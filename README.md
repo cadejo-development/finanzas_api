@@ -1,15 +1,18 @@
-# Backend Gestión de Compras (FASE 1)
+
+# Backend Gestión de Compras y Finanzas
+
 
 ## Instalación y configuración
 
 1. Clona el repositorio y entra al proyecto.
-2. Copia el archivo `.env` y configura la conexión PostgreSQL (Railway):
-   - DB_CONNECTION=compras
-   - DB_HOST=centerbeam.proxy.rlwy.net
-   - DB_PORT=54991
-   - DB_DATABASE=railway
-   - DB_USERNAME=postgres
-   - DB_PASSWORD=PeEZeoTayeiGpLohXdoxnJgECRyArmvw
+2. Copia el archivo `.env` y configura la conexión multi-DB PostgreSQL:
+	- DB_CONNECTION=compras (por defecto)
+	- DB_CONNECTION_PAGOS=pagos
+	- DB_HOST_PAGOS=... (host de pagos)
+	- DB_PORT_PAGOS=...
+	- DB_DATABASE_PAGOS=...
+	- DB_USERNAME_PAGOS=...
+	- DB_PASSWORD_PAGOS=...
 3. Instala dependencias:
    ```bash
    composer install
@@ -19,7 +22,144 @@
    php artisan migrate:fresh --seed
    ```
 
-## Pruebas rápidas en Tinker
+
+## Endpoints RESTful Finanzas
+
+### Catálogos
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET    | /api/finanzas/contribuyentes   | Listar contribuyentes |
+| GET    | /api/finanzas/formas-pago     | Listar formas de pago |
+| GET    | /api/finanzas/proveedores     | Listar proveedores    |
+
+### Solicitudes de Pago
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET    | /api/finanzas/solicitudes-pago           | Listar solicitudes |
+| POST   | /api/finanzas/solicitudes-pago           | Crear solicitud (backend calcula montos) |
+| GET    | /api/finanzas/solicitudes-pago/{id}      | Ver solicitud      |
+| PUT    | /api/finanzas/solicitudes-pago/{id}      | Actualizar solicitud (backend recalcula montos) |
+| DELETE | /api/finanzas/solicitudes-pago/{id}      | Eliminar solicitud |
+| POST   | /api/finanzas/solicitudes-pago/preview   | Preview de cálculo (no guarda, solo calcula) |
+
+#### Ejemplo de payload para crear solicitud de pago (NO incluir montos calculados)
+```json
+{
+	"codigo": "SP-2026-001",
+	"fecha_solicitud": "2026-02-24",
+	"fecha_pago": "2026-02-28",
+	"forma_pago_id": 1,
+	"proveedor_id": 1,
+	"contribuyente_id": 1,
+	"personeria": "natural",
+	"es_servicio": true,
+	"tipo_gasto": "SERVICIOS GENERALES",
+	"estado": "PENDIENTE",
+	"nivel_aprobacion": 1,
+	"aprobador_asignado": "jefe@empresa.com",
+	"aud_usuario": "admin",
+	"detalles": [
+		{
+			"concepto": "Servicio de limpieza",
+			"centro_costo_id": 1,
+			"cantidad": 1,
+			"precio_unitario": 100.00
+		}
+	]
+}
+```
+
+#### Ejemplo de respuesta (backend calcula y devuelve):
+```json
+{
+	"data": {
+		"id": 1,
+		"codigo": "SP-2026-001",
+		...
+		"sub_total": 100.00,
+		"iva": 13.00,
+		"ret_isr": 10.00,
+		"perc_iva_1": 1.00,
+		"a_pagar": 102.00,
+		"detalles": [
+			{
+				"concepto": "Servicio de limpieza",
+				"centro_costo_id": 1,
+				"cantidad": 1,
+				"precio_unitario": 100.00,
+				"subtotal_linea": 100.00
+			}
+		]
+	}
+}
+```
+
+#### Ejemplo de uso (curl):
+```bash
+curl -X POST http://localhost:8000/api/finanzas/solicitudes-pago \
+	-H "Content-Type: application/json" \
+	-d '{
+		"codigo": "SP-2026-001",
+		"fecha_solicitud": "2026-02-24",
+		"fecha_pago": "2026-02-28",
+		"forma_pago_id": 1,
+		"proveedor_id": 1,
+		"contribuyente_id": 1,
+		"personeria": "natural",
+		"es_servicio": true,
+		"tipo_gasto": "SERVICIOS GENERALES",
+		"estado": "PENDIENTE",
+		"nivel_aprobacion": 1,
+		"aprobador_asignado": "jefe@empresa.com",
+		"aud_usuario": "admin",
+		"detalles": [
+			{"concepto": "Servicio de limpieza", "centro_costo_id": 1, "cantidad": 1, "precio_unitario": 100.00}
+		]
+	}'
+```
+
+#### Preview de cálculo (sin guardar):
+```bash
+curl -X POST http://localhost:8000/api/finanzas/solicitudes-pago/preview \
+	-H "Content-Type: application/json" \
+	-d '{ ... mismo payload que store ... }'
+```
+
+La respuesta incluirá los detalles con subtotal calculado y los totales calculados por backend.
+
+### Detalles de Solicitud de Pago
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET    | /api/finanzas/solicitudes-pago/{solicitud_pago}/detalles           | Listar detalles |
+| POST   | /api/finanzas/solicitudes-pago/{solicitud_pago}/detalles           | Crear detalle   |
+| GET    | /api/finanzas/solicitudes-pago/{solicitud_pago}/detalles/{id}      | Ver detalle     |
+| PUT    | /api/finanzas/solicitudes-pago/{solicitud_pago}/detalles/{id}      | Actualizar detalle |
+| DELETE | /api/finanzas/solicitudes-pago/{solicitud_pago}/detalles/{id}      | Eliminar detalle |
+
+### Adjuntos de Solicitud de Pago
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET    | /api/finanzas/solicitudes-pago/{solicitud_pago}/adjuntos           | Listar adjuntos |
+| POST   | /api/finanzas/solicitudes-pago/{solicitud_pago}/adjuntos           | Crear adjunto   |
+| GET    | /api/finanzas/solicitudes-pago/{solicitud_pago}/adjuntos/{id}      | Ver adjunto     |
+| PUT    | /api/finanzas/solicitudes-pago/{solicitud_pago}/adjuntos/{id}      | Actualizar adjunto |
+| DELETE | /api/finanzas/solicitudes-pago/{solicitud_pago}/adjuntos/{id}      | Eliminar adjunto |
+
+### Presupuesto Unidad
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET    | /api/finanzas/presupuestos-unidad           | Listar presupuestos |
+| POST   | /api/finanzas/presupuestos-unidad           | Crear presupuesto   |
+| GET    | /api/finanzas/presupuestos-unidad/{id}      | Ver presupuesto     |
+| PUT    | /api/finanzas/presupuestos-unidad/{id}      | Actualizar presupuesto |
+| DELETE | /api/finanzas/presupuestos-unidad/{id}      | Eliminar presupuesto |
+
+---
 
 ```php
 // Crear un pedido nuevo y agregar items
