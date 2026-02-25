@@ -12,14 +12,16 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::connection('pagos')->create('formas_pago', function (Blueprint $table) {
-            $table->id();
-            $table->string('codigo')->unique();
-            $table->string('nombre');
-            $table->boolean('activo')->default(true);
-            $table->string('aud_usuario')->nullable();
-            $table->timestamps();
-        });
+        if (!Schema::connection('pagos')->hasTable('formas_pago')) {
+            Schema::connection('pagos')->create('formas_pago', function (Blueprint $table) {
+                $table->id();
+                $table->string('codigo')->unique();
+                $table->string('nombre');
+                $table->boolean('activo')->default(true);
+                $table->string('aud_usuario')->nullable();
+                $table->timestamps();
+            });
+        }
     }
 
     /**

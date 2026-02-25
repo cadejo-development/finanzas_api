@@ -12,15 +12,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::connection('pagos')->create('solicitud_pago_adjuntos', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('solicitud_pago_id')->constrained('solicitudes_pago');
-            $table->string('nombre_archivo');
-            $table->string('url');
-            $table->string('tipo');
-            $table->string('aud_usuario')->nullable();
-            $table->timestamps();
-        });
+        if (!Schema::connection('pagos')->hasTable('solicitud_pago_adjuntos')) {
+            Schema::connection('pagos')->create('solicitud_pago_adjuntos', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('solicitud_pago_id')->constrained('solicitudes_pago');
+                $table->string('nombre_archivo');
+                $table->string('url');
+                $table->string('tipo');
+                $table->string('aud_usuario')->nullable();
+                $table->timestamps();
+            });
+        }
     }
 
     /**

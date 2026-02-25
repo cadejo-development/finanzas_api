@@ -12,15 +12,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::connection('pagos')->create('presupuestos_unidad', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('centro_costo_id')->constrained('centros_costo');
-            $table->integer('anio');
-            $table->decimal('presupuesto_total', 12, 2);
-            $table->decimal('ejecutado', 12, 2)->default(0);
-            $table->string('aud_usuario')->nullable();
-            $table->timestamps();
-        });
+        if (!Schema::connection('pagos')->hasTable('presupuestos_unidad')) {
+            Schema::connection('pagos')->create('presupuestos_unidad', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('centro_costo_id')->constrained('centros_costo');
+                $table->integer('anio');
+                $table->decimal('presupuesto_total', 12, 2);
+                $table->decimal('ejecutado', 12, 2)->default(0);
+                $table->string('aud_usuario')->nullable();
+                $table->timestamps();
+            });
+        }
     }
 
     /**

@@ -12,15 +12,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::connection('pagos')->create('proveedores', function (Blueprint $table) {
-            $table->id();
-            $table->string('nombre');
-            $table->string('nit')->nullable();
-            $table->string('nrc')->nullable();
-            $table->boolean('activo')->default(true);
-            $table->string('aud_usuario')->nullable();
-            $table->timestamps();
-        });
+        if (!Schema::connection('pagos')->hasTable('proveedores')) {
+            Schema::connection('pagos')->create('proveedores', function (Blueprint $table) {
+                $table->id();
+                $table->string('nombre');
+                $table->string('nit')->nullable();
+                $table->string('nrc')->nullable();
+                $table->boolean('activo')->default(true);
+                $table->string('aud_usuario')->nullable();
+                $table->timestamps();
+            });
+        }
     }
 
     /**
