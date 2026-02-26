@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Pedido extends Model
 {
-    protected $connection = 'pagos';
+    protected $connection = 'compras';
     protected $table = 'pedidos';
     protected $fillable = [
         'sucursal_id', 'centro_costo_id', 'semana_inicio', 'semana_fin', 'estado', 'total_estimado', 'aud_usuario'

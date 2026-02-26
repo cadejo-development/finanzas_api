@@ -10,6 +10,10 @@ class CentrosCostoSeeder extends Seeder
 {
     public function run(): void
     {
+        // Solo ejecutar en la base central
+        if (CentroCosto::resolveConnection()->getName() !== 'pgsql') {
+            return;
+        }
         // Truncar tabla (PostgreSQL)
         DB::statement('TRUNCATE TABLE centros_costo RESTART IDENTITY CASCADE');
 

@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class PresupuestoUnidad extends Model
 {
-    protected $connection = 'pagos';
+    protected $connection = 'compras';
     protected $table = 'presupuestos_unidad';
     protected $fillable = [
         'centro_costo_id', 'anio', 'presupuesto_total', 'ejecutado', 'aud_usuario'

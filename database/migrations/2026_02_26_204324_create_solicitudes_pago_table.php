@@ -24,7 +24,8 @@ return new class extends Migration
                 $table->string('personeria');
                 $table->boolean('es_servicio');
                 $table->string('tipo_gasto');
-                $table->string('estado')->default('BORRADOR');
+                $table->foreignId('estado_id')->constrained('estados_solicitud_pago');
+                $table->dateTime('fecha_aprobacion')->nullable();
                 $table->integer('nivel_aprobacion')->nullable();
                 $table->string('aprobador_asignado')->nullable();
                 $table->decimal('sub_total', 12, 2)->default(0);
@@ -34,7 +35,7 @@ return new class extends Migration
                 $table->decimal('a_pagar', 12, 2)->default(0);
                 $table->string('aud_usuario')->nullable();
                 $table->timestamps();
-                $table->index(['estado', 'fecha_solicitud', 'proveedor_id', 'tipo_gasto']);
+                $table->index(['estado_id', 'fecha_solicitud', 'proveedor_id', 'tipo_gasto']);
             });
         }
     }

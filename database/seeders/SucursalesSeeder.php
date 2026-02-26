@@ -9,6 +9,10 @@ class SucursalesSeeder extends Seeder
 {
     public function run(): void
     {
+        // Solo ejecutar en la base central
+        if (Sucursal::resolveConnection()->getName() !== 'pgsql') {
+            return;
+        }
         // Truncar usando el modelo (ya trae la conexión)
         Sucursal::truncate();
 

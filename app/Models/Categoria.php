@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Categoria extends Model
 {
-    protected $connection = 'pagos';
+    protected $connection = 'compras';
     protected $table = 'categorias';
     protected $fillable = [
         'key', 'nombre', 'orden', 'activo', 'aud_usuario'

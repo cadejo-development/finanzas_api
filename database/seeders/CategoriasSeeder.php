@@ -10,6 +10,10 @@ class CategoriasSeeder extends Seeder
 {
     public function run(): void
     {
+        // Solo ejecutar en la base central
+        if (Categoria::resolveConnection()->getName() !== 'pgsql') {
+            return;
+        }
         // Truncar tabla (PostgreSQL)
         DB::statement('TRUNCATE TABLE categorias RESTART IDENTITY CASCADE');
 

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Sucursal extends Model
 {
+    protected $connection = 'pgsql';
     protected $table = 'sucursales';
     protected $fillable = [
         'codigo', 'nombre', 'activo', 'aud_usuario'

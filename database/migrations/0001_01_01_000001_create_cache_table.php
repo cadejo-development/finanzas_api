@@ -11,13 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('cache', function (Blueprint $table) {
+        if (config('database.default') !== 'pgsql' && (!isset($this->connection) || $this->connection !== 'pgsql')) {
+            return;
+        }
+        Schema::connection('pgsql')->create('cache', function (Blueprint $table) {
             $table->string('key')->primary();
             $table->mediumText('value');
             $table->integer('expiration')->index();
         });
 
-        Schema::create('cache_locks', function (Blueprint $table) {
+            Schema::connection('pgsql')->create('cache_locks', function (Blueprint $table) {
             $table->string('key')->primary();
             $table->string('owner');
             $table->integer('expiration')->index();
@@ -29,6 +32,9 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (config('database.default') !== 'pgsql' && (!isset($this->connection) || $this->connection !== 'pgsql')) {
+            return;
+        }
         Schema::dropIfExists('cache');
         Schema::dropIfExists('cache_locks');
     }

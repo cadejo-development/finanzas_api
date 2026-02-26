@@ -11,7 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('sucursales', function (Blueprint $table) {
+        if (config('database.default') !== 'pgsql' && (!isset($this->connection) || $this->connection !== 'pgsql')) {
+            return;
+        }
+        Schema::connection('pgsql')->create('sucursales', function (Blueprint $table) {
             $table->id();
             $table->string('codigo', 20)->nullable();
             $table->string('nombre', 150);
@@ -26,6 +29,9 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (config('database.default') !== 'pgsql' && (!isset($this->connection) || $this->connection !== 'pgsql')) {
+            return;
+        }
         Schema::dropIfExists('sucursales');
     }
 };
