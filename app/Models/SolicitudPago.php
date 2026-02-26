@@ -9,7 +9,7 @@ class SolicitudPago extends Model
     protected $connection = 'pagos';
     protected $table = 'solicitudes_pago';
     protected $fillable = [
-        'codigo', 'fecha_solicitud', 'fecha_pago', 'forma_pago_id', 'proveedor_id', 'contribuyente_id', 'personeria', 'es_servicio', 'tipo_gasto', 'estado', 'nivel_aprobacion', 'aprobador_asignado', 'sub_total', 'iva', 'ret_isr', 'perc_iva_1', 'a_pagar', 'aud_usuario'
+        'codigo', 'fecha_solicitud', 'fecha_pago', 'forma_pago_id', 'proveedor_id', 'contribuyente_id', 'personeria', 'es_servicio', 'tipo_gasto', 'estado_id', 'nivel_aprobacion', 'aprobador_asignado', 'sub_total', 'iva', 'ret_isr', 'perc_iva_1', 'a_pagar', 'aud_usuario'
     ];
     protected $casts = [
         'fecha_solicitud' => 'date',
@@ -26,4 +26,5 @@ class SolicitudPago extends Model
     public function proveedor() { return $this->belongsTo(Proveedor::class); }
     public function contribuyente() { return $this->belongsTo(Contribuyente::class); }
     public function formaPago() { return $this->belongsTo(FormaPago::class); }
+    public function estadoSolicitudPago() { return $this->belongsTo(EstadoSolicitudPago::class, 'estado_id'); }
 }

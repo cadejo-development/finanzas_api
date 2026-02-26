@@ -56,13 +56,19 @@ class SolicitudPagoController extends Controller
      */
     public function index(): JsonResponse
     {
-        $solicitudes = SolicitudPago::with(['detalles', 'proveedor', 'contribuyente', 'formaPago'])
+        $solicitudes = SolicitudPago::with(['detalles', 'proveedor', 'contribuyente', 'formaPago', 'estadoSolicitudPago'])
             ->orderByDesc('id')
             ->get();
 
+        $data = $solicitudes->map(function($s) {
+            $arr = $s->toArray();
+            $arr['estado_codigo'] = $s->estadoSolicitudPago?->codigo ?? null;
+            return $arr;
+        });
+
         return response()->json([
             'success' => true,
-            'data' => $solicitudes,
+            'data' => $data,
         ]);
     }
 
@@ -121,12 +127,15 @@ class SolicitudPagoController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        $solicitud = SolicitudPago::with(['detalles', 'proveedor', 'contribuyente', 'formaPago'])
+        $solicitud = SolicitudPago::with(['detalles', 'proveedor', 'contribuyente', 'formaPago', 'estadoSolicitudPago'])
             ->findOrFail($id);
+
+        $arr = $solicitud->toArray();
+        $arr['estado_codigo'] = $solicitud->estadoSolicitudPago?->codigo ?? null;
 
         return response()->json([
             'success' => true,
-            'data' => $solicitud,
+            'data' => $arr,
         ]);
     }
 

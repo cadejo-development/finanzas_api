@@ -1,8 +1,44 @@
 
 # Backend Gestión de Compras y Finanzas
 
+## Resumen del Proyecto
+
+Este backend Laravel implementa una arquitectura multi-DB para la gestión de compras y finanzas, con separación de bases de datos para compras, pagos y datos centrales. Incluye migraciones, seeders, modelos con conexión específica, endpoints RESTful, lógica de cálculo backend, y normalización de catálogos y estados.
+
+### Principales características:
+- Multi-DB PostgreSQL: conexiones independientes para compras, pagos y central.
+- Migraciones y seeders automatizados para cada base.
+- Modelos Eloquent con `$connection` para scoping correcto.
+- Endpoints RESTful para catálogos, solicitudes de pago, detalles, adjuntos y dashboard.
+- Lógica de cálculo de montos solo en backend.
+- Normalización de estados de solicitudes de pago (catálogo `estados_solicitud_pago`).
+- Seeders independientes, sin dependencias cruzadas.
+- API de dashboard para métricas rápidas.
+
+
 
 ## Instalación y configuración
+
+1. Clona el repositorio y entra al proyecto.
+2. Copia el archivo `.env` y configura las conexiones multi-DB PostgreSQL:
+	- `DB_CONNECTION=compras` (por defecto)
+	- `DB_CONNECTION_PAGOS=pagos`
+	- `DB_CONNECTION_CENTRAL=central`
+	- Configura los hosts, puertos, usuarios y contraseñas para cada base.
+3. Instala dependencias:
+	```bash
+	composer install
+	```
+4. Ejecuta migraciones y seeders para todas las bases:
+	```bash
+	php artisan migrate:fresh --database=central
+	php artisan migrate:fresh --database=compras
+	php artisan migrate:fresh --database=pagos
+	php artisan db:seed --database=central
+	php artisan db:seed --database=compras
+	php artisan db:seed --database=pagos
+	```
+
 
 1. Clona el repositorio y entra al proyecto.
 2. Copia el archivo `.env` y configura la conexión multi-DB PostgreSQL:
@@ -26,6 +62,25 @@
 
 ## Endpoints RESTful Pagos
 
+### Dashboard
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET    | /api/pagos/dashboard-solicitudes-pago | Resumen para cards: pendientes (ENVIADO), aprobadas hoy, rechazadas |
+
+La API retorna:
+```json
+{
+	"success": true,
+	"data": {
+		"pendientes": 3,
+		"aprobadas_hoy": 1,
+		"rechazadas": 2
+	}
+}
+```
+
+
 ### Catálogos
 
 | Método | Endpoint | Descripción |
@@ -35,6 +90,28 @@
 | GET    | /api/pagos/proveedores     | Listar proveedores    |
 
 ### Solicitudes de Pago
+
+Ahora cada solicitud retorna:
+- `estado_id`: ID del estado
+- `estado_codigo`: Código del estado (ej. ENVIADO, APROBADO, RECHAZADO, BORRADOR)
+
+Ejemplo:
+```json
+{
+	"success": true,
+	"data": [
+		{
+			"id": 2,
+			"codigo": "SP-0002",
+			...
+			"estado_id": 2,
+			"estado_codigo": "ENVIADO",
+			...
+		}
+	]
+}
+```
+
 
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
@@ -46,6 +123,9 @@
 | POST   | /api/pagos/solicitudes-pago/preview   | Preview de cálculo (no guarda, solo calcula) |
 
 #### Ejemplo de payload para crear solicitud de pago (NO incluir montos calculados)
+
+> Nota: El campo `estado_id` debe mapearse usando el catálogo de estados (`estados_solicitud_pago`).
+
 ```json
 {
 	"codigo": "SP-2026-001",
@@ -163,6 +243,13 @@ La respuesta incluirá los detalles con subtotal calculado y los totales calcula
 
 ### Nota sobre modelos de pagos
 
+Todos los modelos de pagos, compras y central tienen la propiedad:
+```php
+protected $connection = 'pagos'; // o 'compras', 'central'
+```
+Esto asegura el scoping correcto en cada base.
+
+
 Todos los modelos relacionados a pagos (por ejemplo: SolicitudPago, SolicitudPagoDetalle, Contribuyente, Proveedor, FormaPago, etc.) usan la propiedad:
 
 ```php
@@ -217,15 +304,30 @@ $pedido->detalles()->create([
 ```
 
 ## Estructura
+
+- Migraciones, modelos y seeders para compras_db, pagos_db y central_db.
+- Seeders actualizados para usar códigos manuales y evitar dependencias.
+- Catálogo de estados normalizado (`estados_solicitud_pago`).
+- Lógica de cálculo de montos solo en backend.
+- API de dashboard para métricas rápidas.
+- Endpoints RESTful para catálogos, solicitudes, detalles, adjuntos y dashboard.
+- Modelos con relaciones Eloquent para incluir datos relacionados en la API.
+
 - Migraciones, modelos y seeders listos para compras_db.
 - No hay endpoints, controladores ni auth en esta fase.
 
 ---
 
-**Comando principal:**
+**Comandos principales:**
 ```bash
-php artisan migrate:fresh --seed
+php artisan migrate:fresh --database=central
+php artisan migrate:fresh --database=compras
+php artisan migrate:fresh --database=pagos
+php artisan db:seed --database=central
+php artisan db:seed --database=compras
+php artisan db:seed --database=pagos
 ```
+
 
 **Pruebas en Tinker:**
 ```bash
@@ -235,6 +337,37 @@ php artisan tinker
 ---
 
 > Para migrar a módulos, mover modelos a `app/Modules/Compras/Models` y migraciones/seeders a `app/Modules/Compras/Database/`.
+
+---
+
+## Cambios recientes
+
+- Migraciones y seeders actualizados para usar códigos manuales (no IDs).
+- Modelos con `$connection` para cada base.
+- Catálogo de estados normalizado y uso de `estado_id` en solicitudes de pago.
+- API de dashboard para métricas rápidas.
+- Endpoints RESTful mejorados para retornar `estado_codigo`.
+- Seeders independientes y sin dependencias cruzadas.
+- Lógica de cálculo de montos solo en backend.
+- Estructura multi-DB para compras, pagos y central.
+
+---
+
+## Arquitectura general
+
+- Laravel 8+ (PHP 8.3)
+- PostgreSQL multi-DB
+- Railway para despliegue
+- Seeders y migraciones automatizados
+- Modelos Eloquent con scoping por conexión
+- Endpoints RESTful
+- Lógica de negocio en backend
+
+---
+
+## Contribución y contacto
+
+Para dudas, mejoras o reportes, abre un issue o contacta al equipo.
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
 <p align="center">
