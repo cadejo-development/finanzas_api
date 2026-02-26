@@ -22,7 +22,12 @@ class DatabaseSeeder extends Seeder
             CentrosCostoSeeder::class,
             CategoriasSeeder::class,
             ProductosSeeder::class,
+            ProveedoresSeeder::class,
+            ContribuyentesSeeder::class,
+            FormasPagoSeeder::class,
             PedidosSeeder::class,
+            PresupuestosUnidadSeeder::class,
+            SolicitudesPagoSeeder::class,
         ]);
     }
 }
