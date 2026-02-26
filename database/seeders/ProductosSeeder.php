@@ -14,12 +14,11 @@ class ProductosSeeder extends Seeder
         Producto::truncate();
 
         // Catálogo de categorías por key => id
-        $cat = Categoria::pluck('id', 'key'); // ['general' => 1, 'cp' => 2, ...]
-
+        // Usar valores manuales para categoria_id
         Producto::insert([
             // GENERAL
             [
-                'categoria_id' => $cat['general'],
+                'categoria_codigo' => 'general',
                 'codigo' => 'A001',
                 'nombre' => 'Arroz',
                 'unidad' => 'kg',
@@ -30,7 +29,7 @@ class ProductosSeeder extends Seeder
                 'updated_at' => now(),
             ],
             [
-                'categoria_id' => $cat['general'],
+                'categoria_codigo' => 'general',
                 'codigo' => 'A002',
                 'nombre' => 'Frijol',
                 'unidad' => 'kg',
@@ -41,7 +40,7 @@ class ProductosSeeder extends Seeder
                 'updated_at' => now(),
             ],
             [
-                'categoria_id' => $cat['general'],
+                'categoria_codigo' => 'general',
                 'codigo' => 'A003',
                 'nombre' => 'Aceite',
                 'unidad' => 'lt',
@@ -54,7 +53,7 @@ class ProductosSeeder extends Seeder
 
             // CP TERMINADO
             [
-                'categoria_id' => $cat['cp'],
+                'categoria_codigo' => 'cp',
                 'codigo' => 'CP01',
                 'nombre' => 'Pollo rostizado',
                 'unidad' => 'pz',
@@ -65,7 +64,7 @@ class ProductosSeeder extends Seeder
                 'updated_at' => now(),
             ],
             [
-                'categoria_id' => $cat['cp'],
+                'categoria_codigo' => 'cp',
                 'codigo' => 'CP02',
                 'nombre' => 'Ensalada César',
                 'unidad' => 'pz',
@@ -78,7 +77,7 @@ class ProductosSeeder extends Seeder
 
             // EMPAQUE
             [
-                'categoria_id' => $cat['empaque'],
+                'categoria_codigo' => 'empaque',
                 'codigo' => 'E01',
                 'nombre' => 'Caja cartón',
                 'unidad' => 'pz',
@@ -89,7 +88,7 @@ class ProductosSeeder extends Seeder
                 'updated_at' => now(),
             ],
             [
-                'categoria_id' => $cat['empaque'],
+                'categoria_codigo' => 'empaque',
                 'codigo' => 'E02',
                 'nombre' => 'Bolsa plástica',
                 'unidad' => 'pz',
@@ -102,7 +101,7 @@ class ProductosSeeder extends Seeder
 
             // PROMO
             [
-                'categoria_id' => $cat['promo'],
+                'categoria_codigo' => 'promo',
                 'codigo' => 'P01',
                 'nombre' => 'Volante',
                 'unidad' => 'pz',
@@ -113,7 +112,7 @@ class ProductosSeeder extends Seeder
                 'updated_at' => now(),
             ],
             [
-                'categoria_id' => $cat['promo'],
+                'categoria_codigo' => 'promo',
                 'codigo' => 'P02',
                 'nombre' => 'Cuponera',
                 'unidad' => 'pz',
@@ -126,7 +125,7 @@ class ProductosSeeder extends Seeder
 
             // EXTRAS
             [
-                'categoria_id' => $cat['extras'],
+                'categoria_codigo' => 'extras',
                 'codigo' => 'X01',
                 'nombre' => 'Servilleta',
                 'unidad' => 'pz',
@@ -137,7 +136,7 @@ class ProductosSeeder extends Seeder
                 'updated_at' => now(),
             ],
             [
-                'categoria_id' => $cat['extras'],
+                'categoria_codigo' => 'extras',
                 'codigo' => 'X02',
                 'nombre' => 'Encendedor',
                 'unidad' => 'pz',

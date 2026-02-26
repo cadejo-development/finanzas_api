@@ -27,13 +27,13 @@ class DatabaseSeeder extends Seeder
         }
         // Seeders comunes a todas las bases
         $seeders = array_merge($seeders, [
-            ProductosSeeder::class,
+            //ProductosSeeder::class,
             ProveedoresSeeder::class,
             ContribuyentesSeeder::class,
             FormasPagoSeeder::class,
             EstadosSolicitudPagoSeeder::class,
-            PedidosSeeder::class,
-            PresupuestosUnidadSeeder::class,
+            //PedidosSeeder::class,
+            //PresupuestosUnidadSeeder::class,
             SolicitudesPagoSeeder::class,
         ]);
         $this->call($seeders);

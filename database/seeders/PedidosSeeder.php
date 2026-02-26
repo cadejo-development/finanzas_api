@@ -19,15 +19,13 @@ class PedidosSeeder extends Seeder
         DB::connection('pagos')->statement('TRUNCATE TABLE pedidos RESTART IDENTITY CASCADE');
 
         // Si estas tablas están también en la conexión "pagos", poneles on('pagos')
-        $sucursales = Sucursal::pluck('codigo', 'nombre');      // ['Guírola' => 'SUC001', ...]
-        $centros    = CentroCosto::pluck('codigo', 'nombre');   // ['Centro Costo Guírola' => 'CECO...', ...]
-
+        // Usar valores manuales para sucursal_codigo y centro_costo_codigo
         $productos = Producto::get()->keyBy('codigo');          // ['A001' => Producto, ...]
 
         // Pedido 1: Guírola, BORRADOR
         $pedido1 = Pedido::create([
-            'sucursal_codigo' => $sucursales['Guírola'],
-            'centro_costo_codigo' => $centros['Centro Costo Guírola'],
+            'sucursal_codigo' => 'S01', // Guírola
+            'centro_costo_codigo' => 'CECO_GUIROLA', // Centro Costo Guírola
             'semana_inicio' => now()->startOfWeek(),
             'semana_fin' => now()->endOfWeek(),
             'estado' => 'BORRADOR',
@@ -65,8 +63,8 @@ class PedidosSeeder extends Seeder
 
         // Pedido 2: Santa Tecla, ENVIADO
         $pedido2 = Pedido::create([
-            'sucursal_codigo' => $sucursales['Santa Tecla'],
-            'centro_costo_codigo' => $centros['Centro Costo Santa Tecla'],
+            'sucursal_codigo' => 'S02', // Santa Tecla
+            'centro_costo_codigo' => 'CECO_STA_TECLA', // Centro Costo Santa Tecla
             'semana_inicio' => now()->addWeek()->startOfWeek(),
             'semana_fin' => now()->addWeek()->endOfWeek(),
             'estado' => 'ENVIADO',

@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\Contribuyente;
+use App\Models\EstadoSolicitudPago;
 use App\Models\FormaPago;
 use App\Models\Proveedor;
 use App\Models\SolicitudPago;
@@ -13,6 +14,9 @@ class SolicitudesPagoSeeder extends Seeder
 {
     public function run(): void
     {
+        // Mapeo de estados por código
+        $estados = EstadoSolicitudPago::pluck('id', 'codigo');
+
         // Truncar detalle primero (por FK) y luego la tabla principal
         SolicitudPagoDetalle::truncate();
         SolicitudPago::truncate();
@@ -33,7 +37,7 @@ class SolicitudesPagoSeeder extends Seeder
             'personeria' => 'JURIDICA',
             'es_servicio' => true,
             'tipo_gasto' => 'OPEX',
-            'estado' => 'BORRADOR',
+            'estado_id' => $estados['BORRADOR'] ?? null,
             'aud_usuario' => 'seed',
         ]);
 
@@ -68,7 +72,7 @@ class SolicitudesPagoSeeder extends Seeder
             'personeria' => 'NATURAL',
             'es_servicio' => false,
             'tipo_gasto' => 'CAPEX',
-            'estado' => 'BORRADOR',
+            'estado_id' => $estados['ENVIADO'] ?? null,
             'aud_usuario' => 'seed',
         ]);
 
