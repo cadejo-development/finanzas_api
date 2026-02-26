@@ -11,15 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('categorias', function (Blueprint $table) {
-            $table->id();
-            $table->string('key', 30)->unique();
-            $table->string('nombre', 80);
-            $table->integer('orden')->default(0);
-            $table->boolean('activo')->default(true);
-            $table->string('aud_usuario', 150)->nullable();
-            $table->timestamps();
-        });
+        if (!Schema::connection('pagos')->hasTable('categorias')) {
+            Schema::connection('pagos')->create('categorias', function (Blueprint $table) {
+                $table->id();
+                $table->string('key', 30)->unique();
+                $table->string('nombre', 80);
+                $table->integer('orden')->default(0);
+                $table->boolean('activo')->default(true);
+                $table->string('aud_usuario', 150)->nullable();
+                $table->timestamps();
+            });
+        }
     }
 
     /**

@@ -11,18 +11,20 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('productos', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('categoria_id')->constrained('categorias');
-            $table->string('codigo', 30)->unique();
-            $table->string('nombre', 150);
-            $table->string('unidad', 20);
-            $table->decimal('precio', 12, 2)->default(0);
-            $table->boolean('activo')->default(true);
-            $table->string('aud_usuario', 150)->nullable();
-            $table->timestamps();
-            $table->index('categoria_id');
-        });
+        if (!Schema::connection('pagos')->hasTable('productos')) {
+            Schema::connection('pagos')->create('productos', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('categoria_id')->constrained('categorias');
+                $table->string('codigo', 30)->unique();
+                $table->string('nombre', 150);
+                $table->string('unidad', 20);
+                $table->decimal('precio', 12, 2)->default(0);
+                $table->boolean('activo')->default(true);
+                $table->string('aud_usuario', 150)->nullable();
+                $table->timestamps();
+                $table->index('categoria_id');
+            });
+        }
     }
 
     /**
