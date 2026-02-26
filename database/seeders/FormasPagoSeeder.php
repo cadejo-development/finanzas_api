@@ -13,7 +13,7 @@ class FormasPagoSeeder extends Seeder
      */
     public function run(): void
     {
-        FormaPago::on('pagos')->insert([
+        FormaPago::insert([
             [
                 'codigo' => 'transferencia',
                 'nombre' => 'Transferencia Bancaria',

@@ -4,15 +4,17 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\Categoria;
+use Illuminate\Support\Facades\DB;
 
 class CategoriasSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        Categoria::on('pagos')->insert([
+        // Truncar tabla (PostgreSQL)
+        DB::statement('TRUNCATE TABLE categorias RESTART IDENTITY CASCADE');
+
+        // Insertar datos
+        Categoria::insert([
             [
                 'key' => 'general',
                 'nombre' => 'GENERAL',

@@ -13,7 +13,7 @@ class ProveedoresSeeder extends Seeder
      */
     public function run(): void
     {
-        Proveedor::on('pagos')->insert([
+        Proveedor::insert([
             [
                 'nombre' => 'Proveedor Genérico S.A. de C.V.',
                 'nit' => '0614-010101-001-1',

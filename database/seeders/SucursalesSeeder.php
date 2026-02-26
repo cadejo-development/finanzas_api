@@ -2,17 +2,18 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use App\Models\Sucursal;
 
 class SucursalesSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        \App\Models\Sucursal::insert([
+        // Truncar usando el modelo (ya trae la conexión)
+        Sucursal::truncate();
+
+        // Insertar registros
+        Sucursal::insert([
             [
                 'codigo' => 'S01',
                 'nombre' => 'Guírola',

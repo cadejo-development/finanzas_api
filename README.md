@@ -23,26 +23,27 @@
    ```
 
 
-## Endpoints RESTful Finanzas
+
+## Endpoints RESTful Pagos
 
 ### Catálogos
 
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
-| GET    | /api/finanzas/contribuyentes   | Listar contribuyentes |
-| GET    | /api/finanzas/formas-pago     | Listar formas de pago |
-| GET    | /api/finanzas/proveedores     | Listar proveedores    |
+| GET    | /api/pagos/contribuyentes   | Listar contribuyentes |
+| GET    | /api/pagos/formas-pago     | Listar formas de pago |
+| GET    | /api/pagos/proveedores     | Listar proveedores    |
 
 ### Solicitudes de Pago
 
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
-| GET    | /api/finanzas/solicitudes-pago           | Listar solicitudes |
-| POST   | /api/finanzas/solicitudes-pago           | Crear solicitud (backend calcula montos) |
-| GET    | /api/finanzas/solicitudes-pago/{id}      | Ver solicitud      |
-| PUT    | /api/finanzas/solicitudes-pago/{id}      | Actualizar solicitud (backend recalcula montos) |
-| DELETE | /api/finanzas/solicitudes-pago/{id}      | Eliminar solicitud |
-| POST   | /api/finanzas/solicitudes-pago/preview   | Preview de cálculo (no guarda, solo calcula) |
+| GET    | /api/pagos/solicitudes-pago           | Listar solicitudes |
+| POST   | /api/pagos/solicitudes-pago           | Crear solicitud (backend calcula montos) |
+| GET    | /api/pagos/solicitudes-pago/{id}      | Ver solicitud      |
+| PUT    | /api/pagos/solicitudes-pago/{id}      | Actualizar solicitud (backend recalcula montos) |
+| DELETE | /api/pagos/solicitudes-pago/{id}      | Eliminar solicitud |
+| POST   | /api/pagos/solicitudes-pago/preview   | Preview de cálculo (no guarda, solo calcula) |
 
 #### Ejemplo de payload para crear solicitud de pago (NO incluir montos calculados)
 ```json
@@ -98,7 +99,7 @@
 
 #### Ejemplo de uso (curl):
 ```bash
-curl -X POST http://localhost:8000/api/finanzas/solicitudes-pago \
+curl -X POST http://localhost:8000/api/pagos/solicitudes-pago \
 	-H "Content-Type: application/json" \
 	-d '{
 		"codigo": "SP-2026-001",
@@ -122,7 +123,7 @@ curl -X POST http://localhost:8000/api/finanzas/solicitudes-pago \
 
 #### Preview de cálculo (sin guardar):
 ```bash
-curl -X POST http://localhost:8000/api/finanzas/solicitudes-pago/preview \
+curl -X POST http://localhost:8000/api/pagos/solicitudes-pago/preview \
 	-H "Content-Type: application/json" \
 	-d '{ ... mismo payload que store ... }'
 ```
@@ -133,31 +134,42 @@ La respuesta incluirá los detalles con subtotal calculado y los totales calcula
 
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
-| GET    | /api/finanzas/solicitudes-pago/{solicitud_pago}/detalles           | Listar detalles |
-| POST   | /api/finanzas/solicitudes-pago/{solicitud_pago}/detalles           | Crear detalle   |
-| GET    | /api/finanzas/solicitudes-pago/{solicitud_pago}/detalles/{id}      | Ver detalle     |
-| PUT    | /api/finanzas/solicitudes-pago/{solicitud_pago}/detalles/{id}      | Actualizar detalle |
-| DELETE | /api/finanzas/solicitudes-pago/{solicitud_pago}/detalles/{id}      | Eliminar detalle |
+| GET    | /api/pagos/solicitudes-pago/{solicitud_pago}/detalles           | Listar detalles |
+| POST   | /api/pagos/solicitudes-pago/{solicitud_pago}/detalles           | Crear detalle   |
+| GET    | /api/pagos/solicitudes-pago/{solicitud_pago}/detalles/{id}      | Ver detalle     |
+| PUT    | /api/pagos/solicitudes-pago/{solicitud_pago}/detalles/{id}      | Actualizar detalle |
+| DELETE | /api/pagos/solicitudes-pago/{solicitud_pago}/detalles/{id}      | Eliminar detalle |
 
 ### Adjuntos de Solicitud de Pago
 
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
-| GET    | /api/finanzas/solicitudes-pago/{solicitud_pago}/adjuntos           | Listar adjuntos |
-| POST   | /api/finanzas/solicitudes-pago/{solicitud_pago}/adjuntos           | Crear adjunto   |
-| GET    | /api/finanzas/solicitudes-pago/{solicitud_pago}/adjuntos/{id}      | Ver adjunto     |
-| PUT    | /api/finanzas/solicitudes-pago/{solicitud_pago}/adjuntos/{id}      | Actualizar adjunto |
-| DELETE | /api/finanzas/solicitudes-pago/{solicitud_pago}/adjuntos/{id}      | Eliminar adjunto |
+| GET    | /api/pagos/solicitudes-pago/{solicitud_pago}/adjuntos           | Listar adjuntos |
+| POST   | /api/pagos/solicitudes-pago/{solicitud_pago}/adjuntos           | Crear adjunto   |
+| GET    | /api/pagos/solicitudes-pago/{solicitud_pago}/adjuntos/{id}      | Ver adjunto     |
+| PUT    | /api/pagos/solicitudes-pago/{solicitud_pago}/adjuntos/{id}      | Actualizar adjunto |
+| DELETE | /api/pagos/solicitudes-pago/{solicitud_pago}/adjuntos/{id}      | Eliminar adjunto |
 
 ### Presupuesto Unidad
 
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
-| GET    | /api/finanzas/presupuestos-unidad           | Listar presupuestos |
-| POST   | /api/finanzas/presupuestos-unidad           | Crear presupuesto   |
-| GET    | /api/finanzas/presupuestos-unidad/{id}      | Ver presupuesto     |
-| PUT    | /api/finanzas/presupuestos-unidad/{id}      | Actualizar presupuesto |
-| DELETE | /api/finanzas/presupuestos-unidad/{id}      | Eliminar presupuesto |
+| GET    | /api/pagos/presupuestos-unidad           | Listar presupuestos |
+| POST   | /api/pagos/presupuestos-unidad           | Crear presupuesto   |
+| GET    | /api/pagos/presupuestos-unidad/{id}      | Ver presupuesto     |
+| PUT    | /api/pagos/presupuestos-unidad/{id}      | Actualizar presupuesto |
+| DELETE | /api/pagos/presupuestos-unidad/{id}      | Eliminar presupuesto |
+---
+
+### Nota sobre modelos de pagos
+
+Todos los modelos relacionados a pagos (por ejemplo: SolicitudPago, SolicitudPagoDetalle, Contribuyente, Proveedor, FormaPago, etc.) usan la propiedad:
+
+```php
+protected $connection = 'pagos';
+```
+
+Esto asegura que las operaciones de Eloquent se realicen en la base de datos de pagos.
 
 ---
 

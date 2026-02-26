@@ -8,13 +8,15 @@ use App\Models\Producto;
 
 class ProductosSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        $cat = Categoria::on('pagos')->pluck('id', 'key');
-        Producto::on('pagos')->insert([
+        // Truncar usando el modelo (ya trae conexión)
+        Producto::truncate();
+
+        // Catálogo de categorías por key => id
+        $cat = Categoria::pluck('id', 'key'); // ['general' => 1, 'cp' => 2, ...]
+
+        Producto::insert([
             // GENERAL
             [
                 'categoria_id' => $cat['general'],
@@ -49,6 +51,7 @@ class ProductosSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
+
             // CP TERMINADO
             [
                 'categoria_id' => $cat['cp'],
@@ -72,6 +75,7 @@ class ProductosSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
+
             // EMPAQUE
             [
                 'categoria_id' => $cat['empaque'],
@@ -95,6 +99,7 @@ class ProductosSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
+
             // PROMO
             [
                 'categoria_id' => $cat['promo'],
@@ -118,6 +123,7 @@ class ProductosSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
+
             // EXTRAS
             [
                 'categoria_id' => $cat['extras'],

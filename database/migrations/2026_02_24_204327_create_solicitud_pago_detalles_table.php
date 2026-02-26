@@ -14,8 +14,7 @@ return new class extends Migration
                 $table->foreignId('solicitud_pago_id')
                     ->constrained('solicitudes_pago');
                 $table->text('concepto');
-                $table->foreignId('centro_costo_id')
-                    ->constrained('centros_costo');
+                $table->string('centro_costo_codigo', 20); // Código de centro de costo (no FK)
                 $table->decimal('cantidad', 12, 2);
                 $table->decimal('precio_unitario', 12, 2);
                 $table->decimal('subtotal_linea', 12, 2);

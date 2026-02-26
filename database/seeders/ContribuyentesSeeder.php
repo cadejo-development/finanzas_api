@@ -13,7 +13,7 @@ class ContribuyentesSeeder extends Seeder
      */
     public function run(): void
     {
-        Contribuyente::on('pagos')->insert([
+        Contribuyente::insert([
             [
                 'codigo' => 'no_inscrito',
                 'nombre' => 'No Inscrito / Factura Consumidor',

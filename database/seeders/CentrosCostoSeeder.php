@@ -4,14 +4,16 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\CentroCosto;
+use Illuminate\Support\Facades\DB;
 
 class CentrosCostoSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
+        // Truncar tabla (PostgreSQL)
+        DB::statement('TRUNCATE TABLE centros_costo RESTART IDENTITY CASCADE');
+
+        // Insertar datos
         CentroCosto::insert([
             [
                 'codigo' => 'CECO_GUIROLA',

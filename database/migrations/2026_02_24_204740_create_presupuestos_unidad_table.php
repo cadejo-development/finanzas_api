@@ -15,7 +15,7 @@ return new class extends Migration
         if (!Schema::connection('pagos')->hasTable('presupuestos_unidad')) {
             Schema::connection('pagos')->create('presupuestos_unidad', function (Blueprint $table) {
                 $table->id();
-                $table->foreignId('centro_costo_id')->constrained('centros_costo');
+                $table->string('centro_costo_codigo', 20); // Código de centro de costo (no FK)
                 $table->integer('anio');
                 $table->decimal('presupuesto_total', 12, 2);
                 $table->decimal('ejecutado', 12, 2)->default(0);
