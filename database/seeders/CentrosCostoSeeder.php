@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use App\Models\CentroCosto;
 
 class CentrosCostoSeeder extends Seeder
 {
@@ -12,7 +12,7 @@ class CentrosCostoSeeder extends Seeder
      */
     public function run(): void
     {
-        \App\Models\CentroCosto::insert([
+        CentroCosto::insert([
             [
                 'codigo' => 'CECO_GUIROLA',
                 'nombre' => 'Centro Costo Guírola',

@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use App\Models\Categoria;
 
 class CategoriasSeeder extends Seeder
 {
@@ -12,7 +12,7 @@ class CategoriasSeeder extends Seeder
      */
     public function run(): void
     {
-        \App\Models\Categoria::insert([
+        Categoria::on('pagos')->insert([
             [
                 'key' => 'general',
                 'nombre' => 'GENERAL',

@@ -2,8 +2,12 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use App\Models\Sucursal;
+use App\Models\CentroCosto;
+use App\Models\Producto;
+use App\Models\Pedido;
+use App\Models\PedidoDetalle;
 
 class PedidosSeeder extends Seeder
 {
@@ -12,12 +16,12 @@ class PedidosSeeder extends Seeder
      */
     public function run(): void
     {
-        $sucursales = \App\Models\Sucursal::pluck('id', 'nombre');
-        $centros = \App\Models\CentroCosto::pluck('id', 'codigo');
-        $productos = \App\Models\Producto::all()->keyBy('codigo');
+        $sucursales = Sucursal::pluck('id', 'nombre');
+        $centros = CentroCosto::pluck('id', 'codigo');
+        $productos = Producto::on('pagos')->get()->keyBy('codigo');
 
         // Pedido 1: Guírola, BORRADOR
-        $pedido1 = \App\Models\Pedido::create([
+        $pedido1 = Pedido::on('pagos')->create([
             'sucursal_id' => $sucursales['Guírola'],
             'centro_costo_id' => $centros['CECO_GUIROLA'],
             'semana_inicio' => now()->startOfWeek(),
@@ -36,7 +40,7 @@ class PedidosSeeder extends Seeder
             $prod = $productos[$item['codigo']];
             $subtotal = $item['cantidad'] * $prod->precio;
             $total1 += $subtotal;
-            \App\Models\PedidoDetalle::create([
+            PedidoDetalle::on('pagos')->create([
                 'pedido_id' => $pedido1->id,
                 'producto_id' => $prod->id,
                 'cantidad' => $item['cantidad'],
