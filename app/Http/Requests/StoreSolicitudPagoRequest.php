@@ -31,6 +31,7 @@ class StoreSolicitudPagoRequest extends FormRequest
             'fecha_solicitud' => 'required|date',
             'fecha_pago' => 'required|date',
             'tipo_gasto' => 'required|string|max:50',
+            'estado' => 'sometimes|string',
             'detalles' => 'required|array|min:1',
             'detalles.*.concepto' => 'required|string|max:255',
             'detalles.*.cantidad' => 'required|numeric|min:0.01',

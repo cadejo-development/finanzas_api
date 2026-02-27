@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSolicitudPagoRequest;
 use App\Http\Requests\UpdateSolicitudPagoRequest;
 use App\Models\Contribuyente;
+use App\Models\EstadoSolicitudPago;
 use App\Models\SolicitudPago;
 use App\Models\SolicitudPagoDetalle;
 use App\Services\Finanzas\CalculoImpuestosSolicitudPago;
@@ -63,6 +64,9 @@ class SolicitudPagoController extends Controller
         $data = $solicitudes->map(function($s) {
             $arr = $s->toArray();
             $arr['estado_codigo'] = $s->estadoSolicitudPago?->codigo ?? null;
+            if (isset($arr['fecha_solicitud'])) {
+                $arr['fecha_solicitud'] = date('d/m/Y', strtotime($arr['fecha_solicitud']));
+            }
             return $arr;
         });
 
@@ -82,6 +86,19 @@ class SolicitudPagoController extends Controller
 
         $detalles = $data['detalles'];
         unset($data['detalles']);
+
+        // Generar código correlativo por fecha
+        $fecha = isset($data['fecha_solicitud']) ? $data['fecha_solicitud'] : date('Y-m-d');
+        $fechaBase = str_replace('-', '', $fecha);
+        $countHoy = SolicitudPago::whereDate('fecha_solicitud', $fecha)->count();
+        $correlativo = $countHoy + 1;
+        $data['codigo'] = 'SP-' . $fechaBase . '-' . str_pad($correlativo, 3, '0', STR_PAD_LEFT);
+
+        // Buscar estado_id por código (normalizado)
+        $codigoEstado = strtoupper(trim($data['estado']));
+        $estado = EstadoSolicitudPago::where('codigo', $codigoEstado)->first();
+        $data['estado_id'] = $estado->id;
+        unset($data['estado']);
 
         // 1) Subtotales por línea
         $detallesCalculados = CalculoImpuestosSolicitudPago::calcularSubtotalesDetalles($detalles);
@@ -109,7 +126,8 @@ class SolicitudPagoController extends Controller
             $detalle['solicitud_pago_id'] = $solicitud->id;
             $detalle['subtotal_linea'] = $detalle['subtotal'];
             unset($detalle['subtotal']);
-
+            // Centro de costo quemado por el momento
+            $detalle['centro_costo_codigo'] = 'CECO_DEFAULT';
             SolicitudPagoDetalle::create($detalle);
         }
 
