@@ -18,6 +18,12 @@ return new class extends Migration
                 $table->string('nombre');
                 $table->string('nit')->nullable();
                 $table->string('nrc')->nullable();
+                $table->string('telefono')->nullable();
+                $table->string('direccion')->nullable();
+                $table->string('cuenta_bancaria')->nullable();
+                $table->string('tipo_cuenta')->nullable();
+                $table->string('banco')->nullable();
+                $table->string('correo')->nullable();
                 $table->boolean('activo')->default(true);
                 $table->string('aud_usuario')->nullable();
                 $table->timestamps();

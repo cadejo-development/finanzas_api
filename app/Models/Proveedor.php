@@ -9,7 +9,7 @@ class Proveedor extends Model
     protected $connection = 'pagos';
     protected $table = 'proveedores';
     protected $fillable = [
-        'nombre', 'nit', 'nrc', 'activo', 'aud_usuario'
+        'nombre', 'nit', 'nrc', 'telefono', 'direccion', 'cuenta_bancaria', 'tipo_cuenta', 'banco', 'correo', 'activo', 'aud_usuario'
     ];
     protected $casts = [
         'activo' => 'boolean',
