@@ -15,6 +15,7 @@ class ProveedoresSeeder extends Seeder
     {
         Proveedor::insert([
             [
+                'codigo' => 'PRV-001',
                 'nombre' => 'Proveedor Genérico S.A. de C.V.',
                 'nit' => '0614-010101-001-1',
                 'nrc' => '123456-7',
@@ -30,6 +31,7 @@ class ProveedoresSeeder extends Seeder
                 'updated_at' => now(),
             ],
             [
+                'codigo' => 'PRV-002',
                 'nombre' => 'Servicios Profesionales El Salvador',
                 'nit' => '0614-020202-002-2',
                 'nrc' => '765432-1',
@@ -45,6 +47,7 @@ class ProveedoresSeeder extends Seeder
                 'updated_at' => now(),
             ],
             [
+                'codigo' => 'PRV-003',
                 'nombre' => 'Distribuidora Comercial XYZ',
                 'nit' => '0614-030303-003-3',
                 'nrc' => '246810-5',

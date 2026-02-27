@@ -15,6 +15,7 @@ return new class extends Migration
         if (!Schema::connection('pagos')->hasTable('proveedores')) {
             Schema::connection('pagos')->create('proveedores', function (Blueprint $table) {
                 $table->id();
+                $table->string('codigo')->unique();
                 $table->string('nombre');
                 $table->string('nit')->nullable();
                 $table->string('nrc')->nullable();
