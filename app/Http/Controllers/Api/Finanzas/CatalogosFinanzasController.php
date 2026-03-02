@@ -25,7 +25,10 @@ class CatalogosFinanzasController extends Controller
             'success' => true,
             'data' => [
                 'sucursales'     => Sucursal::orderBy('id')->get(),
-                'centros_costo'  => CentroCosto::orderBy('id')->get(),
+                'centros_costo'  => CentroCosto::with('padre:id,codigo,nombre')
+                                        ->operativos()
+                                        ->orderBy('nombre')
+                                        ->get(),
                 'estados'        => EstadoSolicitudPago::orderBy('id')->get(),
                 'contribuyentes' => Contribuyente::orderBy('id')->get(),
                 'formas_pago'    => FormaPago::orderBy('id')->get(),
