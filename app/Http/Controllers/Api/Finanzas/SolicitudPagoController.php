@@ -195,8 +195,7 @@ class SolicitudPagoController extends Controller
             $detalle['solicitud_pago_id'] = $solicitud->id;
             $detalle['subtotal_linea'] = $detalle['subtotal'];
             unset($detalle['subtotal']);
-            // Centro de costo quemado por el momento
-            $detalle['centro_costo_codigo'] = 'CECO_DEFAULT';
+            $detalle['centro_costo_codigo'] = $detalle['centro_costo_codigo'] ?? '';
             SolicitudPagoDetalle::create($detalle);
         }
 
