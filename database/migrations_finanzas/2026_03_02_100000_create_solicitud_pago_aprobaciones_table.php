@@ -10,12 +10,17 @@ return new class extends Migration
     {
         // Agregar solicitante_id a solicitudes_pago para rastrear quién creó la solicitud
         Schema::connection('pagos')->table('solicitudes_pago', function (Blueprint $table) {
-            $table->unsignedBigInteger('solicitante_id')->nullable()->after('aud_usuario');
-            $table->string('solicitante_nombre', 150)->nullable()->after('solicitante_id');
+            if (!Schema::connection('pagos')->hasColumn('solicitudes_pago', 'solicitante_id')) {
+                $table->unsignedBigInteger('solicitante_id')->nullable()->after('aud_usuario');
+            }
+            if (!Schema::connection('pagos')->hasColumn('solicitudes_pago', 'solicitante_nombre')) {
+                $table->string('solicitante_nombre', 150)->nullable()->after('solicitante_id');
+            }
         });
 
         // Tabla de líneas de aprobación por solicitud
-        Schema::connection('pagos')->create('solicitud_pago_aprobaciones', function (Blueprint $table) {
+        if (!Schema::connection('pagos')->hasTable('solicitud_pago_aprobaciones')) {
+            Schema::connection('pagos')->create('solicitud_pago_aprobaciones', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('solicitud_pago_id');
             $table->foreign('solicitud_pago_id')
@@ -46,7 +51,8 @@ return new class extends Migration
             // Índices de búsqueda frecuente
             $table->index(['solicitud_pago_id', 'nivel_orden']);
             $table->index(['rol_requerido', 'estado']);
-        });
+            });
+        } // end if !hasTable
     }
 
     public function down(): void

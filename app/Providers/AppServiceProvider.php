@@ -16,5 +16,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
+
+        // Migraciones del schema de finanzas/pagos (DB secundaria)
+        $this->loadMigrationsFrom(database_path('migrations_finanzas'));
     }
 }
