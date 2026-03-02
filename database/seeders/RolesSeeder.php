@@ -10,56 +10,58 @@ class RolesSeeder extends Seeder
 {
     public function run(): void
     {
-        $sistemas = System::pluck('id', 'codigo');
-        Role::insert([
+        $pagosId = System::where('codigo', 'pagos')->value('id');
+
+        $roles = [
             [
-                'nombre' => 'Gerente de Sucursal',
-                'codigo' => 'gerente_sucursal',
-                'system_id' => $sistemas['pagos'] ?? null,
+                'nombre'      => 'Administrador',
+                'codigo'      => 'admin',
+                'system_id'   => $pagosId,
                 'aud_usuario' => 'seed',
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
-                'nombre' => 'Jefe del Departamento de Compras',
-                'codigo' => 'jefe_compras',
-                'system_id' => $sistemas['pagos'] ?? null,
+                'nombre'      => 'Gerente de Sucursal',
+                'codigo'      => 'gerente_sucursal',
+                'system_id'   => $pagosId,
                 'aud_usuario' => 'seed',
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
-                'nombre' => 'Gerente de Sucursal',
-                'codigo' => 'gerente_sucursal',
-                'system_id' => $sistemas['compras'] ?? null,
+                'nombre'      => 'Gerente de Logistica',
+                'codigo'      => 'gerente_logistica',
+                'system_id'   => $pagosId,
                 'aud_usuario' => 'seed',
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
-                'nombre' => 'Jefe del Departamento de Compras',
-                'codigo' => 'jefe_compras',
-                'system_id' => $sistemas['compras'] ?? null,
+                'nombre'      => 'Gerente de Mantenimiento',
+                'codigo'      => 'gerente_mantenimiento',
+                'system_id'   => $pagosId,
                 'aud_usuario' => 'seed',
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
-                'nombre' => 'Administrador',
-                'codigo' => 'admin',
-                'system_id' => $sistemas['pagos'] ?? null,
+                'nombre'      => 'Gerencia del Area',
+                'codigo'      => 'gerencia_area',
+                'system_id'   => $pagosId,
                 'aud_usuario' => 'seed',
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
-                'nombre' => 'Administrador',
-                'codigo' => 'admin',
-                'system_id' => $sistemas['compras'] ?? null,
+                'nombre'      => 'Gerencia Financiera',
+                'codigo'      => 'gerencia_financiera',
+                'system_id'   => $pagosId,
                 'aud_usuario' => 'seed',
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
-        ]);
+            [
+                'nombre'      => 'Gerencia General',
+                'codigo'      => 'gerencia_general',
+                'system_id'   => $pagosId,
+                'aud_usuario' => 'seed',
+            ],
+        ];
+
+        foreach ($roles as $data) {
+            Role::updateOrCreate(
+                ['codigo' => $data['codigo'], 'system_id' => $pagosId],
+                array_merge($data, ['created_at' => now(), 'updated_at' => now()])
+            );
+        }
     }
 }

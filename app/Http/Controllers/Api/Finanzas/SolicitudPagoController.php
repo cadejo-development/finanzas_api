@@ -9,6 +9,7 @@ use App\Models\Contribuyente;
 use App\Models\EstadoSolicitudPago;
 use App\Models\SolicitudPago;
 use App\Models\SolicitudPagoDetalle;
+use App\Services\Finanzas\AprobacionService;
 use App\Services\Finanzas\CalculoImpuestosSolicitudPago;
 use Illuminate\Http\JsonResponse;
 
@@ -118,8 +119,14 @@ class SolicitudPagoController extends Controller
             $subTotal
         );
 
-        // 4) Guardar solicitud
-        $solicitud = SolicitudPago::create(array_merge($data, $totales));
+        // 4) Guardar solicitud (registrar solicitante)
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
+        $solicitud = SolicitudPago::create(array_merge($data, $totales, [
+            'solicitante_id'     => $user?->id,
+            'solicitante_nombre' => $user?->name,
+            'aud_usuario'        => $user?->email,
+        ]));
 
         // 5) Guardar detalles
         foreach ($detallesCalculados as $detalle) {
@@ -233,6 +240,38 @@ class SolicitudPagoController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Solicitud de pago eliminada',
+        ]);
+    }
+
+    /**
+     * Enviar solicitud al flujo de aprobación (BORRADOR → ENVIADO + genera cadena).
+     * POST /api/pagos/solicitudes-pago/{id}/enviar
+     */
+    public function enviar(int $id, AprobacionService $aprobacionService): JsonResponse
+    {
+        $solicitud = SolicitudPago::with(['estadoSolicitudPago'])->findOrFail($id);
+
+        // Solo se puede enviar si está en BORRADOR
+        if ($solicitud->estadoSolicitudPago?->codigo !== 'BORRADOR') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Solo se pueden enviar solicitudes en estado BORRADOR.',
+            ], 422);
+        }
+
+        // Cambiar estado a ENVIADO
+        $estadoEnviado = EstadoSolicitudPago::where('codigo', 'ENVIADO')->firstOrFail();
+        $solicitud->update(['estado_id' => $estadoEnviado->id]);
+
+        // Generar cadena de aprobación
+        $aprobacionService->generarCadena($solicitud);
+
+        $solicitud->load(['estadoSolicitudPago', 'aprobaciones']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Solicitud enviada al flujo de aprobación.',
+            'data'    => $solicitud,
         ]);
     }
 }

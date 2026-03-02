@@ -10,34 +10,74 @@ class UsersSeeder extends Seeder
 {
     public function run(): void
     {
-        User::insert([
+        $users = [
             [
-                'name' => 'Admin',
-                'email' => 'admin@demo.com',
-                'password' => Hash::make('admin123'),
-                'activo' => true,
+                'name'        => 'Admin',
+                'email'       => 'admin@demo.com',
+                'password'    => Hash::make('admin123'),
+                'activo'      => true,
                 'aud_usuario' => 'seed',
-                'created_at' => now(),
-                'updated_at' => now(),
+                'created_at'  => now(),
+                'updated_at'  => now(),
             ],
             [
-                'name' => 'Gerente Sucursal',
-                'email' => 'gerente@demo.com',
-                'password' => Hash::make('gerente123'),
-                'activo' => true,
+                'name'        => 'Gerente Sucursal',
+                'email'       => 'gerente@demo.com',
+                'password'    => Hash::make('gerente123'),
+                'activo'      => true,
                 'aud_usuario' => 'seed',
-                'created_at' => now(),
-                'updated_at' => now(),
+                'created_at'  => now(),
+                'updated_at'  => now(),
             ],
             [
-                'name' => 'Jefe Compras',
-                'email' => 'jefe@demo.com',
-                'password' => Hash::make('jefe123'),
-                'activo' => true,
+                'name'        => 'Nelson Martinez',
+                'email'       => 'nelson@demo.com',
+                'password'    => Hash::make('nelson123'),
+                'activo'      => true,
                 'aud_usuario' => 'seed',
-                'created_at' => now(),
-                'updated_at' => now(),
+                'created_at'  => now(),
+                'updated_at'  => now(),
             ],
-        ]);
+            [
+                'name'        => 'Fabio Navarrete',
+                'email'       => 'fabio@demo.com',
+                'password'    => Hash::make('fabio123'),
+                'activo'      => true,
+                'aud_usuario' => 'seed',
+                'created_at'  => now(),
+                'updated_at'  => now(),
+            ],
+            [
+                'name'        => 'Gerencia del Area',
+                'email'       => 'garea@demo.com',
+                'password'    => Hash::make('garea123'),
+                'activo'      => true,
+                'aud_usuario' => 'seed',
+                'created_at'  => now(),
+                'updated_at'  => now(),
+            ],
+            [
+                'name'        => 'Juan Jose Lopez',
+                'email'       => 'juanjose@demo.com',
+                'password'    => Hash::make('juanjose123'),
+                'activo'      => true,
+                'aud_usuario' => 'seed',
+                'created_at'  => now(),
+                'updated_at'  => now(),
+            ],
+            [
+                'name'        => 'David Falkenstein',
+                'email'       => 'david@demo.com',
+                'password'    => Hash::make('david123'),
+                'activo'      => true,
+                'aud_usuario' => 'seed',
+                'created_at'  => now(),
+                'updated_at'  => now(),
+            ],
+        ];
+
+        foreach ($users as $data) {
+            User::updateOrCreate(['email' => $data['email']], $data);
+        }
     }
 }
