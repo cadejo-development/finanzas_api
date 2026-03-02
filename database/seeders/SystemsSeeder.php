@@ -9,21 +9,16 @@ class SystemsSeeder extends Seeder
 {
     public function run(): void
     {
-        System::insert([
-            [
-                'nombre' => 'Pagos',
-                'codigo' => 'pagos',
-                'aud_usuario' => 'seed',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'nombre' => 'Compras',
-                'codigo' => 'compras',
-                'aud_usuario' => 'seed',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-        ]);
+        $sistemas = [
+            ['nombre' => 'Pagos',   'codigo' => 'pagos'],
+            ['nombre' => 'Compras', 'codigo' => 'compras'],
+        ];
+
+        foreach ($sistemas as $s) {
+            System::updateOrCreate(
+                ['codigo' => $s['codigo']],
+                array_merge($s, ['aud_usuario' => 'seed', 'created_at' => now(), 'updated_at' => now()])
+            );
+        }
     }
 }

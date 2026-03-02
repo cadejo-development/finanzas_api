@@ -163,11 +163,9 @@ class AprobacionService
      */
     public function pendientesParaActor(User $actor, int $systemId): \Illuminate\Support\Collection
     {
-        // Obtener los roles del actor para el sistema pagos
-        $roles = $actor->roles()
-            ->where('system_id', $systemId)
-            ->pluck('codigo')
-            ->toArray();
+        // Obtener TODOS los roles del actor (sin filtrar por sistema,
+        // ya que el usuario solo opera en el contexto de pagos)
+        $roles = $actor->roles()->pluck('codigo')->toArray();
 
         if (empty($roles)) {
             return collect();
