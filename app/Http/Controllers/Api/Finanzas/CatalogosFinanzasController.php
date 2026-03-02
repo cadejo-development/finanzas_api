@@ -9,6 +9,7 @@ use App\Models\EstadoSolicitudPago;
 use App\Models\FormaPago;
 use App\Models\Proveedor;
 use App\Models\Sucursal;
+use App\Models\TipoPersona;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -32,6 +33,7 @@ class CatalogosFinanzasController extends Controller
                 'estados'        => EstadoSolicitudPago::orderBy('id')->get(),
                 'contribuyentes' => Contribuyente::orderBy('id')->get(),
                 'formas_pago'    => FormaPago::orderBy('id')->get(),
+                'tipos_persona'  => TipoPersona::where('activo', true)->orderBy('id')->get(),
                 // proveedores NO se incluye aquí — usar GET /proveedores?q=texto
             ],
         ]);
@@ -71,8 +73,9 @@ class CatalogosFinanzasController extends Controller
             return response()->json(['success' => true, 'data' => []]);
         }
 
-        $cols      = ['id', 'codigo', 'nombre', 'nit', 'banco', 'cuenta_bancaria', 'tipo_cuenta'];
-        $resultado = Proveedor::where('nombre', 'ilike', '%' . $q . '%')
+        $cols      = ['id', 'codigo', 'nombre', 'nit', 'banco', 'cuenta_bancaria', 'tipo_cuenta', 'tipo_persona_id'];
+        $resultado = Proveedor::with('tipoPersona:id,codigo,nombre')
+            ->where('nombre', 'ilike', '%' . $q . '%')
             ->orderBy('nombre')
             ->limit(10)
             ->get($cols);
@@ -96,6 +99,7 @@ class CatalogosFinanzasController extends Controller
             'tipo_cuenta'    => 'nullable|string|max:50',
             'banco'          => 'nullable|string|max:100',
             'correo'         => 'nullable|email|max:100',
+            'tipo_persona_id'=> 'nullable|integer|exists:pagos.tipos_persona,id',
             'telefono'       => 'nullable|string|max:30',
             'direccion'      => 'nullable|string|max:300',
         ]);
@@ -118,6 +122,7 @@ class CatalogosFinanzasController extends Controller
             'correo'          => $request->input('correo'),
             'telefono'        => $request->input('telefono'),
             'direccion'       => $request->input('direccion'),
+            'tipo_persona_id' => $request->input('tipo_persona_id'),
             'activo'          => true,
             'aud_usuario'     => auth()->user()?->email ?? 'api',
         ]);
