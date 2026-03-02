@@ -66,8 +66,11 @@ class SolicitudPagoController extends Controller
      * Listado
      * GET /api/pagos/solicitudes-pago
      */
-    public function index(): JsonResponse
+    public function index(AprobacionService $aprobacionService): JsonResponse
     {
+        $userId        = auth()->id();
+        $borradoreId   = EstadoSolicitudPago::where('codigo', 'BORRADOR')->value('id');
+
         $solicitudes = SolicitudPago::with([
                 'proveedor',
                 'contribuyente',
@@ -75,8 +78,26 @@ class SolicitudPagoController extends Controller
                 'estadoSolicitudPago',
                 'aprobaciones' => fn($q) => $q->orderBy('nivel_orden')->orderBy('id'),
             ])
+            // BORRADOR solo visible al creador; el resto de estados los ve todo el mundo
+            ->where(function ($q) use ($userId, $borradoreId) {
+                $q->where('estado_solicitud_pago_id', '!=', $borradoreId)
+                  ->orWhere('solicitante_id', $userId);
+            })
             ->orderByDesc('id')
             ->get();
+
+        // Reparación en caliente: si una solicitud ya está ENVIADA pero nunca
+        // tuvo su cadena generada (ej. fue enviada antes de implementar el sistema),
+        // la generamos ahora para que el nivel y aprobador aparezcan correctamente.
+        foreach ($solicitudes as $s) {
+            if (
+                $s->estadoSolicitudPago?->codigo === 'ENVIADO'
+                && $s->aprobaciones->isEmpty()
+            ) {
+                $aprobacionService->generarCadena($s);
+                $s->load(['aprobaciones' => fn($q) => $q->orderBy('nivel_orden')->orderBy('id')]);
+            }
+        }
 
         $data = $solicitudes->map(function($s) {
             $arr = $s->toArray();
@@ -86,19 +107,18 @@ class SolicitudPagoController extends Controller
                 $arr['fecha_solicitud'] = date('d/m/Y', strtotime($arr['fecha_solicitud']));
             }
 
-            // Calcular nivel actual y aprobador pendiente
+            // Calcular nivel y aprobador de decisión (nivel_orden > 0, siempre visible)
+            // El "Visto Bueno" (nivel_orden=0) es un pre-requisito interno;
+            // la tabla muestra el NIVEL DE DECISIÓN (1-4) y quién lo aprueba.
             $aprobaciones = $s->aprobaciones;
-            $nivelPendiente = $aprobaciones->where('estado', 'pendiente')->min('nivel_orden');
+            $decisionLinea = $aprobaciones->where('nivel_orden', '>', 0)->first();
 
-            if ($nivelPendiente !== null) {
-                $arr['nivel_actual'] = $nivelPendiente === 0 ? 'Visto Bueno' : 'Nivel ' . $nivelPendiente;
-                $roles = $aprobaciones
-                    ->where('estado', 'pendiente')
-                    ->where('nivel_orden', $nivelPendiente)
-                    ->pluck('rol_requerido')
-                    ->map(fn($r) => self::$rolLabels[$r] ?? $r)
-                    ->implode(' / ');
-                $arr['aprobador_pendiente'] = $roles;
+            if ($decisionLinea) {
+                // Extraer número de nivel desde el código (nivel_1 → 1, nivel_2 → 2…)
+                $numStr = preg_replace('/[^0-9]/', '', $decisionLinea->nivel_codigo);
+                $arr['nivel_actual'] = 'Nivel ' . $numStr;
+                $arr['aprobador_pendiente'] = self::$rolLabels[$decisionLinea->rol_requerido]
+                    ?? $decisionLinea->rol_requerido;
             } else {
                 $arr['nivel_actual'] = null;
                 $arr['aprobador_pendiente'] = null;

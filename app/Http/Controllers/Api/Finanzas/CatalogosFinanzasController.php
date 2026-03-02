@@ -11,6 +11,7 @@ use App\Models\Proveedor;
 use App\Models\Sucursal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class CatalogosFinanzasController extends Controller
 {
@@ -28,7 +29,7 @@ class CatalogosFinanzasController extends Controller
                 'estados'        => EstadoSolicitudPago::orderBy('id')->get(),
                 'contribuyentes' => Contribuyente::orderBy('id')->get(),
                 'formas_pago'    => FormaPago::orderBy('id')->get(),
-                'proveedores'    => Proveedor::orderBy('id')->get(),
+                // proveedores NO se incluye aquí — usar GET /proveedores?q=texto
             ],
         ]);
     }
@@ -56,14 +57,72 @@ class CatalogosFinanzasController extends Controller
     }
 
     /**
-     * Catálogo de proveedores
+     * GET /api/pagos/proveedores?q=texto
+     * Mínimo 2 caracteres. Devuelve hasta 10 coincidencias ILIKE en nombre.
      */
-    public function proveedores(): JsonResponse
+    public function proveedores(Request $request): JsonResponse
     {
+        $q = trim((string) $request->query('q', ''));
+
+        if (mb_strlen($q) < 2) {
+            return response()->json(['success' => true, 'data' => []]);
+        }
+
+        $cols      = ['id', 'codigo', 'nombre', 'nit', 'banco', 'cuenta_bancaria', 'tipo_cuenta'];
+        $resultado = Proveedor::where('nombre', 'ilike', '%' . $q . '%')
+            ->orderBy('nombre')
+            ->limit(10)
+            ->get($cols);
+
         return response()->json([
             'success' => true,
-            'data' => Proveedor::orderBy('id')->get()
+            'data'    => $resultado,
         ]);
+    }
+
+    /**
+     * Crear nuevo proveedor
+     * POST /api/pagos/proveedores
+     */
+    public function storeProveedor(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'nombre'         => 'required|string|max:255',
+            'nit'            => 'required|string|max:50',
+            'cuenta_bancaria'=> 'nullable|string|max:100',
+            'tipo_cuenta'    => 'nullable|string|max:50',
+            'banco'          => 'nullable|string|max:100',
+            'correo'         => 'nullable|email|max:100',
+            'telefono'       => 'nullable|string|max:30',
+            'direccion'      => 'nullable|string|max:300',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Datos inválidos',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $proveedor = Proveedor::create([
+            'nombre'          => $request->nombre,
+            'nit'             => $request->nit,
+            'nrc'             => $request->input('nrc'),
+            'cuenta_bancaria' => $request->input('cuenta_bancaria'),
+            'tipo_cuenta'     => $request->input('tipo_cuenta'),
+            'banco'           => $request->input('banco'),
+            'correo'          => $request->input('correo'),
+            'telefono'        => $request->input('telefono'),
+            'direccion'       => $request->input('direccion'),
+            'activo'          => true,
+            'aud_usuario'     => auth()->user()?->email ?? 'api',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data'    => $proveedor,
+        ], 201);
     }
 
     /**

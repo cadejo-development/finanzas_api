@@ -26,7 +26,8 @@ Route::prefix('pagos')->middleware('auth:sanctum')->group(function () {
     Route::get('dashboard-solicitudes-pago', [DashboardSolicitudesPagoController::class, 'resumen']);
     Route::get('contribuyentes', [CatalogosFinanzasController::class, 'contribuyentes']);
     Route::get('formas-pago', [CatalogosFinanzasController::class, 'formasPago']);
-    Route::get('proveedores', [CatalogosFinanzasController::class, 'proveedores']);
+    Route::get('proveedores',  [CatalogosFinanzasController::class, 'proveedores']);
+    Route::post('proveedores', [CatalogosFinanzasController::class, 'storeProveedor']);
 
     // Catálogos generales (sucursales, centros de costo, estados)
     Route::get('catalogos', [CatalogosFinanzasController::class, 'index']);
