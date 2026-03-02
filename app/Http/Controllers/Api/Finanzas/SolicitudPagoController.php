@@ -80,7 +80,7 @@ class SolicitudPagoController extends Controller
             ])
             // BORRADOR solo visible al creador; el resto de estados los ve todo el mundo
             ->where(function ($q) use ($userId, $borradoreId) {
-                $q->where('estado_solicitud_pago_id', '!=', $borradoreId)
+                $q->where('estado_id', '!=', $borradoreId)
                   ->orWhere('solicitante_id', $userId);
             })
             ->orderByDesc('id')
@@ -90,12 +90,18 @@ class SolicitudPagoController extends Controller
         // tuvo su cadena generada (ej. fue enviada antes de implementar el sistema),
         // la generamos ahora para que el nivel y aprobador aparezcan correctamente.
         foreach ($solicitudes as $s) {
-            if (
-                $s->estadoSolicitudPago?->codigo === 'ENVIADO'
-                && $s->aprobaciones->isEmpty()
-            ) {
-                $aprobacionService->generarCadena($s);
-                $s->load(['aprobaciones' => fn($q) => $q->orderBy('nivel_orden')->orderBy('id')]);
+            try {
+                if (
+                    $s->estadoSolicitudPago?->codigo === 'ENVIADO'
+                    && $s->relationLoaded('aprobaciones')
+                    && $s->aprobaciones->isEmpty()
+                ) {
+                    $aprobacionService->generarCadena($s);
+                    $s->load(['aprobaciones' => fn($q) => $q->orderBy('nivel_orden')->orderBy('id')]);
+                }
+            } catch (\Throwable $e) {
+                // Silenciar: no romper el listado por un error de reparación
+                \Log::warning("generarCadena falló para solicitud {$s->id}: " . $e->getMessage());
             }
         }
 
