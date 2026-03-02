@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Finanzas;
 use App\Http\Controllers\Controller;
 use App\Models\SolicitudPago;
 use App\Models\System;
+use App\Models\User;
 use App\Services\Finanzas\AprobacionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,7 +27,11 @@ class AprobacionController extends Controller
         $solicitudes = $this->aprobacionService->pendientesParaActor($actor, $pagosSystem?->id ?? 0);
         $roles = $actor->roles()->pluck('codigo')->toArray();
 
-        $data = $solicitudes->map(function ($s) use ($roles) {
+        // Eager-load roles for all unique solicitantes in one query
+        $solicitanteIds = $solicitudes->pluck('solicitante_id')->unique()->filter()->values();
+        $usuarios = User::with('roles')->whereIn('id', $solicitanteIds)->get()->keyBy('id');
+
+        $data = $solicitudes->map(function ($s) use ($roles, $usuarios) {
             $arr = $s->toArray();
             // Detectar la línea pendiente del actor para saber si es visto_bueno u otro nivel
             $linea = collect($s->aprobaciones)
@@ -35,6 +40,8 @@ class AprobacionController extends Controller
                 ->sortBy('nivel_orden')
                 ->first();
             $arr['linea_pendiente_nivel_codigo'] = $linea['nivel_codigo'] ?? ($linea->nivel_codigo ?? null);
+            $solicitanteUser = $usuarios->get($s->solicitante_id);
+            $arr['solicitante_rol'] = $solicitanteUser?->roles?->first()?->nombre ?? null;
             return $arr;
         });
 

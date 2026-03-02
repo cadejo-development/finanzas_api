@@ -117,7 +117,17 @@ class SolicitudPagoController extends Controller
             // El "Visto Bueno" (nivel_orden=0) es un pre-requisito interno;
             // la tabla muestra el NIVEL DE DECISIÓN (1-4) y quién lo aprueba.
             $aprobaciones = $s->aprobaciones;
-            $decisionLinea = $aprobaciones->where('nivel_orden', '>', 0)->first();
+            // Find the first PENDING decision line (nivel_orden > 0)
+            $decisionLinea = $aprobaciones->where('nivel_orden', '>', 0)
+                ->where('estado', 'pendiente')
+                ->sortBy('nivel_orden')
+                ->first();
+            // Fallback: if none pending, show the last approved decision line
+            if (!$decisionLinea) {
+                $decisionLinea = $aprobaciones->where('nivel_orden', '>', 0)
+                    ->sortByDesc('nivel_orden')
+                    ->first();
+            }
 
             if ($decisionLinea) {
                 // Extraer número de nivel desde el código (nivel_1 → 1, nivel_2 → 2…)
@@ -125,9 +135,11 @@ class SolicitudPagoController extends Controller
                 $arr['nivel_actual'] = 'Nivel ' . $numStr;
                 $arr['aprobador_pendiente'] = self::$rolLabels[$decisionLinea->rol_requerido]
                     ?? $decisionLinea->rol_requerido;
+                $arr['aprobador_nombre'] = $decisionLinea->aprobador_nombre ?? null;
             } else {
                 $arr['nivel_actual'] = null;
                 $arr['aprobador_pendiente'] = null;
+                $arr['aprobador_nombre'] = null;
             }
 
             return $arr;
