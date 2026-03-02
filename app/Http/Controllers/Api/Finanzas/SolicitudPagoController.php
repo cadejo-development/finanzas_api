@@ -219,6 +219,13 @@ class SolicitudPagoController extends Controller
 
         $arr = $solicitud->toArray();
         $arr['estado_codigo'] = $solicitud->estadoSolicitudPago?->codigo ?? null;
+        $arr['estado_nombre'] = $solicitud->estadoSolicitudPago?->nombre ?? null;
+        if (isset($arr['fecha_solicitud'])) {
+            $arr['fecha_solicitud'] = date('d/m/Y', strtotime($arr['fecha_solicitud']));
+        }
+        if (isset($arr['fecha_pago'])) {
+            $arr['fecha_pago'] = date('d/m/Y', strtotime($arr['fecha_pago']));
+        }
 
         return response()->json([
             'success' => true,
