@@ -19,11 +19,18 @@ class DatabaseSeeder extends Seeder
         // User::factory(10)->create();
 
         $seeders = [];
-        // Solo ejecutar seeders core en la base central
+        // Solo ejecutar seeders core en la base central (pgsql)
         if (DB::connection()->getName() === 'pgsql') {
             $seeders[] = SucursalesSeeder::class;
             $seeders[] = CentrosCostoSeeder::class;
             $seeders[] = CategoriasSeeder::class;
+            // Auth: sistemas -> roles -> permisos -> usuarios -> relaciones
+            $seeders[] = SystemsSeeder::class;
+            $seeders[] = UsersSeeder::class;
+            $seeders[] = RolesSeeder::class;
+            $seeders[] = PermissionsSeeder::class;
+            $seeders[] = RoleUserSeeder::class;
+            $seeders[] = PermissionRoleSeeder::class;
         }
         // Seeders comunes a todas las bases
         $seeders = array_merge($seeders, [
