@@ -24,10 +24,23 @@ class AprobacionController extends Controller
         $pagosSystem = System::where('codigo', 'pagos')->first();
 
         $solicitudes = $this->aprobacionService->pendientesParaActor($actor, $pagosSystem?->id ?? 0);
+        $roles = $actor->roles()->pluck('codigo')->toArray();
+
+        $data = $solicitudes->map(function ($s) use ($roles) {
+            $arr = $s->toArray();
+            // Detectar la línea pendiente del actor para saber si es visto_bueno u otro nivel
+            $linea = collect($s->aprobaciones)
+                ->where('estado', 'pendiente')
+                ->filter(fn ($l) => in_array($l['rol_requerido'] ?? ($l->rol_requerido ?? ''), $roles))
+                ->sortBy('nivel_orden')
+                ->first();
+            $arr['linea_pendiente_nivel_codigo'] = $linea['nivel_codigo'] ?? ($linea->nivel_codigo ?? null);
+            return $arr;
+        });
 
         return response()->json([
             'success' => true,
-            'data'    => $solicitudes->values(),
+            'data'    => $data->values(),
         ]);
     }
 
