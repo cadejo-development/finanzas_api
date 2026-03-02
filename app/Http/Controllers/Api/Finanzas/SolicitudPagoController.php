@@ -8,6 +8,7 @@ use App\Http\Requests\UpdateSolicitudPagoRequest;
 use App\Models\Contribuyente;
 use App\Models\EstadoSolicitudPago;
 use App\Models\SolicitudPago;
+use App\Models\SolicitudPagoAprobacion;
 use App\Models\SolicitudPagoDetalle;
 use App\Services\Finanzas\AprobacionService;
 use App\Services\Finanzas\CalculoImpuestosSolicitudPago;
@@ -237,6 +238,21 @@ class SolicitudPagoController extends Controller
         if (isset($arr['fecha_pago'])) {
             $arr['fecha_pago'] = date('d/m/Y', strtotime($arr['fecha_pago']));
         }
+
+        // Cargar observaciones (líneas marcadas como 'observado' con sus comentarios)
+        $arr['observaciones'] = SolicitudPagoAprobacion::where('solicitud_pago_id', $solicitud->id)
+            ->where('estado', 'observado')
+            ->orderBy('id', 'asc')
+            ->get()
+            ->map(fn ($l) => [
+                'id'               => $l->id,
+                'aprobador_nombre' => $l->aprobador_nombre,
+                'rol_requerido'    => $l->rol_requerido,
+                'rol_label'        => self::$rolLabels[$l->rol_requerido] ?? $l->rol_requerido,
+                'comentario'       => $l->comentario,
+                'aprobado_en'      => $l->aprobado_en?->toIso8601String(),
+            ])
+            ->values();
 
         return response()->json([
             'success' => true,

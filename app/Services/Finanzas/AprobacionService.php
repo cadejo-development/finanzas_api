@@ -148,6 +148,44 @@ class AprobacionService
         });
     }
 
+    /**
+     * El usuario autenticado observa (devuelve a borrador) la solicitud para que el solicitante la corrija.
+     * La línea queda como 'observado', las demás pendientes se cancelan.
+     * La solicitud vuelve al estado BORRADOR.
+     */
+    public function observar(SolicitudPago $solicitud, User $actor, string $comentario): array
+    {
+        return DB::connection('pagos')->transaction(function () use ($solicitud, $actor, $comentario) {
+            $linea = $this->obtenerLineaPendienteParaActor($solicitud, $actor);
+
+            if (!$linea) {
+                return ['ok' => false, 'message' => 'No tienes una aprobación pendiente para esta solicitud.'];
+            }
+
+            // Marcar esta línea como observada con el comentario
+            $linea->update([
+                'estado'           => 'observado',
+                'aprobador_id'     => $actor->id,
+                'aprobador_nombre' => $actor->name,
+                'comentario'       => $comentario,
+                'aprobado_en'      => Carbon::now(),
+            ]);
+
+            // Cancelar todas las líneas pendientes restantes
+            $solicitud->aprobaciones()
+                ->where('estado', 'pendiente')
+                ->update(['estado' => 'cancelado']);
+
+            // Devolver la solicitud al estado BORRADOR
+            $estadoBorrador = EstadoSolicitudPago::where('codigo', 'BORRADOR')->first();
+            if ($estadoBorrador) {
+                $solicitud->update(['estado_id' => $estadoBorrador->id]);
+            }
+
+            return ['ok' => true, 'message' => 'Solicitud devuelta al solicitante para revisión.'];
+        });
+    }
+
     // ─── Helpers públicos ──────────────────────────────────────────────────────
 
     /**

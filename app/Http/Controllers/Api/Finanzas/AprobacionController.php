@@ -120,4 +120,27 @@ class AprobacionController extends Controller
             'message' => $resultado['message'],
         ], $resultado['ok'] ? 200 : 422);
     }
+
+    /**
+     * Observar: devuelve la solicitud a BORRADOR con un comentario obligatorio.
+     * El solicitante debe corregir antes de reenviar.
+     * POST /api/pagos/solicitudes-pago/{id}/observar
+     */
+    public function observar(Request $request, int $id): JsonResponse
+    {
+        $request->validate([
+            'comentario' => 'required|string|min:5|max:1000',
+        ]);
+
+        $solicitud = SolicitudPago::findOrFail($id);
+        /** @var \App\Models\User $actor */
+        $actor = auth()->user();
+
+        $resultado = $this->aprobacionService->observar($solicitud, $actor, $request->input('comentario'));
+
+        return response()->json([
+            'success' => $resultado['ok'],
+            'message' => $resultado['message'],
+        ], $resultado['ok'] ? 200 : 422);
+    }
 }
