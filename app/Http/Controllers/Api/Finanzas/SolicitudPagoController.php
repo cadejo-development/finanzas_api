@@ -15,6 +15,16 @@ use Illuminate\Http\JsonResponse;
 
 class SolicitudPagoController extends Controller
 {
+    /** Mapa de códigos de rol → etiqueta legible */
+    private static array $rolLabels = [
+        'gerente_logistica'    => 'Gte. Logística',
+        'gerente_mantenimiento'=> 'Gte. Mantenimiento',
+        'gerente_sucursal'     => 'Gte. Sucursal',
+        'gerencia_area'        => 'Gcia. de Área',
+        'gerencia_financiera'  => 'Gcia. Financiera',
+        'gerencia_general'     => 'Gcia. General',
+        'admin'                => 'Admin',
+    ];
 
     /**
      * Preview de cálculo de solicitud de pago (no guarda nada).
@@ -58,16 +68,42 @@ class SolicitudPagoController extends Controller
      */
     public function index(): JsonResponse
     {
-        $solicitudes = SolicitudPago::with(['detalles', 'proveedor', 'contribuyente', 'formaPago', 'estadoSolicitudPago'])
+        $solicitudes = SolicitudPago::with([
+                'proveedor',
+                'contribuyente',
+                'formaPago',
+                'estadoSolicitudPago',
+                'aprobaciones' => fn($q) => $q->orderBy('nivel_orden')->orderBy('id'),
+            ])
             ->orderByDesc('id')
             ->get();
 
         $data = $solicitudes->map(function($s) {
             $arr = $s->toArray();
             $arr['estado_codigo'] = $s->estadoSolicitudPago?->codigo ?? null;
+            $arr['estado_nombre'] = $s->estadoSolicitudPago?->nombre ?? null;
             if (isset($arr['fecha_solicitud'])) {
                 $arr['fecha_solicitud'] = date('d/m/Y', strtotime($arr['fecha_solicitud']));
             }
+
+            // Calcular nivel actual y aprobador pendiente
+            $aprobaciones = $s->aprobaciones;
+            $nivelPendiente = $aprobaciones->where('estado', 'pendiente')->min('nivel_orden');
+
+            if ($nivelPendiente !== null) {
+                $arr['nivel_actual'] = $nivelPendiente === 0 ? 'Visto Bueno' : 'Nivel ' . $nivelPendiente;
+                $roles = $aprobaciones
+                    ->where('estado', 'pendiente')
+                    ->where('nivel_orden', $nivelPendiente)
+                    ->pluck('rol_requerido')
+                    ->map(fn($r) => self::$rolLabels[$r] ?? $r)
+                    ->implode(' / ');
+                $arr['aprobador_pendiente'] = $roles;
+            } else {
+                $arr['nivel_actual'] = null;
+                $arr['aprobador_pendiente'] = null;
+            }
+
             return $arr;
         });
 
