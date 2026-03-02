@@ -3,38 +3,34 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\CentroCosto;
 use Illuminate\Support\Facades\DB;
 
 class CentrosCostoSeeder extends Seeder
 {
     public function run(): void
     {
-        // Solo ejecutar en la base central
-        if (CentroCosto::resolveConnection()->getName() !== 'pgsql') {
-            return;
-        }
-        // Truncar tabla (PostgreSQL)
-        DB::statement('TRUNCATE TABLE centros_costo RESTART IDENTITY CASCADE');
+        // Truncar tabla (PostgreSQL) — usar conexión explícita
+        DB::connection('pgsql')->statement('TRUNCATE TABLE centros_costo RESTART IDENTITY CASCADE');
 
-        // Insertar datos
-        CentroCosto::insert([
-            [
-                'codigo' => 'CECO_GUIROLA',
-                'nombre' => 'Centro Costo Guírola',
-                'activo' => true,
-                'aud_usuario' => 'seed',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'codigo' => 'CECO_STA_TECLA',
-                'nombre' => 'Centro Costo Santa Tecla',
-                'activo' => true,
-                'aud_usuario' => 'seed',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-        ]);
+        $now = now();
+        $rows = [
+            ['codigo' => 'CC-ADM',  'nombre' => 'Administración Central'],
+            ['codigo' => 'CC-OPE',  'nombre' => 'Operaciones'],
+            ['codigo' => 'CC-LOG',  'nombre' => 'Logística'],
+            ['codigo' => 'CC-MKT',  'nombre' => 'Marketing y Ventas'],
+            ['codigo' => 'CC-PROD', 'nombre' => 'Producción / Planta'],
+            ['codigo' => 'CC-MAN',  'nombre' => 'Mantenimiento'],
+            ['codigo' => 'CC-FIN',  'nombre' => 'Finanzas y Contabilidad'],
+            ['codigo' => 'CC-RH',   'nombre' => 'Recursos Humanos'],
+            ['codigo' => 'CC-TI',   'nombre' => 'Tecnología e Informática'],
+            ['codigo' => 'CC-CAL',  'nombre' => 'Control de Calidad'],
+        ];
+
+        foreach ($rows as $row) {
+            DB::connection('pgsql')->table('centros_costo')->updateOrInsert(
+                ['codigo' => $row['codigo']],
+                array_merge($row, ['aud_usuario' => 'seed', 'created_at' => $now, 'updated_at' => $now])
+            );
+        }
     }
 }
