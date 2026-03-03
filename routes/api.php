@@ -46,5 +46,6 @@ Route::prefix('pagos')->middleware('auth:sanctum')->group(function () {
     Route::get('mis-aprobaciones',                [AprobacionController::class, 'misAprobaciones']);
 
     // Presupuesto Unidad
+    Route::get('mi-presupuesto', [PresupuestoUnidadController::class, 'miPresupuesto']);
     Route::apiResource('presupuestos-unidad', PresupuestoUnidadController::class);
 });

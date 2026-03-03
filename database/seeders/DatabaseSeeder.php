@@ -31,6 +31,8 @@ class DatabaseSeeder extends Seeder
             $seeders[] = PermissionsSeeder::class;
             $seeders[] = RoleUserSeeder::class;
             $seeders[] = PermissionRoleSeeder::class;
+            // Asignación de centros de costo a usuarios
+            $seeders[] = UserCentrosCostoSeeder::class;
         }
         // Seeders comunes a todas las bases
         $seeders = array_merge($seeders, [
@@ -40,7 +42,7 @@ class DatabaseSeeder extends Seeder
             FormasPagoSeeder::class,
             EstadosSolicitudPagoSeeder::class,
             //PedidosSeeder::class,
-            //PresupuestosUnidadSeeder::class,
+            PresupuestosUnidadSeeder::class,
             SolicitudesPagoSeeder::class,
         ]);
         $this->call($seeders);
