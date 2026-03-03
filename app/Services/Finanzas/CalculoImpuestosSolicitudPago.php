@@ -49,7 +49,7 @@ class CalculoImpuestosSolicitudPago
             $perc_iva_1 = 0;
         } elseif ($codigo === 'gran_contribuyente') {
             $iva = round($subTotal * 0.13, 2);
-            $perc_iva_1 = round($subTotal * 0.01, 2);
+            $perc_iva_1 = $subTotal > 100 ? round($subTotal * 0.01, 2) : 0;
         }
 
         if (strtolower($personeria) === 'natural' && $esServicio) {
