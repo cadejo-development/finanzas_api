@@ -25,45 +25,50 @@ class PresupuestoUnidadController extends Controller
      */
     public function miPresupuesto()
     {
-        $userId = Auth::id();
-        $anio   = (int) date('Y');
+        try {
+            $userId = Auth::id();
+            $anio   = (int) date('Y');
 
-        // 1) Centros de costo asignados al usuario (pgsql)
-        $codigos = UserCentroCosto::where('user_id', $userId)
-            ->pluck('centro_costo_codigo');
+            // 1) Centros de costo asignados al usuario (pgsql)
+            $codigos = UserCentroCosto::where('user_id', $userId)
+                ->pluck('centro_costo_codigo');
 
-        if ($codigos->isEmpty()) {
+            if ($codigos->isEmpty()) {
+                return response()->json(['success' => true, 'data' => []]);
+            }
+
+            // 2) Presupuestos para esos centros (pagos DB)
+            $presupuestos = PresupuestoUnidad::whereIn('centro_costo_codigo', $codigos)
+                ->where('anio', $anio)
+                ->get();
+
+            // 3) Enriquecer con nombre del centro desde pgsql
+            $centros = DB::connection('pgsql')
+                ->table('centros_costo')
+                ->whereIn('codigo', $codigos)
+                ->pluck('nombre', 'codigo');
+
+            $data = $presupuestos->map(function ($p) use ($centros) {
+                $presupuestado = (float) $p->presupuesto_total;
+                $ejecutado     = (float) $p->ejecutado;
+                $porcentaje    = $presupuestado > 0 ? round(($ejecutado / $presupuestado) * 100, 1) : 0;
+                return [
+                    'id'                  => $p->id,
+                    'centro_costo_codigo' => $p->centro_costo_codigo,
+                    'centro_costo_nombre' => $centros[$p->centro_costo_codigo] ?? $p->centro_costo_codigo,
+                    'anio'                => $p->anio,
+                    'presupuesto_total'   => $presupuestado,
+                    'ejecutado'           => $ejecutado,
+                    'disponible'          => max(0, $presupuestado - $ejecutado),
+                    'porcentaje'          => $porcentaje,
+                ];
+            });
+
+            return response()->json(['success' => true, 'data' => $data]);
+        } catch (\Throwable $e) {
+            \Log::error('miPresupuesto error: ' . $e->getMessage());
             return response()->json(['success' => true, 'data' => []]);
         }
-
-        // 2) Presupuestos para esos centros (pagos DB)
-        $presupuestos = PresupuestoUnidad::whereIn('centro_costo_codigo', $codigos)
-            ->where('anio', $anio)
-            ->get();
-
-        // 3) Enriquecer con nombre del centro desde pgsql
-        $centros = DB::connection('pgsql')
-            ->table('centros_costo')
-            ->whereIn('codigo', $codigos)
-            ->pluck('nombre', 'codigo');
-
-        $data = $presupuestos->map(function ($p) use ($centros) {
-            $presupuestado = (float) $p->presupuesto_total;
-            $ejecutado     = (float) $p->ejecutado;
-            $porcentaje    = $presupuestado > 0 ? round(($ejecutado / $presupuestado) * 100, 1) : 0;
-            return [
-                'id'                  => $p->id,
-                'centro_costo_codigo' => $p->centro_costo_codigo,
-                'centro_costo_nombre' => $centros[$p->centro_costo_codigo] ?? $p->centro_costo_codigo,
-                'anio'                => $p->anio,
-                'presupuesto_total'   => $presupuestado,
-                'ejecutado'           => $ejecutado,
-                'disponible'          => max(0, $presupuestado - $ejecutado),
-                'porcentaje'          => $porcentaje,
-            ];
-        });
-
-        return response()->json(['success' => true, 'data' => $data]);
     }
 
     public function store(Request $request)
