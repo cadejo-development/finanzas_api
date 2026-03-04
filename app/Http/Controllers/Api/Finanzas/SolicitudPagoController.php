@@ -13,6 +13,8 @@ use App\Models\SolicitudPagoDetalle;
 use App\Services\Finanzas\AprobacionService;
 use App\Services\Finanzas\CalculoImpuestosSolicitudPago;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class SolicitudPagoController extends Controller
 {
@@ -69,7 +71,7 @@ class SolicitudPagoController extends Controller
      */
     public function index(AprobacionService $aprobacionService): JsonResponse
     {
-        $userId        = auth()->id();
+        $userId        = Auth::id();
         $borradoreId   = EstadoSolicitudPago::where('codigo', 'BORRADOR')->value('id');
 
         $solicitudes = SolicitudPago::with([
@@ -102,7 +104,7 @@ class SolicitudPagoController extends Controller
                 }
             } catch (\Throwable $e) {
                 // Silenciar: no romper el listado por un error de reparación
-                \Log::warning("generarCadena falló para solicitud {$s->id}: " . $e->getMessage());
+                Log::warning("generarCadena falló para solicitud {$s->id}: " . $e->getMessage());
             }
         }
 
@@ -196,7 +198,7 @@ class SolicitudPagoController extends Controller
 
         // 4) Guardar solicitud (registrar solicitante)
         /** @var \App\Models\User $user */
-        $user = auth()->user();
+        $user = Auth::user();
         $solicitud = SolicitudPago::create(array_merge($data, $totales, [
             'solicitante_id'     => $user?->id,
             'solicitante_nombre' => $user?->name,
