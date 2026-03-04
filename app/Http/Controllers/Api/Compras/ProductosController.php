@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Compras;
 use App\Http\Controllers\Controller;
 use App\Models\Categoria;
 use App\Models\Producto;
+use App\Models\Sucursal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -81,5 +82,18 @@ class ProductosController extends Controller
             ->get(['id', 'key', 'nombre', 'orden']);
 
         return response()->json(['data' => $cats]);
+    }
+
+    /**
+     * GET /api/compras/sucursales
+     * Devuelve las sucursales activas (desde pgsql).
+     */
+    public function sucursales(): JsonResponse
+    {
+        $sucursales = Sucursal::where('activo', true)
+            ->orderBy('nombre')
+            ->get(['id', 'codigo', 'nombre']);
+
+        return response()->json(['success' => true, 'data' => $sucursales]);
     }
 }
