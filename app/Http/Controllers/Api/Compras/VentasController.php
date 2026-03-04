@@ -9,7 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use PhpOffice\PhpSpreadsheet\IOFactory;
+// use PhpOffice\PhpSpreadsheet\IOFactory; // deshabilitado temporalmente
 
 class VentasController extends Controller
 {
@@ -78,6 +78,12 @@ class VentasController extends Controller
      */
     public function import(Request $request): JsonResponse
     {
+        return response()->json([
+            'success' => false,
+            'message' => 'Funcionalidad de importación no disponible aún.',
+        ], 501);
+
+        // --- DESHABILITADO TEMPORALMENTE (phpspreadsheet no instalado) ---
         $request->validate([
             'archivo'      => 'required|file|mimes:xlsx,xls,csv|max:5120',
             'sucursal_id'  => 'required|integer|min:1',

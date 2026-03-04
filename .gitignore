@@ -22,3 +22,8 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+package.json
+package-lock.json
+node_modules/
+vite.config.js

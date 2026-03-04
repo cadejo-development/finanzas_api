@@ -1,0 +1,14 @@
+{
+  "steps": {
+    "extensions": {
+      "cmds": [
+        "install-php-extensions ctype curl dom fileinfo filter gd zip hash mbstring openssl pcre pdo session tokenizer xml pdo_pgsql redis"
+      ]
+    },
+    "install:composer": {
+      "cmds": [
+        "composer install --optimize-autoloader --no-scripts --no-interaction --ignore-platform-reqs"
+      ]
+    }
+  }
+}
