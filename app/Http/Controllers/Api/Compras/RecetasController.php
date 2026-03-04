@@ -73,7 +73,7 @@ class RecetasController extends Controller
 
         $usuario = $request->user()?->email ?? 'sistema';
 
-        DB::connection('compras')->transaction(function () use ($validated, $usuario, &$receta) {
+        $receta = DB::connection('compras')->transaction(function () use ($validated, $usuario): Receta {
             $receta = Receta::create([
                 'nombre'        => $validated['nombre'],
                 'descripcion'   => $validated['descripcion'] ?? null,
@@ -92,6 +92,8 @@ class RecetasController extends Controller
                     'aud_usuario'        => $usuario,
                 ]);
             }
+
+            return $receta;
         });
 
         $receta->load('ingredientes.producto');
