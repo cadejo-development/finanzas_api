@@ -8,8 +8,7 @@ use App\Models\VentaSemanalDetalle;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
-// use PhpOffice\PhpSpreadsheet\IOFactory; // deshabilitado temporalmente
+// use PhpOffice\PhpSpreadsheet\IOFactory; // TODO: habilitar cuando se necesite importar xlsx
 
 class VentasController extends Controller
 {
@@ -78,130 +77,11 @@ class VentasController extends Controller
      */
     public function import(Request $request): JsonResponse
     {
+        // TODO: habilitar cuando se instale phpoffice/phpspreadsheet
         return response()->json([
             'success' => false,
             'message' => 'Funcionalidad de importación no disponible aún.',
         ], 501);
-
-        // --- DESHABILITADO TEMPORALMENTE (phpspreadsheet no instalado) ---
-        $request->validate([
-            'archivo'      => 'required|file|mimes:xlsx,xls,csv|max:5120',
-            'sucursal_id'  => 'required|integer|min:1',
-            'semana_inicio' => 'required|date_format:Y-m-d',
-        ]);
-
-        $sucursalId    = (int) $request->sucursal_id;
-        $semanaInicio  = $request->semana_inicio;
-
-        // Verificar duplicado
-        $existe = VentaSemanal::where('sucursal_id', $sucursalId)
-            ->where('semana_inicio', $semanaInicio)
-            ->first();
-
-        if ($existe) {
-            throw ValidationException::withMessages([
-                'semana_inicio' => ["Ya existe una importación de ventas para la sucursal {$sucursalId} en la semana {$semanaInicio}."],
-            ]);
-        }
-
-        $file = $request->file('archivo');
-
-        try {
-            $spreadsheet = IOFactory::load($file->getPathname());
-        } catch (\Exception $e) {
-            throw ValidationException::withMessages([
-                'archivo' => ['No se pudo leer el archivo. Asegúrate de que sea un xlsx/xls/csv válido.'],
-            ]);
-        }
-
-        $sheet = $spreadsheet->getActiveSheet();
-        $rows  = $sheet->toArray(null, true, true, true); // Key by column letter
-
-        if (count($rows) < 2) {
-            throw ValidationException::withMessages([
-                'archivo' => ['El archivo no contiene datos (mínimo cabecera + 1 fila de datos).'],
-            ]);
-        }
-
-        // Detectar mapeo de columnas desde la cabecera (fila 1)
-        $header      = array_map('trim', array_map('strtolower', $rows[1]));
-        $colCodigo   = $this->findCol($header, ['codigo', 'code', 'cód']);
-        $colNombre   = $this->findCol($header, ['producto', 'nombre', 'name', 'product']);
-        $colCategoria = $this->findCol($header, ['categoria', 'categoría', 'category', 'tipo', 'type']);
-        $colCantidad = $this->findCol($header, ['cantidad', 'qty', 'quantity', 'vendido', 'sold']);
-        $colPrecio   = $this->findCol($header, ['precio', 'price', 'precio_unitario', 'unit price']);
-
-        if (! $colCantidad) {
-            throw ValidationException::withMessages([
-                'archivo' => ['No se encontró columna de cantidad en las cabeceras del archivo.'],
-            ]);
-        }
-
-        $detallesData = [];
-        $errores      = [];
-
-        for ($rowIdx = 2; $rowIdx <= count($rows); $rowIdx++) {
-            $row = $rows[$rowIdx] ?? null;
-            if (! $row) continue;
-
-            $codigo   = $colCodigo   ? trim((string)($row[$colCodigo] ?? ''))   : ('PROD-' . $rowIdx);
-            $nombre   = $colNombre   ? trim((string)($row[$colNombre] ?? ''))   : $codigo;
-            $categoria = $colCategoria ? trim((string)($row[$colCategoria] ?? '')) : null;
-            $cantidad = (float) str_replace(',', '.', $row[$colCantidad] ?? 0);
-            $precio   = $colPrecio   ? (float) str_replace(',', '.', $row[$colPrecio] ?? 0) : 0;
-
-            if (empty($nombre) && $cantidad == 0) continue; // saltar filas vacías
-
-            $detallesData[] = [
-                'producto_codigo'  => $codigo ?: ('PROD-' . $rowIdx),
-                'producto_nombre'  => $nombre ?: 'Sin nombre',
-                'categoria_key'    => $categoria ? strtolower($categoria) : null,
-                'cantidad_vendida' => max(0, $cantidad),
-                'precio_unitario'  => max(0, $precio),
-                'total'            => round(max(0, $cantidad) * max(0, $precio), 2),
-            ];
-        }
-
-        if (empty($detallesData)) {
-            throw ValidationException::withMessages([
-                'archivo' => ['No se encontraron filas válidas en el archivo.'],
-            ]);
-        }
-
-        DB::beginTransaction();
-        try {
-            $venta = VentaSemanal::create([
-                'sucursal_id'    => $sucursalId,
-                'semana_inicio'  => $semanaInicio,
-                'archivo_nombre' => $file->getClientOriginalName(),
-                'importado_por'  => $request->user()?->name ?? 'sistema',
-            ]);
-
-            foreach (array_chunk($detallesData, 200) as $chunk) {
-                $chunk = array_map(fn($d) => array_merge($d, [
-                    'venta_semanal_id' => $venta->id,
-                    'created_at'       => now(),
-                    'updated_at'       => now(),
-                ]), $chunk);
-                VentaSemanalDetalle::insert($chunk);
-            }
-
-            DB::commit();
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al persistir los datos: ' . $e->getMessage(),
-            ], 500);
-        }
-
-        return response()->json([
-            'success'      => true,
-            'message'      => 'Ventas importadas correctamente.',
-            'venta_id'     => $venta->id,
-            'total_filas'  => count($detallesData),
-            'errores'      => $errores,
-        ]);
     }
 
     /**
