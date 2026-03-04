@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\System;
 use App\Models\User;
+use App\Models\UserCentroCosto;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -43,8 +44,9 @@ class AuthController extends Controller
 
         $token = $user->createToken('api-token')->plainTextToken;
 
-        // Cargar roles y permisos del sistema 'pagos'
-        $sistema = System::where('codigo', 'pagos')->first();
+        // Cargar roles y permisos del sistema indicado (default: 'pagos')
+        $sistemaCodigo = $request->input('sistema', 'pagos');
+        $sistema = System::where('codigo', $sistemaCodigo)->first();
         $roles = [];
         $permisos = [];
 
@@ -73,16 +75,19 @@ class AuthController extends Controller
                 ]);
         }
 
+        $centrosCosto = $this->centrosCostoDeUsuario($user->id);
+
         return response()->json([
             'success' => true,
             'token'   => $token,
             'user'    => [
-                'id'     => $user->id,
-                'name'   => $user->name,
-                'email'  => $user->email,
-                'activo' => $user->activo,
-                'roles'  => $roles,
-                'permisos' => $permisos,
+                'id'            => $user->id,
+                'name'          => $user->name,
+                'email'         => $user->email,
+                'activo'        => $user->activo,
+                'roles'         => $roles,
+                'permisos'      => $permisos,
+                'centros_costo' => $centrosCosto,
             ],
         ]);
     }
@@ -108,7 +113,8 @@ class AuthController extends Controller
     public function me(Request $request): JsonResponse
     {
         $user = $request->user();
-        $sistema = System::where('codigo', 'pagos')->first();
+        $sistemaCodigo = $request->query('sistema', 'pagos');
+        $sistema = System::where('codigo', $sistemaCodigo)->first();
 
         $roles = [];
         $permisos = [];
@@ -138,16 +144,34 @@ class AuthController extends Controller
                 ]);
         }
 
+        $centrosCosto = $this->centrosCostoDeUsuario($user->id);
+
         return response()->json([
             'success' => true,
             'user'    => [
-                'id'       => $user->id,
-                'name'     => $user->name,
-                'email'    => $user->email,
-                'activo'   => $user->activo,
-                'roles'    => $roles,
-                'permisos' => $permisos,
+                'id'            => $user->id,
+                'name'          => $user->name,
+                'email'         => $user->email,
+                'activo'        => $user->activo,
+                'roles'         => $roles,
+                'permisos'      => $permisos,
+                'centros_costo' => $centrosCosto,
             ],
         ]);
+    }
+
+    // ─── Helpers ───────────────────────────────────────────────────────────────
+
+    private function centrosCostoDeUsuario(int $userId): array
+    {
+        return UserCentroCosto::with('centroCosto')
+            ->where('user_id', $userId)
+            ->get()
+            ->map(fn ($ucc) => [
+                'codigo' => $ucc->centro_costo_codigo,
+                'nombre' => $ucc->centroCosto?->nombre ?? $ucc->centro_costo_codigo,
+            ])
+            ->values()
+            ->toArray();
     }
 }

@@ -9,6 +9,9 @@ use App\Http\Controllers\Api\Finanzas\SolicitudPagoController;
 use App\Http\Controllers\Api\Finanzas\SolicitudPagoDetalleController;
 use App\Http\Controllers\Api\Finanzas\SolicitudPagoAdjuntoController;
 use App\Http\Controllers\Api\Finanzas\PresupuestoUnidadController;
+use App\Http\Controllers\Api\Compras\VentasController;
+use App\Http\Controllers\Api\Compras\ProductosController;
+use App\Http\Controllers\Api\Compras\RecetasController;
 
 // ─── Autenticación (pública) ───────────────────────────────────────────────
 Route::prefix('auth')->group(function () {
@@ -48,4 +51,21 @@ Route::prefix('pagos')->middleware('auth:sanctum')->group(function () {
     // Presupuesto Unidad
     Route::get('mi-presupuesto', [PresupuestoUnidadController::class, 'miPresupuesto']);
     Route::apiResource('presupuestos-unidad', PresupuestoUnidadController::class);
+});
+
+// ─── Compras (protegido con Sanctum) ──────────────────────────────────────
+Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
+    // Catálogo de productos (paginado)
+    Route::get('catalogos',           [ProductosController::class, 'catalogos']);
+    Route::get('productos',           [ProductosController::class, 'index']);
+
+    // Recetas (CRUD + calculo de ingredientes)
+    Route::post('recetas/calcular',   [RecetasController::class, 'calcular']);
+    Route::apiResource('recetas',     RecetasController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
+
+    // Ventas semanales
+    Route::get('ventas',              [VentasController::class, 'index']);
+    Route::get('ventas/sugerencia',   [VentasController::class, 'sugerencia']);
+    Route::get('ventas/{id}',         [VentasController::class, 'show']);
+    Route::post('ventas/import',      [VentasController::class, 'import']);
 });
