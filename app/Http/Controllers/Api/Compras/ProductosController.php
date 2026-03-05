@@ -90,9 +90,7 @@ class ProductosController extends Controller
      */
     public function sucursales(): JsonResponse
     {
-        $sucursales = Sucursal::where('activo', true)
-            ->orderBy('nombre')
-            ->get(['id', 'codigo', 'nombre']);
+        $sucursales = Sucursal::orderBy('nombre')->get(['id', 'codigo', 'nombre']);
 
         return response()->json(['success' => true, 'data' => $sucursales]);
     }

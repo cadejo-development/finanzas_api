@@ -19,20 +19,25 @@ class SucursalesSeeder extends Seeder
         // Insertar registros
         Sucursal::insert([
             [
-                'codigo' => 'S01',
-                'nombre' => 'Guírola',
-                'activo' => true,
+                'codigo'      => 'S01',
+                'nombre'      => 'Guírola',
                 'aud_usuario' => 'seed',
-                'created_at' => now(),
-                'updated_at' => now(),
+                'created_at'  => now(),
+                'updated_at'  => now(),
             ],
             [
-                'codigo' => 'S02',
-                'nombre' => 'Santa Tecla',
-                'activo' => true,
+                'codigo'      => 'S02',
+                'nombre'      => 'Santa Tecla',
                 'aud_usuario' => 'seed',
-                'created_at' => now(),
-                'updated_at' => now(),
+                'created_at'  => now(),
+                'updated_at'  => now(),
+            ],
+            [
+                'codigo'      => 'S03',
+                'nombre'      => 'Multiplaza',
+                'aud_usuario' => 'seed',
+                'created_at'  => now(),
+                'updated_at'  => now(),
             ],
         ]);
     }

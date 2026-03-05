@@ -9,10 +9,7 @@ class Sucursal extends Model
     protected $connection = 'pgsql';
     protected $table = 'sucursales';
     protected $fillable = [
-        'codigo', 'nombre', 'activo', 'aud_usuario'
-    ];
-    protected $casts = [
-        'activo' => 'boolean',
+        'codigo', 'nombre', 'aud_usuario'
     ];
     public function pedidos()
     {
