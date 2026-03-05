@@ -62,10 +62,13 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('sucursales',          [ProductosController::class, 'sucursales']);
 
     // Pedidos (bandeja y consolidado)
-    Route::get('pedidos/semanas',     [PedidosController::class, 'semanas']);
-    Route::get('pedidos/consolidado', [PedidosController::class, 'consolidado']);
-    Route::get('pedidos/{id}',        [PedidosController::class, 'show']);
-    Route::get('pedidos',             [PedidosController::class, 'index']);
+    Route::get('pedidos/semanas',       [PedidosController::class, 'semanas']);
+    Route::get('pedidos/consolidado',   [PedidosController::class, 'consolidado']);
+    Route::get('pedidos/mi-borrador',   [PedidosController::class, 'miBorrador']);
+    Route::put('pedidos/{id}/items',    [PedidosController::class, 'guardarItems']);
+    Route::post('pedidos/{id}/enviar',  [PedidosController::class, 'enviar']);
+    Route::get('pedidos/{id}',          [PedidosController::class, 'show']);
+    Route::get('pedidos',               [PedidosController::class, 'index']);
 
     // Recetas (CRUD + calculo de ingredientes)
     Route::post('recetas/calcular',   [RecetasController::class, 'calcular']);

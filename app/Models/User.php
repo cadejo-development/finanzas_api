@@ -18,6 +18,7 @@ class User extends Authenticatable
         'email',
         'password',
         'activo',
+        'sucursal_id',
         'aud_usuario',
     ];
 
