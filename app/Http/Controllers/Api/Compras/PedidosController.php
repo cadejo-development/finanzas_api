@@ -53,13 +53,17 @@ class PedidosController extends Controller
      */
     public function semanas(): JsonResponse
     {
-        $semanas = Pedido::where('estado', 'ENVIADO')
-            ->distinct()
-            ->orderByDesc('semana_inicio')
-            ->pluck('semana_inicio')
-            ->map(fn ($d) => substr((string) $d, 0, 10));
+        try {
+            $semanas = Pedido::where('estado', 'ENVIADO')
+                ->distinct()
+                ->orderByDesc('semana_inicio')
+                ->pluck('semana_inicio')
+                ->map(fn ($d) => is_string($d) ? substr($d, 0, 10) : (string) \Illuminate\Support\Carbon::parse($d)->toDateString());
 
-        return response()->json(['success' => true, 'data' => $semanas]);
+            return response()->json(['success' => true, 'data' => $semanas]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => true, 'data' => []]);
+        }
     }
 
     /**
