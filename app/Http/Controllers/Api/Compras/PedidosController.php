@@ -118,6 +118,7 @@ class PedidosController extends Controller
             'items.*.cantidad'        => 'required|numeric|min:0',
             'items.*.precio_unitario' => 'required|numeric|min:0',
             'items.*.nota'            => 'nullable|string',
+            'items.*.unidad'          => 'nullable|string|max:20',
         ]);
 
         DB::connection('compras')->transaction(function () use ($pedido, $validated) {
@@ -133,6 +134,7 @@ class PedidosController extends Controller
                     'pedido_id'       => $pedido->id,
                     'producto_id'     => $item['producto_id'],
                     'cantidad'        => $item['cantidad'],
+                    'unidad'          => $item['unidad'] ?? null,
                     'precio_unitario' => $item['precio_unitario'],
                     'subtotal'        => $subtotal,
                     'nota'            => $item['nota'] ?? null,
@@ -245,7 +247,7 @@ class PedidosController extends Controller
                 'id'              => $d->id,
                 'producto_id'     => $d->producto_id,
                 'producto_nombre' => $d->producto?->nombre ?? ('Producto ' . $d->producto_id),
-                'unidad'          => $d->producto?->unidad ?? '',
+                'unidad'          => $d->unidad ?? $d->producto?->unidad ?? '',
                 'cantidad'        => (float) $d->cantidad,
                 'precio_unitario' => (float) $d->precio_unitario,
                 'subtotal'        => (float) $d->subtotal,
