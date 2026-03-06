@@ -16,8 +16,13 @@ return new class extends Migration
         if (Schema::connection('compras')->hasTable('productos')) {
             Schema::connection('compras')->table('productos', function (Blueprint $table) {
                 if (!Schema::connection('compras')->hasColumn('productos', 'codigo_origen')) {
-                    $table->string('codigo_origen', 50)->nullable()->after('codigo')
+                    $table->string('codigo_origen', 50)->nullable()->unique()->after('codigo')
                           ->comment('Código original del sistema de origen (SQL Server proCodigo)');
+                } else {
+                    // Agregar unique constraint si la columna existe pero sin constraint
+                    try {
+                        $table->unique('codigo_origen', 'productos_codigo_origen_unique');
+                    } catch (\Exception $e) { /* ya existe */ }
                 }
                 if (!Schema::connection('compras')->hasColumn('productos', 'costo')) {
                     $table->decimal('costo', 12, 4)->default(0)->after('precio')

@@ -48,6 +48,7 @@ return new class extends Migration
 
                 $table->index('receta_id');
                 $table->index('producto_id');
+                $table->unique(['receta_id', 'producto_id'], 'ri_receta_producto_unique');
             });
         }
     }
