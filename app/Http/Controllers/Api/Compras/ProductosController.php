@@ -29,9 +29,14 @@ class ProductosController extends Controller
             ->where('activo', true)
             ->orderBy('nombre');
 
-        // Filtro por categoría
+        // Filtro por categoría exacta
         if ($cat = $request->query('categoria')) {
             $query->whereHas('categoria', fn ($q) => $q->where('key', $cat));
+        }
+
+        // Filtro por prefijo de categoría (ej: prefijo=MR → todas las MR-01, MR-02, ...)
+        if ($prefijo = $request->query('prefijo')) {
+            $query->whereHas('categoria', fn ($q) => $q->where('key', 'ilike', $prefijo . '%'));
         }
 
         // Búsqueda por nombre o código
