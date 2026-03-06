@@ -202,11 +202,12 @@ class RecetasController extends Controller
 
                 if (!isset($acumulado[$key])) {
                     $acumulado[$key] = [
-                        'producto_id'     => $prod->id,
-                        'producto_codigo' => $prod->codigo,
-                        'producto_nombre' => $prod->nombre,
-                        'unidad'          => $ing->unidad,
-                        'cantidad_total'  => 0,
+                        'producto_id'      => $prod->id,
+                        'producto_codigo'  => $prod->codigo,
+                        'producto_nombre'  => $prod->nombre,
+                        'unidad'           => $ing->unidad,
+                        'precio_unitario'  => (float) $prod->precio,
+                        'cantidad_total'   => 0,
                     ];
                 }
                 $acumulado[$key]['cantidad_total'] += $total;
