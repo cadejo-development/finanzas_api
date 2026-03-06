@@ -40,14 +40,18 @@ class CalculoImpuestosSolicitudPago
         $ret_isr = 0;
 
         // Normalizar código contribuyente a minúsculas para comparación
+        // Códigos vigentes: no_inscrito | contribuyente | gran_contribuyente
         $codigo = strtolower($contribuyenteCodigo);
-        if (in_array($codigo, ['no_inscrito', 'consumidor_final'])) {
+        if (in_array($codigo, ['no_inscrito', 'consumidor_final', 'no inscrito'])) {
+            // No inscrito en IVA → sin IVA ni percepciones
             $iva = 0;
             $perc_iva_1 = 0;
-        } elseif ($codigo === 'otros_contribuyentes') {
+        } elseif (in_array($codigo, ['contribuyente', 'otros_contribuyentes', 'contribuyente_inscrito', 'inscrito_iva'])) {
+            // Contribuyente inscrito en IVA → IVA 13%
             $iva = round($subTotal * 0.13, 2);
             $perc_iva_1 = 0;
         } elseif ($codigo === 'gran_contribuyente') {
+            // Gran Contribuyente → IVA 13% + Percepción IVA 1%
             $iva = round($subTotal * 0.13, 2);
             $perc_iva_1 = $subTotal > 100 ? round($subTotal * 0.01, 2) : 0;
         }

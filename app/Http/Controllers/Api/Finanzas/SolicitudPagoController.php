@@ -13,8 +13,10 @@ use App\Models\SolicitudPagoDetalle;
 use App\Services\Finanzas\AprobacionService;
 use App\Services\Finanzas\CalculoImpuestosSolicitudPago;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 class SolicitudPagoController extends Controller
 {
@@ -32,10 +34,31 @@ class SolicitudPagoController extends Controller
     /**
      * Preview de cálculo de solicitud de pago (no guarda nada).
      * POST /api/pagos/solicitudes-pago/preview
+     * Validación ligera: no requiere fechas (no se usan para calcular impuestos).
      */
-    public function preview(StoreSolicitudPagoRequest $request): JsonResponse
+    public function preview(Request $request): JsonResponse
     {
-        $data = $request->validated();
+        $validator = Validator::make($request->all(), [
+            'contribuyente_id'               => 'required',
+            'personeria'                     => 'required|string',
+            'es_servicio'                    => 'required',
+            'detalles'                       => 'required|array|min:1',
+            'detalles.*.concepto'            => 'required|string|max:255',
+            'detalles.*.cantidad'            => 'required|numeric|min:0.01',
+            'detalles.*.precio_unitario'     => 'required|numeric|min:0',
+            'detalles.*.centro_costo_codigo' => 'nullable|string|max:20',
+            'detalles.*.etiqueta_codigo'     => 'nullable|string|max:5',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Datos insuficientes para calcular preview.',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $data     = $validator->validated();
         $detalles = $data['detalles'];
 
         // 1) Subtotales por línea
@@ -43,10 +66,10 @@ class SolicitudPagoController extends Controller
         $subTotal = array_sum(array_column($detallesCalculados, 'subtotal'));
 
         // 2) Info para impuestos
-        $contribuyente = Contribuyente::find($data['contribuyente_id']);
+        $contribuyente       = Contribuyente::find($data['contribuyente_id']);
         $contribuyenteCodigo = $contribuyente?->codigo ?? '';
-        $personeria = $data['personeria'];
-        $esServicio = $data['es_servicio'];
+        $personeria          = $data['personeria'];
+        $esServicio          = filter_var($data['es_servicio'], FILTER_VALIDATE_BOOLEAN);
 
         // 3) Totales
         $totales = CalculoImpuestosSolicitudPago::calcularTotales(
