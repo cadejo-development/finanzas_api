@@ -73,8 +73,8 @@ class CatalogosFinanzasController extends Controller
             return response()->json(['success' => true, 'data' => []]);
         }
 
-        $cols      = ['id', 'codigo', 'nombre', 'nit', 'banco', 'cuenta_bancaria', 'tipo_cuenta', 'tipo_persona_id'];
-        $resultado = Proveedor::with('tipoPersona:id,codigo,nombre')
+        $cols      = ['id', 'codigo', 'nombre', 'nit', 'banco', 'cuenta_bancaria', 'tipo_cuenta', 'tipo_persona_id', 'tipo_contribuyente_id'];
+        $resultado = Proveedor::with('tipoPersona:id,codigo,nombre', 'tipoContribuyente:id,codigo,nombre')
             ->where('nombre', 'ilike', '%' . $q . '%')
             ->orderBy('nombre')
             ->limit(10)
