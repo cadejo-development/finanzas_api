@@ -245,6 +245,7 @@ class PedidosController extends Controller
                 'id'              => $d->id,
                 'producto_id'     => $d->producto_id,
                 'producto_nombre' => $d->producto?->nombre ?? ('Producto ' . $d->producto_id),
+                'unidad'          => $d->producto?->unidad ?? '',
                 'cantidad'        => (float) $d->cantidad,
                 'precio_unitario' => (float) $d->precio_unitario,
                 'subtotal'        => (float) $d->subtotal,
