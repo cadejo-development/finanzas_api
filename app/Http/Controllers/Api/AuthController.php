@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\System;
+use App\Models\Sucursal;
 use App\Models\User;
 use App\Models\UserCentroCosto;
 use Illuminate\Http\JsonResponse;
@@ -76,6 +77,9 @@ class AuthController extends Controller
         }
 
         $centrosCosto = $this->centrosCostoDeUsuario($user->id);
+        $sucursalNombre = $user->sucursal_id
+            ? Sucursal::find($user->sucursal_id)?->nombre
+            : null;
 
         return response()->json([
             'success' => true,
@@ -86,6 +90,7 @@ class AuthController extends Controller
                 'email'         => $user->email,
                 'activo'        => $user->activo,
                 'sucursal_id'   => $user->sucursal_id,
+                'sucursal'      => $sucursalNombre,
                 'roles'         => $roles,
                 'permisos'      => $permisos,
                 'centros_costo' => $centrosCosto,
@@ -146,6 +151,9 @@ class AuthController extends Controller
         }
 
         $centrosCosto = $this->centrosCostoDeUsuario($user->id);
+        $sucursalNombre = $user->sucursal_id
+            ? Sucursal::find($user->sucursal_id)?->nombre
+            : null;
 
         return response()->json([
             'success' => true,
@@ -155,6 +163,7 @@ class AuthController extends Controller
                 'email'         => $user->email,
                 'activo'        => $user->activo,
                 'sucursal_id'   => $user->sucursal_id,
+                'sucursal'      => $sucursalNombre,
                 'roles'         => $roles,
                 'permisos'      => $permisos,
                 'centros_costo' => $centrosCosto,
