@@ -74,24 +74,33 @@ class PedidosController extends Controller
             return response()->json(['success' => false, 'message' => 'sucursal_id y semana_inicio son requeridos'], 422);
         }
 
-        $pedido = Pedido::with('detalles.producto')
-            ->where('sucursal_id', $sucursalId)
-            ->where('semana_inicio', $semanaInicio)
-            ->orderByRaw("CASE WHEN estado = 'BORRADOR' THEN 0 ELSE 1 END")
-            ->first();
+        try {
+            $pedido = Pedido::with('detalles.producto')
+                ->where('sucursal_id', $sucursalId)
+                ->where('semana_inicio', $semanaInicio)
+                ->orderByRaw("CASE WHEN estado = 'BORRADOR' THEN 0 ELSE 1 END")
+                ->first();
 
-        if (!$pedido) {
-            $pedido = Pedido::create([
-                'sucursal_id'    => $sucursalId,
-                'semana_inicio'  => $semanaInicio,
-                'estado'         => 'BORRADOR',
-                'total_estimado' => 0,
-                'aud_usuario'    => auth('sanctum')->user()?->email ?? 'api',
+            if (!$pedido) {
+                $pedido = Pedido::create([
+                    'sucursal_id'    => $sucursalId,
+                    'semana_inicio'  => $semanaInicio,
+                    'estado'         => 'BORRADOR',
+                    'total_estimado' => 0,
+                    'aud_usuario'    => auth('sanctum')->user()?->email ?? 'api',
+                ]);
+                $pedido->load('detalles.producto');
+            }
+
+            return response()->json(['success' => true, 'data' => $this->formatPedido($pedido)]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('miBorrador error', [
+                'sucursal_id'   => $sucursalId,
+                'semana_inicio' => $semanaInicio,
+                'error'         => $e->getMessage(),
             ]);
-            $pedido->load('detalles.producto');
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
-
-        return response()->json(['success' => true, 'data' => $this->formatPedido($pedido)]);
     }
 
     /**
