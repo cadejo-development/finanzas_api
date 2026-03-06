@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Compras;
 use App\Http\Controllers\Controller;
 use App\Models\Receta;
 use App\Models\RecetaIngrediente;
+use App\Models\RecetaSucursal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,14 +15,21 @@ class RecetasController extends Controller
     // ──────────────────────────────────────────────────────────────────────
     // GET /api/compras/recetas
     // Lista paginada de recetas (con ingredientes + producto).
+    // Query opcional: sucursal_id → devuelve platos_semana específico
     // ──────────────────────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
-        $perPage = min((int) $request->query('per_page', 20), 100);
+        $perPage    = min((int) $request->query('per_page', 20), 100);
+        $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
 
         $query = Receta::with(['ingredientes.producto'])
             ->where('activa', true)
             ->orderBy('nombre');
+
+        // Pre-cargar configuración de platos por sucursal si se especifica
+        if ($sucursalId !== null) {
+            $query->with(['sucursalConfig' => fn ($q) => $q->where('sucursal_id', $sucursalId)]);
+        }
 
         if ($tipo = $request->query('tipo')) {
             $query->where('tipo', $tipo);
@@ -34,7 +42,7 @@ class RecetasController extends Controller
         $pagina = $query->paginate($perPage);
 
         return response()->json([
-            'data' => $pagina->getCollection()->map(fn ($r) => $this->formatReceta($r)),
+            'data' => $pagina->getCollection()->map(fn ($r) => $this->formatReceta($r, $sucursalId)),
             'meta' => [
                 'current_page' => $pagina->currentPage(),
                 'last_page'    => $pagina->lastPage(),
@@ -49,10 +57,17 @@ class RecetasController extends Controller
     // ──────────────────────────────────────────────────────────────────────
     // GET /api/compras/recetas/{id}
     // ──────────────────────────────────────────────────────────────────────
-    public function show(int $id): JsonResponse
+    public function show(Request $request, int $id): JsonResponse
     {
-        $receta = Receta::with(['ingredientes.producto'])->findOrFail($id);
-        return response()->json(['data' => $this->formatReceta($receta)]);
+        $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
+
+        $query = Receta::with(['ingredientes.producto']);
+        if ($sucursalId !== null) {
+            $query->with(['sucursalConfig' => fn ($q) => $q->where('sucursal_id', $sucursalId)]);
+        }
+
+        $receta = $query->findOrFail($id);
+        return response()->json(['data' => $this->formatReceta($receta, $sucursalId)]);
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -202,9 +217,47 @@ class RecetasController extends Controller
     }
 
     // ──────────────────────────────────────────────────────────────────────
+    // PATCH /api/compras/recetas/{id}/platos-sucursal
+    // Establece (o actualiza) platos_semana de una receta para una sucursal.
+    //
+    // Body: { sucursal_id: int, platos_semana: int }
+    // ──────────────────────────────────────────────────────────────────────
+    public function setPlatosSucursal(Request $request, int $id): JsonResponse
+    {
+        $receta = Receta::findOrFail($id);
+
+        $validated = $request->validate([
+            'sucursal_id'   => 'required|integer|min:1',
+            'platos_semana' => 'required|integer|min:0',
+        ]);
+
+        $usuario = $request->user()?->email ?? 'sistema';
+
+        $cfg = RecetaSucursal::updateOrCreate(
+            [
+                'receta_id'   => $receta->id,
+                'sucursal_id' => $validated['sucursal_id'],
+            ],
+            [
+                'platos_semana' => $validated['platos_semana'],
+                'activa'        => true,
+                'aud_usuario'   => $usuario,
+            ]
+        );
+
+        return response()->json([
+            'data' => [
+                'receta_id'     => $receta->id,
+                'sucursal_id'   => $cfg->sucursal_id,
+                'platos_semana' => $cfg->platos_semana,
+            ],
+        ]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
     // Helpers
     // ──────────────────────────────────────────────────────────────────────
-    private function formatReceta(Receta $r): array
+    private function formatReceta(Receta $r, ?int $sucursalId = null): array
     {
         return [
             'id'            => $r->id,
@@ -212,7 +265,7 @@ class RecetasController extends Controller
             'descripcion'   => $r->descripcion,
             'tipo'          => $r->tipo,
             'categoria'     => $r->tipo,   // alias frontend (recetasService usa "categoria")
-            'platos_semana' => $r->platos_semana,
+            'platos_semana' => $r->platosParaSucursal($sucursalId),
             'activa'        => $r->activa,
             'ingredientes'  => $r->ingredientes->map(fn ($ing) => [
                 'id'                 => $ing->id,

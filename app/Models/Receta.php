@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Receta extends Model
 {
@@ -37,5 +38,30 @@ class Receta extends Model
     public function ingredientesConProducto()
     {
         return $this->hasMany(RecetaIngrediente::class)->with('producto');
+    }
+
+    /**
+     * Configuración de platos_semana por sucursal.
+     */
+    public function sucursalConfig(): HasMany
+    {
+        return $this->hasMany(RecetaSucursal::class);
+    }
+
+    /**
+     * Devuelve los platos/semana para una sucursal concreta.
+     * Si no hay registro específico, usa el valor global de la receta.
+     */
+    public function platosParaSucursal(?int $sucursalId): int
+    {
+        if ($sucursalId === null) {
+            return $this->platos_semana ?? 0;
+        }
+
+        $cfg = $this->relationLoaded('sucursalConfig')
+            ? $this->sucursalConfig->firstWhere('sucursal_id', $sucursalId)
+            : $this->sucursalConfig()->where('sucursal_id', $sucursalId)->first();
+
+        return $cfg?->platos_semana ?? $this->platos_semana ?? 0;
     }
 }

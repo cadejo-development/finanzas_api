@@ -70,8 +70,9 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('pedidos/{id}',          [PedidosController::class, 'show']);
     Route::get('pedidos',               [PedidosController::class, 'index']);
 
-    // Recetas (CRUD + calculo de ingredientes)
-    Route::post('recetas/calcular',   [RecetasController::class, 'calcular']);
+    // Recetas (CRUD + calculo de ingredientes + platos por sucursal)
+    Route::post('recetas/calcular',                    [RecetasController::class, 'calcular']);
+    Route::patch('recetas/{id}/platos-sucursal',       [RecetasController::class, 'setPlatosSucursal']);
     Route::apiResource('recetas',     RecetasController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
 
     // Ventas semanales
