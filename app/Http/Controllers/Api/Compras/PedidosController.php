@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace App\Http\Controllers\Api\Compras;
 
@@ -75,23 +75,21 @@ class PedidosController extends Controller
         }
 
         try {
-            $pedido = Pedido::with('detalles.producto')
-                ->where('sucursal_id', $sucursalId)
+            // Busca cualquier pedido existente para esa semana (BORRADOR o ENVIADO)
+            $pedido = Pedido::where('sucursal_id', $sucursalId)
                 ->where('semana_inicio', $semanaInicio)
                 ->orderByRaw("CASE WHEN estado = 'BORRADOR' THEN 0 ELSE 1 END")
                 ->first();
 
+            // Solo crea si no existe ninguno (evita unique violation por race condition)
             if (!$pedido) {
-                $pedido = Pedido::create([
-                    'sucursal_id'    => $sucursalId,
-                    'semana_inicio'  => $semanaInicio,
-                    'estado'         => 'BORRADOR',
-                    'total_estimado' => 0,
-                    'aud_usuario'    => auth('sanctum')->user()?->email ?? 'api',
-                ]);
-                $pedido->load('detalles.producto');
+                $pedido = Pedido::firstOrCreate(
+                    ['sucursal_id' => $sucursalId, 'semana_inicio' => $semanaInicio],
+                    ['estado' => 'BORRADOR', 'total_estimado' => 0, 'aud_usuario' => auth('sanctum')->user()?->email ?? 'api']
+                );
             }
 
+            $pedido->load('detalles.producto');
             return response()->json(['success' => true, 'data' => $this->formatPedido($pedido)]);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('miBorrador error', [
