@@ -25,6 +25,7 @@ class UsersSeeder extends Seeder
                 'email'       => 'gerente@demo.com',
                 'password'    => Hash::make('gerente123'),
                 'activo'      => true,
+                'sucursal_id' => 1,
                 'aud_usuario' => 'seed',
                 'created_at'  => now(),
                 'updated_at'  => now(),
