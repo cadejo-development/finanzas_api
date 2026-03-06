@@ -35,6 +35,7 @@ class StoreSolicitudPagoRequest extends FormRequest
             'detalles' => 'required|array|min:1',
             'detalles.*.concepto' => 'required|string|max:255',
             'detalles.*.centro_costo_codigo' => 'nullable|string|max:20',
+            'detalles.*.etiqueta_codigo' => 'nullable|string|max:5',
             'detalles.*.cantidad' => 'required|numeric|min:0.01',
             'detalles.*.precio_unitario' => 'required|numeric|min:0',
         ];

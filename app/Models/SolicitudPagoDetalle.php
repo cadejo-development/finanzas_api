@@ -9,7 +9,8 @@ class SolicitudPagoDetalle extends Model
     protected $connection = 'pagos';
     protected $table = 'solicitud_pago_detalles';
     protected $fillable = [
-        'solicitud_pago_id', 'concepto', 'centro_costo_codigo', 'cantidad', 'precio_unitario', 'subtotal_linea', 'aud_usuario'
+        'solicitud_pago_id', 'concepto', 'centro_costo_codigo', 'etiqueta_codigo',
+        'cantidad', 'precio_unitario', 'subtotal_linea', 'aud_usuario'
     ];
     protected $casts = [
         'cantidad' => 'decimal:2',

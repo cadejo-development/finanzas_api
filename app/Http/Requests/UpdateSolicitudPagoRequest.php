@@ -38,7 +38,8 @@ class UpdateSolicitudPagoRequest extends FormRequest
             'aud_usuario' => 'sometimes|required|string|max:50',
             'detalles' => 'sometimes|required|array|min:1',
             'detalles.*.concepto' => 'sometimes|required|string|max:255',
-            'detalles.*.centro_costo_id' => 'sometimes|required|exists:compras.centros_costo,id',
+            'detalles.*.centro_costo_codigo' => 'sometimes|nullable|string|max:20',
+            'detalles.*.etiqueta_codigo' => 'sometimes|nullable|string|max:5',
             'detalles.*.cantidad' => 'sometimes|required|numeric|min:0.01',
             'detalles.*.precio_unitario' => 'sometimes|required|numeric|min:0',
             // Si viene detalles.*.subtotal, solo validar que sea numérico, pero no usarlo para cálculo

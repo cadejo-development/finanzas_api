@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CentroCosto;
 use App\Models\Contribuyente;
 use App\Models\EstadoSolicitudPago;
+use App\Models\Etiqueta;
 use App\Models\FormaPago;
 use App\Models\Proveedor;
 use App\Models\Sucursal;
@@ -34,6 +35,7 @@ class CatalogosFinanzasController extends Controller
                 'contribuyentes' => Contribuyente::orderBy('id')->get(),
                 'formas_pago'    => FormaPago::orderBy('id')->get(),
                 'tipos_persona'  => TipoPersona::where('activo', true)->orderBy('id')->get(),
+                'etiquetas'      => Etiqueta::orderBy('codigo')->get(),
                 // proveedores NO se incluye aquí — usar GET /proveedores?q=texto
             ],
         ]);
