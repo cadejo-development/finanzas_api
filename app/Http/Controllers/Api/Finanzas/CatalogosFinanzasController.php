@@ -11,8 +11,10 @@ use App\Models\FormaPago;
 use App\Models\Proveedor;
 use App\Models\Sucursal;
 use App\Models\TipoPersona;
+use App\Models\UserCentroCosto;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
 class CatalogosFinanzasController extends Controller
@@ -23,14 +25,23 @@ class CatalogosFinanzasController extends Controller
      */
     public function index(): JsonResponse
     {
+        // Si el usuario tiene CECOs asignados, filtrar el catálogo a sus centros
+        $cecoQuery = CentroCosto::with('padre:id,codigo,nombre')
+            ->operativos()
+            ->orderBy('nombre');
+
+        $asignados = UserCentroCosto::where('user_id', Auth::id())
+            ->pluck('centro_costo_codigo');
+
+        if ($asignados->isNotEmpty()) {
+            $cecoQuery->whereIn('codigo', $asignados);
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
                 'sucursales'     => Sucursal::orderBy('id')->get(),
-                'centros_costo'  => CentroCosto::with('padre:id,codigo,nombre')
-                                        ->operativos()
-                                        ->orderBy('nombre')
-                                        ->get(),
+                'centros_costo'  => $cecoQuery->get(),
                 'estados'        => EstadoSolicitudPago::orderBy('id')->get(),
                 'contribuyentes' => Contribuyente::orderBy('id')->get(),
                 'formas_pago'    => FormaPago::orderBy('id')->get(),

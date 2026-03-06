@@ -48,9 +48,28 @@ class PresupuestoUnidadController extends Controller
                 ->whereIn('codigo', $codigos)
                 ->pluck('nombre', 'codigo');
 
-            $data = $presupuestos->map(function ($p) use ($centros) {
+            // 4) Calcular ejecutado dinámicamente desde solicitudes aprobadas
+            $estadoAprobadoId = DB::connection('pagos')
+                ->table('estados_solicitud_pago')
+                ->where('codigo', 'APROBADO')
+                ->value('id');
+
+            $ejecutadoPorCeco = collect();
+            if ($estadoAprobadoId) {
+                $ejecutadoPorCeco = DB::connection('pagos')
+                    ->table('solicitud_pago_detalles as d')
+                    ->join('solicitudes_pago as sp', 'sp.id', '=', 'd.solicitud_pago_id')
+                    ->whereIn('d.centro_costo_codigo', $codigos)
+                    ->where('sp.estado_id', $estadoAprobadoId)
+                    ->whereYear('sp.fecha_solicitud', $anio)
+                    ->groupBy('d.centro_costo_codigo')
+                    ->selectRaw('d.centro_costo_codigo, SUM(d.subtotal_linea) as total_ejecutado')
+                    ->pluck('total_ejecutado', 'd.centro_costo_codigo');
+            }
+
+            $data = $presupuestos->map(function ($p) use ($centros, $ejecutadoPorCeco) {
                 $presupuestado = (float) $p->presupuesto_total;
-                $ejecutado     = (float) $p->ejecutado;
+                $ejecutado     = (float) ($ejecutadoPorCeco[$p->centro_costo_codigo] ?? 0);
                 $porcentaje    = $presupuestado > 0 ? round(($ejecutado / $presupuestado) * 100, 1) : 0;
                 return [
                     'id'                  => $p->id,
