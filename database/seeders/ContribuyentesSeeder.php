@@ -13,31 +13,20 @@ class ContribuyentesSeeder extends Seeder
      */
     public function run(): void
     {
-        Contribuyente::insert([
-            [
-                'codigo' => 'no_inscrito',
-                'nombre' => 'No Inscrito / Factura Consumidor',
-                'activo' => true,
-                'aud_usuario' => 'seed',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'codigo' => 'otros',
-                'nombre' => 'Otros contribuyentes',
-                'activo' => true,
-                'aud_usuario' => 'seed',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'codigo' => 'gran_contribuyente',
-                'nombre' => 'Gran Contribuyente',
-                'activo' => true,
-                'aud_usuario' => 'seed',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-        ]);
+        // 0 = No inscrito en IVA (factura consumidor final, sin NRC)
+        // 1 = Contribuyente inscrito en IVA (emite CCF, tiene NIT + NRC)
+        // 2 = Gran Contribuyente (régimen especial DGII)
+        $tipos = [
+            ['codigo' => 'no_inscrito',        'nombre' => 'No Inscrito / Factura Consumidor Final'],
+            ['codigo' => 'contribuyente',       'nombre' => 'Contribuyente Inscrito en IVA'],
+            ['codigo' => 'gran_contribuyente',  'nombre' => 'Gran Contribuyente'],
+        ];
+
+        foreach ($tipos as $t) {
+            Contribuyente::updateOrCreate(
+                ['codigo' => $t['codigo']],
+                array_merge($t, ['activo' => true, 'aud_usuario' => 'seed', 'created_at' => now(), 'updated_at' => now()])
+            );
+        }
     }
 }
