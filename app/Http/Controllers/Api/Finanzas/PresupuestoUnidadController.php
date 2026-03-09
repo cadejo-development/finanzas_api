@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api\Finanzas;
 
 use App\Http\Controllers\Controller;
 use App\Models\PresupuestoUnidad;
-use App\Models\UserCentroCosto;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -26,12 +25,18 @@ class PresupuestoUnidadController extends Controller
     public function miPresupuesto()
     {
         try {
-            $userId = Auth::id();
-            $anio   = (int) date('Y');
+            $user = Auth::user();
+            $anio = (int) date('Y');
 
-            // 1) Centros de costo asignados al usuario (pgsql)
-            $codigos = UserCentroCosto::where('user_id', $userId)
-                ->pluck('centro_costo_codigo');
+            if (!$user->sucursal_id) {
+                return response()->json(['success' => true, 'data' => []]);
+            }
+
+            $codigos = DB::connection('pgsql')
+                ->table('centros_costo')
+                ->where('sucursal_id', $user->sucursal_id)
+                ->whereNotNull('padre_id')
+                ->pluck('codigo');
 
             if ($codigos->isEmpty()) {
                 return response()->json(['success' => true, 'data' => []]);

@@ -11,7 +11,6 @@ use App\Models\FormaPago;
 use App\Models\Proveedor;
 use App\Models\Sucursal;
 use App\Models\TipoPersona;
-use App\Models\UserCentroCosto;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -30,11 +29,9 @@ class CatalogosFinanzasController extends Controller
             ->operativos()
             ->orderBy('nombre');
 
-        $asignados = UserCentroCosto::where('user_id', Auth::id())
-            ->pluck('centro_costo_codigo');
-
-        if ($asignados->isNotEmpty()) {
-            $cecoQuery->whereIn('codigo', $asignados);
+        $user = Auth::user();
+        if ($user->sucursal_id) {
+            $cecoQuery->where('sucursal_id', $user->sucursal_id);
         }
 
         return response()->json([
