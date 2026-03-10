@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CentroCosto;
 use App\Models\System;
 use App\Models\Sucursal;
 use App\Models\User;
-use App\Models\UserCentroCosto;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -76,7 +76,7 @@ class AuthController extends Controller
                 ]);
         }
 
-        $centrosCosto = $this->centrosCostoDeUsuario($user->id);
+        $centrosCosto = $this->centrosCostoDeUsuario($user->sucursal_id);
         $sucursalNombre = $user->sucursal_id
             ? Sucursal::find($user->sucursal_id)?->nombre
             : null;
@@ -150,7 +150,7 @@ class AuthController extends Controller
                 ]);
         }
 
-        $centrosCosto = $this->centrosCostoDeUsuario($user->id);
+        $centrosCosto = $this->centrosCostoDeUsuario($user->sucursal_id);
         $sucursalNombre = $user->sucursal_id
             ? Sucursal::find($user->sucursal_id)?->nombre
             : null;
@@ -173,14 +173,18 @@ class AuthController extends Controller
 
     // ─── Helpers ───────────────────────────────────────────────────────────────
 
-    private function centrosCostoDeUsuario(int $userId): array
+    private function centrosCostoDeUsuario(?int $sucursalId): array
     {
-        return UserCentroCosto::with('centroCosto')
-            ->where('user_id', $userId)
+        if (! $sucursalId) {
+            return [];
+        }
+
+        return CentroCosto::where('sucursal_id', $sucursalId)
+            ->orderBy('nombre')
             ->get()
-            ->map(fn ($ucc) => [
-                'codigo' => $ucc->centro_costo_codigo,
-                'nombre' => $ucc->centroCosto?->nombre ?? $ucc->centro_costo_codigo,
+            ->map(fn ($cc) => [
+                'codigo' => $cc->codigo,
+                'nombre' => $cc->nombre,
             ])
             ->values()
             ->toArray();

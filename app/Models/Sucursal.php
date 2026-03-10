@@ -9,8 +9,12 @@ class Sucursal extends Model
     protected $connection = 'pgsql';
     protected $table = 'sucursales';
     protected $fillable = [
-        'codigo', 'nombre', 'tipo', 'aud_usuario'
+        'codigo', 'nombre', 'tipo_sucursal_id', 'aud_usuario'
     ];
+    public function tipoSucursal()
+    {
+        return $this->belongsTo(TipoSucursal::class);
+    }
     public function centrosCosto()
     {
         return $this->hasMany(CentroCosto::class);

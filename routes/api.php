@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\Finanzas\AdminCoreController;
 use App\Http\Controllers\Api\Finanzas\AprobacionController;
 use App\Http\Controllers\Api\Finanzas\CatalogosFinanzasController;
 use App\Http\Controllers\Api\Finanzas\DashboardSolicitudesPagoController;
@@ -52,6 +53,37 @@ Route::prefix('pagos')->middleware('auth:sanctum')->group(function () {
     // Presupuesto Unidad
     Route::get('mi-presupuesto', [PresupuestoUnidadController::class, 'miPresupuesto']);
     Route::apiResource('presupuestos-unidad', PresupuestoUnidadController::class);
+
+    // ── Administración Core (solo admin) ──────────────────────────────────
+    Route::prefix('admin')->group(function () {
+        Route::get('sucursales',           [AdminCoreController::class, 'sucursalesIndex']);
+        Route::post('sucursales',          [AdminCoreController::class, 'sucursalesStore']);
+        Route::put('sucursales/{id}',      [AdminCoreController::class, 'sucursalesUpdate']);
+        Route::delete('sucursales/{id}',   [AdminCoreController::class, 'sucursalesDestroy']);
+
+        Route::get('centros-costo',        [AdminCoreController::class, 'centrosCostoIndex']);
+        Route::post('centros-costo',       [AdminCoreController::class, 'centrosCostoStore']);
+        Route::put('centros-costo/{id}',   [AdminCoreController::class, 'centrosCostoUpdate']);
+        Route::delete('centros-costo/{id}',[AdminCoreController::class, 'centrosCostoDestroy']);
+
+        Route::get('cargos',               [AdminCoreController::class, 'cargosIndex']);
+        Route::post('cargos',              [AdminCoreController::class, 'cargosStore']);
+        Route::put('cargos/{id}',          [AdminCoreController::class, 'cargosUpdate']);
+        Route::delete('cargos/{id}',       [AdminCoreController::class, 'cargosDestroy']);
+
+        Route::get('empleados',            [AdminCoreController::class, 'empleadosIndex']);
+        Route::post('empleados',           [AdminCoreController::class, 'empleadosStore']);
+        Route::put('empleados/{id}',       [AdminCoreController::class, 'empleadosUpdate']);
+        Route::delete('empleados/{id}',    [AdminCoreController::class, 'empleadosDestroy']);
+
+        Route::get('jefaturas',            [AdminCoreController::class, 'jefaturasIndex']);
+        Route::post('jefaturas',           [AdminCoreController::class, 'jefaturasStore']);
+        Route::put('jefaturas/{id}',       [AdminCoreController::class, 'jefaturasUpdate']);
+        Route::delete('jefaturas/{id}',    [AdminCoreController::class, 'jefaturasDestroy']);
+
+        Route::get('tipos-jefatura',       [AdminCoreController::class, 'tiposJefaturaIndex']);
+        Route::get('tipos-sucursal',       [AdminCoreController::class, 'tiposSucursalIndex']);
+    });
 });
 
 // ─── Compras (protegido con Sanctum) ──────────────────────────────────────
