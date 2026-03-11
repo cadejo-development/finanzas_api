@@ -193,8 +193,9 @@ class AdminController extends Controller
         $empleado = DB::table('empleados')->where('id', $empleadoId)->firstOrFail();
 
         $data = $request->validate([
-            'password' => 'required|string|min:8',
-            'role_id'  => 'nullable|exists:roles,id',
+            'password'   => 'required|string|min:8',
+            'role_ids'   => 'nullable|array',
+            'role_ids.*' => 'exists:roles,id',
         ]);
 
         if (DB::table('users')->whereRaw('LOWER(email) = LOWER(?)', [$empleado->email])->exists()) {
@@ -216,13 +217,15 @@ class AdminController extends Controller
             'updated_at'  => now(),
         ]);
 
-        if (!empty($data['role_id'])) {
-            DB::table('role_user')->insert([
-                'user_id'     => $userId,
-                'role_id'     => $data['role_id'],
-                'created_at'  => now(),
-                'updated_at'  => now(),
-            ]);
+        if (!empty($data['role_ids'])) {
+            $now = now();
+            $rows = array_map(fn($rId) => [
+                'user_id'    => $userId,
+                'role_id'    => $rId,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ], $data['role_ids']);
+            DB::table('role_user')->insert($rows);
         }
 
         // Vincular el empleado al nuevo usuario via FK directa
