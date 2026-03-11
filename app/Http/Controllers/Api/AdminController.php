@@ -46,10 +46,17 @@ class AdminController extends Controller
             ]);
 
         if ($search) {
-            $query->where(function ($q) use ($search) {
-                $q->whereRaw("LOWER(e.nombres || ' ' || e.apellidos) LIKE ?", ["%$search%"])
-                  ->orWhereRaw('LOWER(e.email) LIKE ?', ["%$search%"])
-                  ->orWhereRaw('LOWER(e.codigo) LIKE ?', ["%$search%"]);
+            $words = array_values(array_filter(array_map('trim', explode(' ', $search))));
+            $query->where(function ($q) use ($words) {
+                foreach ($words as $word) {
+                    $w = "%{$word}%";
+                    $q->where(function ($sub) use ($w) {
+                        $sub->whereRaw('e.nombres ILIKE ?', [$w])
+                            ->orWhereRaw('e.apellidos ILIKE ?', [$w])
+                            ->orWhereRaw('e.email ILIKE ?', [$w])
+                            ->orWhereRaw('CAST(e.codigo AS TEXT) ILIKE ?', [$w]);
+                    });
+                }
             });
         }
 
