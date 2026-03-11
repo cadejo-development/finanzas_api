@@ -14,6 +14,13 @@ use App\Http\Controllers\Api\Compras\VentasController;
 use App\Http\Controllers\Api\Compras\ProductosController;
 use App\Http\Controllers\Api\Compras\PedidosController;
 use App\Http\Controllers\Api\Compras\RecetasController;
+use App\Http\Controllers\Api\PortalController;
+use App\Http\Controllers\Api\AdminController;
+
+// ─── Portal SSO (protegido con Sanctum) ──────────────────────────────────
+Route::prefix('portal')->middleware('auth:sanctum')->group(function () {
+    Route::get('sistemas', [PortalController::class, 'sistemas']);
+});
 
 // ─── Autenticación (pública) ───────────────────────────────────────────────
 Route::prefix('auth')->group(function () {
@@ -112,4 +119,34 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('ventas/sugerencia',   [VentasController::class, 'sugerencia']);
     Route::get('ventas/{id}',         [VentasController::class, 'show']);
     Route::post('ventas/import',      [VentasController::class, 'import']);
+});
+
+// ─── Admin Portal (protegido con Sanctum + portal_admin) ────────────────
+Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
+    // Usuarios / Empleados
+    Route::get('usuarios',                              [AdminController::class, 'usuarios']);
+    Route::get('users-list',                            [AdminController::class, 'usersList']);
+    Route::get('catalogos',                             [AdminController::class, 'catalogos']);
+    Route::post('usuarios/{empleadoId}/crear-usuario',           [AdminController::class, 'crearUsuario']);
+    Route::post('empleados/{empleadoId}/vincular/{userId}',      [AdminController::class, 'vincularUsuario']);
+    Route::delete('empleados/{empleadoId}/vincular',             [AdminController::class, 'desvincularUsuario']);
+    Route::patch('empleados/{id}',                      [AdminController::class, 'updateEmpleado']);
+    Route::patch('users/{userId}/toggle',               [AdminController::class, 'toggleUser']);
+    Route::patch('users/{userId}/password',             [AdminController::class, 'cambiarPassword']);
+    Route::patch('users/{userId}',                      [AdminController::class, 'updateUser']);
+
+    // Roles
+    Route::get('roles',               [AdminController::class, 'roles']);
+    Route::post('roles',              [AdminController::class, 'storeRol']);
+    Route::patch('roles/{id}',        [AdminController::class, 'updateRol']);
+    Route::delete('roles/{id}',       [AdminController::class, 'deleteRol']);
+
+    // Asignación roles ↔ usuarios
+    Route::get('users/{userId}/roles',              [AdminController::class, 'rolesDeUsuario']);
+    Route::post('users/{userId}/roles/{roleId}',    [AdminController::class, 'asignarRol']);
+    Route::delete('users/{userId}/roles/{roleId}',  [AdminController::class, 'quitarRol']);
+
+    // Sistemas
+    Route::get('sistemas',              [AdminController::class, 'sistemas']);
+    Route::patch('sistemas/{id}',       [AdminController::class, 'updateSistema']);
 });
