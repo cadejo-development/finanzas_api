@@ -54,7 +54,9 @@ class AdminController extends Controller
                         $sub->whereRaw('e.nombres ILIKE ?', [$w])
                             ->orWhereRaw('e.apellidos ILIKE ?', [$w])
                             ->orWhereRaw('e.email ILIKE ?', [$w])
-                            ->orWhereRaw('CAST(e.codigo AS TEXT) ILIKE ?', [$w]);
+                            ->orWhereRaw('CAST(e.codigo AS TEXT) ILIKE ?', [$w])
+                            ->orWhereRaw('c.nombre ILIKE ?', [$w])
+                            ->orWhereRaw('s.nombre ILIKE ?', [$w]);
                     });
                 }
             });
