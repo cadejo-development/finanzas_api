@@ -42,6 +42,13 @@ class EstadosSolicitudPagoSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
+            [
+                'codigo' => 'PAGADO',
+                'nombre' => 'Pagado',
+                'descripcion' => 'Solicitud marcada como pagada por contabilidad.',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
         ]);
     }
 }

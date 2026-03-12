@@ -366,10 +366,13 @@ class SolicitudPagoController extends Controller
 
     /**
      * Enviar solicitud al flujo de aprobación (BORRADOR → ENVIADO + genera cadena).
+     * Si el solicitante tiene el rol jefe_contabilidad, se aprueba automáticamente.
      * POST /api/pagos/solicitudes-pago/{id}/enviar
      */
     public function enviar(int $id, AprobacionService $aprobacionService): JsonResponse
     {
+        /** @var \App\Models\User $user */
+        $user      = Auth::user();
         $solicitud = SolicitudPago::with(['estadoSolicitudPago'])->findOrFail($id);
 
         // Solo se puede enviar si está en BORRADOR
@@ -380,19 +383,64 @@ class SolicitudPagoController extends Controller
             ], 422);
         }
 
-        // Cambiar estado a ENVIADO
+        // Jefe de Contabilidad: aprobación automática, sin cadena
+        if ($user->hasRole('jefe_contabilidad')) {
+            $estadoAprobado = EstadoSolicitudPago::where('codigo', 'APROBADO')->firstOrFail();
+            $solicitud->update(['estado_id' => $estadoAprobado->id]);
+            $solicitud->load(['estadoSolicitudPago']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Solicitud aprobada automáticamente.',
+                'data'    => $solicitud,
+            ]);
+        }
+
+        // Flujo normal: ENVIADO + cadena de aprobación
         $estadoEnviado = EstadoSolicitudPago::where('codigo', 'ENVIADO')->firstOrFail();
         $solicitud->update(['estado_id' => $estadoEnviado->id]);
-
-        // Generar cadena de aprobación
         $aprobacionService->generarCadena($solicitud);
-
         $solicitud->load(['estadoSolicitudPago', 'aprobaciones']);
 
         return response()->json([
             'success' => true,
             'message' => 'Solicitud enviada al flujo de aprobación.',
             'data'    => $solicitud,
+        ]);
+    }
+
+    /**
+     * Marcar solicitud aprobada como pagada.
+     * Solo accesible para asistente_contabilidad y jefe_contabilidad.
+     * POST /api/pagos/solicitudes-pago/{id}/marcar-pagada
+     */
+    public function marcarPagada(int $id): JsonResponse
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+
+        if (!$user->hasRole('asistente_contabilidad') && !$user->hasRole('jefe_contabilidad')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tienes permiso para marcar solicitudes como pagadas.',
+            ], 403);
+        }
+
+        $solicitud = SolicitudPago::with('estadoSolicitudPago')->findOrFail($id);
+
+        if ($solicitud->estadoSolicitudPago?->codigo !== 'APROBADO') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Solo se pueden marcar como pagadas las solicitudes aprobadas.',
+            ], 422);
+        }
+
+        $estadoPagado = EstadoSolicitudPago::where('codigo', 'PAGADO')->firstOrFail();
+        $solicitud->update(['estado_id' => $estadoPagado->id]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Solicitud marcada como pagada.',
         ]);
     }
 }

@@ -50,11 +50,12 @@ Route::prefix('pagos')->middleware('auth:sanctum')->group(function () {
     Route::apiResource('solicitudes-pago.adjuntos', SolicitudPagoAdjuntoController::class);
 
     // Flujo de aprobación
-    Route::post('solicitudes-pago/{id}/enviar',   [SolicitudPagoController::class, 'enviar']);
-    Route::get('solicitudes-pago/{id}/aprobaciones', [AprobacionController::class, 'cadena']);
-    Route::post('solicitudes-pago/{id}/aprobar',  [AprobacionController::class, 'aprobar']);
-    Route::post('solicitudes-pago/{id}/rechazar', [AprobacionController::class, 'rechazar']);
-    Route::post('solicitudes-pago/{id}/observar', [AprobacionController::class, 'observar']);
+    Route::post('solicitudes-pago/{id}/enviar',        [SolicitudPagoController::class, 'enviar']);
+    Route::post('solicitudes-pago/{id}/marcar-pagada', [SolicitudPagoController::class, 'marcarPagada']);
+    Route::get('solicitudes-pago/{id}/aprobaciones',   [AprobacionController::class, 'cadena']);
+    Route::post('solicitudes-pago/{id}/aprobar',       [AprobacionController::class, 'aprobar']);
+    Route::post('solicitudes-pago/{id}/rechazar',      [AprobacionController::class, 'rechazar']);
+    Route::post('solicitudes-pago/{id}/observar',      [AprobacionController::class, 'observar']);
     Route::get('mis-aprobaciones',                [AprobacionController::class, 'misAprobaciones']);
 
     // Presupuesto Unidad
