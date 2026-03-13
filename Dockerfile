@@ -1,5 +1,6 @@
 # ── Stage 1: dependencias ────────────────────────────────────────────────────
-FROM composer:2 AS vendor
+# Usando ECR Public para evitar rate limit de Docker Hub en CodeBuild
+FROM public.ecr.aws/docker/library/composer:2 AS vendor
 
 WORKDIR /app
 COPY composer.json composer.lock ./
@@ -11,7 +12,7 @@ RUN composer install \
     --prefer-dist
 
 # ── Stage 2: imagen final ─────────────────────────────────────────────────────
-FROM php:8.3-cli-alpine
+FROM public.ecr.aws/docker/library/php:8.3-cli-alpine
 
 # Dependencias del sistema
 RUN apk add --no-cache \
