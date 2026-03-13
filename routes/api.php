@@ -22,6 +22,28 @@ Route::prefix('portal')->middleware('auth:sanctum')->group(function () {
     Route::get('sistemas', [PortalController::class, 'sistemas']);
 });
 
+// ─── Health check (público, sin auth) ─────────────────────────────────────
+Route::get('ping', function () {
+    $checks = [];
+
+    foreach (['pgsql' => 'core', 'compras' => 'compras', 'pagos' => 'pagos'] as $connection => $label) {
+        try {
+            \Illuminate\Support\Facades\DB::connection($connection)->getPdo();
+            $checks[$label] = 'ok';
+        } catch (\Throwable $e) {
+            $checks[$label] = 'error: ' . $e->getMessage();
+        }
+    }
+
+    $allOk = collect($checks)->every(fn ($v) => $v === 'ok');
+
+    return response()->json([
+        'status'    => $allOk ? 'ok' : 'degraded',
+        'timestamp' => now()->toIso8601String(),
+        'databases' => $checks,
+    ], $allOk ? 200 : 503);
+});
+
 // ─── Autenticación (pública) ───────────────────────────────────────────────
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
