@@ -1,0 +1,46 @@
+version: 0.2
+
+# IMAGE_REPO_NAME must be set as a CodeBuild environment variable
+# (e.g. "finanzas-api").
+# APPRUNNER_SERVICE_ARN must be set as a CodeBuild environment variable
+# with the full App Runner service ARN. If not set, the deployment
+# trigger is skipped gracefully (build still succeeds).
+
+phases:
+  pre_build:
+    commands:
+      - echo "Logging in to Amazon ECR"
+      - AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME
+      - IMAGE_TAG=${CODEBUILD_RESOLVED_SOURCE_VERSION:-latest}
+      - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com"
+      - echo "Login succeeded — repository is $REPOSITORY_URI"
+
+  build:
+    commands:
+      - echo "Build started on $(date)"
+      - echo "Building Docker image"
+      - docker build -t "$REPOSITORY_URI:latest" .
+      - docker tag "$REPOSITORY_URI:latest" "$REPOSITORY_URI:$IMAGE_TAG"
+      - echo "Image tagged as $IMAGE_TAG"
+
+  post_build:
+    commands:
+      - echo "Build completed on $(date)"
+      - echo "Pushing Docker image to ECR"
+      - docker push "$REPOSITORY_URI:latest"
+      - docker push "$REPOSITORY_URI:$IMAGE_TAG"
+      - echo "Push complete"
+      - |
+        if [ -n "${APPRUNNER_SERVICE_ARN}" ]; then
+          echo "Triggering App Runner deployment for $APPRUNNER_SERVICE_ARN"
+          aws apprunner start-deployment \
+            --service-arn "$APPRUNNER_SERVICE_ARN" \
+            --region "$AWS_DEFAULT_REGION"
+        else
+          echo "APPRUNNER_SERVICE_ARN not configured, skipping App Runner trigger"
+        fi
+
+artifacts:
+  files:
+    - '**/*'
