@@ -22,16 +22,13 @@ RUN apk add --no-cache \
     libxml2-dev \
     openssl-dev
 
-# Extensiones PHP (igual que nixpacks.toml)
+# Extensiones PHP que NO vienen por defecto en la imagen alpine
+# tokenizer, dom, xml, fileinfo ya están compiladas en el core — NO reinstalar
 RUN docker-php-ext-install \
     pdo_pgsql \
     pgsql \
     bcmath \
     mbstring \
-    tokenizer \
-    dom \
-    xml \
-    fileinfo \
     opcache
 
 # Configuración opcache para producción
