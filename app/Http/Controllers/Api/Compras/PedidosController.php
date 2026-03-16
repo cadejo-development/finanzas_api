@@ -193,6 +193,8 @@ class PedidosController extends Controller
 
     /**
      * GET /api/compras/pedidos/consolidado
+     * Devuelve consolidado por producto. Si hay sucursal_id filtra por ella y
+     * agrega detalle por pedido (quién lo hizo, sucursal, items individuales).
      */
     public function consolidado(Request $request): JsonResponse
     {
@@ -204,34 +206,103 @@ class PedidosController extends Controller
         if ($semana)     $query->where('semana_inicio', $semana);
         if ($sucursalId) $query->where('sucursal_id', $sucursalId);
 
-        $pedidos = $query->get();
-        $map     = [];
+        $pedidos = $query->orderBy('sucursal_id')->get();
+
+        // Cargar nombres y codigos de sucursales
+        $sucursalIds = $pedidos->pluck('sucursal_id')->unique()->filter()->values()->toArray();
+        $sucursales  = Sucursal::whereIn('id', $sucursalIds)->get()->keyBy('id');
+
+        $map         = [];
+        $pedidosMeta = [];
 
         foreach ($pedidos as $pedido) {
+            $suc = $sucursales[$pedido->sucursal_id] ?? null;
+
+            $pedidosMeta[$pedido->id] = [
+                'pedido_id'       => $pedido->id,
+                'sucursal_id'     => $pedido->sucursal_id,
+                'sucursal_nombre' => $suc?->nombre ?? ('Sucursal ' . $pedido->sucursal_id),
+                'sucursal_codigo' => $suc?->codigo ?? '',
+                'semana_inicio'   => substr((string) $pedido->semana_inicio, 0, 10),
+                'total_estimado'  => (float) $pedido->total_estimado,
+                'aud_usuario'     => $pedido->aud_usuario ?? '',
+                'num_items'       => $pedido->detalles->count(),
+                'items'           => [],
+            ];
+
             foreach ($pedido->detalles as $det) {
                 $pid = $det->producto_id;
+
                 if (!isset($map[$pid])) {
                     $map[$pid] = [
-                        'producto_id'     => $pid,
-                        'producto_nombre' => $det->producto?->nombre ?? ('Producto ' . $pid),
-                        'total_cantidad'  => 0.0,
-                        'total_subtotal'  => 0.0,
+                        'producto_id'       => $pid,
+                        'producto_codigo'   => $det->producto?->codigo ?? '',
+                        'producto_nombre'   => $det->producto?->nombre ?? ('Producto ' . $pid),
+                        'unidad'            => $det->unidad ?? $det->producto?->unidad ?? '',
+                        'total_cantidad'    => 0.0,
+                        'total_subtotal'    => 0.0,
+                        'num_pedidos'       => 0,
+                        'precio_promedio'   => 0.0,
+                        '_precios'          => [],
+                        'por_sucursal'      => [],
                     ];
                 }
+
                 $map[$pid]['total_cantidad'] += (float) $det->cantidad;
                 $map[$pid]['total_subtotal'] += (float) $det->subtotal;
+                $map[$pid]['num_pedidos']++;
+                if ((float) $det->precio_unitario > 0) {
+                    $map[$pid]['_precios'][] = (float) $det->precio_unitario;
+                }
+
+                // Detalle por sucursal
+                $sucNombre = $suc?->nombre ?? ('Sucursal ' . $pedido->sucursal_id);
+                $sucCodigo = $suc?->codigo ?? '';
+                $keyS = $pedido->sucursal_id;
+                if (!isset($map[$pid]['por_sucursal'][$keyS])) {
+                    $map[$pid]['por_sucursal'][$keyS] = [
+                        'sucursal_id'     => $pedido->sucursal_id,
+                        'sucursal_nombre' => $sucNombre,
+                        'sucursal_codigo' => $sucCodigo,
+                        'gerente'         => $pedido->aud_usuario ?? '',
+                        'cantidad'        => 0.0,
+                        'subtotal'        => 0.0,
+                    ];
+                }
+                $map[$pid]['por_sucursal'][$keyS]['cantidad'] += (float) $det->cantidad;
+                $map[$pid]['por_sucursal'][$keyS]['subtotal'] += (float) $det->subtotal;
             }
         }
 
-        $consolidado = array_values(array_map(fn ($r) => [
-            ...$r,
-            'total_cantidad' => round($r['total_cantidad'], 2),
-            'total_subtotal' => round($r['total_subtotal'], 2),
-        ], $map));
+        $consolidado = array_values(array_map(function ($r) {
+            $precios = $r['_precios'];
+            $promedio = count($precios) ? round(array_sum($precios) / count($precios), 2) : 0;
+            return [
+                'producto_id'     => $r['producto_id'],
+                'producto_codigo' => $r['producto_codigo'],
+                'producto_nombre' => $r['producto_nombre'],
+                'unidad'          => $r['unidad'],
+                'total_cantidad'  => round($r['total_cantidad'], 2),
+                'total_subtotal'  => round($r['total_subtotal'], 2),
+                'num_pedidos'     => $r['num_pedidos'],
+                'precio_promedio' => $promedio,
+                'por_sucursal'    => array_values($r['por_sucursal']),
+            ];
+        }, $map));
 
         usort($consolidado, fn ($a, $b) => strcmp($a['producto_nombre'], $b['producto_nombre']));
 
-        return response()->json(['success' => true, 'data' => $consolidado]);
+        // Meta: pedidos individuales (útil para vista por sucursal)
+        $pedidosDetalle = array_values($pedidosMeta);
+
+        return response()->json([
+            'success'  => true,
+            'data'     => $consolidado,
+            'pedidos'  => $pedidosDetalle,
+            'semana'   => $semana,
+            'total_productos'  => count($consolidado),
+            'total_pedidos'    => count($pedidosDetalle),
+        ]);
     }
 
     /**
