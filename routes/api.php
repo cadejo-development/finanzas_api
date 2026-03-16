@@ -187,8 +187,8 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::patch('sistemas/{id}',       [AdminController::class, 'updateSistema']);
 });
 
-// ─── RRHH (protegido con Sanctum) ─────────────────────────────────────────
-Route::prefix('rrhh')->middleware('auth:sanctum')->group(function () {
+// ─── RRHH (protegido con Sanctum + rol jefatura) ──────────────────────────
+Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin'])->group(function () {
 
     // Catálogos + equipo a cargo
     Route::get('catalogos', [CatalogosRRHHController::class, 'index']);
