@@ -16,6 +16,15 @@ use App\Http\Controllers\Api\Compras\PedidosController;
 use App\Http\Controllers\Api\Compras\RecetasController;
 use App\Http\Controllers\Api\PortalController;
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\RRHH\CatalogosRRHHController;
+use App\Http\Controllers\Api\RRHH\DashboardRRHHController;
+use App\Http\Controllers\Api\RRHH\PermisosController;
+use App\Http\Controllers\Api\RRHH\VacacionesController;
+use App\Http\Controllers\Api\RRHH\IncapacidadesController;
+use App\Http\Controllers\Api\RRHH\AmonestacionesController;
+use App\Http\Controllers\Api\RRHH\DesvinculacionesController;
+use App\Http\Controllers\Api\RRHH\TrasladosController;
+use App\Http\Controllers\Api\RRHH\CambiosSalarialesController;
 
 // ─── Portal SSO (protegido con Sanctum) ──────────────────────────────────
 Route::prefix('portal')->middleware('auth:sanctum')->group(function () {
@@ -26,7 +35,7 @@ Route::prefix('portal')->middleware('auth:sanctum')->group(function () {
 Route::get('ping', function () {
     $checks = [];
 
-    foreach (['pgsql' => 'core', 'compras' => 'compras', 'pagos' => 'pagos'] as $connection => $label) {
+    foreach (['pgsql' => 'core', 'compras' => 'compras', 'pagos' => 'pagos', 'rrhh' => 'rrhh'] as $connection => $label) {
         try {
             \Illuminate\Support\Facades\DB::connection($connection)->getPdo();
             $checks[$label] = 'ok';
@@ -129,6 +138,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     // Pedidos (bandeja y consolidado)
     Route::get('pedidos/semanas',       [PedidosController::class, 'semanas']);
     Route::get('pedidos/consolidado',   [PedidosController::class, 'consolidado']);
+    Route::get('pedidos/exportar-odc',  [PedidosController::class, 'exportarOdc']);
     Route::get('pedidos/mi-borrador',   [PedidosController::class, 'miBorrador']);
     Route::put('pedidos/{id}/items',    [PedidosController::class, 'guardarItems']);
     Route::post('pedidos/{id}/enviar',  [PedidosController::class, 'enviar']);
@@ -175,4 +185,66 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     // Sistemas
     Route::get('sistemas',              [AdminController::class, 'sistemas']);
     Route::patch('sistemas/{id}',       [AdminController::class, 'updateSistema']);
+});
+
+// ─── RRHH (protegido con Sanctum) ─────────────────────────────────────────
+Route::prefix('rrhh')->middleware('auth:sanctum')->group(function () {
+
+    // Catálogos + equipo a cargo
+    Route::get('catalogos', [CatalogosRRHHController::class, 'index']);
+
+    // Dashboard KPIs
+    Route::get('dashboard', [DashboardRRHHController::class, 'resumen']);
+
+    // Permisos
+    Route::get('permisos/saldos',   [PermisosController::class, 'saldos']);
+    Route::get('permisos',          [PermisosController::class, 'index']);
+    Route::post('permisos',         [PermisosController::class, 'store']);
+    Route::get('permisos/{id}',     [PermisosController::class, 'show']);
+    Route::put('permisos/{id}',     [PermisosController::class, 'update']);
+    Route::delete('permisos/{id}',  [PermisosController::class, 'destroy']);
+
+    // Vacaciones
+    Route::get('vacaciones/saldos',     [VacacionesController::class, 'saldos']);
+    Route::get('vacaciones',            [VacacionesController::class, 'index']);
+    Route::post('vacaciones',           [VacacionesController::class, 'store']);
+    Route::get('vacaciones/{id}',       [VacacionesController::class, 'show']);
+    Route::put('vacaciones/{id}',       [VacacionesController::class, 'update']);
+    Route::delete('vacaciones/{id}',    [VacacionesController::class, 'destroy']);
+
+    // Incapacidades
+    Route::get('incapacidades',                      [IncapacidadesController::class, 'index']);
+    Route::post('incapacidades',                     [IncapacidadesController::class, 'store']);
+    Route::get('incapacidades/{id}',                 [IncapacidadesController::class, 'show']);
+    Route::put('incapacidades/{id}',                 [IncapacidadesController::class, 'update']);
+    Route::delete('incapacidades/{id}',              [IncapacidadesController::class, 'destroy']);
+    Route::patch('incapacidades/{id}/homologar',     [IncapacidadesController::class, 'homologar']);
+
+    // Amonestaciones
+    Route::get('amonestaciones',         [AmonestacionesController::class, 'index']);
+    Route::post('amonestaciones',        [AmonestacionesController::class, 'store']);
+    Route::get('amonestaciones/{id}',    [AmonestacionesController::class, 'show']);
+    Route::put('amonestaciones/{id}',    [AmonestacionesController::class, 'update']);
+    Route::delete('amonestaciones/{id}', [AmonestacionesController::class, 'destroy']);
+
+    // Desvinculaciones (despidos + renuncias, filtrar por ?tipo=despido|renuncia)
+    Route::get('desvinculaciones',         [DesvinculacionesController::class, 'index']);
+    Route::post('desvinculaciones',        [DesvinculacionesController::class, 'store']);
+    Route::get('desvinculaciones/{id}',    [DesvinculacionesController::class, 'show']);
+    Route::put('desvinculaciones/{id}',    [DesvinculacionesController::class, 'update']);
+    Route::delete('desvinculaciones/{id}', [DesvinculacionesController::class, 'destroy']);
+
+    // Traslados
+    Route::get('traslados',         [TrasladosController::class, 'index']);
+    Route::post('traslados',        [TrasladosController::class, 'store']);
+    Route::get('traslados/{id}',    [TrasladosController::class, 'show']);
+    Route::put('traslados/{id}',    [TrasladosController::class, 'update']);
+    Route::delete('traslados/{id}', [TrasladosController::class, 'destroy']);
+
+    // Cambios salariales (aumentos + nivelaciones, filtrar por ?tipo_aumento_id=X)
+    Route::get('cambios-salariales',         [CambiosSalarialesController::class, 'index']);
+    Route::post('cambios-salariales',        [CambiosSalarialesController::class, 'store']);
+    Route::get('cambios-salariales/{id}',    [CambiosSalarialesController::class, 'show']);
+    Route::put('cambios-salariales/{id}',    [CambiosSalarialesController::class, 'update']);
+    Route::delete('cambios-salariales/{id}', [CambiosSalarialesController::class, 'destroy']);
 });

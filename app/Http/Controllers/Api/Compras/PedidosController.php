@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Compras;
 
 use App\Http\Controllers\Controller;
+use App\Models\CentroCosto;
 use App\Models\Pedido;
 use App\Models\PedidoDetalle;
 use App\Models\Sucursal;
@@ -231,6 +232,60 @@ class PedidosController extends Controller
         usort($consolidado, fn ($a, $b) => strcmp($a['producto_nombre'], $b['producto_nombre']));
 
         return response()->json(['success' => true, 'data' => $consolidado]);
+    }
+
+    /**
+     * GET /api/compras/pedidos/exportar-odc
+     * Devuelve filas por ítem por pedido, con CECO y sucursal, para generar el CSV ODC.
+     */
+    public function exportarOdc(Request $request): JsonResponse
+    {
+        $semana     = $request->query('semana_inicio');
+        $sucursalId = $request->query('sucursal_id');
+
+        $pedidos = Pedido::with(['detalles.producto'])
+            ->where('estado', 'ENVIADO')
+            ->when($semana,     fn ($q) => $q->where('semana_inicio', $semana))
+            ->when($sucursalId, fn ($q) => $q->where('sucursal_id', $sucursalId))
+            ->orderBy('sucursal_id')
+            ->get();
+
+        // Cargar sucursales (pgsql) con sus centros de costo
+        $sucursalIds = $pedidos->pluck('sucursal_id')->unique()->filter()->values()->toArray();
+
+        $sucursales = Sucursal::with(['centrosCosto' => fn ($q) => $q->where('activo', true)])
+            ->whereIn('id', $sucursalIds)
+            ->get()
+            ->keyBy('id');
+
+        $filas = [];
+
+        foreach ($pedidos as $pedido) {
+            $suc   = $sucursales[$pedido->sucursal_id] ?? null;
+            $cecos = $suc?->centrosCosto ?? collect();
+
+            // Agrupador (padre, es_sub=false) → CECO-XX
+            // Sub      (hijo,  es_sub=true)  → CECO-XX-01
+            $agrupador = $cecos->firstWhere('es_sub', false);
+            $sub       = $cecos->firstWhere('es_sub', true);
+
+            foreach ($pedido->detalles as $det) {
+                $filas[] = [
+                    'pedido_id'       => $pedido->id,
+                    'semana_inicio'   => substr((string) $pedido->semana_inicio, 0, 10),
+                    'sucursal_codigo' => $suc?->codigo ?? '',
+                    'ceco'            => $agrupador?->codigo ?? '',
+                    'sub_ceco'        => $sub?->codigo ?? '',
+                    'producto_codigo' => $det->producto?->codigo ?? '',
+                    'producto_nombre' => $det->producto?->nombre ?? '',
+                    'unidad'          => $det->unidad ?? $det->producto?->unidad ?? '',
+                    'cantidad'        => (float) $det->cantidad,
+                    'precio_unitario' => (float) $det->precio_unitario,
+                ];
+            }
+        }
+
+        return response()->json(['success' => true, 'data' => $filas]);
     }
 
     // ── Helper ────────────────────────────────────────────────────────────────
