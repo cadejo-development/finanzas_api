@@ -3,13 +3,49 @@
 namespace App\Http\Controllers\Api\Finanzas;
 
 use App\Http\Controllers\Controller;
+use App\Models\SolicitudPago;
 use App\Models\SolicitudPagoAdjunto;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Database\Connection;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class SolicitudPagoAdjuntoController extends Controller
 {
+
+    /**
+     * Subir un archivo adjunto a una solicitud (multipart/form-data).
+     * POST /api/pagos/solicitudes-pago/{solicitudId}/subir-adjunto
+     */
+    public function subir(Request $request, int $solicitudId): JsonResponse
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:pdf,jpg,jpeg,png,webp,xlsx,xls,doc,docx|max:10240',
+        ]);
+
+        $solicitud = SolicitudPago::findOrFail($solicitudId);
+
+        /** @var \Illuminate\Http\UploadedFile $file */
+        $file          = $request->file('file');
+        $nombreOriginal = $file->getClientOriginalName();
+        $tipo           = $file->getMimeType();
+
+        $path = $file->store("adjuntos/solicitudes/{$solicitudId}", 'public');
+        $url  = Storage::disk('public')->url($path);
+
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+
+        $adjunto = SolicitudPagoAdjunto::create([
+            'solicitud_pago_id' => $solicitudId,
+            'nombre_archivo'    => $nombreOriginal,
+            'url'               => $url,
+            'tipo'              => $tipo,
+            'aud_usuario'       => $user?->email,
+        ]);
+
+        return response()->json(['success' => true, 'data' => $adjunto], 201);
+    }
 
     /**
      * Display a listing of the resource.

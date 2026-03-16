@@ -251,7 +251,7 @@ class SolicitudPagoController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        $solicitud = SolicitudPago::with(['detalles', 'proveedor', 'contribuyente', 'formaPago', 'estadoSolicitudPago'])
+        $solicitud = SolicitudPago::with(['detalles', 'proveedor', 'contribuyente', 'formaPago', 'estadoSolicitudPago', 'adjuntos'])
             ->findOrFail($id);
 
         $arr = $solicitud->toArray();

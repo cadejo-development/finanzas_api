@@ -71,6 +71,9 @@ Route::prefix('pagos')->middleware('auth:sanctum')->group(function () {
     Route::apiResource('solicitudes-pago.detalles', SolicitudPagoDetalleController::class);
     Route::apiResource('solicitudes-pago.adjuntos', SolicitudPagoAdjuntoController::class);
 
+    // Subir adjunto (multipart)
+    Route::post('solicitudes-pago/{solicitudId}/subir-adjunto', [SolicitudPagoAdjuntoController::class, 'subir']);
+
     // Flujo de aprobación
     Route::post('solicitudes-pago/{id}/enviar',        [SolicitudPagoController::class, 'enviar']);
     Route::post('solicitudes-pago/{id}/marcar-pagada', [SolicitudPagoController::class, 'marcarPagada']);
