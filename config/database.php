@@ -126,6 +126,20 @@ return [
             'search_path' => 'public',
             'sslmode' => 'prefer',
         ],
+        // Conexión personalizada para rrhh_db
+        'rrhh' => [
+            'driver' => env('DB_CONNECTION_RRHH', 'pgsql'),
+            'host' => env('DB_HOST_RRHH', '127.0.0.1'),
+            'port' => env('DB_PORT_RRHH', '5432'),
+            'database' => env('DB_DATABASE_RRHH', 'rrhh_db'),
+            'username' => env('DB_USERNAME_RRHH', 'postgres'),
+            'password' => env('DB_PASSWORD_RRHH', ''),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => 'prefer',
+        ],
 
         'sqlsrv' => [
             'driver' => 'sqlsrv',
