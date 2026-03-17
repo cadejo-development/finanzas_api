@@ -8,7 +8,6 @@ use App\Models\RRHH\TipoFalta;
 use App\Models\RRHH\TipoIncapacidad;
 use App\Models\RRHH\TipoPermiso;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class CatalogosRRHHController extends RRHHBaseController
@@ -19,21 +18,16 @@ class CatalogosRRHHController extends RRHHBaseController
      */
     public function index(): JsonResponse
     {
-        $user = Auth::user();
-
-        // Empleados subordinados (misma sucursal, activos)
-        $jefeEmpleadoId = DB::connection('pgsql')
-            ->table('empleados')
-            ->where('user_id', $user->id)
-            ->value('id');
+        // Obtener IDs del equipo completo (jefe + subordinados por departamento,
+        // o fallback a sucursal si el usuario no tiene departamento asignado)
+        $equipoIds = $this->getEquipoIds();
 
         $equipo = DB::connection('pgsql')
             ->table('empleados as e')
             ->join('cargos as c', 'e.cargo_id', '=', 'c.id')
             ->join('sucursales as s', 'e.sucursal_id', '=', 's.id')
-            ->where('e.sucursal_id', $user->sucursal_id)
+            ->whereIn('e.id', $equipoIds)
             ->where('e.activo', true)
-            ->when($jefeEmpleadoId, fn($q) => $q->where('e.id', '!=', $jefeEmpleadoId))
             ->select('e.id', 'e.codigo', 'e.nombres', 'e.apellidos', 'e.fecha_ingreso', 'c.nombre as cargo', 's.nombre as sucursal')
             ->orderBy('e.apellidos')
             ->get();
