@@ -53,24 +53,29 @@ abstract class RRHHBaseController extends Controller
                 ->value('id');
 
             if ($deptId) {
-                // Subordinados = empleados activos del departamento (excluyendo al jefe)
-                return DB::connection('pgsql')
+                // Equipo = el jefe + todos los empleados activos del departamento
+                $subordinados = DB::connection('pgsql')
                     ->table('empleados')
                     ->where('departamento_id', $deptId)
                     ->where('activo', true)
-                    ->where('id', '!=', $jefeEmpleadoId)
                     ->pluck('id')
                     ->all();
+
+                // Incluir al jefe mismo si no está ya en la lista
+                if (!in_array($jefeEmpleadoId, $subordinados)) {
+                    $subordinados[] = $jefeEmpleadoId;
+                }
+
+                return $subordinados;
             }
         }
 
-        // Fallback: misma sucursal (para retrocompatibilidad)
+        // Fallback: misma sucursal (para retrocompatibilidad), incluyendo al jefe
         return DB::connection('pgsql')
             ->table('empleados')
             ->where('sucursal_id', $user->sucursal_id)
             ->where('activo', true)
             ->pluck('id')
-            ->filter(fn($id) => $id !== $jefeEmpleadoId)
             ->values()
             ->all();
     }
