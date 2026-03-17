@@ -30,22 +30,27 @@ abstract class RRHHBaseController extends Controller
     }
 
     /**
-     * Retorna los IDs de los empleados subordinados al jefe autenticado.
-     * Criterio: empleados activos en el departamento donde el jefe está asignado,
-     * con fallback a misma sucursal para retrocompatibilidad.
+     * Retorna el empleado_id del usuario autenticado (o null si no tiene empleado).
      */
-    protected function getSubordinadosIds(): array
+    protected function getJefeEmpleadoId(): ?int
     {
-        $user = Auth::user();
-
-        // Buscar el registro de empleado del jefe autenticado
-        $jefeEmpleadoId = DB::connection('pgsql')
+        return DB::connection('pgsql')
             ->table('empleados')
-            ->where('user_id', $user->id)
+            ->where('user_id', Auth::id())
             ->value('id');
+    }
+
+    /**
+     * Retorna los IDs del equipo completo: el jefe + sus subordinados.
+     * Usado para acciones que el jefe también puede gestionar para sí mismo
+     * (permisos, vacaciones, incapacidades).
+     */
+    protected function getEquipoIds(): array
+    {
+        $user           = Auth::user();
+        $jefeEmpleadoId = $this->getJefeEmpleadoId();
 
         if ($jefeEmpleadoId) {
-            // Verificar si el jefe tiene un departamento asignado como jefe
             $deptId = DB::connection('pgsql')
                 ->table('departamentos')
                 ->where('jefe_empleado_id', $jefeEmpleadoId)
@@ -53,24 +58,22 @@ abstract class RRHHBaseController extends Controller
                 ->value('id');
 
             if ($deptId) {
-                // Equipo = el jefe + todos los empleados activos del departamento
-                $subordinados = DB::connection('pgsql')
+                $ids = DB::connection('pgsql')
                     ->table('empleados')
                     ->where('departamento_id', $deptId)
                     ->where('activo', true)
                     ->pluck('id')
                     ->all();
 
-                // Incluir al jefe mismo si no está ya en la lista
-                if (!in_array($jefeEmpleadoId, $subordinados)) {
-                    $subordinados[] = $jefeEmpleadoId;
+                if (!in_array($jefeEmpleadoId, $ids)) {
+                    $ids[] = $jefeEmpleadoId;
                 }
 
-                return $subordinados;
+                return $ids;
             }
         }
 
-        // Fallback: misma sucursal (para retrocompatibilidad), incluyendo al jefe
+        // Fallback: misma sucursal, incluyendo al jefe
         return DB::connection('pgsql')
             ->table('empleados')
             ->where('sucursal_id', $user->sucursal_id)
@@ -81,11 +84,60 @@ abstract class RRHHBaseController extends Controller
     }
 
     /**
-     * Verifica que el empleado_id pertenezca a los subordinados del jefe.
+     * Retorna los IDs de los subordinados del jefe, excluyéndolo a él mismo.
+     * Usado para acciones que no aplican al propio jefe
+     * (amonestaciones, desvinculaciones, traslados, cambios salariales).
+     */
+    protected function getSubordinadosIds(): array
+    {
+        $user           = Auth::user();
+        $jefeEmpleadoId = $this->getJefeEmpleadoId();
+
+        if ($jefeEmpleadoId) {
+            $deptId = DB::connection('pgsql')
+                ->table('departamentos')
+                ->where('jefe_empleado_id', $jefeEmpleadoId)
+                ->where('activo', true)
+                ->value('id');
+
+            if ($deptId) {
+                return DB::connection('pgsql')
+                    ->table('empleados')
+                    ->where('departamento_id', $deptId)
+                    ->where('activo', true)
+                    ->where('id', '!=', $jefeEmpleadoId)
+                    ->pluck('id')
+                    ->all();
+            }
+        }
+
+        // Fallback: misma sucursal, excluyendo al jefe
+        return DB::connection('pgsql')
+            ->table('empleados')
+            ->where('sucursal_id', $user->sucursal_id)
+            ->where('activo', true)
+            ->pluck('id')
+            ->filter(fn($id) => $id !== $jefeEmpleadoId)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Verifica que el empleado_id sea un subordinado (excluye al jefe).
+     * Para amonestaciones, desvinculaciones, traslados, cambios salariales.
      */
     protected function esSubordinado(int $empleadoId): bool
     {
         return in_array($empleadoId, $this->getSubordinadosIds());
+    }
+
+    /**
+     * Verifica que el empleado_id pertenezca al equipo (incluye al jefe).
+     * Para permisos, vacaciones, incapacidades.
+     */
+    protected function esDelEquipo(int $empleadoId): bool
+    {
+        return in_array($empleadoId, $this->getEquipoIds());
     }
 
     /**

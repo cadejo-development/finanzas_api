@@ -17,7 +17,7 @@ class PermisosController extends RRHHBaseController
      */
     public function index(): JsonResponse
     {
-        $subordinadosIds = $this->getSubordinadosIds();
+        $subordinadosIds = $this->getEquipoIds();
 
         $permisos = Permiso::with('tipoPermiso')
             ->whereIn('empleado_id', $subordinadosIds)
@@ -49,7 +49,7 @@ class PermisosController extends RRHHBaseController
             'observaciones_jefe'=> 'nullable|string|max:500',
         ]);
 
-        if (!$this->esSubordinado($validated['empleado_id'])) {
+        if (!$this->esDelEquipo($validated['empleado_id'])) {
             return response()->json([
                 'success' => false,
                 'message' => 'El empleado no pertenece a tu equipo.',
@@ -144,7 +144,7 @@ class PermisosController extends RRHHBaseController
      */
     public function saldos(): JsonResponse
     {
-        $subordinadosIds = $this->getSubordinadosIds();
+        $subordinadosIds = $this->getEquipoIds();
         $anio = now()->year;
 
         // Tipo permiso personal

@@ -15,7 +15,7 @@ class IncapacidadesController extends RRHHBaseController
      */
     public function index(): JsonResponse
     {
-        $subordinadosIds = $this->getSubordinadosIds();
+        $subordinadosIds = $this->getEquipoIds();
 
         $incapacidades = Incapacidad::with('tipoIncapacidad')
             ->whereIn('empleado_id', $subordinadosIds)
@@ -44,7 +44,7 @@ class IncapacidadesController extends RRHHBaseController
             'archivo'            => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
         ]);
 
-        if (!$this->esSubordinado($validated['empleado_id'])) {
+        if (!$this->esDelEquipo($validated['empleado_id'])) {
             return response()->json([
                 'success' => false,
                 'message' => 'El empleado no pertenece a tu equipo.',
