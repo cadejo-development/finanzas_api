@@ -193,6 +193,33 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
 // ─── RRHH (protegido con Sanctum + rol jefatura/rrhh_admin/portal_admin) ──
 Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,rrhh_admin,portal_admin'])->group(function () {
 
+    // Diagnóstico temporal — remover después de verificar
+    Route::get('debug-equipo', function () {
+        $user           = \Illuminate\Support\Facades\Auth::user();
+        $jefeEmpleadoId = \Illuminate\Support\Facades\DB::connection('pgsql')
+            ->table('empleados')->where('user_id', $user->id)->value('id');
+        $dept = $jefeEmpleadoId
+            ? \Illuminate\Support\Facades\DB::connection('pgsql')
+                ->table('departamentos')
+                ->where('jefe_empleado_id', $jefeEmpleadoId)
+                ->where('activo', true)
+                ->first()
+            : null;
+        $equipoIds = $jefeEmpleadoId && $dept
+            ? \Illuminate\Support\Facades\DB::connection('pgsql')
+                ->table('empleados')
+                ->where('departamento_id', $dept->id)
+                ->where('activo', true)->pluck('id')->all()
+            : [];
+        return response()->json([
+            'user_id'          => $user->id,
+            'user_email'       => $user->email,
+            'jefe_empleado_id' => $jefeEmpleadoId,
+            'departamento'     => $dept,
+            'equipo_ids'       => $equipoIds,
+        ]);
+    });
+
     // Catálogos + equipo a cargo
     Route::get('catalogos', [CatalogosRRHHController::class, 'index']);
 
