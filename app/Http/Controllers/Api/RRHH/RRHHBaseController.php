@@ -42,7 +42,6 @@ abstract class RRHHBaseController extends Controller
             ->table('empleados')
             ->where('sucursal_id', $user->sucursal_id)
             ->where('activo', true)
-            ->whereNull('deleted_at')
             ->pluck('id')
             ->filter(function ($id) use ($user) {
                 // Excluir el empleado del propio jefe
