@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\RRHH\AmonestacionesController;
 use App\Http\Controllers\Api\RRHH\DesvinculacionesController;
 use App\Http\Controllers\Api\RRHH\TrasladosController;
 use App\Http\Controllers\Api\RRHH\CambiosSalarialesController;
+use App\Http\Controllers\Api\RRHH\DepartamentosController;
 
 // ─── Portal SSO (protegido con Sanctum) ──────────────────────────────────
 Route::prefix('portal')->middleware('auth:sanctum')->group(function () {
@@ -249,4 +250,18 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin']
     Route::get('cambios-salariales/{id}',    [CambiosSalarialesController::class, 'show']);
     Route::put('cambios-salariales/{id}',    [CambiosSalarialesController::class, 'update']);
     Route::delete('cambios-salariales/{id}', [CambiosSalarialesController::class, 'destroy']);
+});
+
+// ─── RRHH Admin — Departamentos (portal_admin) ────────────────────────────
+Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin'])->group(function () {
+    Route::get('departamentos',                              [DepartamentosController::class, 'index']);
+    Route::post('departamentos',                             [DepartamentosController::class, 'store']);
+    Route::put('departamentos/{id}',                         [DepartamentosController::class, 'update']);
+    Route::delete('departamentos/{id}',                      [DepartamentosController::class, 'destroy']);
+    Route::get('departamentos/{id}/empleados',               [DepartamentosController::class, 'empleados']);
+    Route::post('departamentos/{id}/empleados/{empId}',      [DepartamentosController::class, 'asignarEmpleado']);
+    Route::delete('departamentos/{id}/empleados/{empId}',    [DepartamentosController::class, 'quitarEmpleado']);
+    Route::patch('departamentos/{id}/jefe/{empId}',          [DepartamentosController::class, 'asignarJefe']);
+    Route::delete('departamentos/{id}/jefe',                 [DepartamentosController::class, 'quitarJefe']);
+    Route::get('empleados',                                  [DepartamentosController::class, 'todosEmpleados']);
 });
