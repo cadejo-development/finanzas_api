@@ -190,8 +190,8 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::patch('sistemas/{id}',       [AdminController::class, 'updateSistema']);
 });
 
-// ─── RRHH (protegido con Sanctum + rol jefatura) ──────────────────────────
-Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin'])->group(function () {
+// ─── RRHH (protegido con Sanctum + rol jefatura/rrhh_admin/portal_admin) ──
+Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,rrhh_admin,portal_admin'])->group(function () {
 
     // Catálogos + equipo a cargo
     Route::get('catalogos', [CatalogosRRHHController::class, 'index']);
@@ -252,8 +252,8 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin']
     Route::delete('cambios-salariales/{id}', [CambiosSalarialesController::class, 'destroy']);
 });
 
-// ─── RRHH Admin — Departamentos (portal_admin) ────────────────────────────
-Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin'])->group(function () {
+// ─── RRHH Admin — Departamentos (rrhh_admin o portal_admin) ──────────────
+Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:rrhh_admin,portal_admin'])->group(function () {
     Route::get('departamentos',                              [DepartamentosController::class, 'index']);
     Route::post('departamentos',                             [DepartamentosController::class, 'store']);
     Route::put('departamentos/{id}',                         [DepartamentosController::class, 'update']);
