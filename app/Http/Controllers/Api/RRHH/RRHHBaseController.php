@@ -31,26 +31,46 @@ abstract class RRHHBaseController extends Controller
 
     /**
      * Retorna los IDs de los empleados subordinados al jefe autenticado.
-     * Criterio: empleados activos en la misma sucursal del usuario,
-     * excluyendo al propio jefe.
+     * Criterio: empleados activos en el departamento donde el jefe está asignado,
+     * con fallback a misma sucursal para retrocompatibilidad.
      */
     protected function getSubordinadosIds(): array
     {
         $user = Auth::user();
 
+        // Buscar el registro de empleado del jefe autenticado
+        $jefeEmpleadoId = DB::connection('pgsql')
+            ->table('empleados')
+            ->where('user_id', $user->id)
+            ->value('id');
+
+        if ($jefeEmpleadoId) {
+            // Verificar si el jefe tiene un departamento asignado como jefe
+            $deptId = DB::connection('pgsql')
+                ->table('departamentos')
+                ->where('jefe_empleado_id', $jefeEmpleadoId)
+                ->where('activo', true)
+                ->value('id');
+
+            if ($deptId) {
+                // Subordinados = empleados activos del departamento (excluyendo al jefe)
+                return DB::connection('pgsql')
+                    ->table('empleados')
+                    ->where('departamento_id', $deptId)
+                    ->where('activo', true)
+                    ->where('id', '!=', $jefeEmpleadoId)
+                    ->pluck('id')
+                    ->all();
+            }
+        }
+
+        // Fallback: misma sucursal (para retrocompatibilidad)
         return DB::connection('pgsql')
             ->table('empleados')
             ->where('sucursal_id', $user->sucursal_id)
             ->where('activo', true)
             ->pluck('id')
-            ->filter(function ($id) use ($user) {
-                // Excluir el empleado del propio jefe
-                $jefeEmpleadoId = DB::connection('pgsql')
-                    ->table('empleados')
-                    ->where('user_id', $user->id)
-                    ->value('id');
-                return $id !== $jefeEmpleadoId;
-            })
+            ->filter(fn($id) => $id !== $jefeEmpleadoId)
             ->values()
             ->all();
     }
