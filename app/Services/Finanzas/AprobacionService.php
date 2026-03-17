@@ -2,6 +2,7 @@
 
 namespace App\Services\Finanzas;
 
+use App\Models\ReglaAprobacion;
 use App\Models\SolicitudPago;
 use App\Models\SolicitudPagoAprobacion;
 use App\Models\EstadoSolicitudPago;
@@ -37,9 +38,7 @@ class AprobacionService
         $tipo   = strtoupper($solicitud->tipo_gasto); // OPEX | CAPEX
         $monto  = (float) $solicitud->a_pagar;
 
-        $lineas = $tipo === 'CAPEX'
-            ? $this->lineasCapex($monto)
-            : $this->lineasOpex($monto);
+        $lineas = $this->lineasDesdeTabla($tipo, $monto);
 
         foreach ($lineas as $linea) {
             SolicitudPagoAprobacion::create([
@@ -268,43 +267,18 @@ class AprobacionService
 
     // ─── Matrices de aprobación ────────────────────────────────────────────────
 
-    private function lineasOpex(float $monto): array
+    /**
+     * Genera las líneas de aprobación desde la tabla reglas_aprobacion.
+     * Las reglas se filtran por tipo_gasto y monto, respetando nivel_orden.
+     */
+    private function lineasDesdeTabla(string $tipoGasto, float $monto): array
     {
-        if ($monto < 150) {
-            $rol    = 'gerente_sucursal';
-            $codigo = 'nivel_1';
-        } elseif ($monto < 500) {
-            $rol    = 'gerencia_area';
-            $codigo = 'nivel_2';
-        } elseif ($monto < 2000) {
-            $rol    = 'gerencia_financiera';
-            $codigo = 'nivel_3';
-        } else {
-            $rol    = 'gerencia_general';
-            $codigo = 'nivel_4';
-        }
-
-        return [
-            ['nivel_orden' => 0, 'nivel_codigo' => $codigo, 'rol_requerido' => $rol],
-        ];
-    }
-
-    private function lineasCapex(float $monto): array
-    {
-        // En CAPEX los dos visto-bueno son paralelos (ambos en nivel_orden=0)
-        $lineas = [
-            ['nivel_orden' => 0, 'nivel_codigo' => 'visto_bueno', 'rol_requerido' => 'gerente_logistica'],
-            ['nivel_orden' => 0, 'nivel_codigo' => 'visto_bueno', 'rol_requerido' => 'gerente_mantenimiento'],
-        ];
-
-        if ($monto < 500) {
-            $lineas[] = ['nivel_orden' => 1, 'nivel_codigo' => 'nivel_1', 'rol_requerido' => 'gerencia_area'];
-        } elseif ($monto < 1500) {
-            $lineas[] = ['nivel_orden' => 1, 'nivel_codigo' => 'nivel_2', 'rol_requerido' => 'gerencia_financiera'];
-        } else {
-            $lineas[] = ['nivel_orden' => 1, 'nivel_codigo' => 'nivel_3', 'rol_requerido' => 'gerencia_general'];
-        }
-
-        return $lineas;
+        return ReglaAprobacion::paraGasto($tipoGasto, $monto)
+            ->map(fn(ReglaAprobacion $r) => [
+                'nivel_orden'   => $r->nivel_orden,
+                'nivel_codigo'  => $r->nivel_codigo,
+                'rol_requerido' => $r->rol_requerido,
+            ])
+            ->toArray();
     }
 }

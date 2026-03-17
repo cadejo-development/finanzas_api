@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Finanzas\AdminCoreController;
 use App\Http\Controllers\Api\Finanzas\AprobacionController;
+use App\Http\Controllers\Api\Finanzas\ReglaAprobacionController;
 use App\Http\Controllers\Api\Finanzas\CatalogosFinanzasController;
 use App\Http\Controllers\Api\Finanzas\DashboardSolicitudesPagoController;
 use App\Http\Controllers\Api\Finanzas\SolicitudPagoController;
@@ -91,6 +92,7 @@ Route::prefix('pagos')->middleware('auth:sanctum')->group(function () {
     Route::post('solicitudes-pago/{id}/rechazar',      [AprobacionController::class, 'rechazar']);
     Route::post('solicitudes-pago/{id}/observar',      [AprobacionController::class, 'observar']);
     Route::get('mis-aprobaciones',                [AprobacionController::class, 'misAprobaciones']);
+    Route::get('reglas-aprobacion',               [ReglaAprobacionController::class, 'index']);
 
     // Presupuesto Unidad
     Route::get('mi-presupuesto', [PresupuestoUnidadController::class, 'miPresupuesto']);
