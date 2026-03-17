@@ -30,8 +30,8 @@ class SolicitudPagoAdjuntoController extends Controller
         $nombreOriginal = $file->getClientOriginalName();
         $tipo           = $file->getMimeType();
 
-        $path = $file->store("adjuntos/solicitudes/{$solicitudId}", 'public');
-        $url  = Storage::disk('public')->url($path);
+        $path = $file->store("finanzas/adjuntos/solicitudes/{$solicitudId}", 's3');
+        $url  = Storage::disk('s3')->url($path);
 
         /** @var \App\Models\User $user */
         $user = Auth::user();
