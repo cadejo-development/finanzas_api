@@ -13,11 +13,10 @@ use Illuminate\Support\Facades\DB;
  * Servicio que gestiona la cadena de aprobación de solicitudes de pago.
  *
  * OPEX:
- *  orden=0 → gerente_logistica (visto bueno, siempre)
- *  orden=1 →  $0–$149.99      gerente_sucursal
+ *  orden=0 →  $0–$149.99      gerente_sucursal
  *             $150–$499.99    gerencia_area
- *             $500–$999.99    gerencia_financiera
- *             $1,000+         gerencia_general
+ *             $500–$1,999.99  gerencia_financiera
+ *             $2,000+         gerencia_general
  *
  * CAPEX:
  *  orden=0 → gerente_logistica (visto bueno) + gerente_mantenimiento (visto bueno, en paralelo — AMBOS deben aprobar)
@@ -271,21 +270,23 @@ class AprobacionService
 
     private function lineasOpex(float $monto): array
     {
-        $lineas = [
-            ['nivel_orden' => 0, 'nivel_codigo' => 'visto_bueno', 'rol_requerido' => 'gerente_logistica'],
-        ];
-
         if ($monto < 150) {
-            $lineas[] = ['nivel_orden' => 1, 'nivel_codigo' => 'nivel_1', 'rol_requerido' => 'gerente_sucursal'];
+            $rol    = 'gerente_sucursal';
+            $codigo = 'nivel_1';
         } elseif ($monto < 500) {
-            $lineas[] = ['nivel_orden' => 1, 'nivel_codigo' => 'nivel_2', 'rol_requerido' => 'gerencia_area'];
-        } elseif ($monto < 1000) {
-            $lineas[] = ['nivel_orden' => 1, 'nivel_codigo' => 'nivel_3', 'rol_requerido' => 'gerencia_financiera'];
+            $rol    = 'gerencia_area';
+            $codigo = 'nivel_2';
+        } elseif ($monto < 2000) {
+            $rol    = 'gerencia_financiera';
+            $codigo = 'nivel_3';
         } else {
-            $lineas[] = ['nivel_orden' => 1, 'nivel_codigo' => 'nivel_4', 'rol_requerido' => 'gerencia_general'];
+            $rol    = 'gerencia_general';
+            $codigo = 'nivel_4';
         }
 
-        return $lineas;
+        return [
+            ['nivel_orden' => 0, 'nivel_codigo' => $codigo, 'rol_requerido' => $rol],
+        ];
     }
 
     private function lineasCapex(float $monto): array
