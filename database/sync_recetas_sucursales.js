@@ -69,6 +69,9 @@ const normalizeUnit = s =>
   !s ? 'u' : (UNIT_MAP[s.trim().toUpperCase()] ?? s.trim().toLowerCase().slice(0, 20));
 const clean = (s, max = 150) =>
   !s ? '' : String(s).trim().replace(/\s+/g, ' ').slice(0, max);
+// Limpia sufijos internos del POS (ej: "ENSALADA _-" / "AGUA MINERAL _" → nombre limpio)
+const cleanModNombre = (s) =>
+  clean(s).replace(/[\s_\-]+$/, '').trim();
 const ts  = () => new Date().toTimeString().slice(0, 8);
 const log = s => console.log(`[${ts()}] ${s}`);
 
@@ -535,8 +538,8 @@ async function main() {
         rid,
         m.grupo_id_origen,
         clean(m.grupo_codigo, 30) || null,
-        clean(m.grupo_nombre, 150),
-        clean(m.opcion_nombre, 150),
+        cleanModNombre(m.grupo_nombre).slice(0, 150),
+        cleanModNombre(m.opcion_nombre).slice(0, 150),
         pid,
         parseFloat(m.cantidad) || 0,
         normalizeUnit(m.uni_nombre),
