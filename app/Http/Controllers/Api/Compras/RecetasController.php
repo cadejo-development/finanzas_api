@@ -24,6 +24,9 @@ class RecetasController extends Controller
         $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
 
         $query = Receta::with(['ingredientes.producto'])
+            ->withCount(['modificadores as grupos_modificadores' => fn ($q) =>
+                $q->select(DB::raw('COUNT(DISTINCT grupo_id_origen)'))
+            ])
             ->where('activa', true)
             ->orderBy('nombre');
 
@@ -272,7 +275,8 @@ class RecetasController extends Controller
             'categoria'     => $r->tipo,   // alias frontend
             'precio'        => (float) ($r->precio ?? 0),
             'platos_semana' => $r->platosParaSucursal($sucursalId),
-            'activa'        => $r->activa,
+            'activa'               => $r->activa,
+            'grupos_modificadores' => (int) ($r->grupos_modificadores ?? 0),
             'ingredientes'  => $r->ingredientes->map(fn ($ing) => [
                 'id'                 => $ing->id,
                 'producto_id'        => $ing->producto_id,
