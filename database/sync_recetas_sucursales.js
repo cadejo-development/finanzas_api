@@ -175,6 +175,34 @@ const Q_MXP = `
     AND PRO.proId IN (${Q_PLATOS_EN_MENU})
   GROUP BY MXP.proId, MXP.proIdMaterial`;
 
+// 8. Modificadores de recetas (ModificadoresRst + ModificadoresXProdRst)
+// Jerarquía: padre = mdfrstIdPadre IS NULL / 0, hijo = mdfrstIdPadre = padre.mdfrstId
+const Q_MODS = `
+  SELECT
+    MXP.proId                            AS receta_id_origen,
+    MDR.mdfrstId                         AS grupo_id_origen,
+    MDR.mdfrstCodigo                     AS grupo_codigo,
+    MDR.mdfrstNombre                     AS grupo_nombre,
+    MDD.mdfrstNombre                     AS opcion_nombre,
+    PMOD.proId                           AS mod_prod_id_origen,
+    ISNULL(MDD.mdfrstCantidadProducto, 0) AS cantidad,
+    UNI.uniNombre                        AS uni_nombre
+  FROM olRestaurante.dbo.ModificadoresXProdRst MXP WITH(NOLOCK)
+  INNER JOIN olRestaurante.dbo.ModificadoresRst MDR WITH(NOLOCK)
+    ON MXP.mdfrstId = MDR.mdfrstId
+    AND (MDR.mdfrstIdPadre IS NULL OR MDR.mdfrstIdPadre = 0)
+    AND MDR.mdfrstEliminado = 0
+  INNER JOIN olRestaurante.dbo.ModificadoresRst MDD WITH(NOLOCK)
+    ON MDD.mdfrstIdPadre = MDR.mdfrstId
+    AND MDD.mdfrstEliminado = 0
+  LEFT  JOIN olComun.dbo.Productos PMOD WITH(NOLOCK)
+    ON MDD.proId = PMOD.proId
+  LEFT  JOIN olComun.dbo.Unidades UNI WITH(NOLOCK)
+    ON UNI.uniId = PMOD.uniId
+  WHERE MXP.mxprstEliminado = 0
+    AND MXP.proId IN (${Q_PLATOS_EN_MENU})
+  ORDER BY MXP.proId, MDR.mdfrstId, MDD.mdfrstNombre`;
+
 // 7. Relación receta ↔ área (para receta_sucursal)
 const Q_REC_AREA = `
   SELECT DISTINCT
@@ -222,7 +250,7 @@ async function main() {
   // ============================================================
   // FASE 0 — Sync sucursales → core_db
   // ============================================================
-  log('\n[0/7] Sucursales restaurante → core_db...');
+  log('\n[0/8] Sucursales restaurante → core_db...');
   const sucRows = (await sqlPool.request().query(Q_SUCURSALES)).recordset;
   log(`      ${sucRows.length} sucursales encontradas.`);
 
@@ -253,7 +281,7 @@ async function main() {
   // ============================================================
   // FASE 1 — Limpiar compras_db
   // ============================================================
-  log('\n[1/7] Limpiando compras_db...');
+  log('\n[1/8] Limpiando compras_db...');
   if (!DRY_RUN) {
     await comp.query('DELETE FROM receta_sucursal');
     await comp.query('DELETE FROM receta_ingredientes');
@@ -268,7 +296,7 @@ async function main() {
   // ============================================================
   // FASE 2 — Asegurar columna precio en recetas
   // ============================================================
-  log('\n[2/7] Columna precio en recetas...');
+  log('\n[2/8] Columna precio en recetas...');
   if (!DRY_RUN) {
     await comp.query(`
       ALTER TABLE recetas ADD COLUMN IF NOT EXISTS precio NUMERIC(10,2) DEFAULT 0
@@ -279,7 +307,7 @@ async function main() {
   // ============================================================
   // FASE 3 — Categorías
   // ============================================================
-  log('\n[3/7] Categorías...');
+  log('\n[3/8] Categorías...');
   const catRows = (await sqlPool.request().query(Q_CAT)).recordset;
   log(`      ${catRows.length} categorías.`);
   const catIdMap = {};
@@ -319,7 +347,7 @@ async function main() {
   // ============================================================
   // FASE 4 — Productos (ingredientes)
   // ============================================================
-  log('\n[4/7] Productos / ingredientes...');
+  log('\n[4/8] Productos / ingredientes...');
   const ingrRaw = (await sqlPool.request().query(Q_INGR)).recordset;
   // Deduplicar por id_origen
   const ingrMap = {};
@@ -363,7 +391,7 @@ async function main() {
   // ============================================================
   // FASE 5 — Recetas
   // ============================================================
-  log('\n[5/7] Recetas...');
+  log('\n[5/8] Recetas...');
   const recRows = (await sqlPool.request().query(Q_REC)).recordset;
   log(`      ${recRows.length} recetas en menú activo.`);
   const recIdMap = {};
@@ -399,7 +427,7 @@ async function main() {
   // ============================================================
   // FASE 6 — Ingredientes de receta (BOM)
   // ============================================================
-  log('\n[6/7] Ingredientes de receta (BOM)...');
+  log('\n[6/8] Ingredientes de receta (BOM)...');
   const mxpRows = (await sqlPool.request().query(Q_MXP)).recordset;
   log(`      ${mxpRows.length} líneas encontradas.`);
   let riOk = 0, riSkip = 0;
@@ -434,7 +462,7 @@ async function main() {
   // ============================================================
   // FASE 7 — receta_sucursal
   // ============================================================
-  log('\n[7/7] Receta ↔ Sucursal...');
+  log('\n[7/8] Receta ↔ Sucursal...');
   const rsRows = (await sqlPool.request().query(Q_REC_AREA)).recordset;
   log(`      ${rsRows.length} pares receta-área encontrados.`);
   let rsOk = 0, rsSkip = 0;
@@ -473,6 +501,64 @@ async function main() {
     log(`      (dry-run) ~${rsOk} únicos, ${rsSkip} sin mapping.`);
   }
 
+  // ============================================================
+  // FASE 8 — Modificadores de receta
+  // ============================================================
+  log('\n[8/8] Modificadores de receta...');
+  const modRows = (await sqlPool.request().query(Q_MODS)).recordset;
+  log(`      ${modRows.length} filas de modificadores encontradas.`);
+  let modOk = 0, modSkip = 0;
+
+  if (!DRY_RUN) {
+    // Limpiar modificadores anteriores antes de reinsertar
+    await comp.query('DELETE FROM receta_modificadores');
+
+    const mCols = [
+      'receta_id','grupo_id_origen','grupo_codigo','grupo_nombre',
+      'opcion_nombre','producto_id','cantidad','unidad',
+      'aud_usuario','created_at','updated_at',
+    ];
+    const mConf = `ON CONFLICT (receta_id, grupo_id_origen, opcion_nombre) DO UPDATE SET
+      grupo_nombre=EXCLUDED.grupo_nombre,
+      producto_id=EXCLUDED.producto_id,
+      cantidad=EXCLUDED.cantidad,
+      unidad=EXCLUDED.unidad,
+      updated_at=EXCLUDED.updated_at`;
+
+    const validMods = [];
+    for (const m of modRows) {
+      const rid = recIdMap[m.receta_id_origen];
+      if (!rid) { modSkip++; continue; }
+      // producto_id puede ser null si el modificador no tiene producto asociado
+      const pid = m.mod_prod_id_origen ? (prodIdMap[m.mod_prod_id_origen] ?? null) : null;
+      validMods.push([
+        rid,
+        m.grupo_id_origen,
+        clean(m.grupo_codigo, 30) || null,
+        clean(m.grupo_nombre, 150),
+        clean(m.opcion_nombre, 150),
+        pid,
+        parseFloat(m.cantidad) || 0,
+        normalizeUnit(m.uni_nombre),
+        'sync', now, now,
+      ]);
+      modOk++;
+    }
+
+    for (let i = 0; i < validMods.length; i += BATCH) {
+      const chunk = validMods.slice(i, i + BATCH);
+      const q = buildBatch('receta_modificadores', mCols, chunk, mConf);
+      await comp.query(q.text, q.values);
+      if ((i / BATCH) % 20 === 19) log(`      ... ${i + BATCH} modificadores`);
+    }
+    log(`      OK: ${modOk} insertados, ${modSkip} saltados.`);
+  } else {
+    modRows.forEach(m => {
+      recIdMap[m.receta_id_origen] ? modOk++ : modSkip++;
+    });
+    log(`      (dry-run) ${modOk} OK, ${modSkip} sin mapping.`);
+  }
+
   // ── Resumen final ─────────────────────────────────────────────────────────
   log('\n' + '='.repeat(60));
   log('RESUMEN:');
@@ -482,8 +568,9 @@ async function main() {
   log(`  Recetas (en menú):       ${recRows.length}`);
   log(`  Ingredientes de receta:  ${riOk}`);
   log(`  Receta-sucursal:         ${rsOk}`);
-  if (riSkip > 0 || rsSkip > 0)
-    log(`  Advertencia saltados:    ${riSkip + rsSkip}`);
+  log(`  Modificadores:           ${modOk}`);
+  if (riSkip > 0 || rsSkip > 0 || modSkip > 0)
+    log(`  Advertencia saltados:    ${riSkip + rsSkip + modSkip}`);
   log(DRY_RUN
     ? '\nDRY-RUN completado. Corre sin --dry-run para migrar.'
     : '\n✓ Sincronización completada.');

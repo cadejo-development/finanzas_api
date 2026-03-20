@@ -42,6 +42,14 @@ class Receta extends Model
     }
 
     /**
+     * Modificadores de la receta (opciones de sustitución agrupadas por grupo).
+     */
+    public function modificadores()
+    {
+        return $this->hasMany(RecetaModificador::class)->orderBy('grupo_id_origen')->orderBy('opcion_nombre');
+    }
+
+    /**
      * Configuración de platos_semana por sucursal.
      */
     public function sucursalConfig(): HasMany

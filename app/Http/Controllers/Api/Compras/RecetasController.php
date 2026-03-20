@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Compras;
 use App\Http\Controllers\Controller;
 use App\Models\Receta;
 use App\Models\RecetaIngrediente;
+use App\Models\RecetaModificador;
 use App\Models\RecetaSucursal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -64,13 +65,13 @@ class RecetasController extends Controller
     {
         $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
 
-        $query = Receta::with(['ingredientes.producto']);
+        $query = Receta::with(['ingredientes.producto', 'modificadores']);
         if ($sucursalId !== null) {
             $query->with(['sucursalConfig' => fn ($q) => $q->where('sucursal_id', $sucursalId)]);
         }
 
         $receta = $query->findOrFail($id);
-        return response()->json(['data' => $this->formatReceta($receta, $sucursalId)]);
+        return response()->json(['data' => $this->formatReceta($receta, $sucursalId, true)]);
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -261,14 +262,14 @@ class RecetasController extends Controller
     // ──────────────────────────────────────────────────────────────────────
     // Helpers
     // ──────────────────────────────────────────────────────────────────────
-    private function formatReceta(Receta $r, ?int $sucursalId = null): array
+    private function formatReceta(Receta $r, ?int $sucursalId = null, bool $withModificadores = false): array
     {
-        return [
+        $data = [
             'id'            => $r->id,
             'nombre'        => $r->nombre,
             'descripcion'   => $r->descripcion,
             'tipo'          => $r->tipo,
-            'categoria'     => $r->tipo,   // alias frontend (recetasService usa "categoria")
+            'categoria'     => $r->tipo,   // alias frontend
             'precio'        => (float) ($r->precio ?? 0),
             'platos_semana' => $r->platosParaSucursal($sucursalId),
             'activa'        => $r->activa,
@@ -281,5 +282,30 @@ class RecetasController extends Controller
                 'unidad'             => $ing->unidad,
             ])->values(),
         ];
+
+        if ($withModificadores && $r->relationLoaded('modificadores')) {
+            // Agrupar opciones por grupo para facilitar renderizado en el frontend
+            $grupos = [];
+            foreach ($r->modificadores as $mod) {
+                $key = $mod->grupo_id_origen;
+                if (!isset($grupos[$key])) {
+                    $grupos[$key] = [
+                        'grupo_id'     => $mod->grupo_id_origen,
+                        'grupo_codigo' => $mod->grupo_codigo,
+                        'grupo_nombre' => $mod->grupo_nombre,
+                        'opciones'     => [],
+                    ];
+                }
+                $grupos[$key]['opciones'][] = [
+                    'nombre'      => $mod->opcion_nombre,
+                    'producto_id' => $mod->producto_id,
+                    'cantidad'    => $mod->cantidad,
+                    'unidad'      => $mod->unidad,
+                ];
+            }
+            $data['modificadores'] = array_values($grupos);
+        }
+
+        return $data;
     }
 }
