@@ -14,6 +14,7 @@ class Receta extends Model
         'nombre',
         'descripcion',
         'tipo',
+        'precio',
         'platos_semana',
         'activa',
         'aud_usuario',

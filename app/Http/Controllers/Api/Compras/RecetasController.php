@@ -26,8 +26,11 @@ class RecetasController extends Controller
             ->where('activa', true)
             ->orderBy('nombre');
 
-        // Pre-cargar configuración de platos por sucursal si se especifica
+        // Filtrar solo recetas activas en esa sucursal + cargar su config
         if ($sucursalId !== null) {
+            $query->whereHas('sucursalConfig', fn ($q) =>
+                $q->where('sucursal_id', $sucursalId)->where('activa', true)
+            );
             $query->with(['sucursalConfig' => fn ($q) => $q->where('sucursal_id', $sucursalId)]);
         }
 
@@ -266,6 +269,7 @@ class RecetasController extends Controller
             'descripcion'   => $r->descripcion,
             'tipo'          => $r->tipo,
             'categoria'     => $r->tipo,   // alias frontend (recetasService usa "categoria")
+            'precio'        => (float) ($r->precio ?? 0),
             'platos_semana' => $r->platosParaSucursal($sucursalId),
             'activa'        => $r->activa,
             'ingredientes'  => $r->ingredientes->map(fn ($ing) => [
