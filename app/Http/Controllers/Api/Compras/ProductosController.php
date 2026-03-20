@@ -16,10 +16,12 @@ class ProductosController extends Controller
      * Lista paginada de productos activos.
      *
      * Parámetros:
-     *   - categoria  (string) : key de categoría — filtra por ella
-     *   - search     (string) : búsqueda en nombre o código
-     *   - page       (int)    : página (default 1)
-     *   - per_page   (int)    : registros por página (default 10, max 50)
+     *   - categoria   (string) : key de categoría — filtra por ella
+     *   - prefijo     (string) : prefijo de key, ej: 'MR' → MR-01, MR-02...
+     *   - search      (string) : búsqueda en nombre o código
+     *   - sucursal_id (int)    : solo productos usados en recetas de esa sucursal
+     *   - page        (int)    : página (default 1)
+     *   - per_page    (int)    : registros por página (default 10, max 50)
      */
     public function index(Request $request): JsonResponse
     {
@@ -37,6 +39,17 @@ class ProductosController extends Controller
         // Filtro por prefijo de categoría (ej: prefijo=MR → todas las MR-01, MR-02, ...)
         if ($prefijo = $request->query('prefijo')) {
             $query->whereHas('categoria', fn ($q) => $q->where('key', 'ilike', $prefijo . '%'));
+        }
+
+        // Filtro por sucursal: solo productos que son ingredientes de recetas activas de esa sucursal
+        if ($sucursalId = $request->query('sucursal_id')) {
+            $query->whereIn('id', function ($sub) use ($sucursalId) {
+                $sub->select('ri.producto_id')
+                    ->from('receta_ingredientes as ri')
+                    ->join('receta_sucursal as rs', 'rs.receta_id', '=', 'ri.receta_id')
+                    ->where('rs.sucursal_id', (int) $sucursalId)
+                    ->where('rs.activa', true);
+            });
         }
 
         // Búsqueda por nombre o código
