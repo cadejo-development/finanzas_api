@@ -40,14 +40,14 @@ class AuthController extends Controller
             ], 403);
         }
 
+        // Cargar roles y permisos del sistema indicado (default: 'pagos')
+        $sistemaCodigo = $request->input('sistema', 'pagos');
+
         // Revocar solo los tokens anteriores del mismo sistema para no invalidar otras sesiones activas
         $tokenName = $sistemaCodigo . '-token';
         $user->tokens()->where('name', $tokenName)->delete();
 
         $token = $user->createToken($tokenName)->plainTextToken;
-
-        // Cargar roles y permisos del sistema indicado (default: 'pagos')
-        $sistemaCodigo = $request->input('sistema', 'pagos');
         $sistema = System::where('codigo', $sistemaCodigo)->first();
         $roles = [];
         $permisos = [];
