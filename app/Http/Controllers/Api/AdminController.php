@@ -11,6 +11,12 @@ use Illuminate\Validation\Rule;
 
 class AdminController extends Controller
 {
+    /** Todas las tablas de administración viven en core_db (conexión 'pgsql'). */
+    private function db(): \Illuminate\Database\Connection
+    {
+        return DB::connection('pgsql');
+    }
+
     // ──────────────────────────────────────────────────────────────
     // USUARIOS
     // ──────────────────────────────────────────────────────────────
@@ -23,7 +29,7 @@ class AdminController extends Controller
     {
         $search = $request->query('search', '');
 
-        $query = DB::table('empleados as e')
+        $query = $this->db()->table('empleados as e')
             ->leftJoin('users as u', 'u.id', '=', 'e.user_id')
             ->leftJoin('sucursales as s', 's.id', '=', 'e.sucursal_id')
             ->leftJoin('cargos as c', 'c.id', '=', 'e.cargo_id')
@@ -68,7 +74,7 @@ class AdminController extends Controller
         $userIds = collect($empleados->items())->pluck('user_id')->filter()->values()->toArray();
         $rolesMap = [];
         if (!empty($userIds)) {
-            $rows = DB::table('role_user as ru')
+            $rows = $this->db()->table('role_user as ru')
                 ->join('roles as r', 'r.id', '=', 'ru.role_id')
                 ->join('systems as sys', 'sys.id', '=', 'r.system_id')
                 ->whereIn('ru.user_id', $userIds)
@@ -113,8 +119,8 @@ class AdminController extends Controller
             'total'        => $empleados->total(),
             'current_page' => $empleados->currentPage(),
             'last_page'    => $empleados->lastPage(),
-            'con_usuario'  => DB::table('empleados')->whereNotNull('user_id')->count(),
-            'sin_usuario'  => DB::table('empleados')->whereNull('user_id')->count(),
+            'con_usuario'  => $this->db()->table('empleados')->whereNotNull('user_id')->count(),
+            'sin_usuario'  => $this->db()->table('empleados')->whereNull('user_id')->count(),
         ]);
     }
 
@@ -123,7 +129,7 @@ class AdminController extends Controller
      */
     public function usersList(): JsonResponse
     {
-        $users = DB::table('users as u')
+        $users = $this->db()->table('users as u')
             ->select('u.id', 'u.email', 'u.activo')
             ->orderBy('u.email')
             ->get();
@@ -136,16 +142,16 @@ class AdminController extends Controller
     public function catalogos(): JsonResponse
     {
         // Usuarios que NO están vinculados a ningún empleado (disponibles para vincular)
-        $linkedUserIds = DB::table('empleados')->whereNotNull('user_id')->pluck('user_id');
-        $usersLibres = DB::table('users')
+        $linkedUserIds = $this->db()->table('empleados')->whereNotNull('user_id')->pluck('user_id');
+        $usersLibres = $this->db()->table('users')
             ->whereNotIn('id', $linkedUserIds)
             ->select('id', 'name', 'email', 'activo')
             ->orderBy('email')
             ->get();
 
         return response()->json([
-            'sucursales'   => DB::table('sucursales')->select('id', 'nombre')->orderBy('nombre')->get(),
-            'cargos'       => DB::table('cargos')->select('id', 'nombre')->orderBy('nombre')->get(),
+            'sucursales'   => $this->db()->table('sucursales')->select('id', 'nombre')->orderBy('nombre')->get(),
+            'cargos'       => $this->db()->table('cargos')->select('id', 'nombre')->orderBy('nombre')->get(),
             'users_libres' => $usersLibres,
         ]);
     }
@@ -155,18 +161,18 @@ class AdminController extends Controller
      */
     public function updateEmpleado(Request $request, int $id): JsonResponse
     {
-        abort_unless(DB::table('empleados')->where('id', $id)->exists(), 404);
+        abort_unless($this->db()->table('empleados')->where('id', $id)->exists(), 404);
 
         $data = $request->validate([
             'nombres'     => 'sometimes|required|string|max:100',
             'apellidos'   => 'sometimes|required|string|max:100',
             'email'       => 'sometimes|required|email|max:150',
-            'cargo_id'    => 'sometimes|nullable|integer|exists:cargos,id',
-            'sucursal_id' => 'sometimes|nullable|integer|exists:sucursales,id',
+            'cargo_id'    => 'sometimes|nullable|integer|exists:pgsql.cargos,id',
+            'sucursal_id' => 'sometimes|nullable|integer|exists:pgsql.sucursales,id',
             'activo'      => 'sometimes|boolean',
         ]);
 
-        DB::table('empleados')->where('id', $id)->update($data);
+        $this->db()->table('empleados')->where('id', $id)->update($data);
         return response()->json(['message' => 'Empleado actualizado.']);
     }
 
@@ -175,14 +181,14 @@ class AdminController extends Controller
      */
     public function updateUser(Request $request, int $id): JsonResponse
     {
-        abort_unless(DB::table('users')->where('id', $id)->exists(), 404);
+        abort_unless($this->db()->table('users')->where('id', $id)->exists(), 404);
 
         $data = $request->validate([
             'name'        => 'sometimes|nullable|string|max:150',
-            'sucursal_id' => 'sometimes|nullable|integer|exists:sucursales,id',
+            'sucursal_id' => 'sometimes|nullable|integer|exists:pgsql.sucursales,id',
         ]);
 
-        DB::table('users')->where('id', $id)->update(array_merge($data, ['updated_at' => now()]));
+        $this->db()->table('users')->where('id', $id)->update(array_merge($data, ['updated_at' => now()]));
         return response()->json(['message' => 'Usuario actualizado.']);
     }
 
@@ -192,15 +198,15 @@ class AdminController extends Controller
      */
     public function crearUsuario(Request $request, int $empleadoId): JsonResponse
     {
-        $empleado = DB::table('empleados')->where('id', $empleadoId)->firstOrFail();
+        $empleado = $this->db()->table('empleados')->where('id', $empleadoId)->firstOrFail();
 
         $data = $request->validate([
             'password'   => 'required|string|min:8',
             'role_ids'   => 'nullable|array',
-            'role_ids.*' => 'exists:roles,id',
+            'role_ids.*' => 'exists:pgsql.roles,id',
         ]);
 
-        if (DB::table('users')->whereRaw('LOWER(email) = LOWER(?)', [$empleado->email])->exists()) {
+        if ($this->db()->table('users')->whereRaw('LOWER(email) = LOWER(?)', [$empleado->email])->exists()) {
             return response()->json(['message' => 'Este empleado ya tiene usuario.'], 409);
         }
 
@@ -209,7 +215,7 @@ class AdminController extends Controller
             $nombreCompleto = $empleado->email;
         }
 
-        $userId = DB::table('users')->insertGetId([
+        $userId = $this->db()->table('users')->insertGetId([
             'name'        => $nombreCompleto,
             'email'       => strtolower($empleado->email),
             'password'    => Hash::make($data['password']),
@@ -227,11 +233,11 @@ class AdminController extends Controller
                 'created_at' => $now,
                 'updated_at' => $now,
             ], $data['role_ids']);
-            DB::table('role_user')->insert($rows);
+            $this->db()->table('role_user')->insert($rows);
         }
 
         // Vincular el empleado al nuevo usuario via FK directa
-        DB::table('empleados')->where('id', $empleadoId)->update(['user_id' => $userId]);
+        $this->db()->table('empleados')->where('id', $empleadoId)->update(['user_id' => $userId]);
 
         return response()->json(['message' => 'Usuario creado correctamente.', 'user_id' => $userId], 201);
     }
@@ -242,20 +248,20 @@ class AdminController extends Controller
      */
     public function vincularUsuario(int $empleadoId, int $userId): JsonResponse
     {
-        $empleado = DB::table('empleados')->where('id', $empleadoId)->first();
+        $empleado = $this->db()->table('empleados')->where('id', $empleadoId)->first();
         abort_unless($empleado, 404);
-        abort_unless(DB::table('users')->where('id', $userId)->exists(), 404);
+        abort_unless($this->db()->table('users')->where('id', $userId)->exists(), 404);
 
         if ($empleado->user_id) {
             return response()->json(['message' => 'El empleado ya tiene un usuario vinculado.'], 409);
         }
 
-        $yaVinculado = DB::table('empleados')->where('user_id', $userId)->exists();
+        $yaVinculado = $this->db()->table('empleados')->where('user_id', $userId)->exists();
         if ($yaVinculado) {
             return response()->json(['message' => 'Este usuario ya está vinculado a otro empleado.'], 409);
         }
 
-        DB::table('empleados')->where('id', $empleadoId)->update(['user_id' => $userId]);
+        $this->db()->table('empleados')->where('id', $empleadoId)->update(['user_id' => $userId]);
         return response()->json(['message' => 'Usuario vinculado correctamente.']);
     }
 
@@ -265,8 +271,8 @@ class AdminController extends Controller
      */
     public function desvincularUsuario(int $empleadoId): JsonResponse
     {
-        abort_unless(DB::table('empleados')->where('id', $empleadoId)->exists(), 404);
-        DB::table('empleados')->where('id', $empleadoId)->update(['user_id' => null]);
+        abort_unless($this->db()->table('empleados')->where('id', $empleadoId)->exists(), 404);
+        $this->db()->table('empleados')->where('id', $empleadoId)->update(['user_id' => null]);
         return response()->json(['message' => 'Usuario desvinculado.']);
     }
 
@@ -276,11 +282,11 @@ class AdminController extends Controller
      */
     public function toggleUser(int $userId): JsonResponse
     {
-        $user = DB::table('users')->where('id', $userId)->first();
+        $user = $this->db()->table('users')->where('id', $userId)->first();
         abort_unless($user, 404);
 
         $nuevo = !$user->activo;
-        DB::table('users')->where('id', $userId)->update(['activo' => $nuevo, 'updated_at' => now()]);
+        $this->db()->table('users')->where('id', $userId)->update(['activo' => $nuevo, 'updated_at' => now()]);
 
         return response()->json(['activo' => $nuevo]);
     }
@@ -292,9 +298,9 @@ class AdminController extends Controller
     public function cambiarPassword(Request $request, int $userId): JsonResponse
     {
         $request->validate(['password' => 'required|string|min:8']);
-        abort_unless(DB::table('users')->where('id', $userId)->exists(), 404);
+        abort_unless($this->db()->table('users')->where('id', $userId)->exists(), 404);
 
-        DB::table('users')->where('id', $userId)->update([
+        $this->db()->table('users')->where('id', $userId)->update([
             'password'   => Hash::make($request->password),
             'updated_at' => now(),
         ]);
@@ -309,7 +315,7 @@ class AdminController extends Controller
     /** GET /api/admin/roles */
     public function roles(): JsonResponse
     {
-        $roles = DB::table('roles as r')
+        $roles = $this->db()->table('roles as r')
             ->leftJoin('systems as s', 's.id', '=', 'r.system_id')
             ->select('r.id', 'r.nombre', 'r.codigo', 'r.is_active', 's.id as system_id', 's.nombre as sistema', 's.color')
             ->orderBy('s.nombre')->orderBy('r.nombre')
@@ -323,11 +329,11 @@ class AdminController extends Controller
     {
         $data = $request->validate([
             'nombre'    => 'required|string|max:100',
-            'codigo'    => ['required','string','max:80', Rule::unique('roles','codigo')],
-            'system_id' => 'required|exists:systems,id',
+            'codigo'    => ['required','string','max:80', Rule::unique('pgsql.roles','codigo')],
+            'system_id' => 'required|exists:pgsql.systems,id',
         ]);
 
-        $id = DB::table('roles')->insertGetId(array_merge($data, [
+        $id = $this->db()->table('roles')->insertGetId(array_merge($data, [
             'is_active'  => true,
             'created_at' => now(),
             'updated_at' => now(),
@@ -339,26 +345,26 @@ class AdminController extends Controller
     /** PATCH /api/admin/roles/{id} */
     public function updateRol(Request $request, int $id): JsonResponse
     {
-        abort_unless(DB::table('roles')->where('id', $id)->exists(), 404);
+        abort_unless($this->db()->table('roles')->where('id', $id)->exists(), 404);
 
         $data = $request->validate([
             'nombre'    => 'sometimes|required|string|max:100',
-            'codigo'    => ['sometimes','required','string','max:80', Rule::unique('roles','codigo')->ignore($id)],
-            'system_id' => 'sometimes|required|exists:systems,id',
+            'codigo'    => ['sometimes','required','string','max:80', Rule::unique('pgsql.roles','codigo')->ignore($id)],
+            'system_id' => 'sometimes|required|exists:pgsql.systems,id',
             'is_active' => 'sometimes|boolean',
         ]);
 
-        DB::table('roles')->where('id', $id)->update(array_merge($data, ['updated_at' => now()]));
+        $this->db()->table('roles')->where('id', $id)->update(array_merge($data, ['updated_at' => now()]));
         return response()->json(['message' => 'Rol actualizado.']);
     }
 
     /** DELETE /api/admin/roles/{id} */
     public function deleteRol(int $id): JsonResponse
     {
-        $inUse = DB::table('role_user')->where('role_id', $id)->exists();
+        $inUse = $this->db()->table('role_user')->where('role_id', $id)->exists();
         if ($inUse) return response()->json(['message' => 'No se puede eliminar: el rol tiene usuarios asignados.'], 409);
 
-        DB::table('roles')->where('id', $id)->delete();
+        $this->db()->table('roles')->where('id', $id)->delete();
         return response()->json(['message' => 'Rol eliminado.']);
     }
 
@@ -369,9 +375,9 @@ class AdminController extends Controller
     /** GET /api/admin/users/{userId}/roles */
     public function rolesDeUsuario(int $userId): JsonResponse
     {
-        abort_unless(DB::table('users')->where('id', $userId)->exists(), 404);
+        abort_unless($this->db()->table('users')->where('id', $userId)->exists(), 404);
 
-        $roles = DB::table('role_user as ru')
+        $roles = $this->db()->table('role_user as ru')
             ->join('roles as r', 'r.id', '=', 'ru.role_id')
             ->leftJoin('systems as s', 's.id', '=', 'r.system_id')
             ->where('ru.user_id', $userId)
@@ -384,20 +390,20 @@ class AdminController extends Controller
     /** POST /api/admin/users/{userId}/roles/{roleId} */
     public function asignarRol(int $userId, int $roleId): JsonResponse
     {
-        abort_unless(DB::table('users')->where('id', $userId)->exists(), 404);
-        abort_unless(DB::table('roles')->where('id', $roleId)->exists(), 404);
+        abort_unless($this->db()->table('users')->where('id', $userId)->exists(), 404);
+        abort_unless($this->db()->table('roles')->where('id', $roleId)->exists(), 404);
 
-        $exists = DB::table('role_user')->where('user_id', $userId)->where('role_id', $roleId)->exists();
+        $exists = $this->db()->table('role_user')->where('user_id', $userId)->where('role_id', $roleId)->exists();
         if ($exists) return response()->json(['message' => 'El usuario ya tiene este rol.'], 409);
 
-        DB::table('role_user')->insert(['user_id' => $userId, 'role_id' => $roleId, 'created_at' => now(), 'updated_at' => now()]);
+        $this->db()->table('role_user')->insert(['user_id' => $userId, 'role_id' => $roleId, 'created_at' => now(), 'updated_at' => now()]);
         return response()->json(['message' => 'Rol asignado.'], 201);
     }
 
     /** DELETE /api/admin/users/{userId}/roles/{roleId} */
     public function quitarRol(int $userId, int $roleId): JsonResponse
     {
-        DB::table('role_user')->where('user_id', $userId)->where('role_id', $roleId)->delete();
+        $this->db()->table('role_user')->where('user_id', $userId)->where('role_id', $roleId)->delete();
         return response()->json(['message' => 'Rol removido.']);
     }
 
@@ -408,7 +414,7 @@ class AdminController extends Controller
     /** GET /api/admin/sistemas */
     public function sistemas(): JsonResponse
     {
-        $sistemas = DB::table('systems')
+        $sistemas = $this->db()->table('systems')
             ->select('id', 'nombre', 'codigo', 'url', 'color', 'icon', 'descripcion')
             ->orderBy('nombre')
             ->get();
@@ -419,7 +425,7 @@ class AdminController extends Controller
     /** PATCH /api/admin/sistemas/{id} */
     public function updateSistema(Request $request, int $id): JsonResponse
     {
-        abort_unless(DB::table('systems')->where('id', $id)->exists(), 404);
+        abort_unless($this->db()->table('systems')->where('id', $id)->exists(), 404);
 
         $data = $request->validate([
             'nombre'      => 'sometimes|required|string|max:100',
@@ -429,7 +435,7 @@ class AdminController extends Controller
             'descripcion' => 'sometimes|nullable|string|max:255',
         ]);
 
-        DB::table('systems')->where('id', $id)->update(array_merge($data, ['updated_at' => now()]));
+        $this->db()->table('systems')->where('id', $id)->update(array_merge($data, ['updated_at' => now()]));
         return response()->json(['message' => 'Sistema actualizado.']);
     }
 }
