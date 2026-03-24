@@ -108,7 +108,10 @@ class ProductosController extends Controller
      */
     public function sucursales(): JsonResponse
     {
-        $sucursales = Sucursal::orderBy('nombre')->get(['id', 'codigo', 'nombre']);
+        $sucursales = Sucursal::whereHas('tipoSucursal', fn($q) => $q->where('codigo', 'operativa'))
+            ->where('id', '!=', 19) // excluir RES - CASA GUIROLA (duplicado de RESTAURANTE CASA GUIROLA)
+            ->orderBy('nombre')
+            ->get(['id', 'codigo', 'nombre']);
 
         return response()->json(['success' => true, 'data' => $sucursales]);
     }
