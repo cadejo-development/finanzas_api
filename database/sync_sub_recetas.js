@@ -149,6 +149,80 @@ async function main() {
   const subIngrRows = (await sqlPool.request().query(Q_SUB_INGREDIENTES)).recordset;
   log(`      ${subIngrRows.length} líneas de ingredientes.`);
 
+  // ── 1b. Detectar modifier sub-recetas (no aparecen como proIdMaterial en MXP) ──
+  log('');
+  log('[1b] Detectando modifier sub-recetas (costo=0 en productos, con ingredientes en SQL Server)...');
+
+  // Productos referenciados en receta_modificadores con costo=0 en PG
+  const modSubProds = (await pg.query(`
+    SELECT DISTINCT p.codigo_origen, p.codigo, p.nombre
+    FROM productos p
+    INNER JOIN receta_modificadores rm ON rm.producto_id = p.id
+    WHERE p.costo = 0
+      AND p.codigo_origen IS NOT NULL
+      AND p.codigo_origen != ''
+  `)).rows;
+
+  // Excluir los ya detectados por Q_SUB_RECETAS
+  const subCodigosSet = new Set(subRows.map(r => String(r.codigo ?? '').trim()));
+  const extraProds = modSubProds.filter(p => !subCodigosSet.has(String(p.codigo ?? '').trim()));
+  log(`      ${modSubProds.length} modifier products con costo=0. ${extraProds.length} no detectados aún como sub-recetas.`);
+
+  if (extraProds.length > 0) {
+    // Buscar en SQL Server cuáles tienen ingredientes propios en MXP
+    const extraCodigos = extraProds.map(p => p.codigo_origen).filter(Boolean);
+
+    // Construir query con parámetros nombrados para mssql
+    const extraReq = sqlPool.request();
+    extraCodigos.forEach((c, i) => extraReq.input(`ec${i}`, sql.VarChar, c));
+    const ecPh = extraCodigos.map((_, i) => `@ec${i}`).join(',');
+
+    const extraSubData = (await extraReq.query(`
+      SELECT DISTINCT
+        p.proId        AS id_origen,
+        p.proCodigo    AS codigo,
+        p.proNombre    AS nombre,
+        ISNULL(cpr.cprNombre, 'Sub-Receta') AS tipo
+      FROM olComun.dbo.Productos p WITH (NOLOCK)
+      INNER JOIN olComun.dbo.MaterialesXProducto mx WITH (NOLOCK)
+        ON mx.proId = p.proId AND mx.mxprEliminado = 0 AND mx.mxprCantUnidad > 0
+      LEFT JOIN olComun.dbo.CategoriasProductos cpr WITH (NOLOCK) ON p.cprId = cpr.cprId
+      WHERE p.proCodigo IN (${ecPh})
+    `)).recordset;
+
+    log(`      ${extraSubData.length} modifier sub-recetas con ingredientes en SQL Server.`);
+
+    if (extraSubData.length > 0) {
+      const extraSubIds = extraSubData.map(r => r.id_origen);
+      const ingrReq = sqlPool.request();
+      extraSubIds.forEach((id, i) => ingrReq.input(`si${i}`, sql.Int, id));
+      const siPh = extraSubIds.map((_, i) => `@si${i}`).join(',');
+
+      const extraIngrData = (await ingrReq.query(`
+        SELECT
+          mx.proId           AS sub_id_origen,
+          mx.proIdMaterial   AS ingr_id_origen,
+          ingr.proCodigo     AS ingr_codigo,
+          mx.mxprCantUnidad  AS cantidad,
+          ISNULL(uni.uniNombre, 'u') AS unidad
+        FROM olComun.dbo.MaterialesXProducto mx WITH (NOLOCK)
+        INNER JOIN olComun.dbo.Productos ingr WITH (NOLOCK)
+          ON ingr.proId = mx.proIdMaterial
+        LEFT JOIN olComun.dbo.Unidades uni WITH (NOLOCK)
+          ON uni.uniId = mx.uniId
+        WHERE mx.mxprEliminado = 0
+          AND mx.mxprCantUnidad > 0
+          AND mx.proId IN (${siPh})
+      `)).recordset;
+
+      log(`      ${extraIngrData.length} ingredientes de modifier sub-recetas. Añadiendo a subRows/subIngrRows...`);
+      subRows.push(...extraSubData);
+      subIngrRows.push(...extraIngrData);
+    }
+  } else {
+    log('      Ninguna modifier sub-receta adicional detectada.');
+  }
+
   // ── 3. Migrar sub-recetas a PostgreSQL ────────────────────────────────────
   log('');
   log('[3/4] Upsertando sub-recetas en recetas...');
@@ -271,12 +345,92 @@ async function main() {
 
     log(`      ${updateResult.rowCount} filas actualizadas a sub_receta_id.`);
 
-    // NOTA: Se eliminó el paso 4c de cálculo de costos desde SQL Server.
-    // Los costos de sub-recetas se computan en tiempo real en RecetasController::calcularCostoSubReceta.
-    // Para productos CP con proCosto > 0, se usa el valor almacenado en productos.costo.
-    // Para SUBR con proCosto = 0, se calcula desde los ingredientes con conversión de unidades.
+    // ── 4c. Calcular y almacenar costo de modifier sub-recetas (unidad='u') ──
+    // La tabla ConversionesXUnidades de SQL Server es incompleta (muchas entradas "inactiva").
+    // Calculamos en JS usando la misma tabla de conversión que RecetasController::convertirCosto.
+    log('');
+    log('[4c] Calculando costos de modifier sub-recetas (unidad=u)...');
 
-    if (false) { // Disabled: step 4c - SQL Server cost computation was inaccurate
+    // Misma tabla de conversión que en PHP: factor = cuántas unidades FROM caben en 1 TO
+    const CONV_JS = {
+      'lb':    { 'oz': 1/16,       'g': 1/453.592,  'kg': 1/0.453592 },
+      'kg':    { 'g':  1/1000,     'oz': 1/35.274,  'lb': 1/2.20462  },
+      'oz':    { 'lb': 16,         'g': 28.3495,    'kg': 28.3495/1000 },
+      'g':     { 'lb': 453.592,    'kg': 1000,      'oz': 1/28.3495  },
+      'lt':    { 'ml': 1/1000,     'oz fl': 1/33.814, 'galon': 3.78541 },
+      'galon': { 'oz fl': 1/128,   'lt': 1/3.78541, 'ml': 1/3785.41  },
+      'oz fl': { 'galon': 128,     'lt': 33.814,    'ml': 33.814/1000 },
+      'ml':    { 'lt': 1000,       'oz fl': 1000/33.814, 'galon': 3785.41 },
+    };
+    const convertirCostoJs = (costo, desde, hacia) => {
+      if (!desde || !hacia || desde === hacia) return costo;
+      const factor = CONV_JS[desde]?.[hacia];
+      return factor != null ? costo * factor : costo; // sin factor conocido: asumir misma unidad
+    };
+
+    // Buscar productos con costo=0, unidad='u', que tienen receta sub_receta con ingredientes
+    const modSubCostoCero = (await pg.query(`
+      SELECT p.id AS prod_id, p.codigo AS prod_codigo, r.id AS receta_id
+      FROM productos p
+      INNER JOIN recetas r ON r.codigo_origen = p.codigo AND r.tipo_receta = 'sub_receta'
+      WHERE p.costo = 0
+        AND p.unidad IN ('u', 'unidad', 'porcion', 'rebanada')
+    `)).rows;
+
+    if (modSubCostoCero.length === 0) {
+      log('      Ningún modifier sub-receta con costo=0 encontrado. Saltando.');
+    } else {
+      log(`      ${modSubCostoCero.length} modifier sub-recetas con costo=0 a calcular.`);
+
+      // Cargar todos sus ingredientes con costo y unidades desde PG
+      const recetaIds = modSubCostoCero.map(r => r.receta_id);
+      const ingrData = (await pg.query(`
+        SELECT
+          ri.receta_id,
+          ri.cantidad_por_plato AS cantidad,
+          ri.unidad             AS ingr_unidad,
+          p.costo               AS prod_costo,
+          p.unidad              AS prod_unidad
+        FROM receta_ingredientes ri
+        INNER JOIN productos p ON p.id = ri.producto_id
+        WHERE ri.receta_id = ANY($1::int[])
+          AND p.costo > 0
+      `, [recetaIds])).rows;
+
+      // Agrupar por receta_id
+      const ingrPorReceta = {};
+      ingrData.forEach(r => {
+        if (!ingrPorReceta[r.receta_id]) ingrPorReceta[r.receta_id] = [];
+        ingrPorReceta[r.receta_id].push(r);
+      });
+
+      let costoUpdated = 0;
+      for (const sub of modSubCostoCero) {
+        const ingredientes = ingrPorReceta[sub.receta_id] ?? [];
+        if (ingredientes.length === 0) continue;
+
+        const costo = ingredientes.reduce((sum, ing) => {
+          const costoUnitario = convertirCostoJs(
+            parseFloat(ing.prod_costo) || 0,
+            (ing.prod_unidad ?? '').trim().toLowerCase(),
+            (ing.ingr_unidad ?? '').trim().toLowerCase()
+          );
+          return sum + (parseFloat(ing.cantidad) || 0) * costoUnitario;
+        }, 0);
+
+        if (costo > 0) {
+          await pg.query(
+            'UPDATE productos SET costo = $1, updated_at = NOW() WHERE id = $2 AND costo = 0',
+            [costo, sub.prod_id]
+          );
+          log(`        ${sub.prod_codigo}: $${costo.toFixed(4)}`);
+          costoUpdated++;
+        }
+      }
+      log(`      ${costoUpdated} productos actualizados con costo de modifier sub-receta.`);
+    }
+
+    if (false) { // Disabled old 4c (replaced by new step 4c above)
     // ── 4c. Calcular costos de sub-recetas directamente en SQL Server ──────
     // Para sub-recetas cuyo proCosto = 0, calculamos el costo como
     // SUM(material.proCosto × mxprCantUnidad) usando los mismos datos que el backoffice.
