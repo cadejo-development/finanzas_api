@@ -24,7 +24,7 @@ class RecetasController extends Controller
         $perPage    = min((int) $request->query('per_page', 20), 100);
         $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
 
-        $query = Receta::with(['ingredientes.producto', 'ingredientes.subReceta'])
+        $query = Receta::with(['ingredientes.producto', 'ingredientes.subReceta.productoAsociado', 'ingredientes.subReceta.ingredientes.producto'])
             ->withCount(['modificadores as grupos_modificadores' => fn ($q) =>
                 $q->select(DB::raw('COUNT(DISTINCT grupo_id_origen)'))
             ])
@@ -472,12 +472,21 @@ class RecetasController extends Controller
         if (!$sub->relationLoaded('ingredientes')) {
             $sub->load('ingredientes.producto');
         }
-        return (float) $sub->ingredientes->sum(function ($si) {
-            $costo     = (float) ($si->producto?->costo ?? 0);
-            $prodUnit  = strtolower(trim($si->producto?->unidad ?? ''));
-            $ingrUnit  = strtolower(trim($si->unidad ?? ''));
+        $batchCosto = (float) $sub->ingredientes->sum(function ($si) {
+            $costo    = (float) ($si->producto?->costo ?? 0);
+            $prodUnit = strtolower(trim($si->producto?->unidad ?? ''));
+            $ingrUnit = strtolower(trim($si->unidad ?? ''));
             return (float) $si->cantidad_por_plato * $this->convertirCosto($costo, $prodUnit, $ingrUnit);
         });
+
+        // El batch produce 1 unidad del producto asociado (ej: 1 lb de SUBR CEBOLLA).
+        // Si la receta padre lo usa en otra unidad (ej: oz), convertir.
+        $subUnit = strtolower(trim($prod?->unidad ?? ''));
+        if ($subUnit && $unidadReceta) {
+            $batchCosto = $this->convertirCosto($batchCosto, $subUnit, strtolower(trim($unidadReceta)));
+        }
+
+        return $batchCosto;
     }
 
     /**
