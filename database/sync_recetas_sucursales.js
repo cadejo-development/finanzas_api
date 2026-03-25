@@ -183,14 +183,18 @@ const Q_MXP = `
 // Jerarquía: padre = mdfrstIdPadre IS NULL / 0, hijo = mdfrstIdPadre = padre.mdfrstId
 const Q_MODS = `
   SELECT
-    MXP.proId                            AS receta_id_origen,
-    MDR.mdfrstId                         AS grupo_id_origen,
-    MDR.mdfrstCodigo                     AS grupo_codigo,
-    MDR.mdfrstNombre                     AS grupo_nombre,
-    MDD.mdfrstNombre                     AS opcion_nombre,
-    PMOD.proId                           AS mod_prod_id_origen,
-    ISNULL(MDD.mdfrstCantidadProducto, 0) AS cantidad,
-    UNI.uniNombre                        AS uni_nombre
+    MXP.proId                              AS receta_id_origen,
+    MDR.mdfrstId                           AS grupo_id_origen,
+    MDR.mdfrstCodigo                       AS grupo_codigo,
+    MDR.mdfrstNombre                       AS grupo_nombre,
+    MDD.mdfrstNombre                       AS opcion_nombre,
+    PMOD.proId                             AS mod_prod_id_origen,
+    PMOD.proCodigo                         AS mod_prod_codigo,
+    PMOD.proNombre                         AS mod_prod_nombre,
+    ISNULL(PMOD.proCosto, 0)               AS mod_prod_costo,
+    CPR_MOD.cprCodigo                      AS mod_cat_codigo,
+    ISNULL(MDD.mdfrstCantidadProducto, 0)  AS cantidad,
+    UNI.uniNombre                          AS uni_nombre
   FROM olRestaurante.dbo.ModificadoresXProdRst MXP WITH(NOLOCK)
   INNER JOIN olRestaurante.dbo.ModificadoresRst MDR WITH(NOLOCK)
     ON MXP.mdfrstId = MDR.mdfrstId
@@ -201,6 +205,8 @@ const Q_MODS = `
     AND MDD.mdfrstEliminado = 0
   LEFT  JOIN olComun.dbo.Productos PMOD WITH(NOLOCK)
     ON MDD.proId = PMOD.proId
+  LEFT  JOIN olComun.dbo.CategoriasProductos CPR_MOD WITH(NOLOCK)
+    ON PMOD.cprId = CPR_MOD.cprId
   LEFT  JOIN olComun.dbo.Unidades UNI WITH(NOLOCK)
     ON UNI.uniId = PMOD.uniId
   WHERE MXP.mxprstEliminado = 0
@@ -491,7 +497,45 @@ async function main() {
   let modOk = 0, modSkip = 0;
 
   if (!DRY_RUN) {
-    // Limpiar modificadores anteriores antes de reinsertar
+    // ── 8a. Migrar productos referenciados por modificadores pero no en prodIdMap ──
+    const modProdsExtra = modRows
+      .filter(m => m.mod_prod_id_origen && !prodIdMap[m.mod_prod_id_origen] && m.mod_prod_codigo)
+      .reduce((acc, m) => { acc[m.mod_prod_id_origen] = m; return acc; }, {});
+    const extraList = Object.values(modProdsExtra);
+    if (extraList.length > 0) {
+      log(`      Migrando ${extraList.length} productos referenciados en modificadores...`);
+      const pCols2 = ['categoria_id','codigo','codigo_origen','nombre','unidad','precio','costo','activo','aud_usuario','created_at','updated_at'];
+      const pConf2 = `ON CONFLICT (codigo) DO UPDATE SET
+        nombre=EXCLUDED.nombre, costo=EXCLUDED.costo,
+        unidad=EXCLUDED.unidad, updated_at=EXCLUDED.updated_at`;
+      for (let i = 0; i < extraList.length; i += BATCH) {
+        const chunk = extraList.slice(i, i + BATCH);
+        const rows  = chunk.map(m => [
+          catIdMap[m.mod_cat_codigo] ?? catIdMap['__fb__'],
+          clean(m.mod_prod_codigo, 30),
+          clean(m.mod_prod_codigo, 50),
+          clean(m.mod_prod_nombre, 150),
+          normalizeUnit(m.uni_nombre),
+          0,
+          parseFloat(m.mod_prod_costo) || 0,
+          true, 'sync', now, now,
+        ]);
+        const q = buildBatch('productos', pCols2, rows, pConf2);
+        await comp.query(q.text, q.values);
+      }
+      // Actualizar prodIdMap con los nuevos registros
+      const newP = await comp.query(
+        `SELECT id, codigo_origen FROM productos WHERE codigo_origen = ANY($1::text[])`,
+        [extraList.map(m => clean(m.mod_prod_codigo, 50))]
+      );
+      newP.rows.forEach(r => {
+        const orig = extraList.find(m => clean(m.mod_prod_codigo, 50) === r.codigo_origen);
+        if (orig) prodIdMap[orig.mod_prod_id_origen] = r.id;
+      });
+      log(`      OK: ${extraList.length} productos de modificadores upsertados.`);
+    }
+
+    // ── 8b. Limpiar modificadores anteriores antes de reinsertar ──────────────
     await comp.query('DELETE FROM receta_modificadores');
 
     const mCols = [
@@ -510,7 +554,7 @@ async function main() {
     for (const m of modRows) {
       const rid = recIdMap[m.receta_id_origen];
       if (!rid) { modSkip++; continue; }
-      // producto_id puede ser null si el modificador no tiene producto asociado
+      // producto_id puede ser null si el modificador no tiene producto asociado en SQL Server
       const pid = m.mod_prod_id_origen ? (prodIdMap[m.mod_prod_id_origen] ?? null) : null;
       validMods.push([
         rid,
