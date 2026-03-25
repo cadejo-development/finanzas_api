@@ -12,6 +12,7 @@ class RecetaIngrediente extends Model
     protected $fillable = [
         'receta_id',
         'producto_id',
+        'sub_receta_id',
         'cantidad_por_plato',
         'unidad',
         'aud_usuario',
@@ -29,5 +30,10 @@ class RecetaIngrediente extends Model
     public function producto()
     {
         return $this->belongsTo(Producto::class);
+    }
+
+    public function subReceta()
+    {
+        return $this->belongsTo(Receta::class, 'sub_receta_id');
     }
 }

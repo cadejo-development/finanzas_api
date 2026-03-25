@@ -52,6 +52,11 @@ class ProductosController extends Controller
             });
         }
 
+        // Filtro por origen: 'restaurante' | 'centro_produccion'
+        if ($origen = $request->query('origen')) {
+            $query->where('origen', $origen);
+        }
+
         // Búsqueda por nombre o código
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
@@ -68,12 +73,14 @@ class ProductosController extends Controller
             'codigo'       => $p->codigo,
             'nombre'       => $p->nombre,
             'unidad'       => $p->unidad,
-            'precio'       => (float) $p->precio,
-            'precio_unitario' => (float) $p->precio,  // alias frontend
-            'activo'       => $p->activo,
-            'categoria_id' => $p->categoria_id,
-            'categoria_key' => $p->categoria?->key,
+            'precio'          => (float) $p->precio,
+            'costo'           => (float) $p->costo,
+            'precio_unitario' => (float) $p->costo,  // costo para cálculos de recetas
+            'activo'          => $p->activo,
+            'categoria_id'    => $p->categoria_id,
+            'categoria_key'    => $p->categoria?->key,
             'categoria_nombre' => $p->categoria?->nombre,
+            'origen'           => $p->origen ?? 'restaurante',
         ]);
 
         return response()->json([
@@ -100,6 +107,97 @@ class ProductosController extends Controller
             ->get(['id', 'key', 'nombre', 'orden']);
 
         return response()->json(['data' => $cats]);
+    }
+
+    /**
+     * POST /api/compras/productos
+     * Crea un nuevo producto.
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'categoria_id' => 'required|integer|exists:compras.categorias,id',
+            'codigo'       => 'required|string|max:30|unique:compras.productos,codigo',
+            'nombre'       => 'required|string|max:150',
+            'unidad'       => 'required|string|max:20',
+            'precio'       => 'required|numeric|min:0',
+            'origen'       => 'nullable|in:restaurante,centro_produccion',
+        ]);
+
+        $data['activo']      = true;
+        $data['origen']      = $data['origen'] ?? 'restaurante';
+        $data['aud_usuario'] = $request->user()?->email;
+
+        $producto = Producto::create($data);
+        $producto->load('categoria');
+
+        return response()->json(['data' => [
+            'id'               => $producto->id,
+            'codigo'           => $producto->codigo,
+            'nombre'           => $producto->nombre,
+            'unidad'           => $producto->unidad,
+            'precio'           => (float) $producto->precio,
+            'costo'            => (float) $producto->costo,
+            'precio_unitario'  => (float) $producto->costo,
+            'activo'           => $producto->activo,
+            'categoria_id'     => $producto->categoria_id,
+            'categoria_key'    => $producto->categoria?->key,
+            'categoria_nombre' => $producto->categoria?->nombre,
+            'origen'           => $producto->origen ?? 'restaurante',
+        ]], 201);
+    }
+
+    /**
+     * PUT /api/compras/productos/{id}
+     * Actualiza un producto existente.
+     */
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $producto = Producto::where('activo', true)->findOrFail($id);
+
+        $data = $request->validate([
+            'categoria_id' => 'sometimes|integer|exists:compras.categorias,id',
+            'codigo'       => "sometimes|string|max:30|unique:compras.productos,codigo,{$id}",
+            'nombre'       => 'sometimes|string|max:150',
+            'unidad'       => 'sometimes|string|max:20',
+            'precio'       => 'sometimes|numeric|min:0',
+            'origen'       => 'nullable|in:restaurante,centro_produccion',
+        ]);
+
+        if (isset($data['origen']) && $data['origen'] === null) {
+            $data['origen'] = 'restaurante';
+        }
+        $data['aud_usuario'] = $request->user()?->email;
+
+        $producto->update($data);
+        $producto->load('categoria');
+
+        return response()->json(['data' => [
+            'id'               => $producto->id,
+            'codigo'           => $producto->codigo,
+            'nombre'           => $producto->nombre,
+            'unidad'           => $producto->unidad,
+            'precio'           => (float) $producto->precio,
+            'costo'            => (float) $producto->costo,
+            'precio_unitario'  => (float) $producto->costo,
+            'activo'           => $producto->activo,
+            'categoria_id'     => $producto->categoria_id,
+            'categoria_key'    => $producto->categoria?->key,
+            'categoria_nombre' => $producto->categoria?->nombre,
+            'origen'           => $producto->origen ?? 'restaurante',
+        ]]);
+    }
+
+    /**
+     * DELETE /api/compras/productos/{id}
+     * Desactiva un producto (soft-delete).
+     */
+    public function destroy(int $id): JsonResponse
+    {
+        $producto = Producto::where('activo', true)->findOrFail($id);
+        $producto->update(['activo' => false]);
+
+        return response()->json(['message' => 'Producto desactivado.']);
     }
 
     /**

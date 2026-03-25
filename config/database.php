@@ -110,7 +110,7 @@ return [
             'prefix' => '',
             'prefix_indexes' => true,
             'search_path' => 'public',
-            'sslmode' => 'prefer',
+            'sslmode' => env('DB_SSLMODE_COMPRAS', 'prefer'),
         ],
         // Conexión personalizada para pagos_db
         'pagos' => [

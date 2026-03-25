@@ -9,10 +9,11 @@ class Producto extends Model
     protected $connection = 'compras';
     protected $table = 'productos';
     protected $fillable = [
-        'categoria_id', 'codigo', 'nombre', 'unidad', 'precio', 'activo', 'aud_usuario'
+        'categoria_id', 'codigo', 'nombre', 'unidad', 'precio', 'costo', 'origen', 'activo', 'aud_usuario'
     ];
     protected $casts = [
-        'precio' => 'decimal:2',
+        'precio' => 'decimal:4',
+        'costo'  => 'decimal:4',
         'activo' => 'boolean',
     ];
     public function categoria()

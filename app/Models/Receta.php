@@ -13,10 +13,14 @@ class Receta extends Model
     protected $fillable = [
         'nombre',
         'descripcion',
+        'instrucciones',
         'tipo',
+        'tipo_receta',
         'precio',
         'platos_semana',
         'activa',
+        'foto_plato',
+        'foto_plateria',
         'aud_usuario',
     ];
 
@@ -47,6 +51,15 @@ class Receta extends Model
     public function modificadores()
     {
         return $this->hasMany(RecetaModificador::class)->orderBy('grupo_id_origen')->orderBy('opcion_nombre');
+    }
+
+    /**
+     * Producto asociado (misma clave: productos.codigo = recetas.codigo_origen).
+     * Útil para obtener el costo pre-calculado en SQL Server para sub-recetas.
+     */
+    public function productoAsociado()
+    {
+        return $this->hasOne(Producto::class, 'codigo', 'codigo_origen');
     }
 
     /**

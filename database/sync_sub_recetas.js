@@ -1,0 +1,382 @@
+/**
+ * sync_sub_recetas.js
+ *
+ * Migra las sub-recetas desde SQL Server (olcomun) hacia PostgreSQL (compras_db).
+ *
+ * ¿Qué es una sub-receta?
+ *   Un producto que aparece como ingrediente en OTRAS recetas (proIdMaterial en MXP)
+ *   Y TAMBIÉN tiene sus propios ingredientes (proId en MXP).
+ *   En SQL Server su proCosto = 0 porque el sistema lo calcula dinámicamente.
+ *
+ * Pasos:
+ *   1. Detectar sub-recetas en SQL Server
+ *   2. Crear/actualizar entradas en recetas (tipo_receta = 'sub_receta')
+ *   3. Crear receta_ingredientes de cada sub-receta (sus propias materias primas)
+ *   4. Actualizar receta_ingredientes existentes: producto_id → sub_receta_id
+ *
+ * Uso: node sync_sub_recetas.js [--dry-run]
+ */
+
+const sql      = require('mssql');
+const { Pool } = require('pg');
+
+const sqlConfig = {
+  user: 'olimporeader', password: 'olimporeader',
+  server: '10.0.4.20', port: 2033, database: 'olcomun',
+  options: { trustServerCertificate: true, encrypt: false, connectTimeout: 15000 },
+};
+
+const pgConfig = {
+  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com', port: 5432,
+  database: 'compras_db', user: 'cadejo_admin',
+  password: 'Holamundo#3..',
+  ssl: { rejectUnauthorized: false },
+  keepAlive: true,
+  connectionTimeoutMillis: 30000,
+};
+
+const DRY_RUN = process.argv.includes('--dry-run');
+const BATCH   = 50;
+
+const UNIT_MAP = {
+  'ONZAS': 'oz', 'ONZAS FLUIDAS': 'oz fl', 'UNIDAD': 'u',
+  'LIBRA': 'lb', 'LITRO': 'lt', 'KILOGRAMO': 'kg', 'KG': 'kg',
+  'BARRIL': 'barril', 'BOTELLA 0.75 LT': 'botella', 'BOTELLA 0.70 LT': 'botella',
+  'PORCION': 'porcion', 'REBANADA': 'rebanada', 'CAJA': 'caja',
+  'PAQUETE': 'paquete', 'GALON': 'galon',
+  'BOLSA 2 Kg': 'bolsa 2kg', 'BOLSA 1 KG': 'bolsa 1kg',
+};
+const normalizeUnit = s =>
+  !s ? 'u' : (UNIT_MAP[s.trim().toUpperCase()] ?? s.trim().toLowerCase().slice(0, 20));
+const clean = (s, max = 150) =>
+  !s ? '' : String(s).trim().replace(/\s+/g, ' ').slice(0, max);
+const ts  = () => new Date().toTimeString().slice(0, 8);
+const log = s => console.log(`[${ts()}] ${s}`);
+
+function buildBatch(table, columns, rows, conflictSql, returningSql = '') {
+  const params = [];
+  const rowParts = rows.map(row => {
+    const ph = row.map(v => { params.push(v); return `$${params.length}`; });
+    return `(${ph.join(',')})`;
+  });
+  const text = `INSERT INTO ${table} (${columns.join(',')}) VALUES ${rowParts.join(',')} ${conflictSql} ${returningSql}`;
+  return { text, values: params };
+}
+
+// ── Queries SQL Server ────────────────────────────────────────────────────────
+
+/**
+ * Sub-recetas: productos que aparecen como ingrediente (proIdMaterial) en otras recetas
+ * Y TAMBIÉN tienen sus propios ingredientes (proId en MXP).
+ * NO filtramos por proActivo porque sub-recetas suelen ser inactivas como productos standalone.
+ */
+const Q_SUB_RECETAS = `
+SELECT DISTINCT
+  p.proId        AS id_origen,
+  p.proCodigo    AS codigo,
+  p.proNombre    AS nombre,
+  ISNULL(cpr.cprNombre, 'Sub-Receta') AS tipo
+FROM olComun.dbo.Productos p WITH (NOLOCK)
+-- Debe aparecer como ingrediente en alguna receta
+INNER JOIN olComun.dbo.MaterialesXProducto mx_como_hijo WITH (NOLOCK)
+  ON mx_como_hijo.proIdMaterial = p.proId
+  AND mx_como_hijo.mxprEliminado = 0
+-- Debe tener sus propios ingredientes
+INNER JOIN olComun.dbo.MaterialesXProducto mx_como_padre WITH (NOLOCK)
+  ON mx_como_padre.proId = p.proId
+  AND mx_como_padre.mxprEliminado = 0
+LEFT JOIN olComun.dbo.CategoriasProductos cpr WITH (NOLOCK) ON p.cprId = cpr.cprId
+ORDER BY p.proCodigo`;
+
+/**
+ * Ingredientes de cada sub-receta (las materias primas que la componen).
+ */
+const Q_SUB_INGREDIENTES = `
+SELECT
+  mx.proId           AS sub_id_origen,
+  mx.proIdMaterial   AS ingr_id_origen,
+  ingr.proCodigo     AS ingr_codigo,
+  mx.mxprCantUnidad  AS cantidad,
+  ISNULL(uni.uniNombre, 'u') AS unidad
+FROM olComun.dbo.MaterialesXProducto mx WITH (NOLOCK)
+INNER JOIN olComun.dbo.Productos ingr WITH (NOLOCK)
+  ON ingr.proId = mx.proIdMaterial
+LEFT JOIN olComun.dbo.Unidades uni WITH (NOLOCK)
+  ON uni.uniId = mx.uniId
+WHERE mx.mxprEliminado = 0
+  AND mx.mxprCantUnidad > 0
+  AND mx.proId IN (
+    SELECT DISTINCT p2.proId
+    FROM olComun.dbo.Productos p2 WITH (NOLOCK)
+    INNER JOIN olComun.dbo.MaterialesXProducto c WITH (NOLOCK)
+      ON c.proIdMaterial = p2.proId AND c.mxprEliminado = 0
+    INNER JOIN olComun.dbo.MaterialesXProducto par WITH (NOLOCK)
+      ON par.proId = p2.proId AND par.mxprEliminado = 0
+  )`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+async function main() {
+  log('================================================');
+  log('SYNC SUB-RECETAS: SQL Server → PostgreSQL');
+  log(DRY_RUN ? '*** DRY RUN — sin escritura ***' : '*** MODO REAL ***');
+  log('================================================');
+
+  log('Conectando SQL Server...');
+  const sqlPool = await sql.connect(sqlConfig);
+  log('SQL Server OK');
+
+  log('Conectando PostgreSQL...');
+  const pool = new Pool(pgConfig);
+  const pg   = await pool.connect();
+  log('PostgreSQL OK');
+
+  const now = new Date().toISOString();
+
+  // ── 1. Cargar sub-recetas desde SQL Server ─────────────────────────────────
+  log('');
+  log('[1/4] Detectando sub-recetas en SQL Server...');
+  const subRows = (await sqlPool.request().query(Q_SUB_RECETAS)).recordset;
+  log(`      ${subRows.length} sub-recetas encontradas.`);
+
+  if (subRows.length === 0) {
+    log('      Sin sub-recetas. Abortando.');
+    pg.release(); await pool.end(); await sqlPool.close(); return;
+  }
+
+  // ── 2. Cargar ingredientes de sub-recetas desde SQL Server ─────────────────
+  log('');
+  log('[2/4] Cargando ingredientes de sub-recetas...');
+  const subIngrRows = (await sqlPool.request().query(Q_SUB_INGREDIENTES)).recordset;
+  log(`      ${subIngrRows.length} líneas de ingredientes.`);
+
+  // ── 3. Migrar sub-recetas a PostgreSQL ────────────────────────────────────
+  log('');
+  log('[3/4] Upsertando sub-recetas en recetas...');
+
+  // Mapa: codigo_origen → pg receta id (para sub-recetas ya existentes)
+  const subRecetaPgIdMap = {}; // codigo → pg id
+
+  if (!DRY_RUN) {
+    // Cargar productos pg para mapear codigo → producto_id (para ingredientes)
+    const prodRows = await pg.query('SELECT id, codigo FROM productos WHERE activo = true');
+    const prodCodigoMap = {}; // codigo → pg id
+    prodRows.rows.forEach(r => { prodCodigoMap[r.codigo] = r.id; });
+
+    // Upsert sub-recetas en recetas
+    const rCols = ['nombre','codigo_origen','tipo','tipo_receta','platos_semana','activa','precio','aud_usuario','created_at','updated_at'];
+    const rConf = `ON CONFLICT (codigo_origen) DO UPDATE SET
+      nombre=EXCLUDED.nombre, tipo=EXCLUDED.tipo, tipo_receta=EXCLUDED.tipo_receta,
+      updated_at=EXCLUDED.updated_at`;
+    const rRet = 'RETURNING id, codigo_origen';
+
+    let insertedCount = 0;
+    for (let i = 0; i < subRows.length; i += BATCH) {
+      const chunk = subRows.slice(i, i + BATCH);
+      const rows  = chunk.map(r => [
+        clean(r.nombre, 150),
+        clean(r.codigo, 50),
+        clean(r.tipo, 80) || 'Sub-Receta',
+        'sub_receta',
+        0, true, 0,
+        'sync_sub_recetas', now, now,
+      ]);
+      const q = buildBatch('recetas', rCols, rows, rConf, rRet);
+      const res = await pg.query(q.text, q.values);
+      res.rows.forEach(r => { subRecetaPgIdMap[r.codigo_origen] = r.id; });
+      insertedCount += chunk.length;
+    }
+
+    // Recargar por si acaso (el RETURNING puede tener race conditions en lotes)
+    const existingRec = await pg.query(
+      "SELECT id, codigo_origen FROM recetas WHERE tipo_receta = 'sub_receta'"
+    );
+    existingRec.rows.forEach(r => { subRecetaPgIdMap[r.codigo_origen] = r.id; });
+
+    log(`      OK: ${insertedCount} sub-recetas upsertadas. Mapa: ${Object.keys(subRecetaPgIdMap).length} entradas.`);
+
+    // ── 4a. Crear receta_ingredientes de cada sub-receta ────────────────────
+    log('');
+    log('[4/4] Migrando ingredientes de sub-recetas...');
+
+    // Agrupar ingredientes por sub_id_origen
+    const ingrPorSub = {};
+    subIngrRows.forEach(r => {
+      if (!ingrPorSub[r.sub_id_origen]) ingrPorSub[r.sub_id_origen] = [];
+      ingrPorSub[r.sub_id_origen].push(r);
+    });
+
+    // Mapa SQL Server proId → codigo (para sub-recetas)
+    const subCodigoMap = {}; // proId → codigo
+    subRows.forEach(r => { subCodigoMap[r.id_origen] = r.codigo; });
+
+    let riOk = 0, riSkip = 0;
+    const riCols = ['receta_id','producto_id','cantidad_por_plato','unidad','aud_usuario','created_at','updated_at'];
+    const riConf = ''; // INSERT simple (borramos primero)
+
+    const subRecetaIds = Object.values(subRecetaPgIdMap).filter(Boolean);
+
+    // Borrar ingredientes anteriores de las sub-recetas migradas
+    if (subRecetaIds.length > 0) {
+      for (let i = 0; i < subRecetaIds.length; i += 500) {
+        const chunk = subRecetaIds.slice(i, i + 500);
+        await pg.query('DELETE FROM receta_ingredientes WHERE receta_id = ANY($1::int[])', [chunk]);
+      }
+    }
+
+    for (const [subIdOrigen, ingredientes] of Object.entries(ingrPorSub)) {
+      const subCodigo = subCodigoMap[subIdOrigen];
+      const subPgId   = subRecetaPgIdMap[subCodigo];
+      if (!subPgId) { log(`      WARN: sin pg id para sub ${subIdOrigen}`); riSkip += ingredientes.length; continue; }
+
+      const validRows = [];
+      for (const ing of ingredientes) {
+        const prodPgId = prodCodigoMap[ing.ingr_codigo];
+        if (!prodPgId) { riSkip++; continue; }
+        validRows.push([
+          subPgId,
+          prodPgId,
+          parseFloat(ing.cantidad) || 0,
+          normalizeUnit(ing.unidad),
+          'sync_sub_recetas', now, now,
+        ]);
+        riOk++;
+      }
+
+      if (validRows.length > 0) {
+        for (let i = 0; i < validRows.length; i += BATCH) {
+          const chunk = validRows.slice(i, i + BATCH);
+          const q = buildBatch('receta_ingredientes', riCols, chunk, riConf);
+          await pg.query(q.text, q.values);
+        }
+      }
+    }
+
+    log(`      Ingredientes insertados: ${riOk}, saltados: ${riSkip}`);
+
+    // ── 4b. Actualizar receta_ingredientes existentes: producto_id → sub_receta_id ──
+    log('');
+    log('[4b] Actualizando receta_ingredientes: producto_id → sub_receta_id...');
+
+    const updateResult = await pg.query(`
+      UPDATE receta_ingredientes ri
+      SET
+        sub_receta_id = r.id,
+        producto_id   = NULL
+      FROM recetas r
+      INNER JOIN productos p ON p.codigo = r.codigo_origen
+      WHERE ri.producto_id = p.id
+        AND r.tipo_receta = 'sub_receta'
+        AND ri.sub_receta_id IS NULL
+    `);
+
+    log(`      ${updateResult.rowCount} filas actualizadas a sub_receta_id.`);
+
+    // NOTA: Se eliminó el paso 4c de cálculo de costos desde SQL Server.
+    // Los costos de sub-recetas se computan en tiempo real en RecetasController::calcularCostoSubReceta.
+    // Para productos CP con proCosto > 0, se usa el valor almacenado en productos.costo.
+    // Para SUBR con proCosto = 0, se calcula desde los ingredientes con conversión de unidades.
+
+    if (false) { // Disabled: step 4c - SQL Server cost computation was inaccurate
+    // ── 4c. Calcular costos de sub-recetas directamente en SQL Server ──────
+    // Para sub-recetas cuyo proCosto = 0, calculamos el costo como
+    // SUM(material.proCosto × mxprCantUnidad) usando los mismos datos que el backoffice.
+    log('');
+    log('[4c] Calculando costos de sub-recetas desde SQL Server...');
+
+    // Codigos de sub-recetas cuyo costo en pg = 0
+    const codigosConCostoCero = (await pg.query(`
+      SELECT p.codigo FROM productos p
+      WHERE p.costo = 0
+        AND EXISTS (SELECT 1 FROM recetas r WHERE r.codigo_origen = p.codigo AND r.tipo_receta = 'sub_receta')
+    `)).rows.map(r => r.codigo);
+
+    if (codigosConCostoCero.length === 0) {
+      log('      Ninguna sub-receta con costo=0 encontrada en PG. Saltando.');
+    } else {
+      log(`      ${codigosConCostoCero.length} sub-recetas con costo=0 a calcular.`);
+
+      // Traer los costos calculados desde SQL Server
+      // El mismo cálculo que usa el backoffice: SUM(material.proCosto × mxprCantUnidad)
+      const codigosPlaceholders = codigosConCostoCero.map((_, i) => `@c${i}`).join(',');
+      const costoRequest = sqlPool.request();
+      codigosConCostoCero.forEach((c, i) => costoRequest.input(`c${i}`, c));
+
+      const costoQuery = `
+        SELECT
+          parent.proCodigo AS codigo,
+          SUM(material.proCosto * mxp.mxprCantUnidad) AS costo_calculado
+        FROM olComun.dbo.MaterialesXProducto mxp WITH (NOLOCK)
+        INNER JOIN olComun.dbo.Productos parent WITH (NOLOCK)
+          ON parent.proId = mxp.proId
+        INNER JOIN olComun.dbo.Productos material WITH (NOLOCK)
+          ON material.proId = mxp.proIdMaterial
+        WHERE mxp.mxprEliminado = 0
+          AND material.proCosto > 0
+          AND parent.proCodigo IN (${codigosPlaceholders})
+        GROUP BY parent.proCodigo
+        HAVING SUM(material.proCosto * mxp.mxprCantUnidad) > 0
+      `;
+
+      const costoRows = (await costoRequest.query(costoQuery)).recordset;
+      log(`      ${costoRows.length} sub-recetas con costo calculado en SQL Server.`);
+
+      let costoUpdated = 0;
+      for (let i = 0; i < costoRows.length; i += BATCH) {
+        const chunk = costoRows.slice(i, i + BATCH);
+        for (const row of chunk) {
+          await pg.query(
+            'UPDATE productos SET costo = $1, updated_at = NOW() WHERE codigo = $2 AND costo = 0',
+            [parseFloat(row.costo_calculado) || 0, row.codigo]
+          );
+          costoUpdated++;
+        }
+      }
+      log(`      ${costoUpdated} productos actualizados con costo calculado.`);
+    }
+    } // end if(false) - step 4c disabled
+
+  } else {
+    // DRY RUN
+    log(`      (dry-run) ${subRows.length} sub-recetas se crearían.`);
+    log(`      (dry-run) ${subIngrRows.length} ingredientes de sub-recetas se migrarían.`);
+
+    // Estimar cuántos receta_ingredientes se actualizarían
+    const est = await pg.query(`
+      SELECT COUNT(*) as c
+      FROM receta_ingredientes ri
+      INNER JOIN productos p ON p.id = ri.producto_id
+      WHERE (p.codigo ILIKE 'PL%' OR p.nombre ILIKE 'SUBR%')
+        AND ri.sub_receta_id IS NULL
+    `);
+    log(`      (dry-run) ~${est.rows[0].c} receta_ingredientes pasarían a usar sub_receta_id.`);
+  }
+
+  // ── Resumen ────────────────────────────────────────────────────────────────
+  log('');
+  log('================================================');
+  log('RESUMEN:');
+  log(`  Sub-recetas detectadas:       ${subRows.length}`);
+  log(`  Ingredientes de sub-recetas:  ${subIngrRows.length}`);
+  if (!DRY_RUN) {
+    log(`  Verificando estado final...`);
+    const fin = await pg.query(
+      "SELECT COUNT(*) as total FROM recetas WHERE tipo_receta = 'sub_receta'"
+    );
+    const finIngr = await pg.query(
+      "SELECT COUNT(*) as total FROM receta_ingredientes WHERE sub_receta_id IS NOT NULL"
+    );
+    log(`  Recetas sub_receta en PG:     ${fin.rows[0].total}`);
+    log(`  Ingredientes con sub_receta_id: ${finIngr.rows[0].total}`);
+  }
+  log(DRY_RUN ? '\nDRY-RUN OK. Corre sin --dry-run para migrar.' : '\n✓ Sync completado.');
+  log('================================================');
+
+  pg.release();
+  await pool.end();
+  await sqlPool.close();
+}
+
+main().catch(err => {
+  console.error('\n❌ ERROR:', err.message, err.stack);
+  process.exit(1);
+});

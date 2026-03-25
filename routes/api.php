@@ -135,8 +135,11 @@ Route::prefix('pagos')->middleware('auth:sanctum')->group(function () {
 Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     // Catálogo de productos (paginado)
     Route::get('catalogos',           [ProductosController::class, 'catalogos']);
-    Route::get('productos',           [ProductosController::class, 'index']);
     Route::get('sucursales',          [ProductosController::class, 'sucursales']);
+    Route::get('productos',           [ProductosController::class, 'index']);
+    Route::post('productos',          [ProductosController::class, 'store']);
+    Route::put('productos/{id}',      [ProductosController::class, 'update']);
+    Route::delete('productos/{id}',   [ProductosController::class, 'destroy']);
 
     // Pedidos (bandeja y consolidado)
     Route::get('pedidos/semanas',       [PedidosController::class, 'semanas']);
@@ -148,9 +151,10 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('pedidos/{id}',          [PedidosController::class, 'show']);
     Route::get('pedidos',               [PedidosController::class, 'index']);
 
-    // Recetas (CRUD + calculo de ingredientes + platos por sucursal)
+    // Recetas (CRUD + calculo de ingredientes + platos por sucursal + upload fotos)
     Route::post('recetas/calcular',                    [RecetasController::class, 'calcular']);
     Route::patch('recetas/{id}/platos-sucursal',       [RecetasController::class, 'setPlatosSucursal']);
+    Route::post('upload',                              [RecetasController::class, 'uploadFoto']);
     Route::apiResource('recetas',     RecetasController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
 
     // Ventas semanales

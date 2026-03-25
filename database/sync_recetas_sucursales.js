@@ -35,19 +35,20 @@ const RDS_BASE = {
 const pgCoreCfg    = { ...RDS_BASE, database: 'core_db'    };
 const pgComprasCfg = { ...RDS_BASE, database: 'compras_db' };
 
-// ── Mapeo AreasRst → Sucursal (SQL Server sucId) ─────────────────────────────
-// arerstId (AreasRst) → sucId (olComun.Sucursales) → mismo id en core_db.sucursales
+// ── Mapeo AreasRst → core_db sucursal id ─────────────────────────────────────
+// arerstId (olRestaurante.AreasRst) → id en core_db.sucursales
+// NOTA: Los sucIds de SQL Server NO coinciden con los IDs de core_db
 const AREA_TO_SUC = {
-  1:  3,   // ZONA ROSA      → RES - ZONA ROSA
-  16: 6,   // LA LIBERTAD    → RES - LA LIBERTAD
-  17: 7,   // AEROPUERTO 1   → RES - AEROPUERTO-1
-  18: 8,   // AEROPUERTO 2   → RES - AEROPUERTO-2
-  22: 10,  // PLAZA VENECIA  → RES - PASEO VENECIA
-  23: 11,  // SANTA ELENA    → RES - SANTA ELENA
-  25: 12,  // HUIZUCAR       → RES - HUIZUCAR
-  26: 13,  // OPICO          → RES - OPICO
-  28: 16,  // MALCRIADAS AE  → RES - MALCRIADAS AE2
-  30: 19,  // CASA GUIROLA   → RES - CASA GUIROLA
+  1:  1,   // ZONA ROSA      → core_db id=1  (RESTAURANTE ZONA ROSA)
+  16: 3,   // LA LIBERTAD    → core_db id=3  (RESTAURANTE LA LIBERTAD)
+  17: 4,   // AEROPUERTO 1   → core_db id=4  (RESTAURANTE AEROPUERTO 1)
+  18: 5,   // AEROPUERTO 2   → core_db id=5  (RESTAURANTE AEROPUERTO 2)
+  22: 7,   // PLAZA VENECIA  → core_db id=7  (RESTAURANTE PASEO VENECIA)
+  23: 8,   // SANTA ELENA    → core_db id=8  (RESTAURANTE SANTA ELENA)
+  25: 9,   // HUIZUCAR       → core_db id=9  (RESTAURANTE HUIZUCAR)
+  26: 10,  // OPICO          → core_db id=10 (RESTAURANTE OPICO)
+  28: 16,  // MALCRIADAS AE  → core_db id=16 (RES - MALCRIADAS AE2)
+  30: 11,  // CASA GUIROLA   → core_db id=11 (RESTAURANTE CASA GUIROLA)
 };
 const ACTIVE_AREA_IDS = Object.keys(AREA_TO_SUC).map(Number);
 const ACTIVE_SUC_IDS  = [...new Set(Object.values(AREA_TO_SUC))]; // [3,6,7,8,10,11,12,13,16,19]
@@ -251,35 +252,12 @@ async function main() {
   const now = new Date().toISOString();
 
   // ============================================================
-  // FASE 0 — Sync sucursales → core_db
+  // FASE 0 — Sync sucursales (OMITIDO)
+  // Los sucIds de SQL Server no coinciden con los IDs de core_db.
+  // Las sucursales se gestionan desde el sistema RRHH (sync_empleados_to_rds.js).
   // ============================================================
-  log('\n[0/8] Sucursales restaurante → core_db...');
-  const sucRows = (await sqlPool.request().query(Q_SUCURSALES)).recordset;
-  log(`      ${sucRows.length} sucursales encontradas.`);
-
-  // Obtener tipo_sucursal_id "operativa"
-  let tipoOpId = null;
-  const tipoRes = await core.query("SELECT id FROM tipos_sucursal WHERE codigo='operativa' LIMIT 1");
-  tipoOpId = tipoRes.rows[0]?.id ?? null;
-  if (!tipoOpId) log('      AVISO: tipos_sucursal vacío, tipo_sucursal_id quedará NULL');
-
-  if (!DRY_RUN) {
-    for (const s of sucRows) {
-      await core.query(`
-        INSERT INTO sucursales (id, nombre, codigo, tipo_sucursal_id, aud_usuario, created_at, updated_at)
-        OVERRIDING SYSTEM VALUE
-        VALUES ($1, $2, $3, $4, 'sync', NOW(), NOW())
-        ON CONFLICT (id) DO UPDATE SET
-          nombre = EXCLUDED.nombre,
-          updated_at = NOW()
-      `, [s.id, clean(s.nombre, 100), clean(s.codigo, 30), tipoOpId]);
-    }
-    // Resetear secuencia para que los próximos auto-id no colisionen
-    await core.query("SELECT setval('sucursales_id_seq', GREATEST((SELECT MAX(id) FROM sucursales), 1))");
-    log(`      OK: ${sucRows.length} sucursales upsertadas.`);
-  } else {
-    sucRows.forEach(s => log(`      [dry] ${s.id} — ${s.nombre}`));
-  }
+  log('\n[0/8] Sucursales → omitido (IDs de SQL Server no coinciden con core_db).');
+  const sucRows = [];
 
   // ============================================================
   // FASE 1 — Limpiar compras_db

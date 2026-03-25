@@ -19,9 +19,9 @@ const sqlConfig = {
 
 // ── PostgreSQL compras ────────────────────────────────────────────────────────
 const pgConfig = {
-  host: 'centerbeam.proxy.rlwy.net', port: 54991,
-  database: 'railway', user: 'postgres',
-  password: 'PeEZeoTayeiGpLohXdoxnJgECRyArmvw',
+  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com', port: 5432,
+  database: 'compras_db', user: 'cadejo_admin',
+  password: 'Holamundo#3..',
   ssl: { rejectUnauthorized: false },
   keepAlive: true,
   connectionTimeoutMillis: 30000,
