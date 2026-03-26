@@ -16,10 +16,12 @@ class ProductosController extends Controller
      * Lista paginada de productos activos.
      *
      * Parámetros:
-     *   - categoria  (string) : key de categoría — filtra por ella
-     *   - search     (string) : búsqueda en nombre o código
-     *   - page       (int)    : página (default 1)
-     *   - per_page   (int)    : registros por página (default 10, max 50)
+     *   - categoria   (string) : key de categoría — filtra por ella
+     *   - prefijo     (string) : prefijo de key, ej: 'MR' → MR-01, MR-02...
+     *   - search      (string) : búsqueda en nombre o código
+     *   - sucursal_id (int)    : solo productos usados en recetas de esa sucursal
+     *   - page        (int)    : página (default 1)
+     *   - per_page    (int)    : registros por página (default 10, max 50)
      */
     public function index(Request $request): JsonResponse
     {
@@ -39,6 +41,22 @@ class ProductosController extends Controller
             $query->whereHas('categoria', fn ($q) => $q->where('key', 'ilike', $prefijo . '%'));
         }
 
+        // Filtro por sucursal: solo productos que son ingredientes de recetas activas de esa sucursal
+        if ($sucursalId = $request->query('sucursal_id')) {
+            $query->whereIn('id', function ($sub) use ($sucursalId) {
+                $sub->select('ri.producto_id')
+                    ->from('receta_ingredientes as ri')
+                    ->join('receta_sucursal as rs', 'rs.receta_id', '=', 'ri.receta_id')
+                    ->where('rs.sucursal_id', (int) $sucursalId)
+                    ->where('rs.activa', true);
+            });
+        }
+
+        // Filtro por origen: 'restaurante' | 'centro_produccion'
+        if ($origen = $request->query('origen')) {
+            $query->where('origen', $origen);
+        }
+
         // Búsqueda por nombre o código
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
@@ -55,12 +73,14 @@ class ProductosController extends Controller
             'codigo'       => $p->codigo,
             'nombre'       => $p->nombre,
             'unidad'       => $p->unidad,
-            'precio'       => (float) $p->precio,
-            'precio_unitario' => (float) $p->precio,  // alias frontend
-            'activo'       => $p->activo,
-            'categoria_id' => $p->categoria_id,
-            'categoria_key' => $p->categoria?->key,
+            'precio'          => (float) $p->precio,
+            'costo'           => (float) $p->costo,
+            'precio_unitario' => (float) $p->costo,  // costo para cálculos de recetas
+            'activo'          => $p->activo,
+            'categoria_id'    => $p->categoria_id,
+            'categoria_key'    => $p->categoria?->key,
             'categoria_nombre' => $p->categoria?->nombre,
+            'origen'           => $p->origen ?? 'restaurante',
         ]);
 
         return response()->json([
@@ -90,12 +110,106 @@ class ProductosController extends Controller
     }
 
     /**
+     * POST /api/compras/productos
+     * Crea un nuevo producto.
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'categoria_id' => 'required|integer|exists:compras.categorias,id',
+            'codigo'       => 'required|string|max:30|unique:compras.productos,codigo',
+            'nombre'       => 'required|string|max:150',
+            'unidad'       => 'required|string|max:20',
+            'precio'       => 'required|numeric|min:0',
+            'origen'       => 'nullable|in:restaurante,centro_produccion',
+        ]);
+
+        $data['activo']      = true;
+        $data['origen']      = $data['origen'] ?? 'restaurante';
+        $data['aud_usuario'] = $request->user()?->email;
+
+        $producto = Producto::create($data);
+        $producto->load('categoria');
+
+        return response()->json(['data' => [
+            'id'               => $producto->id,
+            'codigo'           => $producto->codigo,
+            'nombre'           => $producto->nombre,
+            'unidad'           => $producto->unidad,
+            'precio'           => (float) $producto->precio,
+            'costo'            => (float) $producto->costo,
+            'precio_unitario'  => (float) $producto->costo,
+            'activo'           => $producto->activo,
+            'categoria_id'     => $producto->categoria_id,
+            'categoria_key'    => $producto->categoria?->key,
+            'categoria_nombre' => $producto->categoria?->nombre,
+            'origen'           => $producto->origen ?? 'restaurante',
+        ]], 201);
+    }
+
+    /**
+     * PUT /api/compras/productos/{id}
+     * Actualiza un producto existente.
+     */
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $producto = Producto::where('activo', true)->findOrFail($id);
+
+        $data = $request->validate([
+            'categoria_id' => 'sometimes|integer|exists:compras.categorias,id',
+            'codigo'       => "sometimes|string|max:30|unique:compras.productos,codigo,{$id}",
+            'nombre'       => 'sometimes|string|max:150',
+            'unidad'       => 'sometimes|string|max:20',
+            'precio'       => 'sometimes|numeric|min:0',
+            'origen'       => 'nullable|in:restaurante,centro_produccion',
+        ]);
+
+        if (isset($data['origen']) && $data['origen'] === null) {
+            $data['origen'] = 'restaurante';
+        }
+        $data['aud_usuario'] = $request->user()?->email;
+
+        $producto->update($data);
+        $producto->load('categoria');
+
+        return response()->json(['data' => [
+            'id'               => $producto->id,
+            'codigo'           => $producto->codigo,
+            'nombre'           => $producto->nombre,
+            'unidad'           => $producto->unidad,
+            'precio'           => (float) $producto->precio,
+            'costo'            => (float) $producto->costo,
+            'precio_unitario'  => (float) $producto->costo,
+            'activo'           => $producto->activo,
+            'categoria_id'     => $producto->categoria_id,
+            'categoria_key'    => $producto->categoria?->key,
+            'categoria_nombre' => $producto->categoria?->nombre,
+            'origen'           => $producto->origen ?? 'restaurante',
+        ]]);
+    }
+
+    /**
+     * DELETE /api/compras/productos/{id}
+     * Desactiva un producto (soft-delete).
+     */
+    public function destroy(int $id): JsonResponse
+    {
+        $producto = Producto::where('activo', true)->findOrFail($id);
+        $producto->update(['activo' => false]);
+
+        return response()->json(['message' => 'Producto desactivado.']);
+    }
+
+    /**
      * GET /api/compras/sucursales
      * Devuelve las sucursales activas (desde pgsql).
      */
     public function sucursales(): JsonResponse
     {
-        $sucursales = Sucursal::orderBy('nombre')->get(['id', 'codigo', 'nombre']);
+        $sucursales = Sucursal::whereHas('tipoSucursal', fn($q) => $q->where('codigo', 'operativa'))
+            ->where('id', '!=', 19) // excluir RES - CASA GUIROLA (duplicado de RESTAURANTE CASA GUIROLA)
+            ->orderBy('nombre')
+            ->get(['id', 'codigo', 'nombre']);
 
         return response()->json(['success' => true, 'data' => $sucursales]);
     }

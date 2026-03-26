@@ -8,6 +8,7 @@ use App\Models\RRHH\TipoFalta;
 use App\Models\RRHH\TipoIncapacidad;
 use App\Models\RRHH\TipoPermiso;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class CatalogosRRHHController extends RRHHBaseController
@@ -18,19 +19,38 @@ class CatalogosRRHHController extends RRHHBaseController
      */
     public function index(): JsonResponse
     {
-        // Obtener IDs del equipo completo (jefe + subordinados por departamento,
-        // o fallback a sucursal si el usuario no tiene departamento asignado)
-        $equipoIds = $this->getEquipoIds();
+        $user = Auth::user();
+        $esAdmin = $this->esAdminRrhh();
 
-        $equipo = DB::connection('pgsql')
+        $jefeEmpleadoId = DB::connection('pgsql')
+            ->table('empleados')
+            ->where('user_id', $user->id)
+            ->value('id');
+
+        $equipoQuery = DB::connection('pgsql')
             ->table('empleados as e')
             ->join('cargos as c', 'e.cargo_id', '=', 'c.id')
             ->join('sucursales as s', 'e.sucursal_id', '=', 's.id')
-            ->whereIn('e.id', $equipoIds)
             ->where('e.activo', true)
-            ->select('e.id', 'e.codigo', 'e.nombres', 'e.apellidos', 'e.fecha_ingreso', 'c.nombre as cargo', 's.nombre as sucursal')
-            ->orderBy('e.apellidos')
-            ->get();
+            ->select('e.id', 'e.codigo', 'e.nombres', 'e.apellidos', 'e.fecha_ingreso', 'c.nombre as cargo', 's.nombre as sucursal', 's.id as sucursal_id');
+
+        if ($esAdmin) {
+            // Admin ve todos; opcionalmente filtrado por sucursal_id del request
+            if ($sid = request()->input('sucursal_id')) {
+                $equipoQuery->where('e.sucursal_id', (int) $sid);
+            }
+            if ($did = request()->input('departamento_id')) {
+                $equipoQuery->where('e.departamento_id', (int) $did);
+            }
+        } else {
+            // Jefatura ve su sucursal, excluyéndose a sí mismo
+            $equipoQuery->where('e.sucursal_id', $user->sucursal_id);
+            if ($jefeEmpleadoId) {
+                $equipoQuery->where('e.id', '!=', $jefeEmpleadoId);
+            }
+        }
+
+        $equipo = $equipoQuery->orderBy('e.apellidos')->get();
 
         // Sucursales (para traslados)
         $sucursales = DB::connection('pgsql')
@@ -47,6 +67,16 @@ class CatalogosRRHHController extends RRHHBaseController
             ->orderBy('nombre')
             ->get();
 
+        // Departamentos (para admin: permite filtrar equipo por departamento)
+        $departamentos = $esAdmin
+            ? DB::connection('pgsql')
+                ->table('departamentos')
+                ->where('activo', true)
+                ->select('id', 'nombre')
+                ->orderBy('nombre')
+                ->get()
+            : collect();
+
         return response()->json([
             'success' => true,
             'data'    => [
@@ -58,6 +88,8 @@ class CatalogosRRHHController extends RRHHBaseController
                 'equipo'                 => $equipo,
                 'sucursales'             => $sucursales,
                 'cargos'                 => $cargos,
+                'departamentos'          => $departamentos,
+                'es_admin'               => $esAdmin,
             ],
         ]);
     }

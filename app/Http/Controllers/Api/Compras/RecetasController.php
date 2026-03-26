@@ -5,34 +5,68 @@ namespace App\Http\Controllers\Api\Compras;
 use App\Http\Controllers\Controller;
 use App\Models\Receta;
 use App\Models\RecetaIngrediente;
+use App\Models\RecetaModificador;
 use App\Models\RecetaSucursal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class RecetasController extends Controller
 {
     // ──────────────────────────────────────────────────────────────────────
     // GET /api/compras/recetas
     // Lista paginada de recetas (con ingredientes + producto).
-    // Query opcional: sucursal_id → devuelve platos_semana específico
+    // Query opcional: sucursal_id, tipo_receta ('plato'|'sub_receta')
     // ──────────────────────────────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
         $perPage    = min((int) $request->query('per_page', 20), 100);
         $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
 
-        $query = Receta::with(['ingredientes.producto'])
+        $query = Receta::with([
+                'ingredientes.producto',
+                'ingredientes.subReceta.productoAsociado',
+                'ingredientes.subReceta.ingredientes.producto',
+                // Sub-sub-recetas: ingredientes de sub-recetas que son a su vez sub-recetas
+                'ingredientes.subReceta.ingredientes.subReceta.productoAsociado',
+                'ingredientes.subReceta.ingredientes.subReceta.ingredientes.producto',
+            ])
+            ->withCount(['modificadores as grupos_modificadores' => fn ($q) =>
+                $q->select(DB::raw('COUNT(DISTINCT grupo_id_origen)'))
+            ])
             ->where('activa', true)
             ->orderBy('nombre');
 
-        // Pre-cargar configuración de platos por sucursal si se especifica
+        // Filtrar solo recetas activas en esa sucursal + cargar su config
         if ($sucursalId !== null) {
+            $query->whereHas('sucursalConfig', fn ($q) =>
+                $q->where('sucursal_id', $sucursalId)->where('activa', true)
+            );
             $query->with(['sucursalConfig' => fn ($q) => $q->where('sucursal_id', $sucursalId)]);
         }
 
         if ($tipo = $request->query('tipo')) {
             $query->where('tipo', $tipo);
+        }
+
+        // Filtro por tipo_receta: 'plato' | 'sub_receta'
+        // Incluye también registros con tipo (categoría) que contenga 'Sub-Receta'
+        // para compatibilidad con datos migrados antes del campo tipo_receta.
+        if ($tipoReceta = $request->query('tipo_receta')) {
+            $query->where(function ($q) use ($tipoReceta) {
+                $q->where('tipo_receta', $tipoReceta);
+                if ($tipoReceta === 'sub_receta') {
+                    $q->orWhereRaw("lower(tipo) LIKE '%sub%receta%'");
+                }
+            });
+        } else {
+            // Sin filtro de tipo_receta: excluir los marcados como sub_receta,
+            // y también los de categoría "Platos Sub-Recetas" para que no se mezclen.
+            $query->where(function ($q) {
+                $q->where('tipo_receta', '!=', 'sub_receta')
+                  ->orWhereNull('tipo_receta');
+            })->whereRaw("lower(coalesce(tipo,'')) NOT LIKE '%sub%receta%'");
         }
 
         if ($search = $request->query('search')) {
@@ -61,13 +95,20 @@ class RecetasController extends Controller
     {
         $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
 
-        $query = Receta::with(['ingredientes.producto']);
+        $query = Receta::with([
+            'ingredientes.producto',
+            'ingredientes.subReceta.productoAsociado',
+            'ingredientes.subReceta.ingredientes.producto',
+            'ingredientes.subReceta.ingredientes.subReceta.productoAsociado',
+            'ingredientes.subReceta.ingredientes.subReceta.ingredientes.producto',
+            'modificadores.producto',
+        ]);
         if ($sucursalId !== null) {
             $query->with(['sucursalConfig' => fn ($q) => $q->where('sucursal_id', $sucursalId)]);
         }
 
         $receta = $query->findOrFail($id);
-        return response()->json(['data' => $this->formatReceta($receta, $sucursalId)]);
+        return response()->json(['data' => $this->formatReceta($receta, $sucursalId, true)]);
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -78,22 +119,41 @@ class RecetasController extends Controller
         $validated = $request->validate([
             'nombre'              => 'required|string|max:150',
             'descripcion'         => 'nullable|string',
+            'instrucciones'       => 'nullable|string',
             'tipo'                => 'nullable|string|max:80',
+            'tipo_receta'         => 'nullable|in:plato,sub_receta',
             'platos_semana'       => 'required|integer|min:0',
+            'foto_plato'          => 'nullable|string|max:500',
+            'foto_plateria'       => 'nullable|string|max:500',
             'ingredientes'        => 'array',
-            'ingredientes.*.producto_id'       => 'required|integer',
+            'ingredientes.*.producto_id'       => 'nullable|integer',
+            'ingredientes.*.sub_receta_id'     => 'nullable|integer',
             'ingredientes.*.cantidad_por_plato'=> 'required|numeric|min:0',
             'ingredientes.*.unidad'            => 'required|string|max:20',
         ]);
 
-        $usuario = $request->user()?->email ?? 'sistema';
+        $tipoReceta = $validated['tipo_receta'] ?? 'plato';
+        $usuario    = $request->user()?->email ?? 'sistema';
 
-        $receta = DB::connection('compras')->transaction(function () use ($validated, $usuario): Receta {
+        // Validar: sub-receta solo puede tener materias primas como ingredientes
+        if ($tipoReceta === 'sub_receta') {
+            foreach ($validated['ingredientes'] ?? [] as $ing) {
+                if (!empty($ing['sub_receta_id'])) {
+                    return response()->json(['message' => 'Las sub-recetas solo pueden contener materias primas, no otras sub-recetas.'], 422);
+                }
+            }
+        }
+
+        $receta = DB::connection('compras')->transaction(function () use ($validated, $tipoReceta, $usuario): Receta {
             $receta = Receta::create([
                 'nombre'        => $validated['nombre'],
                 'descripcion'   => $validated['descripcion'] ?? null,
+                'instrucciones' => $validated['instrucciones'] ?? null,
                 'tipo'          => $validated['tipo'] ?? null,
+                'tipo_receta'   => $tipoReceta,
                 'platos_semana' => $validated['platos_semana'],
+                'foto_plato'    => $validated['foto_plato'] ?? null,
+                'foto_plateria' => $validated['foto_plateria'] ?? null,
                 'activa'        => true,
                 'aud_usuario'   => $usuario,
             ]);
@@ -101,7 +161,8 @@ class RecetasController extends Controller
             foreach ($validated['ingredientes'] ?? [] as $ing) {
                 RecetaIngrediente::create([
                     'receta_id'          => $receta->id,
-                    'producto_id'        => $ing['producto_id'],
+                    'producto_id'        => $ing['producto_id'] ?? null,
+                    'sub_receta_id'      => $ing['sub_receta_id'] ?? null,
                     'cantidad_por_plato' => $ing['cantidad_por_plato'],
                     'unidad'             => $ing['unidad'],
                     'aud_usuario'        => $usuario,
@@ -111,7 +172,7 @@ class RecetasController extends Controller
             return $receta;
         });
 
-        $receta->load('ingredientes.producto');
+        $receta->load(['ingredientes.producto', 'ingredientes.subReceta']);
         return response()->json(['data' => $this->formatReceta($receta)], 201);
     }
 
@@ -125,58 +186,117 @@ class RecetasController extends Controller
         $validated = $request->validate([
             'nombre'              => 'sometimes|string|max:150',
             'descripcion'         => 'nullable|string',
+            'instrucciones'       => 'nullable|string',
             'tipo'                => 'nullable|string|max:80',
+            'tipo_receta'         => 'nullable|in:plato,sub_receta',
             'platos_semana'       => 'sometimes|integer|min:0',
             'activa'              => 'sometimes|boolean',
+            'foto_plato'          => 'nullable|string|max:500',
+            'foto_plateria'       => 'nullable|string|max:500',
             'ingredientes'        => 'sometimes|array',
-            'ingredientes.*.producto_id'       => 'required_with:ingredientes|integer',
+            'ingredientes.*.producto_id'       => 'nullable|integer',
+            'ingredientes.*.sub_receta_id'     => 'nullable|integer',
             'ingredientes.*.cantidad_por_plato'=> 'required_with:ingredientes|numeric|min:0',
             'ingredientes.*.unidad'            => 'required_with:ingredientes|string|max:20',
+            'modificadores'       => 'sometimes|array',
+            'modificadores.*.grupo_nombre'     => 'required_with:modificadores|string|max:100',
+            'modificadores.*.grupo_codigo'     => 'nullable|string|max:50',
+            'modificadores.*.opciones'         => 'array',
+            'modificadores.*.opciones.*.opcion_nombre' => 'required|string|max:100',
+            'modificadores.*.opciones.*.producto_id'   => 'nullable|integer',
+            'modificadores.*.opciones.*.cantidad'      => 'nullable|numeric',
+            'modificadores.*.opciones.*.unidad'        => 'nullable|string|max:20',
         ]);
 
-        $usuario = $request->user()?->email ?? 'sistema';
+        $tipoReceta = $validated['tipo_receta'] ?? $receta->tipo_receta;
+        $usuario    = $request->user()?->email ?? 'sistema';
+
+        // Validar: sub-receta solo puede tener materias primas
+        if ($tipoReceta === 'sub_receta' && array_key_exists('ingredientes', $validated)) {
+            foreach ($validated['ingredientes'] as $ing) {
+                if (!empty($ing['sub_receta_id'])) {
+                    return response()->json(['message' => 'Las sub-recetas solo pueden contener materias primas, no otras sub-recetas.'], 422);
+                }
+            }
+        }
 
         DB::connection('compras')->transaction(function () use ($receta, $validated, $usuario) {
-            $receta->update(array_merge(
-                array_intersect_key($validated, array_flip(['nombre', 'descripcion', 'tipo', 'platos_semana', 'activa'])),
-                ['aud_usuario' => $usuario]
-            ));
+            $campos = array_intersect_key($validated, array_flip([
+                'nombre', 'descripcion', 'instrucciones', 'tipo', 'tipo_receta',
+                'platos_semana', 'activa', 'foto_plato', 'foto_plateria',
+            ]));
+            $receta->update(array_merge($campos, ['aud_usuario' => $usuario]));
 
-            // Si se envian ingredientes, reemplazar todos
+            // Reemplazar ingredientes si se envian
             if (array_key_exists('ingredientes', $validated)) {
                 $receta->ingredientes()->delete();
                 foreach ($validated['ingredientes'] as $ing) {
                     RecetaIngrediente::create([
                         'receta_id'          => $receta->id,
-                        'producto_id'        => $ing['producto_id'],
+                        'producto_id'        => $ing['producto_id'] ?? null,
+                        'sub_receta_id'      => $ing['sub_receta_id'] ?? null,
                         'cantidad_por_plato' => $ing['cantidad_por_plato'],
                         'unidad'             => $ing['unidad'],
                         'aud_usuario'        => $usuario,
                     ]);
                 }
             }
+
+            // Reemplazar modificadores si se envian
+            if (array_key_exists('modificadores', $validated)) {
+                $receta->modificadores()->delete();
+                $grupoId = DB::connection('compras')->table('receta_modificadores')->max('grupo_id_origen') ?? 0;
+                foreach ($validated['modificadores'] as $grupo) {
+                    $grupoId++;
+                    foreach ($grupo['opciones'] ?? [] as $opcion) {
+                        RecetaModificador::create([
+                            'receta_id'      => $receta->id,
+                            'grupo_id_origen'=> $grupoId,
+                            'grupo_codigo'   => $grupo['grupo_codigo'] ?? strtoupper(str_replace(' ', '_', $grupo['grupo_nombre'])),
+                            'grupo_nombre'   => $grupo['grupo_nombre'],
+                            'opcion_nombre'  => $opcion['opcion_nombre'],
+                            'producto_id'    => $opcion['producto_id'] ?? null,
+                            'cantidad'       => $opcion['cantidad'] ?? 0,
+                            'unidad'         => $opcion['unidad'] ?? '',
+                            'aud_usuario'    => $usuario,
+                        ]);
+                    }
+                }
+            }
         });
 
-        $receta->load('ingredientes.producto');
-        return response()->json(['data' => $this->formatReceta($receta)]);
+        $receta->load(['ingredientes.producto', 'ingredientes.subReceta', 'modificadores']);
+        return response()->json(['data' => $this->formatReceta($receta, null, true)]);
     }
 
     // ──────────────────────────────────────────────────────────────────────
-    // DELETE /api/compras/recetas/{id}
-    // Desactiva la receta (soft-delete logico).
+    // DELETE /api/compras/recetas/{id}  — Inactiva la receta (soft-delete).
     // ──────────────────────────────────────────────────────────────────────
     public function destroy(int $id): JsonResponse
     {
         $receta = Receta::findOrFail($id);
         $receta->update(['activa' => false]);
-        return response()->json(['message' => 'Receta desactivada.']);
+        return response()->json(['message' => 'Receta inactivada.']);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // GET /api/compras/recetas/tipos
+    // Devuelve los valores únicos del campo 'tipo' para usar como catálogo.
+    // ──────────────────────────────────────────────────────────────────────
+    public function tipos(): JsonResponse
+    {
+        $tipos = Receta::where('activa', true)
+            ->whereNotNull('tipo')
+            ->where('tipo', '!=', '')
+            ->distinct()
+            ->orderBy('tipo')
+            ->pluck('tipo');
+
+        return response()->json(['data' => $tipos]);
     }
 
     // ──────────────────────────────────────────────────────────────────────
     // POST /api/compras/recetas/calcular
-    // Calcula totales de ingredientes para un conjunto de recetas + platos.
-    //
-    // Body: [{ receta_id: int, platos: int }, ...]
     // ──────────────────────────────────────────────────────────────────────
     public function calcular(Request $request): JsonResponse
     {
@@ -186,31 +306,30 @@ class RecetasController extends Controller
             '*.platos'         => 'required|integer|min:0',
         ]);
 
-        // Acumular {producto_id => totales} agrupando por codigo
         $acumulado = [];
 
         foreach ($items as $item) {
-            $receta = Receta::with('ingredientes.producto')->find($item['receta_id']);
+            $receta = Receta::with(['ingredientes.producto', 'ingredientes.subReceta'])->find($item['receta_id']);
             if (!$receta) continue;
 
             foreach ($receta->ingredientes as $ing) {
-                $prod = $ing->producto;
-                if (!$prod) continue;
-
                 $total = (float) $ing->cantidad_por_plato * (int) $item['platos'];
-                $key   = $prod->codigo;
 
-                if (!isset($acumulado[$key])) {
-                    $acumulado[$key] = [
-                        'producto_id'      => $prod->id,
-                        'producto_codigo'  => $prod->codigo,
-                        'producto_nombre'  => $prod->nombre,
-                        'unidad'           => $ing->unidad,
-                        'precio_unitario'  => (float) $prod->precio,
-                        'cantidad_total'   => 0,
-                    ];
+                if ($ing->producto_id && $ing->producto) {
+                    $prod = $ing->producto;
+                    $key  = $prod->codigo;
+                    if (!isset($acumulado[$key])) {
+                        $acumulado[$key] = [
+                            'producto_id'     => $prod->id,
+                            'producto_codigo' => $prod->codigo,
+                            'producto_nombre' => $prod->nombre,
+                            'unidad'          => $ing->unidad,
+                            'precio_unitario' => (float) $prod->costo,
+                            'cantidad_total'  => 0,
+                        ];
+                    }
+                    $acumulado[$key]['cantidad_total'] += $total;
                 }
-                $acumulado[$key]['cantidad_total'] += $total;
             }
         }
 
@@ -219,9 +338,6 @@ class RecetasController extends Controller
 
     // ──────────────────────────────────────────────────────────────────────
     // PATCH /api/compras/recetas/{id}/platos-sucursal
-    // Establece (o actualiza) platos_semana de una receta para una sucursal.
-    //
-    // Body: { sucursal_id: int, platos_semana: int }
     // ──────────────────────────────────────────────────────────────────────
     public function setPlatosSucursal(Request $request, int $id): JsonResponse
     {
@@ -235,15 +351,8 @@ class RecetasController extends Controller
         $usuario = $request->user()?->email ?? 'sistema';
 
         $cfg = RecetaSucursal::updateOrCreate(
-            [
-                'receta_id'   => $receta->id,
-                'sucursal_id' => $validated['sucursal_id'],
-            ],
-            [
-                'platos_semana' => $validated['platos_semana'],
-                'activa'        => true,
-                'aud_usuario'   => $usuario,
-            ]
+            ['receta_id' => $receta->id, 'sucursal_id' => $validated['sucursal_id']],
+            ['platos_semana' => $validated['platos_semana'], 'activa' => true, 'aud_usuario' => $usuario]
         );
 
         return response()->json([
@@ -256,26 +365,172 @@ class RecetasController extends Controller
     }
 
     // ──────────────────────────────────────────────────────────────────────
+    // POST /api/compras/upload
+    // Sube una foto de receta (foto_plato o foto_plateria).
+    // Body: multipart/form-data con campo 'foto' (imagen)
+    // Retorna: { url: '...' }
+    // ──────────────────────────────────────────────────────────────────────
+    public function uploadFoto(Request $request): JsonResponse
+    {
+        $request->validate([
+            'foto' => 'required|image|max:4096',
+        ]);
+
+        $path = $request->file('foto')->store('recetas', 'public');
+        $url  = Storage::disk('public')->url($path);
+
+        return response()->json(['url' => $url]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
     // Helpers
     // ──────────────────────────────────────────────────────────────────────
-    private function formatReceta(Receta $r, ?int $sucursalId = null): array
+    private function formatReceta(Receta $r, ?int $sucursalId = null, bool $withModificadores = false): array
     {
-        return [
+        $data = [
             'id'            => $r->id,
             'nombre'        => $r->nombre,
             'descripcion'   => $r->descripcion,
+            'instrucciones' => $r->instrucciones,
             'tipo'          => $r->tipo,
-            'categoria'     => $r->tipo,   // alias frontend (recetasService usa "categoria")
+            'tipo_receta'   => $r->tipo_receta ?? 'plato',
+            'categoria'     => $r->tipo,
+            'precio'        => (float) ($r->precio ?? 0),
             'platos_semana' => $r->platosParaSucursal($sucursalId),
-            'activa'        => $r->activa,
+            'activa'               => $r->activa,
+            'foto_plato'    => $r->foto_plato,
+            'foto_plateria' => $r->foto_plateria,
+            'grupos_modificadores' => (int) ($r->grupos_modificadores ?? 0),
             'ingredientes'  => $r->ingredientes->map(fn ($ing) => [
                 'id'                 => $ing->id,
                 'producto_id'        => $ing->producto_id,
+                'sub_receta_id'      => $ing->sub_receta_id,
                 'producto_codigo'    => $ing->producto?->codigo,
-                'producto_nombre'    => $ing->producto?->nombre,
+                'producto_nombre'    => $ing->producto?->nombre ?? $ing->subReceta?->nombre,
+                'es_sub_receta'      => !is_null($ing->sub_receta_id),
                 'cantidad_por_plato' => (float) $ing->cantidad_por_plato,
                 'unidad'             => $ing->unidad,
+                'precio_unitario'    => $ing->sub_receta_id
+                    ? $this->calcularCostoSubReceta($ing->subReceta, $ing->unidad)
+                    : $this->convertirCosto(
+                        (float) ($ing->producto?->costo ?? 0),
+                        strtolower(trim($ing->producto?->unidad ?? '')),
+                        strtolower(trim($ing->unidad ?? ''))
+                      ),
             ])->values(),
         ];
+
+        if ($withModificadores && $r->relationLoaded('modificadores')) {
+            $grupos = [];
+            foreach ($r->modificadores as $mod) {
+                $key = $mod->grupo_id_origen;
+                if (!isset($grupos[$key])) {
+                    $grupos[$key] = [
+                        'grupo_id'     => $mod->grupo_id_origen,
+                        'grupo_codigo' => $mod->grupo_codigo,
+                        'grupo_nombre' => $mod->grupo_nombre,
+                        'opciones'     => [],
+                        'costo_grupo'  => 0.0,
+                    ];
+                }
+                $costoUnit = $this->convertirCosto(
+                    (float) ($mod->producto?->costo ?? 0),
+                    strtolower(trim($mod->producto?->unidad ?? '')),
+                    strtolower(trim($mod->unidad ?? ''))
+                );
+                $costoOp = $costoUnit * (float) ($mod->cantidad ?? 0);
+                $grupos[$key]['opciones'][] = [
+                    'nombre'      => $mod->opcion_nombre,
+                    'producto_id' => $mod->producto_id,
+                    'cantidad'    => $mod->cantidad,
+                    'unidad'      => $mod->unidad,
+                    'costo'       => $costoUnit,
+                    'costo_total' => round($costoOp, 6),
+                ];
+                $grupos[$key]['costo_grupo'] += $costoOp;
+            }
+            // Round costo_grupo
+            foreach ($grupos as &$g) {
+                $g['costo_grupo'] = round($g['costo_grupo'], 4);
+            }
+            $data['modificadores'] = array_values($grupos);
+        }
+
+        return $data;
+    }
+
+    private function calcularCostoSubReceta(?Receta $sub, ?string $unidadReceta = null, int $depth = 0): float
+    {
+        if (!$sub || $depth > 5) return 0.0;
+
+        // Si el producto asociado tiene costo pre-almacenado, usarlo directamente.
+        $prod = $sub->productoAsociado ?? null;
+        if (!$prod && $sub->codigo_origen) {
+            $prod = \App\Models\Producto::where('codigo', $sub->codigo_origen)->first();
+        }
+        if ($prod && (float) $prod->costo > 0) {
+            return $this->convertirCosto(
+                (float) $prod->costo,
+                strtolower(trim($prod->unidad ?? '')),
+                strtolower(trim($unidadReceta ?? ''))
+            );
+        }
+
+        // Cargar ingredientes incluyendo sub-sub-recetas si no están cargados.
+        if (!$sub->relationLoaded('ingredientes')) {
+            $sub->load([
+                'ingredientes.producto',
+                'ingredientes.subReceta.productoAsociado',
+                'ingredientes.subReceta.ingredientes.producto',
+            ]);
+        }
+
+        $batchCosto = (float) $sub->ingredientes->sum(function ($si) use ($depth) {
+            // Ingrediente es a su vez una sub-receta → calcular recursivamente.
+            if ($si->sub_receta_id && $si->subReceta) {
+                return (float) $si->cantidad_por_plato
+                    * $this->calcularCostoSubReceta($si->subReceta, $si->unidad, $depth + 1);
+            }
+            $costo    = (float) ($si->producto?->costo ?? 0);
+            $prodUnit = strtolower(trim($si->producto?->unidad ?? ''));
+            $ingrUnit = strtolower(trim($si->unidad ?? ''));
+            return (float) $si->cantidad_por_plato * $this->convertirCosto($costo, $prodUnit, $ingrUnit);
+        });
+
+        // El batch produce 1 unidad del producto (ej: 1 lb). Si la receta padre lo usa
+        // en otra unidad (ej: oz), convertir.
+        $subUnit = strtolower(trim($prod?->unidad ?? ''));
+        if ($subUnit && $unidadReceta) {
+            $batchCosto = $this->convertirCosto($batchCosto, $subUnit, strtolower(trim($unidadReceta)));
+        }
+
+        return $batchCosto;
+    }
+
+    /**
+     * Convierte el costo almacenado (por unidad de compra) a la unidad usada en la receta.
+     * Ej: costo en $/lb → $/oz multiplica por (1/16).
+     */
+    private function convertirCosto(float $costo, string $desdePorUnidad, string $haciaUnidad): float
+    {
+        if ($costo === 0.0 || $desdePorUnidad === $haciaUnidad) return $costo;
+
+        // Tabla de conversión: factor[FROM][TO] = # de unidades FROM que caben en 1 unidad TO
+        // costo_TO = costo_FROM × factor
+        $conv = [
+            // Masa / peso
+            'lb'    => ['oz' => 1/16,       'g'    => 1/453.592,  'kg'    => 1/0.453592, 'lb'    => 1],
+            'kg'    => ['g'  => 1/1000,     'oz'   => 1/35.274,   'lb'    => 1/2.20462,  'kg'    => 1],
+            'oz'    => ['lb' => 16,         'g'    => 28.3495,    'oz'    => 1],
+            'g'     => ['lb' => 453.592,    'kg'   => 1000,       'oz'    => 28.3495,     'g'     => 1],
+            // Volumen
+            'lt'    => ['ml' => 1/1000,     'oz fl'=> 1/33.814,   'galon' => 3.78541,    'lt'    => 1],
+            'galon' => ['oz fl' => 1/128,   'lt'   => 1/3.78541,  'ml'    => 1/3785.41,  'galon' => 1],
+            'oz fl' => ['galon' => 128,     'lt'   => 33.814,     'ml'    => 33.814/1000, 'oz fl' => 1],
+            'ml'    => ['lt' => 1000,       'oz fl'=> 1000/33.814,'galon' => 3785.41,    'ml'    => 1],
+        ];
+
+        $factor = $conv[$desdePorUnidad][$haciaUnidad] ?? null;
+        return $factor !== null ? $costo * $factor : $costo;
     }
 }

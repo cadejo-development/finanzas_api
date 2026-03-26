@@ -40,13 +40,14 @@ class AuthController extends Controller
             ], 403);
         }
 
-        // Revocar tokens anteriores del mismo dispositivo/nombre (opcional: purge all)
-        $user->tokens()->where('name', 'api-token')->delete();
-
-        $token = $user->createToken('api-token')->plainTextToken;
-
         // Cargar roles y permisos del sistema indicado (default: 'pagos')
         $sistemaCodigo = $request->input('sistema', 'pagos');
+
+        // Revocar solo los tokens anteriores del mismo sistema para no invalidar otras sesiones activas
+        $tokenName = $sistemaCodigo . '-token';
+        $user->tokens()->where('name', $tokenName)->delete();
+
+        $token = $user->createToken($tokenName)->plainTextToken;
         $sistema = System::where('codigo', $sistemaCodigo)->first();
         $roles = [];
         $permisos = [];

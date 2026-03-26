@@ -19,9 +19,9 @@ const sqlConfig = {
 
 // ── PostgreSQL compras ────────────────────────────────────────────────────────
 const pgConfig = {
-  host: 'centerbeam.proxy.rlwy.net', port: 54991,
-  database: 'railway', user: 'postgres',
-  password: 'PeEZeoTayeiGpLohXdoxnJgECRyArmvw',
+  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com', port: 5432,
+  database: 'compras_db', user: 'cadejo_admin',
+  password: 'Holamundo#3..',
   ssl: { rejectUnauthorized: false },
   keepAlive: true,
   connectionTimeoutMillis: 30000,
@@ -191,24 +191,30 @@ async function main() {
   const prodIdMap = {};
 
   if (!DRY_RUN) {
-    const pCols = ['categoria_id','codigo','codigo_origen','nombre','unidad','precio','costo','activo','aud_usuario','created_at','updated_at'];
+    const pCols = ['categoria_id','codigo','codigo_origen','nombre','unidad','precio','costo','origen','activo','aud_usuario','created_at','updated_at'];
     const pConf = `ON CONFLICT (codigo) DO UPDATE SET
       nombre=EXCLUDED.nombre, codigo_origen=EXCLUDED.codigo_origen,
       unidad=EXCLUDED.unidad, precio=EXCLUDED.precio, costo=EXCLUDED.costo,
+      origen=EXCLUDED.origen,
       categoria_id=EXCLUDED.categoria_id, updated_at=EXCLUDED.updated_at`;
 
     for (let i = 0; i < ingrs.length; i += BATCH) {
       const chunk = ingrs.slice(i, i + BATCH);
-      const rows  = chunk.map(r => [
-        catIdMap[r.cat_codigo] ?? catIdMap['__fallback__'],
-        clean(r.codigo_origen, 30),
-        clean(r.codigo_origen, 50),
-        clean(r.nombre, 150),
-        normalizeUnit(r.unidad_nombre),
-        parseFloat(r.precio) || 0,
-        parseFloat(r.costo)  || 0,
-        true, 'migrate', now, now,
-      ]);
+      const rows  = chunk.map(r => {
+        const cod    = clean(r.codigo_origen, 30);
+        const origen = cod.toUpperCase().startsWith('CP') ? 'centro_produccion' : 'restaurante';
+        return [
+          catIdMap[r.cat_codigo] ?? catIdMap['__fallback__'],
+          cod,
+          clean(r.codigo_origen, 50),
+          clean(r.nombre, 150),
+          normalizeUnit(r.unidad_nombre),
+          parseFloat(r.precio) || 0,
+          parseFloat(r.costo)  || 0,
+          origen,
+          true, 'migrate', now, now,
+        ];
+      });
       const q = buildBatch('productos', pCols, rows, pConf);
       await pg.query(q.text, q.values);
       if ((i + BATCH) % 500 === 0) log(`      ... ${i + BATCH} productos procesados`);
