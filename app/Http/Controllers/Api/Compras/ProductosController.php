@@ -110,6 +110,21 @@ class ProductosController extends Controller
     }
 
     /**
+     * GET /api/compras/unidades
+     * Devuelve las unidades de medida activas ordenadas.
+     */
+    public function unidades(): JsonResponse
+    {
+        $unidades = \DB::connection('compras')
+            ->table('unidades_medida')
+            ->where('activo', true)
+            ->orderBy('orden')
+            ->get(['id', 'codigo', 'nombre', 'descripcion']);
+
+        return response()->json(['data' => $unidades]);
+    }
+
+    /**
      * POST /api/compras/productos
      * Crea un nuevo producto.
      */
@@ -119,7 +134,7 @@ class ProductosController extends Controller
             'categoria_id' => 'required|integer|exists:compras.categorias,id',
             'codigo'       => 'required|string|max:30|unique:compras.productos,codigo',
             'nombre'       => 'required|string|max:150',
-            'unidad'       => 'required|string|max:20',
+            'unidad'       => 'required|string|exists:compras.unidades_medida,codigo',
             'precio'       => 'required|numeric|min:0',
             'origen'       => 'nullable|in:restaurante,centro_produccion',
         ]);
@@ -159,7 +174,7 @@ class ProductosController extends Controller
             'categoria_id' => 'sometimes|integer|exists:compras.categorias,id',
             'codigo'       => "sometimes|string|max:30|unique:compras.productos,codigo,{$id}",
             'nombre'       => 'sometimes|string|max:150',
-            'unidad'       => 'sometimes|string|max:20',
+            'unidad'       => 'sometimes|string|exists:compras.unidades_medida,codigo',
             'precio'       => 'sometimes|numeric|min:0',
             'origen'       => 'nullable|in:restaurante,centro_produccion',
         ]);
