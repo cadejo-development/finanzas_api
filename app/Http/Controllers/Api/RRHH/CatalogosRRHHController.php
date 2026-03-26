@@ -32,7 +32,7 @@ class CatalogosRRHHController extends RRHHBaseController
             ->join('cargos as c', 'e.cargo_id', '=', 'c.id')
             ->join('sucursales as s', 'e.sucursal_id', '=', 's.id')
             ->where('e.activo', true)
-            ->select('e.id', 'e.codigo', 'e.nombres', 'e.apellidos', 'e.fecha_ingreso', 'c.nombre as cargo', 's.nombre as sucursal', 's.id as sucursal_id');
+            ->select('e.id', 'e.codigo', 'e.nombres', 'e.apellidos', 'e.fecha_ingreso', 'e.sucursal_id', 'e.departamento_id', 'c.nombre as cargo', 's.nombre as sucursal');
 
         if ($esAdmin) {
             // Admin ve todos; opcionalmente filtrado por sucursal_id del request
