@@ -24,7 +24,14 @@ class RecetasController extends Controller
         $perPage    = min((int) $request->query('per_page', 20), 100);
         $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
 
-        $query = Receta::with(['ingredientes.producto', 'ingredientes.subReceta.productoAsociado', 'ingredientes.subReceta.ingredientes.producto'])
+        $query = Receta::with([
+                'ingredientes.producto',
+                'ingredientes.subReceta.productoAsociado',
+                'ingredientes.subReceta.ingredientes.producto',
+                // Sub-sub-recetas: ingredientes de sub-recetas que son a su vez sub-recetas
+                'ingredientes.subReceta.ingredientes.subReceta.productoAsociado',
+                'ingredientes.subReceta.ingredientes.subReceta.ingredientes.producto',
+            ])
             ->withCount(['modificadores as grupos_modificadores' => fn ($q) =>
                 $q->select(DB::raw('COUNT(DISTINCT grupo_id_origen)'))
             ])
@@ -92,6 +99,8 @@ class RecetasController extends Controller
             'ingredientes.producto',
             'ingredientes.subReceta.productoAsociado',
             'ingredientes.subReceta.ingredientes.producto',
+            'ingredientes.subReceta.ingredientes.subReceta.productoAsociado',
+            'ingredientes.subReceta.ingredientes.subReceta.ingredientes.producto',
             'modificadores.producto',
         ]);
         if ($sucursalId !== null) {
@@ -450,12 +459,11 @@ class RecetasController extends Controller
         return $data;
     }
 
-    private function calcularCostoSubReceta(?Receta $sub, ?string $unidadReceta = null): float
+    private function calcularCostoSubReceta(?Receta $sub, ?string $unidadReceta = null, int $depth = 0): float
     {
-        if (!$sub) return 0.0;
+        if (!$sub || $depth > 5) return 0.0;
 
-        // Si el sub-receta tiene un producto asociado con costo pre-almacenado (proCosto en SQL Server),
-        // convertirlo a la unidad usada en la receta padre.
+        // Si el producto asociado tiene costo pre-almacenado, usarlo directamente.
         $prod = $sub->productoAsociado ?? null;
         if (!$prod && $sub->codigo_origen) {
             $prod = \App\Models\Producto::where('codigo', $sub->codigo_origen)->first();
@@ -468,19 +476,29 @@ class RecetasController extends Controller
             );
         }
 
-        // proCosto = 0 (sub-recetas SUBR): calcular sumatorio con conversión de unidades.
+        // Cargar ingredientes incluyendo sub-sub-recetas si no están cargados.
         if (!$sub->relationLoaded('ingredientes')) {
-            $sub->load('ingredientes.producto');
+            $sub->load([
+                'ingredientes.producto',
+                'ingredientes.subReceta.productoAsociado',
+                'ingredientes.subReceta.ingredientes.producto',
+            ]);
         }
-        $batchCosto = (float) $sub->ingredientes->sum(function ($si) {
+
+        $batchCosto = (float) $sub->ingredientes->sum(function ($si) use ($depth) {
+            // Ingrediente es a su vez una sub-receta → calcular recursivamente.
+            if ($si->sub_receta_id && $si->subReceta) {
+                return (float) $si->cantidad_por_plato
+                    * $this->calcularCostoSubReceta($si->subReceta, $si->unidad, $depth + 1);
+            }
             $costo    = (float) ($si->producto?->costo ?? 0);
             $prodUnit = strtolower(trim($si->producto?->unidad ?? ''));
             $ingrUnit = strtolower(trim($si->unidad ?? ''));
             return (float) $si->cantidad_por_plato * $this->convertirCosto($costo, $prodUnit, $ingrUnit);
         });
 
-        // El batch produce 1 unidad del producto asociado (ej: 1 lb de SUBR CEBOLLA).
-        // Si la receta padre lo usa en otra unidad (ej: oz), convertir.
+        // El batch produce 1 unidad del producto (ej: 1 lb). Si la receta padre lo usa
+        // en otra unidad (ej: oz), convertir.
         $subUnit = strtolower(trim($prod?->unidad ?? ''));
         if ($subUnit && $unidadReceta) {
             $batchCosto = $this->convertirCosto($batchCosto, $subUnit, strtolower(trim($unidadReceta)));
