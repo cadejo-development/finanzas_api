@@ -238,8 +238,18 @@ async function main() {
 
     // Upsert sub-recetas en recetas
     const rCols = ['nombre','codigo_origen','tipo','tipo_receta','platos_semana','activa','precio','aud_usuario','created_at','updated_at'];
+    // IMPORTANTE: no sobreescribir tipo_receta si ya existe como 'plato'.
+    // Algunos platos del menú aparecen en MXP como ingredientes de combos,
+    // lo que los hace detectables como "sub-receta" por Q_SUB_RECETAS — pero en nuestro
+    // sistema siguen siendo platos. Solo se marca 'sub_receta' si el registro es nuevo
+    // (INSERT) o si ya venía marcado como 'sub_receta'.
     const rConf = `ON CONFLICT (codigo_origen) DO UPDATE SET
-      nombre=EXCLUDED.nombre, tipo=EXCLUDED.tipo, tipo_receta=EXCLUDED.tipo_receta,
+      nombre=EXCLUDED.nombre, tipo=EXCLUDED.tipo,
+      tipo_receta = CASE
+        WHEN recetas.tipo_receta IS NOT NULL AND recetas.tipo_receta != 'sub_receta'
+          THEN recetas.tipo_receta
+        ELSE EXCLUDED.tipo_receta
+      END,
       updated_at=EXCLUDED.updated_at`;
     const rRet = 'RETURNING id, codigo_origen';
 
