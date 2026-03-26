@@ -66,9 +66,10 @@ function buildBatch(table, columns, rows, conflictSql, returningSql = '') {
 // ── Queries SQL Server ────────────────────────────────────────────────────────
 
 /**
- * Sub-recetas: productos que aparecen como ingrediente (proIdMaterial) en otras recetas
- * Y TAMBIÉN tienen sus propios ingredientes (proId en MXP).
- * NO filtramos por proActivo porque sub-recetas suelen ser inactivas como productos standalone.
+ * Sub-recetas: SOLO productos de la categoría "Platos Sub-Recetas" (cprId=392)
+ * que además tienen sus propios ingredientes en MXP.
+ * Restricción por categoría evita que platos fuertes, cervezas, etc. que
+ * aparecen como ingredientes en combos sean detectados incorrectamente.
  */
 const Q_SUB_RECETAS = `
 SELECT DISTINCT
@@ -77,15 +78,14 @@ SELECT DISTINCT
   p.proNombre    AS nombre,
   ISNULL(cpr.cprNombre, 'Sub-Receta') AS tipo
 FROM olComun.dbo.Productos p WITH (NOLOCK)
--- Debe aparecer como ingrediente en alguna receta
-INNER JOIN olComun.dbo.MaterialesXProducto mx_como_hijo WITH (NOLOCK)
-  ON mx_como_hijo.proIdMaterial = p.proId
-  AND mx_como_hijo.mxprEliminado = 0
+-- Solo categoría "Platos Sub-Recetas"
+INNER JOIN olComun.dbo.CategoriasProductos cpr WITH (NOLOCK)
+  ON p.cprId = cpr.cprId
+  AND cpr.cprNombre = 'Platos Sub-Recetas'
 -- Debe tener sus propios ingredientes
 INNER JOIN olComun.dbo.MaterialesXProducto mx_como_padre WITH (NOLOCK)
   ON mx_como_padre.proId = p.proId
   AND mx_como_padre.mxprEliminado = 0
-LEFT JOIN olComun.dbo.CategoriasProductos cpr WITH (NOLOCK) ON p.cprId = cpr.cprId
 ORDER BY p.proCodigo`;
 
 /**
@@ -108,8 +108,8 @@ WHERE mx.mxprEliminado = 0
   AND mx.proId IN (
     SELECT DISTINCT p2.proId
     FROM olComun.dbo.Productos p2 WITH (NOLOCK)
-    INNER JOIN olComun.dbo.MaterialesXProducto c WITH (NOLOCK)
-      ON c.proIdMaterial = p2.proId AND c.mxprEliminado = 0
+    INNER JOIN olComun.dbo.CategoriasProductos cpr2 WITH (NOLOCK)
+      ON p2.cprId = cpr2.cprId AND cpr2.cprNombre = 'Platos Sub-Recetas'
     INNER JOIN olComun.dbo.MaterialesXProducto par WITH (NOLOCK)
       ON par.proId = p2.proId AND par.mxprEliminado = 0
   )`;
@@ -238,18 +238,11 @@ async function main() {
 
     // Upsert sub-recetas en recetas
     const rCols = ['nombre','codigo_origen','tipo','tipo_receta','platos_semana','activa','precio','aud_usuario','created_at','updated_at'];
-    // IMPORTANTE: no sobreescribir tipo_receta si ya existe como 'plato'.
-    // Algunos platos del menú aparecen en MXP como ingredientes de combos,
-    // lo que los hace detectables como "sub-receta" por Q_SUB_RECETAS — pero en nuestro
-    // sistema siguen siendo platos. Solo se marca 'sub_receta' si el registro es nuevo
-    // (INSERT) o si ya venía marcado como 'sub_receta'.
+    // Q_SUB_RECETAS ya filtra por categoría 'Platos Sub-Recetas', así que todos los
+    // registros procesados aquí son genuinamente sub-recetas — se puede actualizar
+    // tipo_receta sin riesgo de sobreescribir platos del menú.
     const rConf = `ON CONFLICT (codigo_origen) DO UPDATE SET
-      nombre=EXCLUDED.nombre, tipo=EXCLUDED.tipo,
-      tipo_receta = CASE
-        WHEN recetas.tipo_receta IS NOT NULL AND recetas.tipo_receta != 'sub_receta'
-          THEN recetas.tipo_receta
-        ELSE EXCLUDED.tipo_receta
-      END,
+      nombre=EXCLUDED.nombre, tipo=EXCLUDED.tipo, tipo_receta=EXCLUDED.tipo_receta,
       updated_at=EXCLUDED.updated_at`;
     const rRet = 'RETURNING id, codigo_origen';
 
