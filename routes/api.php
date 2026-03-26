@@ -135,6 +135,7 @@ Route::prefix('pagos')->middleware('auth:sanctum')->group(function () {
 Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     // Catálogo de productos (paginado)
     Route::get('catalogos',           [ProductosController::class, 'catalogos']);
+    Route::get('unidades',            [ProductosController::class, 'unidades']);
     Route::get('sucursales',          [ProductosController::class, 'sucursales']);
     Route::get('productos',           [ProductosController::class, 'index']);
     Route::post('productos',          [ProductosController::class, 'store']);
@@ -194,8 +195,8 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::patch('sistemas/{id}',       [AdminController::class, 'updateSistema']);
 });
 
-// ─── RRHH (protegido con Sanctum + rol jefatura) ──────────────────────────
-Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin'])->group(function () {
+// ─── RRHH (protegido con Sanctum + rol jefatura o admin) ────────────────────
+Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,rrhh_admin'])->group(function () {
 
     // Catálogos + equipo a cargo
     Route::get('catalogos', [CatalogosRRHHController::class, 'index']);
@@ -256,8 +257,8 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin']
     Route::delete('cambios-salariales/{id}', [CambiosSalarialesController::class, 'destroy']);
 });
 
-// ─── RRHH Admin — Departamentos (portal_admin) ────────────────────────────
-Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin'])->group(function () {
+// ─── RRHH Admin — Departamentos (portal_admin o rrhh_admin) ─────────────────
+Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh_admin'])->group(function () {
     Route::get('departamentos',                              [DepartamentosController::class, 'index']);
     Route::post('departamentos',                             [DepartamentosController::class, 'store']);
     Route::put('departamentos/{id}',                         [DepartamentosController::class, 'update']);

@@ -11,12 +11,25 @@ use Illuminate\Support\Facades\DB;
  * Controlador base para el módulo RRHH.
  * Provee helpers para resolver el empleado del jefe autenticado
  * y obtener su listado de subordinados desde la DB core (pgsql).
+ *
+ * Roles:
+ *  - rrhh_admin : ve y gestiona todos los empleados (opcionalmente filtrado por
+ *                 ?sucursal_id=N o ?departamento_id=N en el request).
+ *  - jefatura   : ve y gestiona solo los empleados de su departamento/sucursal.
  */
 abstract class RRHHBaseController extends Controller
 {
     /**
+     * Indica si el usuario autenticado tiene rol rrhh_admin.
+     */
+    protected function esAdminRrhh(): bool
+    {
+        return Auth::user()->hasRole('rrhh_admin');
+    }
+
+    /**
      * Retorna el registro Empleado del usuario autenticado.
-     * Lanza una excepción HTTP 403 si el usuario no tiene empleado vinculado.
+     * Para rrhh_admin no es obligatorio tener empleado vinculado (retorna null).
      */
     protected function getJefeEmpleado(): Empleado
     {
@@ -30,22 +43,24 @@ abstract class RRHHBaseController extends Controller
     }
 
     /**
-     * Retorna los IDs de los empleados subordinados al jefe autenticado.
-     * Criterio: empleados activos en el departamento donde el jefe está asignado,
-     * con fallback a misma sucursal para retrocompatibilidad.
+     * Retorna los IDs del universo de empleados que puede gestionar el usuario:
+     *  - rrhh_admin : todos los empleados activos (filtrable por sucursal_id/departamento_id del request).
+     *  - jefatura   : solo los subordinados del departamento a cargo.
      */
     protected function getSubordinadosIds(): array
     {
+        if ($this->esAdminRrhh()) {
+            return $this->getTodosEmpleadosIds();
+        }
+
         $user = Auth::user();
 
-        // Buscar el registro de empleado del jefe autenticado
         $jefeEmpleadoId = DB::connection('pgsql')
             ->table('empleados')
             ->where('user_id', $user->id)
             ->value('id');
 
         if ($jefeEmpleadoId) {
-            // Verificar si el jefe tiene un departamento asignado como jefe
             $deptId = DB::connection('pgsql')
                 ->table('departamentos')
                 ->where('jefe_empleado_id', $jefeEmpleadoId)
@@ -53,7 +68,6 @@ abstract class RRHHBaseController extends Controller
                 ->value('id');
 
             if ($deptId) {
-                // Subordinados = empleados activos del departamento (excluyendo al jefe)
                 return DB::connection('pgsql')
                     ->table('empleados')
                     ->where('departamento_id', $deptId)
@@ -76,10 +90,42 @@ abstract class RRHHBaseController extends Controller
     }
 
     /**
-     * Verifica que el empleado_id pertenezca a los subordinados del jefe.
+     * Retorna todos los empleados activos (uso exclusivo de rrhh_admin).
+     * Acepta filtros opcionales del request: sucursal_id, departamento_id.
+     */
+    protected function getTodosEmpleadosIds(): array
+    {
+        $request = request();
+
+        $query = DB::connection('pgsql')
+            ->table('empleados')
+            ->where('activo', true);
+
+        if ($sucursalId = $request->input('sucursal_id')) {
+            $query->where('sucursal_id', (int) $sucursalId);
+        }
+
+        if ($departamentoId = $request->input('departamento_id')) {
+            $query->where('departamento_id', (int) $departamentoId);
+        }
+
+        return $query->pluck('id')->all();
+    }
+
+    /**
+     * Verifica que el empleado_id pueda ser gestionado por el usuario actual.
+     * Para rrhh_admin: cualquier empleado activo; para jefatura: solo subordinados.
      */
     protected function esSubordinado(int $empleadoId): bool
     {
+        if ($this->esAdminRrhh()) {
+            return DB::connection('pgsql')
+                ->table('empleados')
+                ->where('id', $empleadoId)
+                ->where('activo', true)
+                ->exists();
+        }
+
         return in_array($empleadoId, $this->getSubordinadosIds());
     }
 
