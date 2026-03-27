@@ -125,6 +125,36 @@ class ProductosController extends Controller
     }
 
     /**
+     * GET /api/compras/productos/siguiente-codigo?categoria_id=X
+     * Devuelve el siguiente código disponible para una categoría.
+     * Formato: {key}-{NNN} donde NNN es correlativo dentro del mismo prefijo.
+     * Solo considera códigos que siguen el patrón {key}-\d+ para no
+     * interferir con códigos migrados del sistema anterior.
+     */
+    public function siguienteCodigo(Request $request): JsonResponse
+    {
+        $request->validate([
+            'categoria_id' => 'required|integer|exists:compras.categorias,id',
+        ]);
+
+        $categoria = Categoria::findOrFail($request->integer('categoria_id'));
+        $prefijo   = $categoria->key; // ej: "MR-01", "CP-02"
+
+        // Solo códigos que siguen el patrón exacto: prefijo + guión + dígitos
+        $pattern = '/^' . preg_quote($prefijo, '/') . '-(\d+)$/';
+
+        $maxNum = Producto::where('codigo', 'ilike', $prefijo . '-%')
+            ->pluck('codigo')
+            ->map(fn ($c) => preg_match($pattern, $c, $m) ? (int) $m[1] : 0)
+            ->max() ?? 0;
+
+        $siguiente = str_pad($maxNum + 1, 3, '0', STR_PAD_LEFT);
+        $codigo    = "{$prefijo}-{$siguiente}";
+
+        return response()->json(['data' => ['codigo' => $codigo, 'prefijo' => $prefijo]]);
+    }
+
+    /**
      * POST /api/compras/productos
      * Crea un nuevo producto.
      */

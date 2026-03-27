@@ -135,10 +135,11 @@ Route::prefix('pagos')->middleware('auth:sanctum')->group(function () {
 // ─── Compras (protegido con Sanctum) ──────────────────────────────────────
 Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     // Catálogo de productos (paginado)
-    Route::get('catalogos',           [ProductosController::class, 'catalogos']);
-    Route::get('unidades',            [ProductosController::class, 'unidades']);
-    Route::get('sucursales',          [ProductosController::class, 'sucursales']);
-    Route::get('productos',           [ProductosController::class, 'index']);
+    Route::get('catalogos',                      [ProductosController::class, 'catalogos']);
+    Route::get('unidades',                       [ProductosController::class, 'unidades']);
+    Route::get('sucursales',                     [ProductosController::class, 'sucursales']);
+    Route::get('productos/siguiente-codigo',     [ProductosController::class, 'siguienteCodigo']);
+    Route::get('productos',                      [ProductosController::class, 'index']);
     Route::post('productos',          [ProductosController::class, 'store']);
     Route::put('productos/{id}',      [ProductosController::class, 'update']);
     Route::delete('productos/{id}',   [ProductosController::class, 'destroy']);
