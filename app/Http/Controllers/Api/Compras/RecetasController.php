@@ -95,19 +95,16 @@ class RecetasController extends Controller
     {
         $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
 
-        $query = Receta::with([
+        $receta = Receta::with([
             'ingredientes.producto',
             'ingredientes.subReceta.productoAsociado',
             'ingredientes.subReceta.ingredientes.producto',
             'ingredientes.subReceta.ingredientes.subReceta.productoAsociado',
             'ingredientes.subReceta.ingredientes.subReceta.ingredientes.producto',
             'modificadores.producto',
-        ]);
-        if ($sucursalId !== null) {
-            $query->with(['sucursalConfig' => fn ($q) => $q->where('sucursal_id', $sucursalId)]);
-        }
+            'sucursalConfig',  // Siempre cargar todas las sucursales asignadas
+        ])->findOrFail($id);
 
-        $receta = $query->findOrFail($id);
         return response()->json(['data' => $this->formatReceta($receta, $sucursalId, true)]);
     }
 
@@ -125,6 +122,8 @@ class RecetasController extends Controller
             'platos_semana'       => 'required|integer|min:0',
             'foto_plato'          => 'nullable|string|max:500',
             'foto_plateria'       => 'nullable|string|max:500',
+            'sucursal_ids'        => 'nullable|array',
+            'sucursal_ids.*'      => 'integer|min:1',
             'ingredientes'        => 'array',
             'ingredientes.*.producto_id'       => 'nullable|integer',
             'ingredientes.*.sub_receta_id'     => 'nullable|integer',
@@ -169,10 +168,20 @@ class RecetasController extends Controller
                 ]);
             }
 
+            foreach ($validated['sucursal_ids'] ?? [] as $sucId) {
+                RecetaSucursal::create([
+                    'receta_id'     => $receta->id,
+                    'sucursal_id'   => $sucId,
+                    'platos_semana' => $validated['platos_semana'],
+                    'activa'        => true,
+                    'aud_usuario'   => $usuario,
+                ]);
+            }
+
             return $receta;
         });
 
-        $receta->load(['ingredientes.producto', 'ingredientes.subReceta']);
+        $receta->load(['ingredientes.producto', 'ingredientes.subReceta', 'sucursalConfig']);
         return response()->json(['data' => $this->formatReceta($receta)], 201);
     }
 
@@ -193,6 +202,8 @@ class RecetasController extends Controller
             'activa'              => 'sometimes|boolean',
             'foto_plato'          => 'nullable|string|max:500',
             'foto_plateria'       => 'nullable|string|max:500',
+            'sucursal_ids'        => 'nullable|array',
+            'sucursal_ids.*'      => 'integer|min:1',
             'ingredientes'        => 'sometimes|array',
             'ingredientes.*.producto_id'       => 'nullable|integer',
             'ingredientes.*.sub_receta_id'     => 'nullable|integer',
@@ -242,6 +253,22 @@ class RecetasController extends Controller
                 }
             }
 
+            // Sincronizar sucursales si se envian
+            if (array_key_exists('sucursal_ids', $validated)) {
+                $nuevasIds = $validated['sucursal_ids'] ?? [];
+                // Desactivar las que ya no están en la lista
+                RecetaSucursal::where('receta_id', $receta->id)
+                    ->whereNotIn('sucursal_id', $nuevasIds)
+                    ->update(['activa' => false]);
+                // Upsert las nuevas/existentes
+                foreach ($nuevasIds as $sucId) {
+                    RecetaSucursal::updateOrCreate(
+                        ['receta_id' => $receta->id, 'sucursal_id' => $sucId],
+                        ['activa' => true, 'aud_usuario' => $usuario]
+                    );
+                }
+            }
+
             // Reemplazar modificadores si se envian
             if (array_key_exists('modificadores', $validated)) {
                 $receta->modificadores()->delete();
@@ -265,18 +292,30 @@ class RecetasController extends Controller
             }
         });
 
-        $receta->load(['ingredientes.producto', 'ingredientes.subReceta', 'modificadores']);
+        $receta->load(['ingredientes.producto', 'ingredientes.subReceta', 'modificadores', 'sucursalConfig']);
         return response()->json(['data' => $this->formatReceta($receta, null, true)]);
     }
 
     // ──────────────────────────────────────────────────────────────────────
     // DELETE /api/compras/recetas/{id}  — Inactiva la receta (soft-delete).
+    // Body opcional: { sucursal_ids: [1, 2] } → inactiva solo en esas sucursales.
+    // Sin sucursal_ids → inactiva globalmente (receta + todas sus sucursales).
     // ──────────────────────────────────────────────────────────────────────
-    public function destroy(int $id): JsonResponse
+    public function destroy(Request $request, int $id): JsonResponse
     {
-        $receta = Receta::findOrFail($id);
+        $receta     = Receta::findOrFail($id);
+        $sucursalIds = $request->input('sucursal_ids');
+
+        if (!empty($sucursalIds)) {
+            RecetaSucursal::where('receta_id', $id)
+                ->whereIn('sucursal_id', $sucursalIds)
+                ->update(['activa' => false]);
+            return response()->json(['message' => 'Receta inactivada en las sucursales seleccionadas.']);
+        }
+
         $receta->update(['activa' => false]);
-        return response()->json(['message' => 'Receta inactivada.']);
+        RecetaSucursal::where('receta_id', $id)->update(['activa' => false]);
+        return response()->json(['message' => 'Receta inactivada globalmente.']);
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -401,6 +440,13 @@ class RecetasController extends Controller
             'foto_plato'    => $r->foto_plato,
             'foto_plateria' => $r->foto_plateria,
             'grupos_modificadores' => (int) ($r->grupos_modificadores ?? 0),
+            'sucursales'    => $r->relationLoaded('sucursalConfig')
+                ? $r->sucursalConfig->map(fn ($s) => [
+                    'sucursal_id'   => $s->sucursal_id,
+                    'platos_semana' => $s->platos_semana,
+                    'activa'        => $s->activa,
+                ])->values()
+                : [],
             'ingredientes'  => $r->ingredientes->map(fn ($ing) => [
                 'id'                 => $ing->id,
                 'producto_id'        => $ing->producto_id,
