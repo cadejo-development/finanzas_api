@@ -307,9 +307,13 @@ class RecetasController extends Controller
         $sucursalIds = $request->input('sucursal_ids');
 
         if (!empty($sucursalIds)) {
-            RecetaSucursal::where('receta_id', $id)
-                ->whereIn('sucursal_id', $sucursalIds)
-                ->update(['activa' => false]);
+            $usuario = $request->user()?->email ?? 'sistema';
+            foreach ($sucursalIds as $sucId) {
+                RecetaSucursal::updateOrCreate(
+                    ['receta_id' => $id, 'sucursal_id' => (int) $sucId],
+                    ['activa' => false, 'platos_semana' => 0, 'aud_usuario' => $usuario]
+                );
+            }
             return response()->json(['message' => 'Receta inactivada en las sucursales seleccionadas.']);
         }
 
