@@ -325,15 +325,24 @@ class RecetasController extends Controller
     // ──────────────────────────────────────────────────────────────────────
     // GET /api/compras/recetas/tipos
     // Devuelve los valores únicos del campo 'tipo' para usar como catálogo.
+    // Query opcional: tipo_receta ('plato'|'sub_receta')
     // ──────────────────────────────────────────────────────────────────────
-    public function tipos(): JsonResponse
+    public function tipos(Request $request): JsonResponse
     {
-        $tipos = Receta::where('activa', true)
+        $query = Receta::where('activa', true)
             ->whereNotNull('tipo')
-            ->where('tipo', '!=', '')
-            ->distinct()
-            ->orderBy('tipo')
-            ->pluck('tipo');
+            ->where('tipo', '!=', '');
+
+        if ($tipoReceta = $request->query('tipo_receta')) {
+            $query->where(function ($q) use ($tipoReceta) {
+                $q->where('tipo_receta', $tipoReceta);
+                if ($tipoReceta === 'sub_receta') {
+                    $q->orWhereRaw("lower(tipo) LIKE '%sub%receta%'");
+                }
+            });
+        }
+
+        $tipos = $query->distinct()->orderBy('tipo')->pluck('tipo');
 
         return response()->json(['data' => $tipos]);
     }

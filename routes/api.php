@@ -154,6 +154,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
 
     // Recetas (CRUD + calculo de ingredientes + platos por sucursal + upload fotos)
     Route::post('recetas/calcular',                    [RecetasController::class, 'calcular']);
+    Route::get('recetas/tipos',                        [RecetasController::class, 'tipos']);
     Route::patch('recetas/{id}/platos-sucursal',       [RecetasController::class, 'setPlatosSucursal']);
     Route::post('upload',                              [RecetasController::class, 'uploadFoto']);
     Route::apiResource('recetas',     RecetasController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
