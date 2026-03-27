@@ -384,19 +384,30 @@ async function main() {
   const recIdMap = {};
 
   if (!DRY_RUN) {
-    const rCols = ['nombre','codigo_origen','tipo','precio','platos_semana','activa','aud_usuario','created_at','updated_at'];
+    // Construir mapa tipo → categoria_id desde receta_categorias
+    const rcResult = await comp.query('SELECT id, nombre FROM receta_categorias WHERE activa = true');
+    const recatMap = {}; // lower(nombre) → id
+    rcResult.rows.forEach(rc => { recatMap[rc.nombre.trim().toLowerCase()] = Number(rc.id); });
+
+    const rCols = ['nombre','codigo_origen','tipo','categoria_id','precio','platos_semana','activa','aud_usuario','created_at','updated_at'];
     const rConf = `ON CONFLICT (codigo_origen) DO UPDATE SET
       nombre=EXCLUDED.nombre, tipo=EXCLUDED.tipo,
+      categoria_id=EXCLUDED.categoria_id,
       precio=EXCLUDED.precio, updated_at=EXCLUDED.updated_at`;
     for (let i = 0; i < recRows.length; i += BATCH) {
       const chunk = recRows.slice(i, i + BATCH);
-      const rows  = chunk.map(r => [
-        clean(r.nombre, 150),
-        clean(r.codigo_origen, 50),
-        clean(r.tipo, 80) || 'General',
-        parseFloat(r.precio) || 0,
-        0, true, 'sync', now, now,
-      ]);
+      const rows  = chunk.map(r => {
+        const tipo = clean(r.tipo, 80) || 'General';
+        const catId = recatMap[tipo.trim().toLowerCase()] ?? null;
+        return [
+          clean(r.nombre, 150),
+          clean(r.codigo_origen, 50),
+          tipo,
+          catId,
+          parseFloat(r.precio) || 0,
+          0, true, 'sync', now, now,
+        ];
+      });
       const q = buildBatch('recetas', rCols, rows, rConf);
       await comp.query(q.text, q.values);
       if ((i / BATCH) % 10 === 9) log(`      ... ${i + BATCH} recetas procesadas`);
