@@ -11,11 +11,12 @@ class Empleado extends Model
 
     protected $fillable = [
         'codigo', 'nombres', 'apellidos', 'email',
-        'cargo_id', 'sucursal_id', 'activo', 'aud_usuario',
+        'cargo_id', 'sucursal_id', 'departamento_id', 'activo', 'aud_usuario',
     ];
 
     protected $casts = [
-        'activo' => 'boolean',
+        'activo'        => 'boolean',
+        'fecha_ingreso' => 'date',
     ];
 
     public function cargo()
@@ -26,6 +27,11 @@ class Empleado extends Model
     public function sucursal()
     {
         return $this->belongsTo(Sucursal::class);
+    }
+
+    public function departamento()
+    {
+        return $this->belongsTo(Departamento::class);
     }
 
     public function jefaturas()
