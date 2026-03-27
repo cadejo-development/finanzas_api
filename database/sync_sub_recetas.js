@@ -236,6 +236,59 @@ async function main() {
     const prodCodigoMap = {}; // codigo → pg id
     prodRows.rows.forEach(r => { prodCodigoMap[r.codigo] = r.id; });
 
+    // ── Detectar ingredientes de sub-recetas que no están en productos → insertarlos ──
+    const allIngrCodigos = [...new Set(subIngrRows.map(r => String(r.ingr_codigo ?? '').trim()).filter(Boolean))];
+    const missingCodigos = allIngrCodigos.filter(c => !prodCodigoMap[c]);
+
+    if (missingCodigos.length > 0) {
+      log(`      Detectados ${missingCodigos.length} ingredientes no presentes en productos. Sincronizando desde SQL Server...`);
+      const chunkSize = 100;
+      for (let ci = 0; ci < missingCodigos.length; ci += chunkSize) {
+        const chunk = missingCodigos.slice(ci, ci + chunkSize);
+        const req = sqlPool.request();
+        chunk.forEach((c, i) => req.input(`mc${i}`, sql.VarChar, c));
+        const ph = chunk.map((_, i) => `@mc${i}`).join(',');
+        const missingData = (await req.query(`
+          SELECT p.proId, p.proCodigo AS codigo, p.proNombre AS nombre,
+                 ISNULL(p.proCosto, 0) AS costo, ISNULL(p.proPrecio, 0) AS precio,
+                 cpr.cprCodigo AS cat_codigo, uni.uniNombre AS unidad_nombre
+          FROM olComun.dbo.Productos p WITH(NOLOCK)
+          LEFT JOIN olComun.dbo.CategoriasProductos cpr WITH(NOLOCK) ON p.cprId = cpr.cprId
+          LEFT JOIN olComun.dbo.Unidades uni WITH(NOLOCK) ON uni.uniId = p.uniId
+          WHERE p.proCodigo IN (${ph})
+        `)).recordset;
+
+        if (missingData.length === 0) continue;
+
+        // Obtener catIdMap desde categorias existentes en PG (key → id)
+        const catPgRes = await pg.query('SELECT id, key FROM categorias');
+        const catKeyMap = {};
+        catPgRes.rows.forEach(r => { catKeyMap[String(r.key).trim()] = Number(r.id); });
+        const fallbackCatId = catPgRes.rows.find(r => r.key === 'SIN-CAT')?.id
+          ?? catPgRes.rows[0]?.id;
+
+        const pCols = ['categoria_id','codigo','codigo_origen','nombre','unidad','precio','costo','origen','activo','aud_usuario','created_at','updated_at'];
+        const pConf = `ON CONFLICT (codigo) DO UPDATE SET nombre=EXCLUDED.nombre, costo=EXCLUDED.costo, precio=EXCLUDED.precio, updated_at=EXCLUDED.updated_at`;
+        const pRet  = 'RETURNING id, codigo';
+        const pRows = missingData.map(r => {
+          const cod    = clean(r.codigo, 30);
+          const origen = cod.toUpperCase().startsWith('CP') ? 'centro_produccion' : 'restaurante';
+          const catKey = r.cat_codigo ? clean(r.cat_codigo, 30).replace(/[^a-zA-Z0-9\-_]/g, '-') : null;
+          const catId  = (catKey && catKeyMap[catKey]) ? catKeyMap[catKey] : fallbackCatId;
+          return [
+            catId, cod, clean(r.codigo, 50), clean(r.nombre, 150),
+            normalizeUnit(r.unidad_nombre),
+            parseFloat(r.precio) || 0, parseFloat(r.costo) || 0,
+            origen, true, 'sync_sub_recetas', now, now,
+          ];
+        });
+        const qP = buildBatch('productos', pCols, pRows, pConf, pRet);
+        const insRes = await pg.query(qP.text, qP.values);
+        insRes.rows.forEach(r => { prodCodigoMap[r.codigo] = r.id; });
+        log(`      Insertados ${insRes.rows.length} productos faltantes.`);
+      }
+    }
+
     // Upsert sub-recetas en recetas
     const rCols = ['nombre','codigo_origen','tipo','tipo_receta','platos_semana','activa','precio','aud_usuario','created_at','updated_at'];
     // Q_SUB_RECETAS ya filtra por categoría 'Platos Sub-Recetas', así que todos los
