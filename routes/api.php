@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\RRHH\DesvinculacionesController;
 use App\Http\Controllers\Api\RRHH\TrasladosController;
 use App\Http\Controllers\Api\RRHH\CambiosSalarialesController;
 use App\Http\Controllers\Api\RRHH\DepartamentosController;
+use App\Http\Controllers\Api\RRHH\ExpedienteController;
 
 // ─── Portal SSO (protegido con Sanctum) ──────────────────────────────────
 Route::prefix('portal')->middleware('auth:sanctum')->group(function () {
@@ -260,6 +261,41 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::get('cambios-salariales/{id}',    [CambiosSalarialesController::class, 'show']);
     Route::put('cambios-salariales/{id}',    [CambiosSalarialesController::class, 'update']);
     Route::delete('cambios-salariales/{id}', [CambiosSalarialesController::class, 'destroy']);
+});
+
+// ─── RRHH Expediente Digital (jefatura, rrhh_admin, portal_admin) ────────────
+Route::prefix('rrhh/expediente')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,rrhh_admin'])->group(function () {
+    // Cabecera + secciones
+    Route::get('{empleadoId}',                           [ExpedienteController::class, 'show']);
+    Route::get('{empleadoId}/acciones',                  [ExpedienteController::class, 'acciones']);
+
+    // Datos personales (upsert)
+    Route::put('{empleadoId}/datos-personales',          [ExpedienteController::class, 'upsertDatosPersonales']);
+
+    // Contactos
+    Route::post('{empleadoId}/contactos',                [ExpedienteController::class, 'storeContacto']);
+    Route::put('{empleadoId}/contactos/{contactoId}',    [ExpedienteController::class, 'updateContacto']);
+    Route::delete('{empleadoId}/contactos/{contactoId}', [ExpedienteController::class, 'destroyContacto']);
+
+    // Direcciones
+    Route::post('{empleadoId}/direcciones',              [ExpedienteController::class, 'storeDireccion']);
+    Route::put('{empleadoId}/direcciones/{dirId}',       [ExpedienteController::class, 'updateDireccion']);
+    Route::delete('{empleadoId}/direcciones/{dirId}',    [ExpedienteController::class, 'destroyDireccion']);
+
+    // Documentos
+    Route::post('{empleadoId}/documentos',               [ExpedienteController::class, 'storeDocumento']);
+    Route::put('{empleadoId}/documentos/{docId}',        [ExpedienteController::class, 'updateDocumento']);
+    Route::delete('{empleadoId}/documentos/{docId}',     [ExpedienteController::class, 'destroyDocumento']);
+
+    // Estudios
+    Route::post('{empleadoId}/estudios',                  [ExpedienteController::class, 'storeEstudio']);
+    Route::put('{empleadoId}/estudios/{estudioId}',       [ExpedienteController::class, 'updateEstudio']);
+    Route::delete('{empleadoId}/estudios/{estudioId}',    [ExpedienteController::class, 'destroyEstudio']);
+
+    // Archivos
+    Route::post('{empleadoId}/archivos',                          [ExpedienteController::class, 'uploadArchivo']);
+    Route::get('{empleadoId}/archivos/{archivoId}/descargar',     [ExpedienteController::class, 'descargarArchivo']);
+    Route::delete('{empleadoId}/archivos/{archivoId}',            [ExpedienteController::class, 'destroyArchivo']);
 });
 
 // ─── RRHH Admin — Departamentos (portal_admin o rrhh_admin) ─────────────────
