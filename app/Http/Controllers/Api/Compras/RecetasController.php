@@ -25,6 +25,7 @@ class RecetasController extends Controller
         $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
 
         $query = Receta::with([
+                'categoria',
                 'ingredientes.producto',
                 'ingredientes.subReceta.productoAsociado',
                 'ingredientes.subReceta.ingredientes.producto',
@@ -46,7 +47,10 @@ class RecetasController extends Controller
             $query->with(['sucursalConfig' => fn ($q) => $q->where('sucursal_id', $sucursalId)]);
         }
 
-        if ($tipo = $request->query('tipo')) {
+        // Filtro por categoria_id (nuevo) o tipo texto (legado)
+        if ($categoriaId = $request->query('categoria_id')) {
+            $query->where('categoria_id', (int) $categoriaId);
+        } elseif ($tipo = $request->query('tipo')) {
             $query->where('tipo', $tipo);
         }
 
@@ -96,6 +100,7 @@ class RecetasController extends Controller
         $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
 
         $receta = Receta::with([
+            'categoria',
             'ingredientes.producto',
             'ingredientes.subReceta.productoAsociado',
             'ingredientes.subReceta.ingredientes.producto',
@@ -118,6 +123,7 @@ class RecetasController extends Controller
             'descripcion'         => 'nullable|string',
             'instrucciones'       => 'nullable|string',
             'tipo'                => 'nullable|string|max:80',
+            'categoria_id'        => 'nullable|integer|exists:compras.receta_categorias,id',
             'tipo_receta'         => 'nullable|in:plato,sub_receta',
             'platos_semana'       => 'required|integer|min:0',
             'foto_plato'          => 'nullable|string|max:500',
@@ -149,6 +155,7 @@ class RecetasController extends Controller
                 'descripcion'   => $validated['descripcion'] ?? null,
                 'instrucciones' => $validated['instrucciones'] ?? null,
                 'tipo'          => $validated['tipo'] ?? null,
+                'categoria_id'  => $validated['categoria_id'] ?? null,
                 'tipo_receta'   => $tipoReceta,
                 'platos_semana' => $validated['platos_semana'],
                 'foto_plato'    => $validated['foto_plato'] ?? null,
@@ -197,6 +204,7 @@ class RecetasController extends Controller
             'descripcion'         => 'nullable|string',
             'instrucciones'       => 'nullable|string',
             'tipo'                => 'nullable|string|max:80',
+            'categoria_id'        => 'nullable|integer|exists:compras.receta_categorias,id',
             'tipo_receta'         => 'nullable|in:plato,sub_receta',
             'platos_semana'       => 'sometimes|integer|min:0',
             'activa'              => 'sometimes|boolean',
@@ -233,8 +241,8 @@ class RecetasController extends Controller
 
         DB::connection('compras')->transaction(function () use ($receta, $validated, $usuario) {
             $campos = array_intersect_key($validated, array_flip([
-                'nombre', 'descripcion', 'instrucciones', 'tipo', 'tipo_receta',
-                'platos_semana', 'activa', 'foto_plato', 'foto_plateria',
+                'nombre', 'descripcion', 'instrucciones', 'tipo', 'categoria_id',
+                'tipo_receta', 'platos_semana', 'activa', 'foto_plato', 'foto_plateria',
             ]));
             $receta->update(array_merge($campos, ['aud_usuario' => $usuario]));
 
@@ -323,28 +331,17 @@ class RecetasController extends Controller
     }
 
     // ──────────────────────────────────────────────────────────────────────
-    // GET /api/compras/recetas/tipos
-    // Devuelve los valores únicos del campo 'tipo' para usar como catálogo.
-    // Query opcional: tipo_receta ('plato'|'sub_receta')
+    // GET /api/compras/recetas/tipos  (deprecated → usar /receta-categorias)
+    // Mantenido por compatibilidad. Devuelve categorías activas de la DB.
     // ──────────────────────────────────────────────────────────────────────
     public function tipos(Request $request): JsonResponse
     {
-        $query = Receta::where('activa', true)
-            ->whereNotNull('tipo')
-            ->where('tipo', '!=', '');
+        // Retornar las categorías reales del catálogo
+        $categorias = \App\Models\RecetaCategoria::where('activa', true)
+            ->orderBy('nombre')
+            ->get(['id', 'nombre']);
 
-        if ($tipoReceta = $request->query('tipo_receta')) {
-            $query->where(function ($q) use ($tipoReceta) {
-                $q->where('tipo_receta', $tipoReceta);
-                if ($tipoReceta === 'sub_receta') {
-                    $q->orWhereRaw("lower(tipo) LIKE '%sub%receta%'");
-                }
-            });
-        }
-
-        $tipos = $query->distinct()->orderBy('tipo')->pluck('tipo');
-
-        return response()->json(['data' => $tipos]);
+        return response()->json(['data' => $categorias]);
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -444,9 +441,10 @@ class RecetasController extends Controller
             'nombre'        => $r->nombre,
             'descripcion'   => $r->descripcion,
             'instrucciones' => $r->instrucciones,
-            'tipo'          => $r->tipo,
-            'tipo_receta'   => $r->tipo_receta ?? 'plato',
-            'categoria'     => $r->tipo,
+            'tipo'           => $r->tipo,
+            'categoria_id'   => $r->categoria_id,
+            'categoria'      => $r->categoria?->nombre ?? $r->tipo,
+            'tipo_receta'    => $r->tipo_receta ?? 'plato',
             'precio'        => (float) ($r->precio ?? 0),
             'platos_semana' => $r->platosParaSucursal($sucursalId),
             'activa'               => $r->activa,

@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\Compras\VentasController;
 use App\Http\Controllers\Api\Compras\ProductosController;
 use App\Http\Controllers\Api\Compras\PedidosController;
 use App\Http\Controllers\Api\Compras\RecetasController;
+use App\Http\Controllers\Api\Compras\RecetaCategoriasController;
 use App\Http\Controllers\Api\PortalController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\RRHH\CatalogosRRHHController;
@@ -157,7 +158,9 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('recetas/tipos',                        [RecetasController::class, 'tipos']);
     Route::patch('recetas/{id}/platos-sucursal',       [RecetasController::class, 'setPlatosSucursal']);
     Route::post('upload',                              [RecetasController::class, 'uploadFoto']);
-    Route::apiResource('recetas',     RecetasController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
+    Route::apiResource('recetas',            RecetasController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
+    // Catálogo de categorías de recetas
+    Route::apiResource('receta-categorias',  RecetaCategoriasController::class)->only(['index', 'store', 'update', 'destroy']);
 
     // Ventas semanales
     Route::get('ventas',              [VentasController::class, 'index']);

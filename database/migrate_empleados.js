@@ -36,9 +36,9 @@ const MSSQL_CFG = {
 
 // ── PostgreSQL core_db ────────────────────────────────────────────────────────
 const PG_CFG = {
-  host: 'centerbeam.proxy.rlwy.net', port: 42433,
-  database: 'railway', user: 'postgres',
-  password: 'kOGUAWGcBiGgYWFdKXjEDmHHnDEQLAVy',
+  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com', port: 5432,
+  database: 'core_db', user: 'cadejo_admin',
+  password: 'Holamundo#3..',
   ssl: { rejectUnauthorized: false },
   connectionTimeoutMillis: 30000,
   idleTimeoutMillis: 90000,

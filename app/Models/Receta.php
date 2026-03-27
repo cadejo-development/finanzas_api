@@ -15,6 +15,7 @@ class Receta extends Model
         'descripcion',
         'instrucciones',
         'tipo',
+        'categoria_id',
         'tipo_receta',
         'precio',
         'platos_semana',
@@ -60,6 +61,14 @@ class Receta extends Model
     public function productoAsociado()
     {
         return $this->hasOne(Producto::class, 'codigo', 'codigo_origen');
+    }
+
+    /**
+     * Categoría a la que pertenece esta receta.
+     */
+    public function categoria()
+    {
+        return $this->belongsTo(RecetaCategoria::class, 'categoria_id');
     }
 
     /**
