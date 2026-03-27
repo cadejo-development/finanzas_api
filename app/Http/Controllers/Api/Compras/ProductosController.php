@@ -127,9 +127,11 @@ class ProductosController extends Controller
     /**
      * GET /api/compras/productos/siguiente-codigo?categoria_id=X
      * Devuelve el siguiente código disponible para una categoría.
-     * Formato: {key}-{NNN} donde NNN es correlativo dentro del mismo prefijo.
-     * Solo considera códigos que siguen el patrón {key}-\d+ para no
-     * interferir con códigos migrados del sistema anterior.
+     * Formato: CCCC+YY+MM+NN
+     *   CCCC = key de categoría sin guión (ej: MR-01 → MR01)
+     *   YY   = año actual 2 dígitos
+     *   MM   = mes actual 2 dígitos
+     *   NN   = correlativo mensual 2 dígitos
      */
     public function siguienteCodigo(Request $request): JsonResponse
     {
@@ -138,20 +140,26 @@ class ProductosController extends Controller
         ]);
 
         $categoria = Categoria::findOrFail($request->integer('categoria_id'));
-        $prefijo   = $categoria->key; // ej: "MR-01", "CP-02"
 
-        // Solo códigos que siguen el patrón exacto: prefijo + guión + dígitos
-        $pattern = '/^' . preg_quote($prefijo, '/') . '-(\d+)$/';
+        // CCCC: key sin guión (MR-01 → MR01)
+        $cccc = str_replace('-', '', $categoria->key);
+        $yy   = now()->format('y');  // 26
+        $mm   = now()->format('m');  // 03
 
-        $maxNum = Producto::where('codigo', 'ilike', $prefijo . '-%')
+        $prefijoBusqueda = $cccc . $yy . $mm; // ej: MR012603
+
+        // Solo códigos con formato CCCC+YY+MM+NN (2 dígitos finales)
+        $pattern = '/^' . preg_quote($prefijoBusqueda, '/') . '(\d{2})$/';
+
+        $maxNum = Producto::where('codigo', 'ilike', $prefijoBusqueda . '%')
             ->pluck('codigo')
             ->map(fn ($c) => preg_match($pattern, $c, $m) ? (int) $m[1] : 0)
             ->max() ?? 0;
 
-        $siguiente = str_pad($maxNum + 1, 3, '0', STR_PAD_LEFT);
-        $codigo    = "{$prefijo}-{$siguiente}";
+        $nn     = str_pad($maxNum + 1, 2, '0', STR_PAD_LEFT);
+        $codigo = $prefijoBusqueda . $nn;
 
-        return response()->json(['data' => ['codigo' => $codigo, 'prefijo' => $prefijo]]);
+        return response()->json(['data' => ['codigo' => $codigo, 'prefijo' => $cccc]]);
     }
 
     /**
