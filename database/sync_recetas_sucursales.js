@@ -595,6 +595,135 @@ async function main() {
     log(`      (dry-run) ${modOk} OK, ${modSkip} sin mapping.`);
   }
 
+  // ============================================================
+  // FASE 8.5 — Recetas nuevas sin botón POS (activas con BOM, no en RDS)
+  // Estrategia: cualquier producto activo en SS con ingredientes cuya categoría
+  // exista en receta_categorias, y que no tenga aún codigo_origen en recetas.
+  // Se importan sin asignación de sucursal — el usuario las asigna en el sistema.
+  // ============================================================
+  log('\n[8.5] Recetas nuevas sin botón POS...');
+  let nuevasOk = 0, nuevasSkip = 0;
+
+  // Cargar categorías válidas de receta desde PG (nombre → categoria_id)
+  const recatResult = await comp.query('SELECT id, nombre FROM receta_categorias WHERE activa = true');
+  const recatNombreMap = {}; // lower(nombre) → { id, nombre }
+  recatResult.rows.forEach(rc => { recatNombreMap[rc.nombre.trim().toLowerCase()] = { id: Number(rc.id), nombre: rc.nombre }; });
+  const validCatNames = Object.keys(recatNombreMap);
+
+  // Códigos ya existentes en recetas
+  const existentesResult = await comp.query('SELECT codigo_origen FROM recetas WHERE codigo_origen IS NOT NULL');
+  const existentesCodigos = new Set(existentesResult.rows.map(r => r.codigo_origen));
+
+  if (!DRY_RUN) {
+    // Consultar SS: todos los productos activos con BOM en categorías de receta
+    const allRecetasSSReq = sqlPool.request();
+    const catNamesForSQL = validCatNames.map((n, i) => { allRecetasSSReq.input(`vcat${i}`, sql.VarChar, recatResult.rows[i]?.nombre ?? n); return `@vcat${i}`; });
+    // Rebuild properly: use recatResult.rows for correct names
+    const allRecetasSSReq2 = sqlPool.request();
+    recatResult.rows.forEach((rc, i) => allRecetasSSReq2.input(`rc${i}`, sql.VarChar, rc.nombre));
+    const rcPh = recatResult.rows.map((_, i) => `@rc${i}`).join(',');
+
+    const allRecetasSS = (await allRecetasSSReq2.query(`
+      SELECT DISTINCT
+        p.proId        AS id_origen,
+        p.proCodigo    AS codigo,
+        p.proNombre    AS nombre,
+        cpr.cprNombre  AS tipo,
+        ISNULL(p.proPrecio, 0) AS precio
+      FROM olComun.dbo.Productos p WITH(NOLOCK)
+      INNER JOIN olComun.dbo.CategoriasProductos cpr WITH(NOLOCK) ON p.cprId = cpr.cprId
+      INNER JOIN olComun.dbo.MaterialesXProducto mx WITH(NOLOCK)
+        ON mx.proId = p.proId AND mx.mxprEliminado = 0 AND mx.mxprCantUnidad > 0
+      WHERE p.proActivo = 1
+        AND cpr.cprNombre NOT LIKE '%Sub-Receta%'
+        AND cpr.cprNombre IN (${rcPh})
+    `)).recordset;
+
+    // Filtrar solo los que NO están en RDS aún
+    const nuevas = allRecetasSS.filter(r => !existentesCodigos.has(clean(r.codigo, 50)));
+    log(`      ${allRecetasSS.length} recetas activas con BOM en SS. ${nuevas.length} no están en RDS.`);
+
+    if (nuevas.length > 0) {
+      // Insertar recetas nuevas
+      const rCols2 = ['nombre','codigo_origen','tipo','categoria_id','precio','platos_semana','activa','aud_usuario','created_at','updated_at'];
+      const rConf2 = `ON CONFLICT (codigo_origen) DO NOTHING`;
+      const rRet2  = 'RETURNING id, codigo_origen';
+      const nuevaRecetaMap = {}; // codigo → pg id
+
+      for (let i = 0; i < nuevas.length; i += BATCH) {
+        const chunk = nuevas.slice(i, i + BATCH);
+        const rows  = chunk.map(r => {
+          const tipo  = clean(r.tipo, 80) || 'General';
+          const catId = recatNombreMap[tipo.trim().toLowerCase()]?.id ?? null;
+          return [
+            clean(r.nombre, 150), clean(r.codigo, 50), tipo, catId,
+            parseFloat(r.precio) || 0, 0, true, 'sync_nuevas', now, now,
+          ];
+        });
+        const q = buildBatch('recetas', rCols2, rows, rConf2, rRet2);
+        const res = await comp.query(q.text, q.values);
+        res.rows.forEach(row => { nuevaRecetaMap[row.codigo_origen] = row.id; });
+        nuevasOk += res.rows.length;
+      }
+      log(`      OK: ${nuevasOk} recetas nuevas insertadas.`);
+
+      // Migrar ingredientes de recetas nuevas desde SS
+      const nuevosIds = nuevas.map(r => r.id_origen);
+      let ingrNuevasOk = 0, ingrNuevasSkip = 0;
+
+      for (let ci = 0; ci < nuevosIds.length; ci += 500) {
+        const idChunk = nuevosIds.slice(ci, ci + 500);
+        const ingrReq = sqlPool.request();
+        idChunk.forEach((id, i) => ingrReq.input(`ni${ci + i}`, sql.Int, id));
+        const niPh = idChunk.map((_, i) => `@ni${ci + i}`).join(',');
+
+        const ingrRows2 = (await ingrReq.query(`
+          SELECT
+            mx.proId         AS plato_id_origen,
+            mx.proIdMaterial AS ingr_id_origen,
+            ingr.proCodigo   AS ingr_codigo,
+            SUM(mx.mxprCantUnidad) AS cantidad,
+            MAX(ISNULL(uni.uniNombre,'u')) AS uni_nombre
+          FROM olComun.dbo.MaterialesXProducto mx WITH(NOLOCK)
+          INNER JOIN olComun.dbo.Productos ingr WITH(NOLOCK) ON ingr.proId = mx.proIdMaterial
+          LEFT  JOIN olComun.dbo.Unidades uni WITH(NOLOCK) ON uni.uniId = mx.uniId
+          WHERE mx.mxprEliminado = 0 AND mx.mxprCantUnidad > 0
+            AND mx.proId IN (${niPh})
+          GROUP BY mx.proId, mx.proIdMaterial, ingr.proCodigo
+        `)).recordset;
+
+        for (const ingr of ingrRows2) {
+          const recPgId = nuevaRecetaMap[clean(nuevas.find(n => n.id_origen === ingr.plato_id_origen)?.codigo ?? '', 50)];
+          const prodPgId = prodIdMap[ingr.ingr_id_origen];
+          if (!recPgId || !prodPgId) { ingrNuevasSkip++; continue; }
+          await comp.query(`
+            INSERT INTO receta_ingredientes (receta_id, producto_id, cantidad_por_plato, unidad, aud_usuario, created_at, updated_at)
+            VALUES ($1,$2,$3,$4,'sync_nuevas',$5,$5)
+            ON CONFLICT (receta_id, producto_id) DO NOTHING
+          `, [recPgId, prodPgId, parseFloat(ingr.cantidad) || 0, normalizeUnit(ingr.uni_nombre), now]);
+          ingrNuevasOk++;
+        }
+      }
+      log(`      Ingredientes nuevas recetas: ${ingrNuevasOk} insertados, ${ingrNuevasSkip} saltados.`);
+    } else {
+      log('      Sin recetas nuevas que importar.');
+    }
+  } else {
+    const allRecetasSSReqDR = sqlPool.request();
+    recatResult.rows.forEach((rc, i) => allRecetasSSReqDR.input(`dr${i}`, sql.VarChar, rc.nombre));
+    const drPh = recatResult.rows.map((_, i) => `@dr${i}`).join(',');
+    const allSSdr = (await allRecetasSSReqDR.query(`
+      SELECT COUNT(DISTINCT p.proId) AS cnt
+      FROM olComun.dbo.Productos p WITH(NOLOCK)
+      INNER JOIN olComun.dbo.CategoriasProductos cpr WITH(NOLOCK) ON p.cprId = cpr.cprId
+      INNER JOIN olComun.dbo.MaterialesXProducto mx WITH(NOLOCK) ON mx.proId = p.proId AND mx.mxprEliminado=0 AND mx.mxprCantUnidad>0
+      WHERE p.proActivo=1 AND cpr.cprNombre NOT LIKE '%Sub-Receta%' AND cpr.cprNombre IN (${drPh})
+    `)).recordset;
+    const totalSS = Number(allSSdr[0].cnt);
+    nuevasOk = totalSS - existentesCodigos.size;
+    log(`      (dry-run) ~${nuevasOk} recetas nuevas se importarían.`);
+  }
+
   // ── Resumen final ─────────────────────────────────────────────────────────
   log('\n' + '='.repeat(60));
   log('RESUMEN:');
@@ -602,6 +731,7 @@ async function main() {
   log(`  Categorías:              ${catRows.length}`);
   log(`  Productos (ingredientes):${ingrs.length}`);
   log(`  Recetas (en menú):       ${recRows.length}`);
+  log(`  Recetas nuevas (sin POS):${nuevasOk}`);
   log(`  Ingredientes de receta:  ${riOk}`);
   log(`  Receta-sucursal:         ${rsOk}`);
   log(`  Modificadores:           ${modOk}`);
