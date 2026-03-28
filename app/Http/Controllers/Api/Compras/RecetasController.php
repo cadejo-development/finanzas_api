@@ -10,8 +10,8 @@ use App\Models\RecetaSucursal;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Facades\Storage;
 
 class RecetasController extends Controller
@@ -120,6 +120,9 @@ class RecetasController extends Controller
     // ──────────────────────────────────────────────────────────────────────
     public function pdf(int $id): Response
     {
+        ini_set('memory_limit', '256M');
+        set_time_limit(60);
+
         $receta = Receta::with([
             'categoria',
             'ingredientes.producto',
