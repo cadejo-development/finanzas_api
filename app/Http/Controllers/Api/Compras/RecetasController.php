@@ -123,13 +123,30 @@ class RecetasController extends Controller
         $receta = Receta::with([
             'categoria',
             'ingredientes.producto',
-            'ingredientes.subReceta',
+            'ingredientes.subReceta.productoAsociado',
+            'ingredientes.subReceta.ingredientes.producto',
+            'ingredientes.subReceta.ingredientes.subReceta.productoAsociado',
+            'ingredientes.subReceta.ingredientes.subReceta.ingredientes.producto',
         ])->findOrFail($id);
 
         $data = $this->formatReceta($receta);
 
-        $pdf = Pdf::loadView('pdf.receta', ['receta' => $data])
-            ->setPaper('letter', 'portrait');
+        // Calcular costo total (ingredientes)
+        $costoTotal = collect($data['ingredientes'])->sum(
+            fn ($i) => (float) $i['precio_unitario'] * (float) $i['cantidad_por_plato']
+        );
+        $data['costo_total'] = $costoTotal;
+
+        $logoPath = public_path('logo.png');
+        $logoBase64 = file_exists($logoPath)
+            ? 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath))
+            : null;
+
+        $pdf = Pdf::loadView('pdf.receta', [
+            'receta'      => $data,
+            'costo_total' => $costoTotal,
+            'logo'        => $logoBase64,
+        ])->setPaper('letter', 'portrait');
 
         $nombre = preg_replace('/[^A-Za-z0-9_\-]/', '_', $receta->nombre);
         return $pdf->download("receta_{$nombre}.pdf");
