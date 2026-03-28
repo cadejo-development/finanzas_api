@@ -137,10 +137,14 @@ class RecetasController extends Controller
         );
         $data['costo_total'] = $costoTotal;
 
-        $logoPath = public_path('logo.png');
-        $logoBase64 = file_exists($logoPath)
-            ? 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath))
-            : null;
+        try {
+            $logoContent = file_get_contents('https://cadejo-storage.s3.us-east-2.amazonaws.com/fonts/cadejol0g0.png');
+            $logoBase64 = $logoContent !== false
+                ? 'data:image/png;base64,' . base64_encode($logoContent)
+                : null;
+        } catch (\Throwable $e) {
+            $logoBase64 = null;
+        }
 
         $pdf = Pdf::loadView('pdf.receta', [
             'receta'      => $data,
