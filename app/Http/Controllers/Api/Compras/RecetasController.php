@@ -7,8 +7,10 @@ use App\Models\Receta;
 use App\Models\RecetaIngrediente;
 use App\Models\RecetaModificador;
 use App\Models\RecetaSucursal;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -114,6 +116,26 @@ class RecetasController extends Controller
     }
 
     // ──────────────────────────────────────────────────────────────────────
+    // GET /api/compras/recetas/{id}/pdf
+    // ──────────────────────────────────────────────────────────────────────
+    public function pdf(int $id): Response
+    {
+        $receta = Receta::with([
+            'categoria',
+            'ingredientes.producto',
+            'ingredientes.subReceta',
+        ])->findOrFail($id);
+
+        $data = $this->formatReceta($receta);
+
+        $pdf = Pdf::loadView('pdf.receta', ['receta' => $data])
+            ->setPaper('letter', 'portrait');
+
+        $nombre = preg_replace('/[^A-Za-z0-9_\-]/', '_', $receta->nombre);
+        return $pdf->download("receta_{$nombre}.pdf");
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
     // POST /api/compras/recetas
     // ──────────────────────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
@@ -126,6 +148,8 @@ class RecetasController extends Controller
             'categoria_id'        => 'nullable|integer|exists:compras.receta_categorias,id',
             'tipo_receta'         => 'nullable|in:plato,sub_receta',
             'platos_semana'       => 'required|integer|min:0',
+            'rendimiento'         => 'nullable|numeric|min:0',
+            'rendimiento_unidad'  => 'nullable|string|max:20',
             'foto_plato'          => 'nullable|string|max:500',
             'foto_plateria'       => 'nullable|string|max:500',
             'sucursal_ids'        => 'nullable|array',
@@ -156,9 +180,11 @@ class RecetasController extends Controller
                 'instrucciones' => $validated['instrucciones'] ?? null,
                 'tipo'          => $validated['tipo'] ?? null,
                 'categoria_id'  => $validated['categoria_id'] ?? null,
-                'tipo_receta'   => $tipoReceta,
-                'platos_semana' => $validated['platos_semana'],
-                'foto_plato'    => $validated['foto_plato'] ?? null,
+                'tipo_receta'        => $tipoReceta,
+                'platos_semana'      => $validated['platos_semana'],
+                'rendimiento'        => $validated['rendimiento'] ?? null,
+                'rendimiento_unidad' => $validated['rendimiento_unidad'] ?? null,
+                'foto_plato'         => $validated['foto_plato'] ?? null,
                 'foto_plateria' => $validated['foto_plateria'] ?? null,
                 'activa'        => true,
                 'aud_usuario'   => $usuario,
@@ -207,6 +233,8 @@ class RecetasController extends Controller
             'categoria_id'        => 'nullable|integer|exists:compras.receta_categorias,id',
             'tipo_receta'         => 'nullable|in:plato,sub_receta',
             'platos_semana'       => 'sometimes|integer|min:0',
+            'rendimiento'         => 'nullable|numeric|min:0',
+            'rendimiento_unidad'  => 'nullable|string|max:20',
             'activa'              => 'sometimes|boolean',
             'foto_plato'          => 'nullable|string|max:500',
             'foto_plateria'       => 'nullable|string|max:500',
@@ -242,7 +270,8 @@ class RecetasController extends Controller
         DB::connection('compras')->transaction(function () use ($receta, $validated, $usuario) {
             $campos = array_intersect_key($validated, array_flip([
                 'nombre', 'descripcion', 'instrucciones', 'tipo', 'categoria_id',
-                'tipo_receta', 'platos_semana', 'activa', 'foto_plato', 'foto_plateria',
+                'tipo_receta', 'platos_semana', 'rendimiento', 'rendimiento_unidad',
+                'activa', 'foto_plato', 'foto_plateria',
             ]));
             $receta->update(array_merge($campos, ['aud_usuario' => $usuario]));
 
@@ -445,8 +474,10 @@ class RecetasController extends Controller
             'categoria_id'   => $r->categoria_id,
             'categoria'      => $r->categoria?->nombre ?? $r->tipo,
             'tipo_receta'    => $r->tipo_receta ?? 'plato',
-            'precio'        => (float) ($r->precio ?? 0),
-            'platos_semana' => $r->platosParaSucursal($sucursalId),
+            'precio'             => (float) ($r->precio ?? 0),
+            'platos_semana'      => $r->platosParaSucursal($sucursalId),
+            'rendimiento'        => $r->rendimiento !== null ? (float) $r->rendimiento : null,
+            'rendimiento_unidad' => $r->rendimiento_unidad,
             'activa'               => $r->activa,
             'foto_plato'    => $r->foto_plato,
             'foto_plateria' => $r->foto_plateria,

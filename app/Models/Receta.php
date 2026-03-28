@@ -19,6 +19,8 @@ class Receta extends Model
         'tipo_receta',
         'precio',
         'platos_semana',
+        'rendimiento',
+        'rendimiento_unidad',
         'activa',
         'foto_plato',
         'foto_plateria',

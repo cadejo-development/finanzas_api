@@ -230,12 +230,26 @@ async function main() {
   }
   log(`  Ingredientes: ${ingrOk} insertados, ${ingrSkip} saltados`);
 
+  // ── 3b. Reconectar sub_receta_id donde el producto es en realidad una sub-receta ──
+  log('\n[3b/3] Corrigiendo referencias sub_receta_id...');
+  const fixRes = await pg.query(`
+    UPDATE receta_ingredientes ri
+    SET sub_receta_id = sr.id,
+        producto_id   = NULL
+    FROM productos p
+    JOIN recetas sr ON sr.codigo_origen = p.codigo AND sr.tipo_receta = 'sub_receta'
+    WHERE ri.producto_id = p.id
+      AND ri.sub_receta_id IS NULL
+  `);
+  log(`  sub_receta_id corregidos: ${fixRes.rowCount}`);
+
   log('\n================================================');
   log('RESUMEN:');
   log(`  Recetas 2026 detectadas:  ${allSS.length}`);
   log(`  Recetas nuevas insertadas:${recOk}`);
   log(`  Ingredientes insertados:  ${ingrOk}`);
   log(`  Ingredientes saltados:    ${ingrSkip}`);
+  log(`  sub_receta_id corregidos: ${fixRes.rowCount}`);
   log('\n✓ Completado.');
   log('================================================');
 
