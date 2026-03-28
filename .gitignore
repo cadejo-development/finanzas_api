@@ -27,3 +27,4 @@ package.json
 package-lock.json
 node_modules/
 vite.config.js
+storage/fonts/*.json

@@ -120,9 +120,6 @@ class RecetasController extends Controller
     // ──────────────────────────────────────────────────────────────────────
     public function pdf(int $id): Response
     {
-        ini_set('memory_limit', '256M');
-        set_time_limit(60);
-
         $receta = Receta::with([
             'categoria',
             'ingredientes.producto',
