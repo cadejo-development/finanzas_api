@@ -228,6 +228,13 @@
 </head>
 <body>
 
+{{-- ── MARCA DE AGUA ── --}}
+@if($logo)
+<div style="position: fixed; top: 270px; left: 170px; opacity: 0.06; z-index: -1000;">
+  <img src="{{ $logo }}" style="width: 260px; height: 260px;" alt="" />
+</div>
+@endif
+
 {{-- ── HEADER ── --}}
 <div class="header">
   <table width="100%" cellpadding="0" cellspacing="0">
@@ -259,7 +266,7 @@
       {{-- Fecha --}}
       <td style="padding: 12px 18px 12px 10px; vertical-align: middle; text-align:right; white-space:nowrap;">
         <div style="font-size:12px; color:#fef3c7; font-weight:bold;">{{ \Carbon\Carbon::now()->format('d/m/Y') }}</div>
-        <div style="font-size:8.5px; color:#78716c; margin-top:2px;">Ficha de Receta</div>
+        <div style="font-size:8.5px; color:#78716c; margin-top:2px;">Receta</div>
       </td>
     </tr>
   </table>
@@ -408,7 +415,7 @@
 </div>
 
 <div class="footer">
-  Cadejo Brewing Company — Sistema de Recetas &nbsp;·&nbsp; {{ \Carbon\Carbon::now()->format('d/m/Y H:i') }}
+  Cadejo Brewing Company — Recetas &nbsp;·&nbsp; {{ \Carbon\Carbon::now()->format('d/m/Y H:i') }}
 </div>
 
 </body>

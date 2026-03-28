@@ -137,14 +137,15 @@ class RecetasController extends Controller
         );
         $data['costo_total'] = $costoTotal;
 
-        try {
-            $logoContent = file_get_contents('https://cadejo-storage.s3.us-east-2.amazonaws.com/fonts/cadejol0g0.png');
-            $logoBase64 = $logoContent !== false
-                ? 'data:image/png;base64,' . base64_encode($logoContent)
-                : null;
-        } catch (\Throwable $e) {
-            $logoBase64 = null;
-        }
+        // Cargamos el logo desde S3 con caché de 1 hora para no frenarlo en cada PDF
+        $logoBase64 = cache()->remember('cadejo_logo_base64', 3600, function () {
+            try {
+                $content = Storage::disk('s3')->get('fonts/cadejol0g0.png');
+                return $content ? 'data:image/png;base64,' . base64_encode($content) : null;
+            } catch (\Throwable $e) {
+                return null;
+            }
+        });
 
         $pdf = Pdf::loadView('pdf.receta', [
             'receta'      => $data,
