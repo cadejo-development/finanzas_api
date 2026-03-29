@@ -197,6 +197,10 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::post('users/{userId}/roles/{roleId}',    [AdminController::class, 'asignarRol']);
     Route::delete('users/{userId}/roles/{roleId}',  [AdminController::class, 'quitarRol']);
 
+    // Sucursales adicionales (multi-sucursal)
+    Route::get('users/{userId}/sucursales',          [AdminController::class, 'getSucursalesUsuario']);
+    Route::put('users/{userId}/sucursales',          [AdminController::class, 'setSucursalesUsuario']);
+
     // Sistemas
     Route::get('sistemas',              [AdminController::class, 'sistemas']);
     Route::patch('sistemas/{id}',       [AdminController::class, 'updateSistema']);

@@ -36,6 +36,23 @@ class User extends Authenticatable
         ];
     }
 
+    /** Sucursales adicionales asignadas explícitamente (multi-sucursal) */
+    public function sucursalesAdicionales()
+    {
+        return $this->belongsToMany(Sucursal::class, 'user_sucursales', 'user_id', 'sucursal_id');
+    }
+
+    /**
+     * Devuelve todos los IDs de sucursal que el usuario puede gestionar
+     * (la sucursal principal + las adicionales del pivot).
+     */
+    public function todasSucursalesIds(): array
+    {
+        $ids = $this->sucursal_id ? [$this->sucursal_id] : [];
+        $adicionales = $this->sucursalesAdicionales()->pluck('sucursales.id')->toArray();
+        return array_values(array_unique(array_merge($ids, $adicionales)));
+    }
+
     /** Roles del usuario (all systems) */
     public function roles()
     {

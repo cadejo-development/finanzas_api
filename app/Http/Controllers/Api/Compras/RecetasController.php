@@ -24,7 +24,9 @@ class RecetasController extends Controller
     public function index(Request $request): JsonResponse
     {
         $perPage    = min((int) $request->query('per_page', 20), 100);
-        $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
+        $sucursalId  = $request->query('sucursal_id')  ? (int) $request->query('sucursal_id') : null;
+        // sucursal_ids: array de IDs para gerentes multi-sucursal (e.g. ?sucursal_ids[]=1&sucursal_ids[]=5)
+        $sucursalIds = $request->query('sucursal_ids') ? array_map('intval', (array) $request->query('sucursal_ids')) : null;
 
         $query = Receta::with([
                 'categoria',
@@ -47,6 +49,12 @@ class RecetasController extends Controller
                 $q->where('sucursal_id', $sucursalId)->where('activa', true)
             );
             $query->with(['sucursalConfig' => fn ($q) => $q->where('sucursal_id', $sucursalId)]);
+        } elseif (!empty($sucursalIds)) {
+            // Gerente multi-sucursal: mostrar recetas activas en CUALQUIERA de sus sucursales
+            $query->whereHas('sucursalConfig', fn ($q) =>
+                $q->whereIn('sucursal_id', $sucursalIds)->where('activa', true)
+            );
+            $query->with(['sucursalConfig' => fn ($q) => $q->whereIn('sucursal_id', $sucursalIds)]);
         }
 
         // Filtro por categoria_id (nuevo) o tipo texto (legado)

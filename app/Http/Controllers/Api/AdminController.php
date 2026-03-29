@@ -438,4 +438,52 @@ class AdminController extends Controller
         $this->db()->table('systems')->where('id', $id)->update(array_merge($data, ['updated_at' => now()]));
         return response()->json(['message' => 'Sistema actualizado.']);
     }
+
+    // ──────────────────────────────────────────────────────────────
+    // SUCURSALES ADICIONALES DE USUARIO (multi-sucursal)
+    // ──────────────────────────────────────────────────────────────
+
+    /**
+     * GET /api/admin/users/{userId}/sucursales
+     * Devuelve las sucursales adicionales asignadas al usuario.
+     */
+    public function getSucursalesUsuario(int $userId): JsonResponse
+    {
+        abort_unless($this->db()->table('users')->where('id', $userId)->exists(), 404);
+
+        $sucursales = $this->db()->table('user_sucursales as us')
+            ->join('sucursales as s', 's.id', '=', 'us.sucursal_id')
+            ->where('us.user_id', $userId)
+            ->select('s.id', 's.nombre')
+            ->orderBy('s.nombre')
+            ->get();
+
+        return response()->json(['sucursales' => $sucursales]);
+    }
+
+    /**
+     * PUT /api/admin/users/{userId}/sucursales
+     * Reemplaza la lista completa de sucursales adicionales del usuario.
+     * Body: { "sucursal_ids": [1, 5, 6] }
+     */
+    public function setSucursalesUsuario(Request $request, int $userId): JsonResponse
+    {
+        abort_unless($this->db()->table('users')->where('id', $userId)->exists(), 404);
+
+        $data = $request->validate([
+            'sucursal_ids'   => 'present|array',
+            'sucursal_ids.*' => 'integer|exists:pgsql.sucursales,id',
+        ]);
+
+        $ids = array_unique($data['sucursal_ids'] ?? []);
+
+        $this->db()->table('user_sucursales')->where('user_id', $userId)->delete();
+
+        if (!empty($ids)) {
+            $rows = array_map(fn ($sid) => ['user_id' => $userId, 'sucursal_id' => $sid], $ids);
+            $this->db()->table('user_sucursales')->insert($rows);
+        }
+
+        return response()->json(['message' => 'Sucursales actualizadas correctamente.', 'count' => count($ids)]);
+    }
 }

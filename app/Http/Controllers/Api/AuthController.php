@@ -81,6 +81,9 @@ class AuthController extends Controller
         $sucursalNombre = $user->sucursal_id
             ? Sucursal::find($user->sucursal_id)?->nombre
             : null;
+        $todasSucursalesIds = $user->todasSucursalesIds();
+        $todasSucursales    = Sucursal::whereIn('id', $todasSucursalesIds)->orderBy('nombre')->get()
+            ->map(fn ($s) => ['id' => $s->id, 'nombre' => $s->nombre]);
 
         return response()->json([
             'success' => true,
@@ -92,6 +95,8 @@ class AuthController extends Controller
                 'activo'          => $user->activo,
                 'sucursal_id'     => $user->sucursal_id,
                 'sucursal'        => $sucursalNombre,
+                'sucursales_ids'  => $todasSucursalesIds,
+                'sucursales'      => $todasSucursales,
                 'roles'           => $roles,
                 'permisos'        => $permisos,
                 'centros_costo'   => $centrosCosto,
@@ -156,6 +161,9 @@ class AuthController extends Controller
         $sucursalNombre = $user->sucursal_id
             ? Sucursal::find($user->sucursal_id)?->nombre
             : null;
+        $todasSucursalesIds = $user->todasSucursalesIds();
+        $todasSucursales    = Sucursal::whereIn('id', $todasSucursalesIds)->orderBy('nombre')->get()
+            ->map(fn ($s) => ['id' => $s->id, 'nombre' => $s->nombre]);
 
         return response()->json([
             'success' => true,
@@ -166,6 +174,8 @@ class AuthController extends Controller
                 'activo'          => $user->activo,
                 'sucursal_id'     => $user->sucursal_id,
                 'sucursal'        => $sucursalNombre,
+                'sucursales_ids'  => $todasSucursalesIds,
+                'sucursales'      => $todasSucursales,
                 'roles'           => $roles,
                 'permisos'        => $permisos,
                 'centros_costo'   => $centrosCosto,
