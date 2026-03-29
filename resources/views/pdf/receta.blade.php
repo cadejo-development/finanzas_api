@@ -228,32 +228,18 @@
 </head>
 <body>
 
-{{-- ── MARCA DE AGUA ── --}}
-@if($logo)
-<div style="position: fixed; top: 270px; left: 170px; opacity: 0.06; z-index: -1000;">
-  <img src="{{ $logo }}" style="width: 260px; height: 260px;" alt="" />
-</div>
-@endif
-
 {{-- ── HEADER ── --}}
 <div class="header">
   <table width="100%" cellpadding="0" cellspacing="0">
     <tr>
-      {{-- Logo --}}
-      <td width="72" style="padding: 12px 0 12px 18px; vertical-align: middle;">
-        @if($logo)
-          <img src="{{ $logo }}" style="width:52px; height:52px; object-fit:contain;" alt="Logo" />
-        @endif
-      </td>
-
       {{-- Marca --}}
-      <td style="padding: 12px 12px 12px 10px; vertical-align: middle; border-right: 1px solid #44403c; white-space: nowrap;">
+      <td style="padding: 14px 16px; vertical-align: middle; border-right: 1px solid #44403c; white-space: nowrap;">
         <div style="font-size:10.5px; font-weight:bold; color:#fbbf24;">Cadejo Brewing Company</div>
         <div style="font-size:8.5px; color:#78716c; margin-top:2px;">Gestión de Operación</div>
       </td>
 
       {{-- Nombre receta --}}
-      <td style="padding: 12px 16px; vertical-align: middle;">
+      <td style="padding: 14px 18px; vertical-align: middle;">
         <div style="font-size:15px; font-weight:bold; color:#fef3c7; letter-spacing:0.3px;">
           {{ strtoupper($receta['nombre']) }}
         </div>
@@ -264,7 +250,7 @@
       </td>
 
       {{-- Fecha --}}
-      <td style="padding: 12px 18px 12px 10px; vertical-align: middle; text-align:right; white-space:nowrap;">
+      <td style="padding: 14px 18px 14px 10px; vertical-align: middle; text-align:right; white-space:nowrap;">
         <div style="font-size:12px; color:#fef3c7; font-weight:bold;">{{ \Carbon\Carbon::now()->format('d/m/Y') }}</div>
         <div style="font-size:8.5px; color:#78716c; margin-top:2px;">Receta</div>
       </td>

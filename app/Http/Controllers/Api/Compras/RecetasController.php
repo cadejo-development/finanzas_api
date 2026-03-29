@@ -137,20 +137,9 @@ class RecetasController extends Controller
         );
         $data['costo_total'] = $costoTotal;
 
-        // Cargamos el logo desde S3 con caché de 1 hora para no frenarlo en cada PDF
-        $logoBase64 = cache()->remember('cadejo_logo_base64', 3600, function () {
-            try {
-                $content = Storage::disk('s3')->get('fonts/cadejol0g0.png');
-                return $content ? 'data:image/png;base64,' . base64_encode($content) : null;
-            } catch (\Throwable $e) {
-                return null;
-            }
-        });
-
         $pdf = Pdf::loadView('pdf.receta', [
             'receta'      => $data,
             'costo_total' => $costoTotal,
-            'logo'        => $logoBase64,
         ])->setPaper('letter', 'portrait');
 
         $nombre = preg_replace('/[^A-Za-z0-9_\-]/', '_', $receta->nombre);
