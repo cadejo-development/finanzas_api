@@ -127,19 +127,20 @@ class RecetasController extends Controller
             'ingredientes.subReceta.ingredientes.producto',
             'ingredientes.subReceta.ingredientes.subReceta.productoAsociado',
             'ingredientes.subReceta.ingredientes.subReceta.ingredientes.producto',
+            'modificadores.producto',
         ])->findOrFail($id);
 
-        $data = $this->formatReceta($receta);
+        $data = $this->formatReceta($receta, null, true);
 
-        // Calcular costo total (ingredientes)
-        $costoTotal = collect($data['ingredientes'])->sum(
+        // Calcular costo total ingredientes
+        $costoIngredientes = collect($data['ingredientes'])->sum(
             fn ($i) => (float) $i['precio_unitario'] * (float) $i['cantidad_por_plato']
         );
-        $data['costo_total'] = $costoTotal;
+        $data['costo_total'] = $costoIngredientes;
 
         $pdf = Pdf::loadView('pdf.receta', [
-            'receta'      => $data,
-            'costo_total' => $costoTotal,
+            'receta'           => $data,
+            'costo_total'      => $costoIngredientes,
         ])->setPaper('letter', 'portrait');
 
         $nombre = preg_replace('/[^A-Za-z0-9_\-]/', '_', $receta->nombre);
