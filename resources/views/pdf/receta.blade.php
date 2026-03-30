@@ -147,13 +147,6 @@
 </head>
 <body>
 
-{{-- ── MARCA DE AGUA ── --}}
-@if($logo)
-<div style="position:fixed; top:260px; left:160px; opacity:0.05; z-index:-1000;">
-  <img src="{{ $logo }}" style="width:280px; height:280px;" alt="" />
-</div>
-@endif
-
 {{-- ── HEADER ── --}}
 <div style="background:#1c1917; color:#fff; padding:0;">
   <table width="100%" cellpadding="0" cellspacing="0">
