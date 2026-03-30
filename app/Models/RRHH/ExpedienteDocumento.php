@@ -11,7 +11,9 @@ class ExpedienteDocumento extends Model
 
     protected $fillable = [
         'empleado_id', 'tipo', 'numero',
-        'fecha_emision', 'fecha_vencimiento', 'entidad_emisora', 'notas',
+        'fecha_emision', 'fecha_vencimiento',
+        'lugar_exp_municipio_id', 'lugar_exp_texto',
+        'foto_frente_ruta', 'foto_reverso_ruta',
     ];
 
     protected $casts = [

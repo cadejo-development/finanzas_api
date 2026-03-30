@@ -29,6 +29,14 @@ use App\Http\Controllers\Api\RRHH\TrasladosController;
 use App\Http\Controllers\Api\RRHH\CambiosSalarialesController;
 use App\Http\Controllers\Api\RRHH\DepartamentosController;
 use App\Http\Controllers\Api\RRHH\ExpedienteController;
+use App\Http\Controllers\Api\GeoController;
+
+// ─── Geo catálogos El Salvador (público, sin auth) ────────────────────────
+Route::prefix('geo')->group(function () {
+    Route::get('departamentos',                    [GeoController::class, 'departamentos']);
+    Route::get('departamentos/{id}/distritos',     [GeoController::class, 'distritos']);
+    Route::get('distritos/{id}/municipios',        [GeoController::class, 'municipios']);
+});
 
 // ─── Portal SSO (protegido con Sanctum) ──────────────────────────────────
 Route::prefix('portal')->middleware('auth:sanctum')->group(function () {

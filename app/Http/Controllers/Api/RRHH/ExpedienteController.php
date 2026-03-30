@@ -261,12 +261,15 @@ class ExpedienteController extends RRHHBaseController
         $this->autorizarAcceso($empleadoId);
 
         $data = $request->validate([
-            'tipo'             => 'required|in:residencia,trabajo',
-            'departamento_geo' => 'nullable|string|max:80',
-            'municipio'        => 'nullable|string|max:80',
-            'direccion'        => 'required|string|max:255',
-            'referencia'       => 'nullable|string|max:255',
-            'es_principal'     => 'boolean',
+            'tipo'            => 'required|in:residencia,trabajo',
+            'departamento_id' => 'nullable|integer',
+            'distrito_id'     => 'nullable|integer',
+            'municipio_id'    => 'nullable|integer',
+            'departamento_geo'=> 'nullable|string|max:80',
+            'municipio'       => 'nullable|string|max:80',
+            'direccion'       => 'required|string|max:255',
+            'referencia'      => 'nullable|string|max:255',
+            'es_principal'    => 'boolean',
         ]);
 
         $direccion = ExpedienteDireccion::create(array_merge($data, ['empleado_id' => $empleadoId]));
@@ -281,12 +284,15 @@ class ExpedienteController extends RRHHBaseController
         $dir = ExpedienteDireccion::where('empleado_id', $empleadoId)->findOrFail($dirId);
 
         $data = $request->validate([
-            'tipo'             => 'sometimes|in:residencia,trabajo',
-            'departamento_geo' => 'nullable|string|max:80',
-            'municipio'        => 'nullable|string|max:80',
-            'direccion'        => 'sometimes|string|max:255',
-            'referencia'       => 'nullable|string|max:255',
-            'es_principal'     => 'boolean',
+            'tipo'            => 'sometimes|in:residencia,trabajo',
+            'departamento_id' => 'nullable|integer',
+            'distrito_id'     => 'nullable|integer',
+            'municipio_id'    => 'nullable|integer',
+            'departamento_geo'=> 'nullable|string|max:80',
+            'municipio'       => 'nullable|string|max:80',
+            'direccion'       => 'sometimes|string|max:255',
+            'referencia'      => 'nullable|string|max:255',
+            'es_principal'    => 'boolean',
         ]);
 
         $dir->update($data);
@@ -309,12 +315,12 @@ class ExpedienteController extends RRHHBaseController
         $this->autorizarAcceso($empleadoId);
 
         $data = $request->validate([
-            'tipo'             => 'required|in:dui,nit,isss,afp,pasaporte,licencia_conducir,otro',
-            'numero'           => 'nullable|string|max:60',
-            'fecha_emision'    => 'nullable|date',
-            'fecha_vencimiento'=> 'nullable|date',
-            'entidad_emisora'  => 'nullable|string|max:120',
-            'notas'            => 'nullable|string|max:255',
+            'tipo'                  => 'required|in:dui,nit,isss,afp,pasaporte,licencia_conducir,otro',
+            'numero'                => 'nullable|string|max:60',
+            'fecha_emision'         => 'nullable|date',
+            'fecha_vencimiento'     => 'nullable|date',
+            'lugar_exp_municipio_id'=> 'nullable|integer',
+            'lugar_exp_texto'       => 'nullable|string|max:200',
         ]);
 
         $doc = ExpedienteDocumento::create(array_merge($data, ['empleado_id' => $empleadoId]));
@@ -329,12 +335,12 @@ class ExpedienteController extends RRHHBaseController
         $doc = ExpedienteDocumento::where('empleado_id', $empleadoId)->findOrFail($docId);
 
         $data = $request->validate([
-            'tipo'             => 'sometimes|in:dui,nit,isss,afp,pasaporte,licencia_conducir,otro',
-            'numero'           => 'nullable|string|max:60',
-            'fecha_emision'    => 'nullable|date',
-            'fecha_vencimiento'=> 'nullable|date',
-            'entidad_emisora'  => 'nullable|string|max:120',
-            'notas'            => 'nullable|string|max:255',
+            'tipo'                  => 'sometimes|in:dui,nit,isss,afp,pasaporte,licencia_conducir,otro',
+            'numero'                => 'nullable|string|max:60',
+            'fecha_emision'         => 'nullable|date',
+            'fecha_vencimiento'     => 'nullable|date',
+            'lugar_exp_municipio_id'=> 'nullable|integer',
+            'lugar_exp_texto'       => 'nullable|string|max:200',
         ]);
 
         $doc->update($data);

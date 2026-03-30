@@ -10,8 +10,10 @@ class ExpedienteDireccion extends Model
     protected $table      = 'expediente_direcciones';
 
     protected $fillable = [
-        'empleado_id', 'tipo', 'departamento_geo',
-        'municipio', 'direccion', 'referencia', 'es_principal',
+        'empleado_id', 'tipo',
+        'departamento_id', 'distrito_id', 'municipio_id',
+        'departamento_geo', 'municipio',
+        'direccion', 'referencia', 'es_principal',
     ];
 
     protected $casts = [
