@@ -578,7 +578,10 @@ class RecetasController extends Controller
                 'producto_nombre'    => $ing->producto?->nombre ?? $ing->subReceta?->nombre,
                 'es_sub_receta'      => !is_null($ing->sub_receta_id),
                 'cantidad_por_plato' => (float) $ing->cantidad_por_plato,
-                'unidad'             => $ing->unidad,
+                'unidad'                 => $ing->unidad,
+                'prod_unidad'            => $ing->producto?->unidad,
+                'sub_rendimiento'        => $ing->subReceta ? ((float) ($ing->subReceta->rendimiento ?? 0) ?: null) : null,
+                'sub_rendimiento_unidad' => $ing->subReceta?->rendimiento_unidad,
                 'precio_unitario'    => $ing->sub_receta_id
                     ? $this->calcularCostoSubReceta($ing->subReceta, $ing->unidad)
                     : $this->convertirCosto(
@@ -666,8 +669,20 @@ class RecetasController extends Controller
             return (float) $si->cantidad_por_plato * $this->convertirCosto($costo, $prodUnit, $ingrUnit);
         });
 
-        // El batch produce 1 unidad del producto (ej: 1 lb). Si la receta padre lo usa
-        // en otra unidad (ej: oz), convertir.
+        // Si la sub-receta tiene rendimiento definido: es el denominador explícito del batch.
+        // Ej: rinde 10 porciones → costo/porcion = batch/10; padre usa 1 porcion → $batch/10.
+        $rendimiento = (float) ($sub->rendimiento ?? 0);
+        $rendUnidad  = strtolower(trim($sub->rendimiento_unidad ?? ''));
+        if ($rendimiento > 0 && $rendUnidad) {
+            $costePorUnidad = $batchCosto / $rendimiento;
+            $targetUnit     = strtolower(trim($unidadReceta ?? ''));
+            if (!$targetUnit || $targetUnit === $rendUnidad) {
+                return $costePorUnidad;
+            }
+            return $this->convertirCosto($costePorUnidad, $rendUnidad, $targetUnit);
+        }
+
+        // Sin rendimiento explícito → batch = 1 unidad del producto (ej: 1 lb).
         // Para unidades desconocidas ('tanda', 'u', 'porcion', etc.) se trata como 'lb',
         // ya que SS usa mxprCantidad en libras internamente y el batch implícitamente
         // representa el costo por 1 lb de producción.
