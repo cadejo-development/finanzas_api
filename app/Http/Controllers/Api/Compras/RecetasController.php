@@ -468,22 +468,42 @@ class RecetasController extends Controller
     // Body: multipart/form-data con campo 'foto' (imagen)
     // Retorna: { url: '...' }
     // ──────────────────────────────────────────────────────────────────────
-    public function uploadFoto(Request $request): JsonResponse
+    // ──────────────────────────────────────────────────────────────────────
+    // GET /api/compras/upload/presign?ext=jpg&mime=image/jpeg
+    // Genera una URL pre-firmada de S3 para que el browser suba directamente.
+    // No hace ninguna llamada de red a S3 — solo firma localmente.
+    // Retorna: { presigned_url, public_url }
+    // ──────────────────────────────────────────────────────────────────────
+    public function presignUpload(Request $request): JsonResponse
     {
-        $request->validate([
-            'foto' => 'required|image|max:4096',
+        $ext      = preg_replace('/[^a-zA-Z0-9]/', '', $request->query('ext', 'jpg'));
+        $mime     = $request->query('mime', 'image/jpeg');
+        $filename = uniqid('receta_', true) . '.' . $ext;
+        $key      = 'recetas/fotos/' . $filename;
+
+        $s3 = new \Aws\S3\S3Client([
+            'region'      => env('AWS_DEFAULT_REGION', 'us-east-2'),
+            'version'     => 'latest',
+            'credentials' => [
+                'key'    => env('AWS_ACCESS_KEY_ID'),
+                'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            ],
         ]);
 
-        $file      = $request->file('foto');
-        $extension = $file->getClientOriginalExtension();
-        $filename  = uniqid('receta_', true) . '.' . $extension;
-        $path      = 'recetas/fotos/' . $filename;
+        $cmd = $s3->getCommand('PutObject', [
+            'Bucket'      => env('AWS_BUCKET'),
+            'Key'         => $key,
+            'ContentType' => $mime,
+        ]);
 
-        Storage::disk('s3')->put($path, file_get_contents($file), 'public');
+        $presignedRequest = $s3->createPresignedRequest($cmd, '+15 minutes');
+        $presignedUrl     = (string) $presignedRequest->getUri();
+        $publicUrl        = 'https://' . env('AWS_BUCKET') . '.s3.' . env('AWS_DEFAULT_REGION', 'us-east-2') . '.amazonaws.com/' . $key;
 
-        $url = 'https://' . env('AWS_BUCKET') . '.s3.' . env('AWS_DEFAULT_REGION') . '.amazonaws.com/' . $path;
-
-        return response()->json(['url' => $url]);
+        return response()->json([
+            'presigned_url' => $presignedUrl,
+            'public_url'    => $publicUrl,
+        ]);
     }
 
     // ──────────────────────────────────────────────────────────────────────

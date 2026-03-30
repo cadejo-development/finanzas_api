@@ -160,6 +160,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('recetas/tipos',                        [RecetasController::class, 'tipos']);
     Route::get('recetas/{id}/pdf',                     [RecetasController::class, 'pdf']);
     Route::patch('recetas/{id}/platos-sucursal',       [RecetasController::class, 'setPlatosSucursal']);
+    Route::get('upload/presign',                       [RecetasController::class, 'presignUpload']);
     Route::post('upload',                              [RecetasController::class, 'uploadFoto']);
     Route::apiResource('recetas',            RecetasController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     // Catálogo de categorías de recetas
