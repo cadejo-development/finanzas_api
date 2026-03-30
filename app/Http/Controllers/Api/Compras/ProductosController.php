@@ -261,6 +261,7 @@ class ProductosController extends Controller
     {
         $sucursales = Sucursal::whereHas('tipoSucursal', fn($q) => $q->where('codigo', 'operativa'))
             ->where('id', '!=', 19) // excluir RES - CASA GUIROLA (duplicado de RESTAURANTE CASA GUIROLA)
+            ->where(fn($q) => $q->where('activa', true)->orWhereNull('activa'))
             ->orderBy('nombre')
             ->get(['id', 'codigo', 'nombre']);
 

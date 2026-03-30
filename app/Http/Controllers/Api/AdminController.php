@@ -150,7 +150,7 @@ class AdminController extends Controller
             ->get();
 
         return response()->json([
-            'sucursales'   => $this->db()->table('sucursales')->select('id', 'nombre')->orderBy('nombre')->get(),
+            'sucursales'   => $this->db()->table('sucursales')->where(fn($q) => $q->where('activa', true)->orWhereNull('activa'))->select('id', 'nombre')->orderBy('nombre')->get(),
             'cargos'       => $this->db()->table('cargos')->select('id', 'nombre')->orderBy('nombre')->get(),
             'users_libres' => $usersLibres,
         ]);

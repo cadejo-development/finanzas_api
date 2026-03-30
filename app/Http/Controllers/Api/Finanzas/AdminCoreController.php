@@ -38,6 +38,10 @@ class AdminCoreController extends Controller
                     ->orWhere('codigo', 'ilike', $search);
             });
         }
+        // Por defecto solo activas; pasar ?todas=1 para ver también las cerradas
+        if (!$request->boolean('todas')) {
+            $q->where(fn($s) => $s->where('activa', true)->orWhereNull('activa'));
+        }
         $rows = $q->paginate($request->get('per_page', 20));
         return response()->json(['success' => true, 'data' => $rows]);
     }
