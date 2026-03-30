@@ -148,15 +148,17 @@ class RecetasController extends Controller
         );
         $data['costo_total'] = $costoIngredientes;
 
-        // Fotos enviadas como base64 desde el browser
+        // Imágenes enviadas como base64 desde el browser (evita que App Runner toque S3)
         $fotoPlato    = $request->input('foto_plato_b64');
         $fotoPlateria = $request->input('foto_plateria_b64');
+        $logo         = $request->input('logo_b64');
 
         $pdf = Pdf::loadView('pdf.receta', [
             'receta'        => $data,
             'costo_total'   => $costoIngredientes,
             'foto_plato'    => $fotoPlato,
             'foto_plateria' => $fotoPlateria,
+            'logo'          => $logo,
         ])->setPaper('letter', 'portrait');
 
         $nombre = preg_replace('/[^A-Za-z0-9_\-]/', '_', $receta->nombre);
