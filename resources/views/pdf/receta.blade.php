@@ -20,19 +20,11 @@ body {
 
 /* ── HEADER ── */
 .header { display: table; width: 100%; margin-bottom: 8px; }
-.header-logo-wrap {
-  display: table-cell;
-  vertical-align: middle;
-  width: 62px;
-}
+.header-logo-wrap { display: table-cell; vertical-align: middle; width: 62px; }
 .logo-box {
-  background: #1a1a1a;
-  width: 54px;
-  height: 54px;
-  text-align: center;
-  vertical-align: middle;
-  display: table-cell;
-  border-radius: 3px;
+  background: #1a1a1a; width: 54px; height: 54px;
+  text-align: center; vertical-align: middle;
+  display: table-cell; border-radius: 3px;
 }
 .logo-box img { width: 46px; height: auto; vertical-align: middle; }
 .header-center { display: table-cell; vertical-align: middle; padding-left: 11px; }
@@ -78,7 +70,7 @@ body {
   text-transform: uppercase; letter-spacing: 0.8px; color: #ddd;
 }
 .dt thead th.r { text-align: right; }
-.dt tbody tr { border-bottom: 1px solid #ececec; }
+.dt tbody tr { border-bottom: 1px solid #ececec; page-break-inside: avoid; }
 .dt tbody tr:nth-child(even) { background: #f9f9f9; }
 .dt tbody td { padding: 4px 8px; font-size: 9.5px; vertical-align: middle; color: #222; }
 .dt tbody td.r { text-align: right; }
@@ -98,19 +90,16 @@ body {
   border-radius: 2px; padding: 1px 5px; font-size: 6.5px;
   font-weight: bold; margin-right: 4px; vertical-align: middle;
 }
-.zero { color: #ddd; }
 
-/* ── DOS COLUMNAS (ingredientes + modificadores) ── */
-.two-col { display: table; width: 100%; border-collapse: collapse; }
-.col-left  { display: table-cell; vertical-align: top; padding-right: 8px; }
-.col-right { display: table-cell; vertical-align: top; padding-left: 8px; border-left: 1px solid #e0e0e0; }
-.col-full  { display: table-cell; vertical-align: top; }
-
+/* ── DOS COLUMNAS con tabla HTML real ── */
+.two-col-tbl { width: 100%; border-collapse: collapse; }
+.two-col-tbl > tbody > tr > td { vertical-align: top; }
+.col-divider { width: 10px; }
 .col-subtitle {
   font-size: 7px; font-weight: bold; text-transform: uppercase;
   letter-spacing: 1.5px; color: #888;
   padding: 5px 8px; background: #f5f5f5;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid #e0e0e0; border-top: 1px solid #e0e0e0;
 }
 
 /* ── INSTRUCCIONES ── */
@@ -198,109 +187,132 @@ body {
   </div>
 </div>
 
-{{-- INGREDIENTES + MODIFICADORES (lado a lado si hay modificadores) --}}
+{{-- INGREDIENTES + MODIFICADORES --}}
 @php
   $modificadores = $receta['modificadores'] ?? [];
   $tieneModificadores = count($modificadores) > 0;
-  $costoIngr = collect($receta['ingredientes'])->sum(fn($i) => (float)($i['precio_unitario'] ?? 0) * (float)($i['cantidad_por_plato'] ?? 0));
 @endphp
 
 <div class="section">
   <div class="section-head">
     Ingredientes
-    @if($tieneModificadores)
-      <span class="gold">&nbsp;·&nbsp; Modificadores</span>
-    @endif
+    @if($tieneModificadores)<span class="gold">&nbsp;·&nbsp; Modificadores</span>@endif
   </div>
   <div class="section-body">
-    <div class="two-col">
 
-      {{-- COLUMNA IZQUIERDA: INGREDIENTES --}}
-      <div class="{{ $tieneModificadores ? 'col-left' : 'col-full' }}">
-        @if($tieneModificadores)
-          <div class="col-subtitle">Ingredientes</div>
-        @endif
+  @if($tieneModificadores)
+  {{-- DOS COLUMNAS: tabla HTML real para que dompdf pagine bien --}}
+  <table class="two-col-tbl" cellpadding="0" cellspacing="0">
+    <tbody><tr>
+
+      {{-- Columna izquierda: Ingredientes --}}
+      <td style="width:48%;">
+        <div class="col-subtitle">Ingredientes</div>
         <table class="dt">
           <thead>
             <tr>
-              <th width="5%">#</th>
-              <th>Producto / Sub-Receta</th>
-              <th class="r" width="{{ $tieneModificadores ? '16%' : '13%' }}">Cant.</th>
-              <th width="{{ $tieneModificadores ? '10%' : '9%' }}">Un.</th>
-              @if(!$tieneModificadores)
-              <th class="r" width="13%">Costo u.</th>
-              @endif
-              <th class="r" width="12%">Subtotal</th>
+              <th width="6%">#</th>
+              <th>Producto</th>
+              <th class="r" width="18%">Cant.</th>
+              <th width="14%">Un.</th>
             </tr>
           </thead>
           <tbody>
             @foreach($receta['ingredientes'] as $i => $ing)
-            @php
-              $pu = (float)($ing['precio_unitario'] ?? 0);
-              $qt = (float)($ing['cantidad_por_plato'] ?? 0);
-              $st = $pu * $qt;
-            @endphp
             <tr>
               <td class="sm">{{ $i + 1 }}</td>
               <td>
                 {{ $ing['producto_nombre'] ?? '—' }}
                 @if($ing['es_sub_receta'])<span class="tag-sub">SUB</span>@endif
               </td>
-              <td class="r">{{ number_format($qt, 3) }}</td>
+              <td class="r">{{ number_format((float)($ing['cantidad_por_plato'] ?? 0), 3) }}</td>
               <td class="sm">{{ $ing['unidad'] }}</td>
-              @if(!$tieneModificadores)
-              <td class="r {{ $pu > 0 ? '' : 'zero' }}">${{ number_format($pu, 4) }}</td>
-              @endif
-              <td class="r {{ $st > 0 ? '' : 'zero' }}">${{ number_format($st, 2) }}</td>
             </tr>
             @endforeach
           </tbody>
           <tfoot>
             <tr>
-              <td colspan="{{ $tieneModificadores ? 3 : 4 }}">{{ count($receta['ingredientes']) }} línea(s)</td>
-              <td class="r">${{ number_format($costoIngr, 2) }}</td>
+              <td colspan="3">{{ count($receta['ingredientes']) }} línea(s)</td>
+              <td></td>
             </tr>
           </tfoot>
         </table>
-      </div>
+      </td>
 
-      {{-- COLUMNA DERECHA: MODIFICADORES (solo si existen) --}}
-      @if($tieneModificadores)
-      <div class="col-right">
+      {{-- Separador --}}
+      <td class="col-divider"></td>
+
+      {{-- Columna derecha: Modificadores --}}
+      <td style="width:48%;">
         <div class="col-subtitle">Modificadores del Menú</div>
         <table class="dt">
           <thead>
             <tr>
-              <th width="38%">Grupo</th>
+              <th width="36%">Grupo</th>
               <th>Opción</th>
-              <th class="r" width="16%">Costo</th>
+              <th class="r" width="16%">Cant.</th>
+              <th width="12%">Un.</th>
             </tr>
           </thead>
           <tbody>
             @foreach($modificadores as $gi => $grupo)
               @foreach($grupo['opciones'] as $j => $op)
-              @php $co = (float)($op['costo_total'] ?? 0); @endphp
               <tr>
                 <td style="font-size:9px;">
                   @if($j === 0)<span class="grp-num">{{ $gi + 1 }}</span>{{ $grupo['grupo_nombre'] }}@endif
                 </td>
                 <td>{{ $op['nombre'] }}</td>
-                <td class="r {{ $co > 0 ? '' : 'zero' }}">${{ number_format($co, 3) }}</td>
+                <td class="r">{{ number_format((float)($op['cantidad'] ?? 0), 3) }}</td>
+                <td class="sm">{{ $op['unidad'] ?? 'u' }}</td>
               </tr>
               @endforeach
             @endforeach
           </tbody>
           <tfoot>
             <tr>
-              <td colspan="2">{{ count($modificadores) }} grupo(s)</td>
-              <td class="r"></td>
+              <td colspan="3">{{ count($modificadores) }} grupo(s)</td>
+              <td></td>
             </tr>
           </tfoot>
         </table>
-      </div>
-      @endif
+      </td>
 
-    </div>{{-- /two-col --}}
+    </tr></tbody>
+  </table>
+
+  @else
+  {{-- SIN MODIFICADORES: tabla full width --}}
+  <table class="dt">
+    <thead>
+      <tr>
+        <th width="5%">#</th>
+        <th>Producto / Sub-Receta</th>
+        <th class="r" width="15%">Cantidad</th>
+        <th width="12%">Unidad</th>
+      </tr>
+    </thead>
+    <tbody>
+      @foreach($receta['ingredientes'] as $i => $ing)
+      <tr>
+        <td class="sm">{{ $i + 1 }}</td>
+        <td>
+          {{ $ing['producto_nombre'] ?? '—' }}
+          @if($ing['es_sub_receta'])<span class="tag-sub">SUB</span>@endif
+        </td>
+        <td class="r">{{ number_format((float)($ing['cantidad_por_plato'] ?? 0), 3) }}</td>
+        <td class="sm">{{ $ing['unidad'] }}</td>
+      </tr>
+      @endforeach
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="3">{{ count($receta['ingredientes']) }} línea(s)</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+  @endif
+
   </div>
 </div>
 
