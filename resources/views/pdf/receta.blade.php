@@ -165,7 +165,7 @@ body {
         <td class="info-lbl">Categoría</td>
         <td class="info-val">{{ $receta['categoria'] ?? $receta['tipo'] ?? '—' }}</td>
       </tr>
-      @if($receta['rendimiento'])
+      @if($receta['rendimiento'] && $receta['tipo_receta'] === 'sub_receta')
       <tr>
         <td class="info-lbl">Rendimiento</td>
         <td class="info-val">{{ number_format($receta['rendimiento'], 2) }} {{ $receta['rendimiento_unidad'] ?? '' }}</td>
