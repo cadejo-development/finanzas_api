@@ -124,9 +124,12 @@ class RecetasController extends Controller
     }
 
     // ──────────────────────────────────────────────────────────────────────
-    // GET /api/compras/recetas/{id}/pdf
+    // POST /api/compras/recetas/{id}/pdf
+    // Body JSON opcional: { foto_plato_b64: "data:image/...", foto_plateria_b64: "..." }
+    // El browser convierte las fotos a base64 antes de enviarlas (evita que
+    // App Runner intente descargar desde S3, lo cual falla por red).
     // ──────────────────────────────────────────────────────────────────────
-    public function pdf(int $id): Response
+    public function pdf(int $id, Request $request): Response
     {
         $receta = Receta::with([
             'categoria',
@@ -140,15 +143,20 @@ class RecetasController extends Controller
 
         $data = $this->formatReceta($receta, null, true);
 
-        // Calcular costo total ingredientes
         $costoIngredientes = collect($data['ingredientes'])->sum(
             fn ($i) => (float) $i['precio_unitario'] * (float) $i['cantidad_por_plato']
         );
         $data['costo_total'] = $costoIngredientes;
 
+        // Fotos enviadas como base64 desde el browser
+        $fotoPlato    = $request->input('foto_plato_b64');
+        $fotoPlateria = $request->input('foto_plateria_b64');
+
         $pdf = Pdf::loadView('pdf.receta', [
-            'receta'           => $data,
-            'costo_total'      => $costoIngredientes,
+            'receta'        => $data,
+            'costo_total'   => $costoIngredientes,
+            'foto_plato'    => $fotoPlato,
+            'foto_plateria' => $fotoPlateria,
         ])->setPaper('letter', 'portrait');
 
         $nombre = preg_replace('/[^A-Za-z0-9_\-]/', '_', $receta->nombre);

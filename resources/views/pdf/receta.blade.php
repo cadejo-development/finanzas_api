@@ -178,6 +178,26 @@
 
 <div class="content">
 
+  {{-- ── FOTOS ── --}}
+  @if($foto_plato || $foto_plateria)
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
+    <tr>
+      @if($foto_plato)
+      <td style="padding-right: {{ $foto_plateria ? '6px' : '0' }}; vertical-align:top; width:{{ $foto_plateria ? '50%' : '60%' }};">
+        <div style="font-size:8px; text-transform:uppercase; letter-spacing:0.6px; color:#78716c; margin-bottom:4px;">Foto del plato</div>
+        <img src="{{ $foto_plato }}" style="width:100%; max-height:160px; object-fit:cover; border-radius:5px; border:1px solid #e7e5e4;" alt="Foto del plato" />
+      </td>
+      @endif
+      @if($foto_plateria)
+      <td style="padding-left: {{ $foto_plato ? '6px' : '0' }}; vertical-align:top; width:{{ $foto_plato ? '50%' : '60%' }};">
+        <div style="font-size:8px; text-transform:uppercase; letter-spacing:0.6px; color:#78716c; margin-bottom:4px;">Foto de la loza</div>
+        <img src="{{ $foto_plateria }}" style="width:100%; max-height:160px; object-fit:cover; border-radius:5px; border:1px solid #e7e5e4;" alt="Foto de la loza" />
+      </td>
+      @endif
+    </tr>
+  </table>
+  @endif
+
   {{-- ── RESUMEN DE COSTOS ── --}}
   @php
     $precioVenta   = (float) ($receta['precio'] ?? 0);
