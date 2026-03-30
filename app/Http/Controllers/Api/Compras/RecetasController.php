@@ -668,9 +668,14 @@ class RecetasController extends Controller
 
         // El batch produce 1 unidad del producto (ej: 1 lb). Si la receta padre lo usa
         // en otra unidad (ej: oz), convertir.
+        // Para unidades desconocidas ('tanda', 'u', 'porcion', etc.) se trata como 'lb',
+        // ya que SS usa mxprCantidad en libras internamente y el batch implícitamente
+        // representa el costo por 1 lb de producción.
         $subUnit = strtolower(trim($prod?->unidad ?? ''));
         if ($subUnit && $unidadReceta) {
-            $batchCosto = $this->convertirCosto($batchCosto, $subUnit, strtolower(trim($unidadReceta)));
+            $knownUnits = ['lb', 'oz', 'g', 'kg', 'lt', 'ml', 'oz fl', 'galon'];
+            $effectiveUnit = in_array($subUnit, $knownUnits, true) ? $subUnit : 'lb';
+            $batchCosto = $this->convertirCosto($batchCosto, $effectiveUnit, strtolower(trim($unidadReceta)));
         }
 
         return $batchCosto;
