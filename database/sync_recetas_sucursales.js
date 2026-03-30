@@ -149,19 +149,35 @@ const Q_INGR = `
     AND PRO.proId IN (${Q_PLATOS_EN_MENU})`;
 
 // 5. Recetas (platos en menú con BOM activo)
+// Si el producto aparece en algún menú infantil (INFANTIL*, KIDS*, MENU NIÑOS)
+// → tipo = 'Platos Infantiles' para que se asigne la categoría correcta en PG.
 const Q_REC = `
   SELECT DISTINCT
     PRO.proId      AS id_origen,
     PRO.proCodigo  AS codigo_origen,
     PRO.proNombre  AS nombre,
-    CPR.cprNombre  AS tipo,
+    CASE WHEN EXISTS (
+      SELECT 1 FROM olRestaurante.dbo.BotonesRst B2 WITH(NOLOCK)
+      INNER JOIN olRestaurante.dbo.detMenusRst D2 WITH(NOLOCK)
+        ON B2.btnrstid = D2.btnrstId AND D2.dmnrstEliminado = 0
+      INNER JOIN olRestaurante.dbo.maeMenusRst M2 WITH(NOLOCK)
+        ON D2.mmnrstId = M2.mmnrstId AND M2.mmnrstEliminado = 0
+      INNER JOIN olRestaurante.dbo.AreasRst A2 WITH(NOLOCK)
+        ON M2.arerstId = A2.arerstId AND A2.arerstEliminado = 0
+      WHERE B2.proId = PRO.proId AND B2.btnrstEliminado = 0
+        AND A2.arerstActiva = 1 AND A2.arerstId IN (${AREA_IN})
+        AND (M2.mmnrstNombre LIKE 'INFANTIL%' OR M2.mmnrstNombre LIKE 'KIDS%'
+             OR M2.mmnrstNombre LIKE 'MENU NI%OS')
+    ) THEN 'Platos Infantiles'
+    ELSE CPR.cprNombre
+    END AS tipo,
     ISNULL(PRO.proPrecio, 0) AS precio
   FROM olComun.dbo.MaterialesXProducto MXP WITH(NOLOCK)
   INNER JOIN olComun.dbo.Productos PRO WITH(NOLOCK) ON MXP.proId = PRO.proId AND PRO.proActivo = 1
   LEFT  JOIN olComun.dbo.CategoriasProductos CPR WITH(NOLOCK) ON PRO.cprId = CPR.cprId
   WHERE MXP.mxprEliminado = 0 AND MXP.mxprCantUnidad > 0
     AND PRO.proId IN (${Q_PLATOS_EN_MENU})
-  ORDER BY CPR.cprNombre, PRO.proCodigo`;
+  ORDER BY tipo, PRO.proCodigo`;
 
 // 6. Ingredientes de receta (BOM) para platos en menú
 const Q_MXP = `
