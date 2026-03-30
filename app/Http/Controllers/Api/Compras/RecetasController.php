@@ -83,6 +83,13 @@ class RecetasController extends Controller
             })->whereRaw("lower(coalesce(tipo,'')) NOT LIKE '%sub%receta%'");
         }
 
+        // Excluir recetas cuya categoría está marcada como inactiva
+        // (cervezas, aguas, cristalería, envases, etc. no deben aparecer en el catálogo)
+        $query->where(function ($q) {
+            $q->whereNull('categoria_id')
+              ->orWhereHas('categoria', fn ($sq) => $sq->where('activa', true));
+        });
+
         if ($search = $request->query('search')) {
             $query->where('nombre', 'ilike', "%{$search}%");
         }
