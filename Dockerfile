@@ -24,8 +24,11 @@ RUN composer dump-autoload --no-dev --optimize
 # =============================================================================
 FROM public.ecr.aws/docker/library/php:8.3-cli-alpine
 
-RUN apk add --no-cache postgresql-dev curl-dev \
-    && docker-php-ext-install pdo_pgsql bcmath
+RUN apk add --no-cache \
+        postgresql-dev curl-dev \
+        freetype-dev libjpeg-turbo-dev libpng-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install pdo_pgsql bcmath gd
 
 WORKDIR /var/www/html
 
