@@ -168,15 +168,23 @@ class RecetasController extends Controller
         $fotoPlato    = $request->input('foto_plato_b64');
         $fotoPlateria = $request->input('foto_plateria_b64');
 
-        $pdf = Pdf::loadView('pdf.receta', [
-            'receta'        => $data,
-            'costo_total'   => $costoIngredientes,
-            'foto_plato'    => $fotoPlato,
-            'foto_plateria' => $fotoPlateria,
-        ])->setPaper('letter', 'portrait');
+        try {
+            $pdf = Pdf::loadView('pdf.receta', [
+                'receta'        => $data,
+                'costo_total'   => $costoIngredientes,
+                'foto_plato'    => $fotoPlato,
+                'foto_plateria' => $fotoPlateria,
+            ])->setPaper('letter', 'portrait');
 
-        $nombre = preg_replace('/[^A-Za-z0-9_\-]/', '_', $receta->nombre);
-        return $pdf->download("receta_{$nombre}.pdf");
+            $nombre = preg_replace('/[^A-Za-z0-9_\-]/', '_', $receta->nombre);
+            return $pdf->download("receta_{$nombre}.pdf");
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'file'    => $e->getFile() . ':' . $e->getLine(),
+                'trace'   => collect(explode("\n", $e->getTraceAsString()))->take(10)->implode("\n"),
+            ], 500);
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────
