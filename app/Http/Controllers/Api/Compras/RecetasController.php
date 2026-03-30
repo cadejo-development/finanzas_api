@@ -474,8 +474,14 @@ class RecetasController extends Controller
             'foto' => 'required|image|max:4096',
         ]);
 
-        $path = $request->file('foto')->store('recetas', 'public');
-        $url  = Storage::disk('public')->url($path);
+        $file      = $request->file('foto');
+        $extension = $file->getClientOriginalExtension();
+        $filename  = uniqid('receta_', true) . '.' . $extension;
+        $path      = 'recetas/fotos/' . $filename;
+
+        Storage::disk('s3')->put($path, file_get_contents($file), 'public');
+
+        $url = 'https://' . env('AWS_BUCKET') . '.s3.' . env('AWS_DEFAULT_REGION') . '.amazonaws.com/' . $path;
 
         return response()->json(['url' => $url]);
     }
