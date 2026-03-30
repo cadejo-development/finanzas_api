@@ -149,14 +149,18 @@ const Q_INGR = `
     AND PRO.proId IN (${Q_PLATOS_EN_MENU})`;
 
 // 5. Recetas (platos en menú con BOM activo)
-// Si el producto aparece en algún menú infantil (INFANTIL*, KIDS*, MENU NIÑOS)
-// → tipo = 'Platos Infantiles' para que se asigne la categoría correcta en PG.
+// Prioridad de tipo:
+//   1. Menú INFANTIL*/KIDS*/MENU NI*OS → 'Platos Infantiles'
+//   2. Categoría SQL Server ya es 'Platos Desayunos' → 'Platos Desayunos'
+//   3. Categoría es 'Platos Fuertes' y está en menú DESAYUNO*/BREAKFAST* → 'Platos Desayunos'
+//   4. Resto → CPR.cprNombre
 const Q_REC = `
   SELECT DISTINCT
     PRO.proId      AS id_origen,
     PRO.proCodigo  AS codigo_origen,
     PRO.proNombre  AS nombre,
-    CASE WHEN EXISTS (
+    CASE
+    WHEN EXISTS (
       SELECT 1 FROM olRestaurante.dbo.BotonesRst B2 WITH(NOLOCK)
       INNER JOIN olRestaurante.dbo.detMenusRst D2 WITH(NOLOCK)
         ON B2.btnrstid = D2.btnrstId AND D2.dmnrstEliminado = 0
@@ -169,6 +173,19 @@ const Q_REC = `
         AND (M2.mmnrstNombre LIKE 'INFANTIL%' OR M2.mmnrstNombre LIKE 'KIDS%'
              OR M2.mmnrstNombre LIKE 'MENU NI%OS')
     ) THEN 'Platos Infantiles'
+    WHEN CPR.cprNombre = 'Platos Desayunos' THEN 'Platos Desayunos'
+    WHEN CPR.cprNombre = 'Platos Fuertes' AND EXISTS (
+      SELECT 1 FROM olRestaurante.dbo.BotonesRst B3 WITH(NOLOCK)
+      INNER JOIN olRestaurante.dbo.detMenusRst D3 WITH(NOLOCK)
+        ON B3.btnrstid = D3.btnrstId AND D3.dmnrstEliminado = 0
+      INNER JOIN olRestaurante.dbo.maeMenusRst M3 WITH(NOLOCK)
+        ON D3.mmnrstId = M3.mmnrstId AND M3.mmnrstEliminado = 0
+      INNER JOIN olRestaurante.dbo.AreasRst A3 WITH(NOLOCK)
+        ON M3.arerstId = A3.arerstId AND A3.arerstEliminado = 0
+      WHERE B3.proId = PRO.proId AND B3.btnrstEliminado = 0
+        AND A3.arerstActiva = 1 AND A3.arerstId IN (${AREA_IN})
+        AND (M3.mmnrstNombre LIKE 'DESAYUNO%' OR M3.mmnrstNombre LIKE 'BREAKFAST%')
+    ) THEN 'Platos Desayunos'
     ELSE CPR.cprNombre
     END AS tipo,
     ISNULL(PRO.proPrecio, 0) AS precio

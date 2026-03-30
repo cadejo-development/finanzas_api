@@ -539,6 +539,7 @@ class RecetasController extends Controller
         $data = [
             'id'            => $r->id,
             'nombre'        => $r->nombre,
+            'codigo_origen' => $r->codigo_origen,
             'descripcion'   => $r->descripcion,
             'instrucciones' => $r->instrucciones,
             'tipo'           => $r->tipo,
