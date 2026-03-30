@@ -543,8 +543,8 @@ class RecetasController extends Controller
             'rendimiento'        => $r->rendimiento !== null ? (float) $r->rendimiento : null,
             'rendimiento_unidad' => $r->rendimiento_unidad,
             'activa'               => $r->activa,
-            'foto_plato'    => $r->foto_plato,
-            'foto_plateria' => $r->foto_plateria,
+            'foto_plato'    => $this->presignS3Url($r->foto_plato),
+            'foto_plateria' => $this->presignS3Url($r->foto_plateria),
             'grupos_modificadores' => (int) ($r->grupos_modificadores ?? 0),
             'sucursales'    => $r->relationLoaded('sucursalConfig')
                 ? $r->sucursalConfig->map(fn ($s) => [
@@ -657,6 +657,45 @@ class RecetasController extends Controller
         }
 
         return $batchCosto;
+    }
+
+    /**
+     * Convierte una URL de S3 a una presigned GET URL válida por 2 horas.
+     * La generación es puramente local (HMAC-SHA256), sin llamadas de red a S3.
+     * Si la URL no es de nuestro bucket, la devuelve sin cambios.
+     */
+    private function presignS3Url(?string $url): ?string
+    {
+        if (!$url) return null;
+
+        $bucket = config('filesystems.disks.s3.bucket');
+        $region = config('filesystems.disks.s3.region');
+        $prefix = "https://{$bucket}.s3.{$region}.amazonaws.com/";
+
+        if (!str_starts_with($url, $prefix)) return $url;
+
+        $key = substr($url, strlen($prefix));
+
+        try {
+            static $s3Client = null;
+            if (!$s3Client) {
+                $s3Client = new \Aws\S3\S3Client([
+                    'region'      => $region,
+                    'version'     => 'latest',
+                    'credentials' => [
+                        'key'    => config('filesystems.disks.s3.key'),
+                        'secret' => config('filesystems.disks.s3.secret'),
+                    ],
+                ]);
+            }
+            $cmd = $s3Client->getCommand('GetObject', [
+                'Bucket' => $bucket,
+                'Key'    => $key,
+            ]);
+            return (string) $s3Client->createPresignedRequest($cmd, '+2 hours')->getUri();
+        } catch (\Throwable $e) {
+            return $url; // Si falla, devolver la URL original
+        }
     }
 
     /**
