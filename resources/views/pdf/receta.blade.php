@@ -151,15 +151,8 @@
 <div style="background:#1c1917; color:#fff; padding:0;">
   <table width="100%" cellpadding="0" cellspacing="0">
     <tr>
-      {{-- Logo --}}
-      @if($logo)
-      <td style="padding:10px 12px 10px 14px; vertical-align:middle; width:60px;">
-        <img src="{{ $logo }}" style="width:44px; height:44px; object-fit:contain;" alt="Logo" />
-      </td>
-      @endif
-
       {{-- Marca --}}
-      <td style="padding:14px 14px 14px {{ $logo ? '0' : '16px' }}; vertical-align:middle; border-right:1px solid #44403c; white-space:nowrap;">
+      <td style="padding:14px 16px; vertical-align:middle; border-right:1px solid #44403c; white-space:nowrap;">
         <div style="font-size:10.5px; font-weight:bold; color:#fbbf24;">Cadejo Brewing Company</div>
       </td>
 
@@ -184,6 +177,26 @@
 </div>
 
 <div class="content">
+
+  {{-- ── FOTOS ── --}}
+  @if($foto_plato || $foto_plateria)
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
+    <tr>
+      @if($foto_plato)
+      <td style="padding-right: {{ $foto_plateria ? '6px' : '0' }}; vertical-align:top; width:{{ $foto_plateria ? '50%' : '60%' }};">
+        <div style="font-size:8px; text-transform:uppercase; letter-spacing:0.6px; color:#78716c; margin-bottom:4px;">Foto del plato</div>
+        <img src="{{ $foto_plato }}" style="width:100%; max-height:160px; object-fit:cover; border-radius:5px; border:1px solid #e7e5e4;" alt="Foto del plato" />
+      </td>
+      @endif
+      @if($foto_plateria)
+      <td style="padding-left: {{ $foto_plato ? '6px' : '0' }}; vertical-align:top; width:{{ $foto_plato ? '50%' : '60%' }};">
+        <div style="font-size:8px; text-transform:uppercase; letter-spacing:0.6px; color:#78716c; margin-bottom:4px;">Foto de la loza</div>
+        <img src="{{ $foto_plateria }}" style="width:100%; max-height:160px; object-fit:cover; border-radius:5px; border:1px solid #e7e5e4;" alt="Foto de la loza" />
+      </td>
+      @endif
+    </tr>
+  </table>
+  @endif
 
   {{-- ── RESUMEN DE COSTOS ── --}}
   @php
@@ -374,31 +387,6 @@
     <div class="ficha-header">Instrucciones de Preparación</div>
     <div class="ficha-body">
       <div class="instrucciones">{{ $receta['instrucciones'] }}</div>
-    </div>
-  </div>
-  @endif
-
-  {{-- ── FOTOS (al final) ── --}}
-  @if($foto_plato || $foto_plateria)
-  <div class="ficha">
-    <div class="ficha-header">Fotografías</div>
-    <div class="ficha-body" style="padding:10px;">
-      <table width="100%" cellpadding="0" cellspacing="0">
-        <tr>
-          @if($foto_plato)
-          <td style="padding-right:{{ $foto_plateria ? '6px' : '0' }}; vertical-align:top; width:{{ $foto_plateria ? '50%' : '65%' }};">
-            <div style="font-size:8px; text-transform:uppercase; letter-spacing:0.6px; color:#78716c; margin-bottom:5px;">Foto del plato</div>
-            <img src="{{ $foto_plato }}" style="width:100%; max-height:180px; object-fit:cover; border-radius:4px; border:1px solid #e7e5e4;" alt="Foto del plato" />
-          </td>
-          @endif
-          @if($foto_plateria)
-          <td style="padding-left:{{ $foto_plato ? '6px' : '0' }}; vertical-align:top; width:{{ $foto_plato ? '50%' : '65%' }};">
-            <div style="font-size:8px; text-transform:uppercase; letter-spacing:0.6px; color:#78716c; margin-bottom:5px;">Foto de la loza</div>
-            <img src="{{ $foto_plateria }}" style="width:100%; max-height:180px; object-fit:cover; border-radius:4px; border:1px solid #e7e5e4;" alt="Foto de la loza" />
-          </td>
-          @endif
-        </tr>
-      </table>
     </div>
   </div>
   @endif
