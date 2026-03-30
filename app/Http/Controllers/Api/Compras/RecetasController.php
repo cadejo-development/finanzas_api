@@ -481,24 +481,27 @@ class RecetasController extends Controller
         $filename = uniqid('receta_', true) . '.' . $ext;
         $key      = 'recetas/fotos/' . $filename;
 
-        $s3 = new \Aws\S3\S3Client([
-            'region'      => env('AWS_DEFAULT_REGION', 'us-east-2'),
-            'version'     => 'latest',
-            'credentials' => [
-                'key'    => env('AWS_ACCESS_KEY_ID'),
-                'secret' => env('AWS_SECRET_ACCESS_KEY'),
-            ],
-        ]);
+        $bucket = config('filesystems.disks.s3.bucket');
+        $region = config('filesystems.disks.s3.region');
 
-        $cmd = $s3->getCommand('PutObject', [
-            'Bucket'      => env('AWS_BUCKET'),
-            'Key'         => $key,
-            'ContentType' => $mime,
-        ]);
+        try {
+            // Reutilizamos el cliente S3 que ya armó Laravel/Flysystem
+            /** @var \League\Flysystem\AwsS3V3\AwsS3V3Adapter $adapter */
+            $adapter = Storage::disk('s3')->getAdapter();
+            $client  = $adapter->getClient();
 
-        $presignedRequest = $s3->createPresignedRequest($cmd, '+15 minutes');
-        $presignedUrl     = (string) $presignedRequest->getUri();
-        $publicUrl        = 'https://' . env('AWS_BUCKET') . '.s3.' . env('AWS_DEFAULT_REGION', 'us-east-2') . '.amazonaws.com/' . $key;
+            $cmd = $client->getCommand('PutObject', [
+                'Bucket'      => $bucket,
+                'Key'         => $key,
+                'ContentType' => $mime,
+            ]);
+
+            $presignedUrl = (string) $client->createPresignedRequest($cmd, '+15 minutes')->getUri();
+        } catch (\Throwable $e) {
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+
+        $publicUrl = "https://{$bucket}.s3.{$region}.amazonaws.com/{$key}";
 
         return response()->json([
             'presigned_url' => $presignedUrl,
