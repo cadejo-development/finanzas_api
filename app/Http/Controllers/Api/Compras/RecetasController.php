@@ -176,6 +176,7 @@ class RecetasController extends Controller
             'categoria_id'        => 'nullable|integer|exists:compras.receta_categorias,id',
             'tipo_receta'         => 'nullable|in:plato,sub_receta',
             'platos_semana'       => 'required|integer|min:0',
+            'precio'              => 'nullable|numeric|min:0',
             'rendimiento'         => 'nullable|numeric|min:0',
             'rendimiento_unidad'  => 'nullable|string|max:20',
             'foto_plato'          => 'nullable|string|max:500',
@@ -210,10 +211,11 @@ class RecetasController extends Controller
                 'categoria_id'  => $validated['categoria_id'] ?? null,
                 'tipo_receta'        => $tipoReceta,
                 'platos_semana'      => $validated['platos_semana'],
+                'precio'             => $validated['precio'] ?? null,
                 'rendimiento'        => $validated['rendimiento'] ?? null,
                 'rendimiento_unidad' => $validated['rendimiento_unidad'] ?? null,
                 'foto_plato'         => $validated['foto_plato'] ?? null,
-                'foto_plateria' => $validated['foto_plateria'] ?? null,
+                'foto_plateria'      => $validated['foto_plateria'] ?? null,
                 'activa'        => true,
                 'aud_usuario'   => $usuario,
             ]);
@@ -261,6 +263,7 @@ class RecetasController extends Controller
             'categoria_id'        => 'nullable|integer|exists:compras.receta_categorias,id',
             'tipo_receta'         => 'nullable|in:plato,sub_receta',
             'platos_semana'       => 'sometimes|integer|min:0',
+            'precio'              => 'nullable|numeric|min:0',
             'rendimiento'         => 'nullable|numeric|min:0',
             'rendimiento_unidad'  => 'nullable|string|max:20',
             'activa'              => 'sometimes|boolean',
@@ -298,7 +301,7 @@ class RecetasController extends Controller
         DB::connection('compras')->transaction(function () use ($receta, $validated, $usuario) {
             $campos = array_intersect_key($validated, array_flip([
                 'nombre', 'descripcion', 'instrucciones', 'tipo', 'categoria_id',
-                'tipo_receta', 'platos_semana', 'rendimiento', 'rendimiento_unidad',
+                'tipo_receta', 'platos_semana', 'precio', 'rendimiento', 'rendimiento_unidad',
                 'activa', 'foto_plato', 'foto_plateria',
             ]));
             $receta->update(array_merge($campos, ['aud_usuario' => $usuario]));
