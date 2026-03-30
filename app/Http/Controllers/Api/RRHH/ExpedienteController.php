@@ -12,6 +12,8 @@ use App\Models\RRHH\ExpedienteDatosPersonales;
 use App\Models\RRHH\ExpedienteDireccion;
 use App\Models\RRHH\ExpedienteDocumento;
 use App\Models\RRHH\ExpedienteEstudio;
+use App\Models\RRHH\ExpedienteExperienciaLaboral;
+use App\Models\RRHH\ExpedienteIdioma;
 use App\Models\RRHH\Incapacidad;
 use App\Models\RRHH\Permiso;
 use App\Models\RRHH\Traslado;
@@ -101,10 +103,24 @@ class ExpedienteController extends RRHHBaseController
         $contactos       = ExpedienteContacto::where('empleado_id', $empleadoId)->orderBy('orden')->orderBy('id')->get();
         $direcciones     = ExpedienteDireccion::where('empleado_id', $empleadoId)->get();
         $documentos      = ExpedienteDocumento::where('empleado_id', $empleadoId)->get();
-        $estudios        = ExpedienteEstudio::where('empleado_id', $empleadoId)->orderByDesc('anio_graduacion')->get();
-        $archivos        = ExpedienteArchivo::where('empleado_id', $empleadoId)->orderByDesc('created_at')->get()
-            ->map(fn ($a) => array_merge($a->toArray(), [
-                'url' => url("/api/rrhh/expediente/{$empleadoId}/archivos/{$a->id}/descargar"),
+        $estudios       = ExpedienteEstudio::where('empleado_id', $empleadoId)->orderByDesc('anio_graduacion')->get();
+        $idiomas        = ExpedienteIdioma::where('empleado_id', $empleadoId)->get()
+            ->map(fn ($i) => array_merge($i->toArray(), [
+                'atestado_url' => $i->atestado_ruta
+                    ? url("/api/rrhh/expediente/{$empleadoId}/idiomas/{$i->id}/atestado")
+                    : null,
+            ]));
+        $experiencia    = ExpedienteExperienciaLaboral::where('empleado_id', $empleadoId)
+            ->orderByRaw('es_actual DESC, fecha_inicio DESC NULLS LAST')
+            ->get();
+        $documentos     = ExpedienteDocumento::where('empleado_id', $empleadoId)->get()
+            ->map(fn ($d) => array_merge($d->toArray(), [
+                'foto_frente_url' => $d->foto_frente_ruta
+                    ? url("/api/rrhh/expediente/{$empleadoId}/documentos/{$d->id}/foto/frente")
+                    : null,
+                'foto_reverso_url' => $d->foto_reverso_ruta
+                    ? url("/api/rrhh/expediente/{$empleadoId}/documentos/{$d->id}/foto/reverso")
+                    : null,
             ]));
 
         return response()->json([
@@ -116,7 +132,8 @@ class ExpedienteController extends RRHHBaseController
                 'direcciones'      => $direcciones,
                 'documentos'       => $documentos,
                 'estudios'         => $estudios,
-                'archivos'         => $archivos,
+                'idiomas'          => $idiomas,
+                'experiencia'      => $experiencia,
             ],
         ]);
     }
@@ -461,5 +478,176 @@ class ExpedienteController extends RRHHBaseController
         $archivo->delete();
 
         return response()->json(['success' => true, 'message' => 'Archivo eliminado.']);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Fotos de documentos  PATCH /{docId}/foto/{campo}  GET /{docId}/foto/{campo}
+    // ─────────────────────────────────────────────────────────────────────────
+    public function subirFotoDocumento(Request $request, int $empleadoId, int $docId, string $campo)
+    {
+        $this->autorizarAcceso($empleadoId);
+        if (!in_array($campo, ['frente', 'reverso'])) abort(422, 'Campo inválido.');
+
+        $request->validate(['foto' => 'required|file|image|max:5120']);
+
+        $doc  = ExpedienteDocumento::where('empleado_id', $empleadoId)->findOrFail($docId);
+        $file = $request->file('foto');
+        $path = $file->storeAs(
+            "rrhh/expedientes/{$empleadoId}/documentos",
+            uniqid('doc_', true) . '_' . $campo . '.' . $file->getClientOriginalExtension(),
+            'local'
+        );
+
+        $columna = "foto_{$campo}_ruta";
+        if ($doc->$columna) Storage::disk('local')->delete($doc->$columna);
+        $doc->update([$columna => $path]);
+
+        return response()->json([
+            'success' => true,
+            'url'     => url("/api/rrhh/expediente/{$empleadoId}/documentos/{$docId}/foto/{$campo}"),
+        ]);
+    }
+
+    public function verFotoDocumento(int $empleadoId, int $docId, string $campo)
+    {
+        $this->autorizarAcceso($empleadoId);
+        if (!in_array($campo, ['frente', 'reverso'])) abort(422);
+
+        $doc = ExpedienteDocumento::where('empleado_id', $empleadoId)->findOrFail($docId);
+        $ruta = $doc->{"foto_{$campo}_ruta"};
+        if (!$ruta || !Storage::disk('local')->exists($ruta)) abort(404);
+
+        return Storage::disk('local')->response($ruta);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Idiomas  POST / PUT /{id} / DELETE /{id} / GET /{id}/atestado
+    // ─────────────────────────────────────────────────────────────────────────
+    public function storeIdioma(Request $request, int $empleadoId): JsonResponse
+    {
+        $this->autorizarAcceso($empleadoId);
+
+        $data = $request->validate([
+            'idioma'          => 'required|string|max:80',
+            'nivel_habla'     => 'integer|min:0|max:100',
+            'nivel_escucha'   => 'integer|min:0|max:100',
+            'nivel_lectura'   => 'integer|min:0|max:100',
+            'nivel_escritura' => 'integer|min:0|max:100',
+            'notas'           => 'nullable|string|max:500',
+        ]);
+
+        $idioma = ExpedienteIdioma::create(array_merge($data, ['empleado_id' => $empleadoId]));
+
+        return response()->json(['success' => true, 'data' => $idioma], 201);
+    }
+
+    public function updateIdioma(Request $request, int $empleadoId, int $idiomaId): JsonResponse
+    {
+        $this->autorizarAcceso($empleadoId);
+        $idioma = ExpedienteIdioma::where('empleado_id', $empleadoId)->findOrFail($idiomaId);
+
+        $data = $request->validate([
+            'idioma'          => 'sometimes|string|max:80',
+            'nivel_habla'     => 'integer|min:0|max:100',
+            'nivel_escucha'   => 'integer|min:0|max:100',
+            'nivel_lectura'   => 'integer|min:0|max:100',
+            'nivel_escritura' => 'integer|min:0|max:100',
+            'notas'           => 'nullable|string|max:500',
+        ]);
+
+        $idioma->update($data);
+
+        return response()->json(['success' => true, 'data' => $idioma]);
+    }
+
+    public function destroyIdioma(int $empleadoId, int $idiomaId): JsonResponse
+    {
+        $this->autorizarAcceso($empleadoId);
+        $idioma = ExpedienteIdioma::where('empleado_id', $empleadoId)->findOrFail($idiomaId);
+        if ($idioma->atestado_ruta) Storage::disk('local')->delete($idioma->atestado_ruta);
+        $idioma->delete();
+        return response()->json(['success' => true]);
+    }
+
+    public function subirAtestadoIdioma(Request $request, int $empleadoId, int $idiomaId): JsonResponse
+    {
+        $this->autorizarAcceso($empleadoId);
+        $request->validate(['atestado' => 'required|file|max:10240']);
+
+        $idioma = ExpedienteIdioma::where('empleado_id', $empleadoId)->findOrFail($idiomaId);
+        $file   = $request->file('atestado');
+        $path   = $file->storeAs(
+            "rrhh/expedientes/{$empleadoId}/idiomas",
+            uniqid('ates_', true) . '.' . $file->getClientOriginalExtension(),
+            'local'
+        );
+
+        if ($idioma->atestado_ruta) Storage::disk('local')->delete($idioma->atestado_ruta);
+        $idioma->update(['atestado_ruta' => $path]);
+
+        return response()->json([
+            'success'      => true,
+            'atestado_url' => url("/api/rrhh/expediente/{$empleadoId}/idiomas/{$idiomaId}/atestado"),
+        ]);
+    }
+
+    public function verAtestadoIdioma(int $empleadoId, int $idiomaId)
+    {
+        $this->autorizarAcceso($empleadoId);
+        $idioma = ExpedienteIdioma::where('empleado_id', $empleadoId)->findOrFail($idiomaId);
+        if (!$idioma->atestado_ruta || !Storage::disk('local')->exists($idioma->atestado_ruta)) abort(404);
+        return Storage::disk('local')->download($idioma->atestado_ruta);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Experiencia Laboral  POST / PUT /{id} / DELETE /{id}
+    // ─────────────────────────────────────────────────────────────────────────
+    public function storeExperiencia(Request $request, int $empleadoId): JsonResponse
+    {
+        $this->autorizarAcceso($empleadoId);
+
+        $data = $request->validate([
+            'empresa'     => 'required|string|max:200',
+            'cargo'       => 'nullable|string|max:200',
+            'fecha_inicio'=> 'nullable|date',
+            'fecha_fin'   => 'nullable|date|after_or_equal:fecha_inicio',
+            'es_actual'   => 'boolean',
+            'descripcion' => 'nullable|string|max:2000',
+            'pais'        => 'nullable|string|max:80',
+        ]);
+
+        if ($data['es_actual'] ?? false) $data['fecha_fin'] = null;
+
+        $exp = ExpedienteExperienciaLaboral::create(array_merge($data, ['empleado_id' => $empleadoId]));
+
+        return response()->json(['success' => true, 'data' => $exp], 201);
+    }
+
+    public function updateExperiencia(Request $request, int $empleadoId, int $expId): JsonResponse
+    {
+        $this->autorizarAcceso($empleadoId);
+        $exp = ExpedienteExperienciaLaboral::where('empleado_id', $empleadoId)->findOrFail($expId);
+
+        $data = $request->validate([
+            'empresa'     => 'sometimes|string|max:200',
+            'cargo'       => 'nullable|string|max:200',
+            'fecha_inicio'=> 'nullable|date',
+            'fecha_fin'   => 'nullable|date',
+            'es_actual'   => 'boolean',
+            'descripcion' => 'nullable|string|max:2000',
+            'pais'        => 'nullable|string|max:80',
+        ]);
+
+        if ($data['es_actual'] ?? false) $data['fecha_fin'] = null;
+        $exp->update($data);
+
+        return response()->json(['success' => true, 'data' => $exp]);
+    }
+
+    public function destroyExperiencia(int $empleadoId, int $expId): JsonResponse
+    {
+        $this->autorizarAcceso($empleadoId);
+        ExpedienteExperienciaLaboral::where('empleado_id', $empleadoId)->findOrFail($expId)->delete();
+        return response()->json(['success' => true]);
     }
 }

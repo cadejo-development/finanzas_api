@@ -302,6 +302,22 @@ Route::prefix('rrhh/expediente')->middleware(['auth:sanctum', 'role:jefatura,por
     Route::post('{empleadoId}/archivos',                          [ExpedienteController::class, 'uploadArchivo']);
     Route::get('{empleadoId}/archivos/{archivoId}/descargar',     [ExpedienteController::class, 'descargarArchivo']);
     Route::delete('{empleadoId}/archivos/{archivoId}',            [ExpedienteController::class, 'destroyArchivo']);
+
+    // Fotos de documentos (frente / reverso)
+    Route::patch('{empleadoId}/documentos/{docId}/foto/{campo}',  [ExpedienteController::class, 'subirFotoDocumento']);
+    Route::get('{empleadoId}/documentos/{docId}/foto/{campo}',    [ExpedienteController::class, 'verFotoDocumento']);
+
+    // Idiomas
+    Route::post('{empleadoId}/idiomas',                           [ExpedienteController::class, 'storeIdioma']);
+    Route::put('{empleadoId}/idiomas/{idiomaId}',                 [ExpedienteController::class, 'updateIdioma']);
+    Route::delete('{empleadoId}/idiomas/{idiomaId}',              [ExpedienteController::class, 'destroyIdioma']);
+    Route::post('{empleadoId}/idiomas/{idiomaId}/atestado',       [ExpedienteController::class, 'subirAtestadoIdioma']);
+    Route::get('{empleadoId}/idiomas/{idiomaId}/atestado',        [ExpedienteController::class, 'verAtestadoIdioma']);
+
+    // Experiencia Laboral
+    Route::post('{empleadoId}/experiencia',                       [ExpedienteController::class, 'storeExperiencia']);
+    Route::put('{empleadoId}/experiencia/{expId}',                [ExpedienteController::class, 'updateExperiencia']);
+    Route::delete('{empleadoId}/experiencia/{expId}',             [ExpedienteController::class, 'destroyExperiencia']);
 });
 
 // ─── RRHH Admin — Departamentos (portal_admin o rrhh_admin) ─────────────────
