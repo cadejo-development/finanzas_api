@@ -217,14 +217,6 @@ class RecetasController extends Controller
         $tipoReceta = $validated['tipo_receta'] ?? 'plato';
         $usuario    = $request->user()?->email ?? 'sistema';
 
-        // Validar: sub-receta solo puede tener materias primas como ingredientes
-        if ($tipoReceta === 'sub_receta') {
-            foreach ($validated['ingredientes'] ?? [] as $ing) {
-                if (!empty($ing['sub_receta_id'])) {
-                    return response()->json(['message' => 'Las sub-recetas solo pueden contener materias primas, no otras sub-recetas.'], 422);
-                }
-            }
-        }
 
         $receta = DB::connection('compras')->transaction(function () use ($validated, $tipoReceta, $usuario): Receta {
             $receta = Receta::create([
@@ -313,14 +305,6 @@ class RecetasController extends Controller
         $tipoReceta = $validated['tipo_receta'] ?? $receta->tipo_receta;
         $usuario    = $request->user()?->email ?? 'sistema';
 
-        // Validar: sub-receta solo puede tener materias primas
-        if ($tipoReceta === 'sub_receta' && array_key_exists('ingredientes', $validated)) {
-            foreach ($validated['ingredientes'] as $ing) {
-                if (!empty($ing['sub_receta_id'])) {
-                    return response()->json(['message' => 'Las sub-recetas solo pueden contener materias primas, no otras sub-recetas.'], 422);
-                }
-            }
-        }
 
         DB::connection('compras')->transaction(function () use ($receta, $validated, $usuario) {
             $campos = array_intersect_key($validated, array_flip([
