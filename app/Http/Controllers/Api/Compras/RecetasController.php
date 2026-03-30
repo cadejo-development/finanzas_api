@@ -485,10 +485,14 @@ class RecetasController extends Controller
         $region = config('filesystems.disks.s3.region');
 
         try {
-            // Reutilizamos el cliente S3 que ya armó Laravel/Flysystem
-            /** @var \League\Flysystem\AwsS3V3\AwsS3V3Adapter $adapter */
-            $adapter = Storage::disk('s3')->getAdapter();
-            $client  = $adapter->getClient();
+            $client = new \Aws\S3\S3Client([
+                'region'      => $region,
+                'version'     => 'latest',
+                'credentials' => [
+                    'key'    => config('filesystems.disks.s3.key'),
+                    'secret' => config('filesystems.disks.s3.secret'),
+                ],
+            ]);
 
             $cmd = $client->getCommand('PutObject', [
                 'Bucket'      => $bucket,
