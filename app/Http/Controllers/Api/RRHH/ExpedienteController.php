@@ -718,4 +718,27 @@ class ExpedienteController extends RRHHBaseController
         ExpedienteCuentaBanco::where('empleado_id', $empleadoId)->findOrFail($cuentaId)->delete();
         return response()->json(['success' => true, 'message' => 'Cuenta eliminada.']);
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PATCH /api/rrhh/expediente/{empleadoId}/fecha-ingreso
+    // Actualiza la fecha de ingreso del empleado en la DB core (pgsql).
+    // Solo rrhh_admin puede ejecutar esta acción.
+    // ─────────────────────────────────────────────────────────────────────────
+    public function updateFechaIngreso(Request $request, int $empleadoId): JsonResponse
+    {
+        if (!$this->esAdminRrhh()) {
+            abort(403, 'Solo administradores de RRHH pueden modificar la fecha de ingreso.');
+        }
+
+        $data = $request->validate([
+            'fecha_ingreso' => 'required|date',
+        ]);
+
+        \DB::connection('pgsql')
+            ->table('empleados')
+            ->where('id', $empleadoId)
+            ->update(['fecha_ingreso' => $data['fecha_ingreso']]);
+
+        return response()->json(['success' => true, 'fecha_ingreso' => $data['fecha_ingreso']]);
+    }
 }

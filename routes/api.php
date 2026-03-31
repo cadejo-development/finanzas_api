@@ -331,6 +331,9 @@ Route::prefix('rrhh/expediente')->middleware(['auth:sanctum', 'role:jefatura,por
     Route::post('{empleadoId}/cuentas-banco',                     [ExpedienteController::class, 'storeCuentaBanco']);
     Route::put('{empleadoId}/cuentas-banco/{cuentaId}',           [ExpedienteController::class, 'updateCuentaBanco']);
     Route::delete('{empleadoId}/cuentas-banco/{cuentaId}',        [ExpedienteController::class, 'destroyCuentaBanco']);
+
+    // Fecha de ingreso (solo rrhh_admin)
+    Route::patch('{empleadoId}/fecha-ingreso',                    [ExpedienteController::class, 'updateFechaIngreso']);
 });
 
 // ─── RRHH Admin — Departamentos (portal_admin o rrhh_admin) ─────────────────
