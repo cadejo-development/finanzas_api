@@ -45,7 +45,7 @@ class AmonestacionesController extends RRHHBaseController
             'dias_suspension.*'  => 'date',
         ]);
 
-        if (!$this->esSubordinado($validated['empleado_id'])) {
+        if (!$this->puedeGestionar($validated['empleado_id'])) {
             return response()->json([
                 'success' => false,
                 'message' => 'El empleado no pertenece a tu equipo.',

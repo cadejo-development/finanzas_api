@@ -49,7 +49,7 @@ class PermisosController extends RRHHBaseController
             'observaciones_jefe'=> 'nullable|string|max:500',
         ]);
 
-        if (!$this->esSubordinado($validated['empleado_id'])) {
+        if (!$this->puedeGestionar($validated['empleado_id'])) {
             return response()->json([
                 'success' => false,
                 'message' => 'El empleado no pertenece a tu equipo.',
@@ -70,7 +70,7 @@ class PermisosController extends RRHHBaseController
 
         $permiso = Permiso::create(array_merge($validated, [
             'jefe_id'     => $jefe->id,
-            'estado'      => 'pendiente',
+            'estado'      => $this->estadoParaEmpleado($validated['empleado_id']),
             'aud_usuario' => Auth::user()->email,
         ]));
 

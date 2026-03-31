@@ -76,17 +76,29 @@ abstract class RRHHBaseController extends Controller
                     ->pluck('id')
                     ->all();
             }
+
+            // No department configured — only allow sucursal-wide scope for
+            // restaurant branches (tipo = 'operativa'). Corporate branches
+            // (area_corporativa) without a dept assignment see nobody.
+            $sucursalTipo = DB::connection('pgsql')
+                ->table('sucursales')
+                ->where('id', $user->sucursal_id)
+                ->value('tipo');
+
+            if ($sucursalTipo === 'operativa') {
+                return DB::connection('pgsql')
+                    ->table('empleados')
+                    ->where('sucursal_id', $user->sucursal_id)
+                    ->where('activo', true)
+                    ->pluck('id')
+                    ->filter(fn($id) => $id !== $jefeEmpleadoId)
+                    ->values()
+                    ->all();
+            }
         }
 
-        // Fallback: misma sucursal (para retrocompatibilidad)
-        return DB::connection('pgsql')
-            ->table('empleados')
-            ->where('sucursal_id', $user->sucursal_id)
-            ->where('activo', true)
-            ->pluck('id')
-            ->filter(fn($id) => $id !== $jefeEmpleadoId)
-            ->values()
-            ->all();
+        // Corporate branch with no dept → jefe sees no subordinates
+        return [];
     }
 
     /**
@@ -110,6 +122,47 @@ abstract class RRHHBaseController extends Controller
         }
 
         return $query->pluck('id')->all();
+    }
+
+    /**
+     * Verifica si el empleado_id es el mismo empleado del usuario autenticado.
+     */
+    protected function esEmpleadoPropio(int $empleadoId): bool
+    {
+        try {
+            return $this->getJefeEmpleado()->id === $empleadoId;
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Devuelve true si el usuario puede gestionar al empleado dado:
+     *  - rrhh_admin: cualquier empleado activo.
+     *  - jefatura: sus subordinados O su propio registro.
+     */
+    protected function puedeGestionar(int $empleadoId): bool
+    {
+        if ($this->esAdminRrhh()) {
+            return DB::connection('pgsql')
+                ->table('empleados')
+                ->where('id', $empleadoId)
+                ->where('activo', true)
+                ->exists();
+        }
+
+        return $this->esEmpleadoPropio($empleadoId) || $this->esSubordinado($empleadoId);
+    }
+
+    /**
+     * Devuelve el estado inicial para un registro según quién lo crea:
+     *  - rrhh_admin o jefatura para subordinados → 'aprobado'
+     *  - jefatura para sí mismo → 'pendiente'
+     */
+    protected function estadoParaEmpleado(int $empleadoId): string
+    {
+        if ($this->esAdminRrhh()) return 'aprobado';
+        return $this->esEmpleadoPropio($empleadoId) ? 'pendiente' : 'aprobado';
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Models\RRHH\CambioSalarial;
 use App\Models\RRHH\Desvinculacion;
 use App\Models\RRHH\ExpedienteArchivo;
 use App\Models\RRHH\ExpedienteContacto;
+use App\Models\RRHH\ExpedienteCuentaBanco;
 use App\Models\RRHH\ExpedienteDatosPersonales;
 use App\Models\RRHH\ExpedienteDireccion;
 use App\Models\RRHH\ExpedienteDocumento;
@@ -122,6 +123,7 @@ class ExpedienteController extends RRHHBaseController
                     ? url("/api/rrhh/expediente/{$empleadoId}/documentos/{$d->id}/foto/reverso")
                     : null,
             ]));
+        $cuentasBanco   = ExpedienteCuentaBanco::where('empleado_id', $empleadoId)->orderByDesc('es_principal')->orderBy('id')->get();
 
         return response()->json([
             'success' => true,
@@ -134,6 +136,7 @@ class ExpedienteController extends RRHHBaseController
                 'estudios'         => $estudios,
                 'idiomas'          => $idiomas,
                 'experiencia'      => $experiencia,
+                'cuentas_banco'    => $cuentasBanco,
             ],
         ]);
     }
@@ -655,5 +658,64 @@ class ExpedienteController extends RRHHBaseController
         $this->autorizarAcceso($empleadoId);
         ExpedienteExperienciaLaboral::where('empleado_id', $empleadoId)->findOrFail($expId)->delete();
         return response()->json(['success' => true]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Cuentas Bancarias  POST / PUT /{id} / DELETE /{id}
+    // ─────────────────────────────────────────────────────────────────────────
+    public function storeCuentaBanco(Request $request, int $empleadoId): JsonResponse
+    {
+        $this->autorizarAcceso($empleadoId);
+
+        $data = $request->validate([
+            'banco'         => 'required|string|max:100',
+            'tipo_cuenta'   => 'required|in:ahorros,corriente',
+            'numero_cuenta' => 'required|string|max:40',
+            'titular'       => 'nullable|string|max:120',
+            'es_principal'  => 'boolean',
+        ]);
+
+        if (!empty($data['es_principal'])) {
+            ExpedienteCuentaBanco::where('empleado_id', $empleadoId)->update(['es_principal' => false]);
+        }
+
+        $cuenta = ExpedienteCuentaBanco::create(array_merge($data, [
+            'empleado_id' => $empleadoId,
+            'aud_usuario' => $request->user()?->email,
+        ]));
+
+        return response()->json(['success' => true, 'data' => $cuenta], 201);
+    }
+
+    public function updateCuentaBanco(Request $request, int $empleadoId, int $cuentaId): JsonResponse
+    {
+        $this->autorizarAcceso($empleadoId);
+
+        $cuenta = ExpedienteCuentaBanco::where('empleado_id', $empleadoId)->findOrFail($cuentaId);
+
+        $data = $request->validate([
+            'banco'         => 'sometimes|string|max:100',
+            'tipo_cuenta'   => 'sometimes|in:ahorros,corriente',
+            'numero_cuenta' => 'sometimes|string|max:40',
+            'titular'       => 'nullable|string|max:120',
+            'es_principal'  => 'boolean',
+        ]);
+
+        if (!empty($data['es_principal'])) {
+            ExpedienteCuentaBanco::where('empleado_id', $empleadoId)
+                ->where('id', '!=', $cuentaId)
+                ->update(['es_principal' => false]);
+        }
+
+        $cuenta->update(array_merge($data, ['aud_usuario' => $request->user()?->email]));
+
+        return response()->json(['success' => true, 'data' => $cuenta]);
+    }
+
+    public function destroyCuentaBanco(int $empleadoId, int $cuentaId): JsonResponse
+    {
+        $this->autorizarAcceso($empleadoId);
+        ExpedienteCuentaBanco::where('empleado_id', $empleadoId)->findOrFail($cuentaId)->delete();
+        return response()->json(['success' => true, 'message' => 'Cuenta eliminada.']);
     }
 }
