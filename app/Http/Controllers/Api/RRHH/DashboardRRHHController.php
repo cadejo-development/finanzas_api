@@ -82,6 +82,7 @@ class DashboardRRHHController extends RRHHBaseController
         return response()->json([
             'success' => true,
             'data'    => [
+                'es_admin'               => $this->esAdminRrhh(),
                 'total_empleados'        => $totalEmpleados,
                 'permisos_pendientes'    => $permisosPendientes,
                 'vacaciones_pendientes'  => $vacacionesPendientes,
