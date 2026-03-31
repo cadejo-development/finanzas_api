@@ -326,6 +326,11 @@ Route::prefix('rrhh/expediente')->middleware(['auth:sanctum', 'role:jefatura,por
     Route::post('{empleadoId}/experiencia',                       [ExpedienteController::class, 'storeExperiencia']);
     Route::put('{empleadoId}/experiencia/{expId}',                [ExpedienteController::class, 'updateExperiencia']);
     Route::delete('{empleadoId}/experiencia/{expId}',             [ExpedienteController::class, 'destroyExperiencia']);
+
+    // Cuentas Bancarias
+    Route::post('{empleadoId}/cuentas-banco',                     [ExpedienteController::class, 'storeCuentaBanco']);
+    Route::put('{empleadoId}/cuentas-banco/{cuentaId}',           [ExpedienteController::class, 'updateCuentaBanco']);
+    Route::delete('{empleadoId}/cuentas-banco/{cuentaId}',        [ExpedienteController::class, 'destroyCuentaBanco']);
 });
 
 // ─── RRHH Admin — Departamentos (portal_admin o rrhh_admin) ─────────────────
