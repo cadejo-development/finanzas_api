@@ -14,9 +14,12 @@ class ExpedienteDireccion extends Model
         'departamento_id', 'distrito_id', 'municipio_id',
         'departamento_geo', 'municipio',
         'direccion', 'referencia', 'es_principal',
+        'latitud', 'longitud',
     ];
 
     protected $casts = [
         'es_principal' => 'boolean',
+        'latitud'      => 'float',
+        'longitud'     => 'float',
     ];
 }

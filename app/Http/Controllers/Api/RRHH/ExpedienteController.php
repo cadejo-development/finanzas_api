@@ -273,6 +273,8 @@ class ExpedienteController extends RRHHBaseController
             'direccion'       => 'required|string|max:255',
             'referencia'      => 'nullable|string|max:255',
             'es_principal'    => 'boolean',
+            'latitud'         => 'nullable|numeric|between:-90,90',
+            'longitud'        => 'nullable|numeric|between:-180,180',
         ]);
 
         $direccion = ExpedienteDireccion::create(array_merge($data, ['empleado_id' => $empleadoId]));
@@ -296,6 +298,8 @@ class ExpedienteController extends RRHHBaseController
             'direccion'       => 'sometimes|string|max:255',
             'referencia'      => 'nullable|string|max:255',
             'es_principal'    => 'boolean',
+            'latitud'         => 'nullable|numeric|between:-90,90',
+            'longitud'        => 'nullable|numeric|between:-180,180',
         ]);
 
         $dir->update($data);
