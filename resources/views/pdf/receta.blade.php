@@ -138,9 +138,9 @@ body {
 }
 .ing tbody td.num { text-align: right; white-space: nowrap; color: #1a1a1a; }
 
-/* Sub-receta: borde inferior como subrayado (evita el bug de color azul de DomPDF) */
-.ing tbody td.sub-ing {
-  border-bottom: 1.5px solid #1a1a1a;
+/* Sub-receta: subrayado solo en el span de texto, la celda mantiene borde normal */
+.sub-ing-span {
+  border-bottom: 1px solid #1a1a1a;
   color: #1a1a1a;
 }
 
@@ -186,7 +186,12 @@ body {
         <td class="top-right-cell"></td>
       </tr>
       <tr>
-        <td class="location-cell">{{ $sucursal_nombre ?? 'Cadejo Brewing Company' }}</td>
+        <td class="location-cell">
+          {{ $sucursal_nombre ?? 'Cadejo Brewing Company' }}
+          @if(!empty($sucursales_nombres))
+            &nbsp;—&nbsp;{{ $sucursales_nombres }}
+          @endif
+        </td>
         <td class="fecha-cell">Fecha: {{ \Carbon\Carbon::now('America/El_Salvador')->format('d/m/Y') }}</td>
       </tr>
     </tbody>
@@ -265,8 +270,12 @@ body {
       @if($n > 0)
         @foreach($ingredientes as $idx => $ing)
         <tr>
-          <td class="{{ $ing['es_sub_receta'] ? 'sub-ing' : '' }}" style="color:#1a1a1a;">
-            {{ $ing['producto_nombre'] ?? '—' }}
+          <td style="color:#1a1a1a;">
+            @if($ing['es_sub_receta'])
+              <span class="sub-ing-span">{{ $ing['producto_nombre'] ?? '—' }}</span>
+            @else
+              {{ $ing['producto_nombre'] ?? '—' }}
+            @endif
           </td>
           <td class="num" style="color:#1a1a1a;">{{ number_format((float)($ing['cantidad_por_plato'] ?? 0), 3) }}</td>
           <td style="color:#1a1a1a;">{{ $ing['unidad'] ?? '' }}</td>

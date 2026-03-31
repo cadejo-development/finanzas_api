@@ -149,6 +149,7 @@ class RecetasController extends Controller
     {
         $receta = Receta::with([
             'categoria',
+            'sucursalConfig',
             'ingredientes.producto',
             'ingredientes.subReceta.productoAsociado',
             'ingredientes.subReceta.ingredientes.producto',
@@ -169,13 +170,25 @@ class RecetasController extends Controller
         $fotoPlateria   = $request->input('foto_plateria_b64');
         $sucursalNombre = $request->input('sucursal_nombre', 'Cadejo Brewing Company');
 
+        // Obtener nombres de todas las sucursales activas de esta receta
+        $sucursalIds = $receta->sucursalConfig
+            ->where('activa', true)
+            ->pluck('sucursal_id')
+            ->filter()
+            ->unique()
+            ->values();
+        $sucursalesNombres = $sucursalIds->isNotEmpty()
+            ? \App\Models\Sucursal::whereIn('id', $sucursalIds)->pluck('nombre')->join(' / ')
+            : null;
+
         try {
             $pdf = Pdf::loadView('pdf.receta', [
                 'receta'          => $data,
                 'costo_total'     => $costoIngredientes,
                 'foto_plato'      => $fotoPlato,
                 'foto_plateria'   => $fotoPlateria,
-                'sucursal_nombre' => $sucursalNombre,
+                'sucursal_nombre'   => $sucursalNombre,
+                'sucursales_nombres' => $sucursalesNombres,
             ])->setPaper('letter', 'portrait');
 
             $nombre = preg_replace('/[^A-Za-z0-9_\-]/', '_', $receta->nombre);
