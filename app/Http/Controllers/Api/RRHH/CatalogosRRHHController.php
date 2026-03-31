@@ -43,12 +43,16 @@ class CatalogosRRHHController extends RRHHBaseController
                 $equipoQuery->where('e.departamento_id', (int) $did);
             }
         } else {
-            // Jefatura ve solo sus subordinados directos (departamento a cargo)
+            // Jefatura ve sus subordinados + su propio registro
             $subordinadosIds = $this->getSubordinadosIds();
-            if (empty($subordinadosIds)) {
-                $equipoQuery->whereRaw('1=0'); // sin subordinados → lista vacía
+            $idsVisibles = $jefeEmpleadoId
+                ? array_unique(array_merge([$jefeEmpleadoId], $subordinadosIds))
+                : $subordinadosIds;
+
+            if (empty($idsVisibles)) {
+                $equipoQuery->whereRaw('1=0');
             } else {
-                $equipoQuery->whereIn('e.id', $subordinadosIds);
+                $equipoQuery->whereIn('e.id', $idsVisibles);
             }
         }
 
