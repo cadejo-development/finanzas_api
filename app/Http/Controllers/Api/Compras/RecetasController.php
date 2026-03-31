@@ -165,15 +165,17 @@ class RecetasController extends Controller
         $data['costo_total'] = $costoIngredientes;
 
         // Fotos enviadas como base64 desde el browser
-        $fotoPlato    = $request->input('foto_plato_b64');
-        $fotoPlateria = $request->input('foto_plateria_b64');
+        $fotoPlato      = $request->input('foto_plato_b64');
+        $fotoPlateria   = $request->input('foto_plateria_b64');
+        $sucursalNombre = $request->input('sucursal_nombre', 'Cadejo Brewing Company');
 
         try {
             $pdf = Pdf::loadView('pdf.receta', [
-                'receta'        => $data,
-                'costo_total'   => $costoIngredientes,
-                'foto_plato'    => $fotoPlato,
-                'foto_plateria' => $fotoPlateria,
+                'receta'          => $data,
+                'costo_total'     => $costoIngredientes,
+                'foto_plato'      => $fotoPlato,
+                'foto_plateria'   => $fotoPlateria,
+                'sucursal_nombre' => $sucursalNombre,
             ])->setPaper('letter', 'portrait');
 
             $nombre = preg_replace('/[^A-Za-z0-9_\-]/', '_', $receta->nombre);
