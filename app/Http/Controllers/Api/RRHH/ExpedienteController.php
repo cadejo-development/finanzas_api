@@ -722,13 +722,10 @@ class ExpedienteController extends RRHHBaseController
     // ─────────────────────────────────────────────────────────────────────────
     // PATCH /api/rrhh/expediente/{empleadoId}/fecha-ingreso
     // Actualiza la fecha de ingreso del empleado en la DB core (pgsql).
-    // Solo rrhh_admin puede ejecutar esta acción.
     // ─────────────────────────────────────────────────────────────────────────
     public function updateFechaIngreso(Request $request, int $empleadoId): JsonResponse
     {
-        if (!$this->esAdminRrhh()) {
-            abort(403, 'Solo administradores de RRHH pueden modificar la fecha de ingreso.');
-        }
+        $this->autorizarAcceso($empleadoId);
 
         $data = $request->validate([
             'fecha_ingreso' => 'required|date',
