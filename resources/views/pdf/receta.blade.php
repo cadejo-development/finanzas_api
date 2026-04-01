@@ -131,18 +131,12 @@ body {
 .ing tbody td {
   padding: 5px 10px;
   font-size: 10.5px;
-  border-right: 1px solid #ccc;
-  border-bottom: 1px solid #e0e0e0;
+  border-right: 1.5px solid #444;
+  border-bottom: 1.5px solid #444;
   vertical-align: top;
   color: #1a1a1a;
 }
 .ing tbody td.num { text-align: right; white-space: nowrap; color: #1a1a1a; }
-
-/* Sub-receta: subrayado solo en el span de texto, la celda mantiene borde normal */
-.sub-ing-span {
-  border-bottom: 1px solid #1a1a1a;
-  color: #1a1a1a;
-}
 
 .ing tbody td.proc {
   border-left: 1.5px solid #444;
@@ -270,13 +264,7 @@ body {
       @if($n > 0)
         @foreach($ingredientes as $idx => $ing)
         <tr>
-          <td style="color:#1a1a1a;">
-            @if($ing['es_sub_receta'])
-              <span class="sub-ing-span">{{ $ing['producto_nombre'] ?? '—' }}</span>
-            @else
-              {{ $ing['producto_nombre'] ?? '—' }}
-            @endif
-          </td>
+          <td style="color:#1a1a1a;">{{ $ing['producto_nombre'] ?? '—' }}</td>
           <td class="num" style="color:#1a1a1a;">{{ number_format((float)($ing['cantidad_por_plato'] ?? 0), 3) }}</td>
           <td style="color:#1a1a1a;">{{ $ing['unidad'] ?? '' }}</td>
           @if($idx === 0)
