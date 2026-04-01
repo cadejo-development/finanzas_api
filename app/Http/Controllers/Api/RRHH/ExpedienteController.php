@@ -56,6 +56,25 @@ class ExpedienteController extends RRHHBaseController
         ]);
     }
 
+    private function s3TemporaryUrl(string $key, int $minutes = 60): string
+    {
+        $client = new \Aws\S3\S3Client([
+            'region'      => config('filesystems.disks.s3.region'),
+            'version'     => 'latest',
+            'credentials' => [
+                'key'    => config('filesystems.disks.s3.key'),
+                'secret' => config('filesystems.disks.s3.secret'),
+            ],
+        ]);
+
+        $cmd = $client->getCommand('GetObject', [
+            'Bucket' => config('filesystems.disks.s3.bucket'),
+            'Key'    => $key,
+        ]);
+
+        return (string) $client->createPresignedRequest($cmd, "+{$minutes} minutes")->getUri();
+    }
+
     /**
      * Verifica que el usuario autenticado puede acceder al expediente del empleado dado.
      * Admin puede ver a todos; jefatura solo a sí mismo y sus subordinados.
@@ -476,7 +495,7 @@ class ExpedienteController extends RRHHBaseController
         $this->autorizarAcceso($empleadoId);
         $estudio = ExpedienteEstudio::where('empleado_id', $empleadoId)->findOrFail($estudioId);
         if (!$estudio->atestado_ruta) abort(404);
-        return redirect(Storage::disk('s3')->temporaryUrl($estudio->atestado_ruta, now()->addMinutes(60)));
+        return redirect($this->s3TemporaryUrl($estudio->atestado_ruta));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -548,7 +567,7 @@ class ExpedienteController extends RRHHBaseController
             abort(404, 'Archivo no encontrado.');
         }
 
-        return redirect(Storage::disk('s3')->temporaryUrl($archivo->archivo_ruta, now()->addMinutes(60)));
+        return redirect($this->s3TemporaryUrl($archivo->archivo_ruta));
     }
 
     public function destroyArchivo(int $empleadoId, int $archivoId): JsonResponse
@@ -599,7 +618,7 @@ class ExpedienteController extends RRHHBaseController
         $ruta = $doc->{"foto_{$campo}_ruta"};
         if (!$ruta) abort(404);
 
-        return redirect(Storage::disk('s3')->temporaryUrl($ruta, now()->addMinutes(60)));
+        return redirect($this->s3TemporaryUrl($ruta));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -681,7 +700,7 @@ class ExpedienteController extends RRHHBaseController
         $this->autorizarAcceso($empleadoId);
         $idioma = ExpedienteIdioma::where('empleado_id', $empleadoId)->findOrFail($idiomaId);
         if (!$idioma->atestado_ruta) abort(404);
-        return redirect(Storage::disk('s3')->temporaryUrl($idioma->atestado_ruta, now()->addMinutes(60)));
+        return redirect($this->s3TemporaryUrl($idioma->atestado_ruta));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
