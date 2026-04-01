@@ -30,6 +30,15 @@ RUN apk add --no-cache \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install pdo_pgsql bcmath gd
 
+# Increase PHP upload/memory limits (default CLI limits are 2M/128M which
+# cause 502 Bad Gateway on any file upload through App Runner)
+RUN { \
+        echo "upload_max_filesize = 50M"; \
+        echo "post_max_size = 55M"; \
+        echo "memory_limit = 256M"; \
+        echo "max_execution_time = 120"; \
+    } > /usr/local/etc/php/conf.d/uploads.ini
+
 WORKDIR /var/www/html
 
 COPY --from=vendor /app/vendor ./vendor
