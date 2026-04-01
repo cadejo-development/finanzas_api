@@ -63,7 +63,7 @@ class ExpedienteController extends RRHHBaseController
             ->latest()
             ->first();
         if ($fotoPerfil) {
-            $fotoRuta = Storage::disk('local')->exists($fotoPerfil->archivo_ruta)
+            $fotoRuta = Storage::disk('s3')->exists($fotoPerfil->archivo_ruta)
                 ? url("/api/rrhh/expediente/{$empleadoId}/archivos/{$fotoPerfil->id}/descargar")
                 : null;
         }
@@ -416,7 +416,7 @@ class ExpedienteController extends RRHHBaseController
     {
         $this->autorizarAcceso($empleadoId);
         $estudio = ExpedienteEstudio::where('empleado_id', $empleadoId)->findOrFail($estudioId);
-        if ($estudio->atestado_ruta) Storage::disk('local')->delete($estudio->atestado_ruta);
+        if ($estudio->atestado_ruta) Storage::disk('s3')->delete($estudio->atestado_ruta);
         $estudio->delete();
         return response()->json(['success' => true, 'message' => 'Estudio eliminado.']);
     }
@@ -431,20 +431,20 @@ class ExpedienteController extends RRHHBaseController
         $estudio = ExpedienteEstudio::where('empleado_id', $empleadoId)->findOrFail($estudioId);
         $file    = $request->file('atestado');
         $path    = $file->storeAs(
-            "rrhh/expedientes/{$empleadoId}/atestados",
-            uniqid('est_', true) . '.' . $file->getClientOriginalExtension(),
-            'local'
+            'rrhh/expediente_empleado/atestados',
+            "{$empleadoId}_" . uniqid('est_', true) . '.' . $file->getClientOriginalExtension(),
+            's3'
         );
 
-        if ($estudio->atestado_ruta) Storage::disk('local')->delete($estudio->atestado_ruta);
+        if ($estudio->atestado_ruta) Storage::disk('s3')->delete($estudio->atestado_ruta);
         $estudio->update([
             'atestado_ruta' => $path,
             'atestado_mime' => $file->getMimeType(),
         ]);
 
         return response()->json([
-            'success'      => true,
-            'atestado_url' => url("/api/rrhh/expediente/{$empleadoId}/estudios/{$estudioId}/atestado"),
+            'success'       => true,
+            'atestado_url'  => url("/api/rrhh/expediente/{$empleadoId}/estudios/{$estudioId}/atestado"),
             'atestado_mime' => $file->getMimeType(),
         ]);
     }
@@ -453,14 +453,8 @@ class ExpedienteController extends RRHHBaseController
     {
         $this->autorizarAcceso($empleadoId);
         $estudio = ExpedienteEstudio::where('empleado_id', $empleadoId)->findOrFail($estudioId);
-        if (!$estudio->atestado_ruta || !Storage::disk('local')->exists($estudio->atestado_ruta)) {
-            abort(404);
-        }
-        $mime = $estudio->atestado_mime ?? 'application/octet-stream';
-        return Storage::disk('local')->response($estudio->atestado_ruta, null, [
-            'Content-Type'        => $mime,
-            'Content-Disposition' => 'inline',
-        ]);
+        if (!$estudio->atestado_ruta) abort(404);
+        return redirect(Storage::disk('s3')->temporaryUrl($estudio->atestado_ruta, now()->addMinutes(60)));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -477,13 +471,14 @@ class ExpedienteController extends RRHHBaseController
             'descripcion' => 'nullable|string|max:255',
         ]);
 
-        $file  = $request->file('archivo');
-        $ext   = $file->getClientOriginalExtension();
-        $tipo  = $request->input('tipo');
-        $path  = $file->storeAs(
-            "rrhh/expedientes/{$empleadoId}/{$tipo}",
-            uniqid('', true) . ".{$ext}",
-            'local'
+        $file    = $request->file('archivo');
+        $ext     = $file->getClientOriginalExtension();
+        $tipo    = $request->input('tipo');
+        $carpeta = $tipo === 'foto_perfil' ? 'foto_perfil' : 'atestados';
+        $path    = $file->storeAs(
+            "rrhh/expediente_empleado/{$carpeta}",
+            "{$empleadoId}_" . uniqid('', true) . ".{$ext}",
+            's3'
         );
 
         // Si es foto de perfil, eliminar la anterior
@@ -492,7 +487,7 @@ class ExpedienteController extends RRHHBaseController
                 ->where('tipo', 'foto_perfil')
                 ->get()
                 ->each(function ($a) {
-                    Storage::disk('local')->delete($a->archivo_ruta);
+                    Storage::disk('s3')->delete($a->archivo_ruta);
                     $a->delete();
                 });
         }
@@ -524,11 +519,11 @@ class ExpedienteController extends RRHHBaseController
 
         $archivo = ExpedienteArchivo::where('empleado_id', $empleadoId)->findOrFail($archivoId);
 
-        if (!Storage::disk('local')->exists($archivo->archivo_ruta)) {
+        if (!Storage::disk('s3')->exists($archivo->archivo_ruta)) {
             abort(404, 'Archivo no encontrado.');
         }
 
-        return Storage::disk('local')->download($archivo->archivo_ruta, $archivo->nombre);
+        return redirect(Storage::disk('s3')->temporaryUrl($archivo->archivo_ruta, now()->addMinutes(60)));
     }
 
     public function destroyArchivo(int $empleadoId, int $archivoId): JsonResponse
@@ -536,7 +531,7 @@ class ExpedienteController extends RRHHBaseController
         $this->autorizarAcceso($empleadoId);
 
         $archivo = ExpedienteArchivo::where('empleado_id', $empleadoId)->findOrFail($archivoId);
-        Storage::disk('local')->delete($archivo->archivo_ruta);
+        Storage::disk('s3')->delete($archivo->archivo_ruta);
         $archivo->delete();
 
         return response()->json(['success' => true, 'message' => 'Archivo eliminado.']);
@@ -555,13 +550,13 @@ class ExpedienteController extends RRHHBaseController
         $doc  = ExpedienteDocumento::where('empleado_id', $empleadoId)->findOrFail($docId);
         $file = $request->file('foto');
         $path = $file->storeAs(
-            "rrhh/expedientes/{$empleadoId}/documentos",
-            uniqid('doc_', true) . '_' . $campo . '.' . $file->getClientOriginalExtension(),
-            'local'
+            'rrhh/expediente_empleado/documentos_personales',
+            "{$empleadoId}_" . uniqid('doc_', true) . "_{$campo}." . $file->getClientOriginalExtension(),
+            's3'
         );
 
         $columna = "foto_{$campo}_ruta";
-        if ($doc->$columna) Storage::disk('local')->delete($doc->$columna);
+        if ($doc->$columna) Storage::disk('s3')->delete($doc->$columna);
         $doc->update([$columna => $path]);
 
         return response()->json([
@@ -575,11 +570,11 @@ class ExpedienteController extends RRHHBaseController
         $this->autorizarAcceso($empleadoId);
         if (!in_array($campo, ['frente', 'reverso'])) abort(422);
 
-        $doc = ExpedienteDocumento::where('empleado_id', $empleadoId)->findOrFail($docId);
+        $doc  = ExpedienteDocumento::where('empleado_id', $empleadoId)->findOrFail($docId);
         $ruta = $doc->{"foto_{$campo}_ruta"};
-        if (!$ruta || !Storage::disk('local')->exists($ruta)) abort(404);
+        if (!$ruta) abort(404);
 
-        return Storage::disk('local')->response($ruta);
+        return redirect(Storage::disk('s3')->temporaryUrl($ruta, now()->addMinutes(60)));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -626,7 +621,7 @@ class ExpedienteController extends RRHHBaseController
     {
         $this->autorizarAcceso($empleadoId);
         $idioma = ExpedienteIdioma::where('empleado_id', $empleadoId)->findOrFail($idiomaId);
-        if ($idioma->atestado_ruta) Storage::disk('local')->delete($idioma->atestado_ruta);
+        if ($idioma->atestado_ruta) Storage::disk('s3')->delete($idioma->atestado_ruta);
         $idioma->delete();
         return response()->json(['success' => true]);
     }
@@ -634,17 +629,17 @@ class ExpedienteController extends RRHHBaseController
     public function subirAtestadoIdioma(Request $request, int $empleadoId, int $idiomaId): JsonResponse
     {
         $this->autorizarAcceso($empleadoId);
-        $request->validate(['atestado' => 'required|file|max:10240']);
+        $request->validate(['atestado' => 'required|file|max:15360|mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx']);
 
         $idioma = ExpedienteIdioma::where('empleado_id', $empleadoId)->findOrFail($idiomaId);
         $file   = $request->file('atestado');
         $path   = $file->storeAs(
-            "rrhh/expedientes/{$empleadoId}/idiomas",
-            uniqid('ates_', true) . '.' . $file->getClientOriginalExtension(),
-            'local'
+            'rrhh/expediente_empleado/atestados',
+            "{$empleadoId}_" . uniqid('idi_', true) . '.' . $file->getClientOriginalExtension(),
+            's3'
         );
 
-        if ($idioma->atestado_ruta) Storage::disk('local')->delete($idioma->atestado_ruta);
+        if ($idioma->atestado_ruta) Storage::disk('s3')->delete($idioma->atestado_ruta);
         $idioma->update(['atestado_ruta' => $path]);
 
         return response()->json([
@@ -657,8 +652,8 @@ class ExpedienteController extends RRHHBaseController
     {
         $this->autorizarAcceso($empleadoId);
         $idioma = ExpedienteIdioma::where('empleado_id', $empleadoId)->findOrFail($idiomaId);
-        if (!$idioma->atestado_ruta || !Storage::disk('local')->exists($idioma->atestado_ruta)) abort(404);
-        return Storage::disk('local')->download($idioma->atestado_ruta);
+        if (!$idioma->atestado_ruta) abort(404);
+        return redirect(Storage::disk('s3')->temporaryUrl($idioma->atestado_ruta, now()->addMinutes(60)));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
