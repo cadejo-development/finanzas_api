@@ -305,23 +305,27 @@ Route::prefix('rrhh/expediente')->middleware(['auth:sanctum', 'role:jefatura,por
     Route::post('{empleadoId}/estudios',                              [ExpedienteController::class, 'storeEstudio']);
     Route::put('{empleadoId}/estudios/{estudioId}',                   [ExpedienteController::class, 'updateEstudio']);
     Route::delete('{empleadoId}/estudios/{estudioId}',                [ExpedienteController::class, 'destroyEstudio']);
+    Route::get('{empleadoId}/estudios/{estudioId}/atestado/presign',  [ExpedienteController::class, 'presignAtestadoEstudio']);
     Route::post('{empleadoId}/estudios/{estudioId}/atestado',         [ExpedienteController::class, 'subirAtestadoEstudio']);
     Route::get('{empleadoId}/estudios/{estudioId}/atestado',          [ExpedienteController::class, 'verAtestadoEstudio']);
 
     // Archivos
-    Route::post('{empleadoId}/archivos',                          [ExpedienteController::class, 'uploadArchivo']);
-    Route::get('{empleadoId}/archivos/{archivoId}/descargar',     [ExpedienteController::class, 'descargarArchivo']);
-    Route::delete('{empleadoId}/archivos/{archivoId}',            [ExpedienteController::class, 'destroyArchivo']);
+    Route::get('{empleadoId}/archivos/presign',                       [ExpedienteController::class, 'presignArchivo']);
+    Route::post('{empleadoId}/archivos',                              [ExpedienteController::class, 'uploadArchivo']);
+    Route::get('{empleadoId}/archivos/{archivoId}/descargar',         [ExpedienteController::class, 'descargarArchivo']);
+    Route::delete('{empleadoId}/archivos/{archivoId}',                [ExpedienteController::class, 'destroyArchivo']);
 
     // Fotos de documentos (frente / reverso)
-    Route::patch('{empleadoId}/documentos/{docId}/foto/{campo}',  [ExpedienteController::class, 'subirFotoDocumento']);
-    Route::get('{empleadoId}/documentos/{docId}/foto/{campo}',    [ExpedienteController::class, 'verFotoDocumento']);
+    Route::get('{empleadoId}/documentos/{docId}/foto/{campo}/presign',    [ExpedienteController::class, 'presignFotoDocumento']);
+    Route::patch('{empleadoId}/documentos/{docId}/foto/{campo}',          [ExpedienteController::class, 'subirFotoDocumento']);
+    Route::get('{empleadoId}/documentos/{docId}/foto/{campo}',            [ExpedienteController::class, 'verFotoDocumento']);
 
     // Idiomas
     Route::post('{empleadoId}/idiomas',                           [ExpedienteController::class, 'storeIdioma']);
     Route::put('{empleadoId}/idiomas/{idiomaId}',                 [ExpedienteController::class, 'updateIdioma']);
     Route::delete('{empleadoId}/idiomas/{idiomaId}',              [ExpedienteController::class, 'destroyIdioma']);
     Route::post('{empleadoId}/idiomas/{idiomaId}/atestado',       [ExpedienteController::class, 'subirAtestadoIdioma']);
+    Route::get('{empleadoId}/idiomas/{idiomaId}/atestado/presign',[ExpedienteController::class, 'presignAtestadoIdioma']);
     Route::get('{empleadoId}/idiomas/{idiomaId}/atestado',        [ExpedienteController::class, 'verAtestadoIdioma']);
 
     // Experiencia Laboral

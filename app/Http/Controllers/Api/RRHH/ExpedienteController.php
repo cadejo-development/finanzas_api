@@ -30,6 +30,33 @@ class ExpedienteController extends RRHHBaseController
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
+     * Genera una presigned URL de S3 para que el cliente suba directamente.
+     */
+    private function generarPresignUrl(string $key, string $contentType): JsonResponse
+    {
+        $client = new \Aws\S3\S3Client([
+            'region'      => config('filesystems.disks.s3.region'),
+            'version'     => 'latest',
+            'credentials' => [
+                'key'    => config('filesystems.disks.s3.key'),
+                'secret' => config('filesystems.disks.s3.secret'),
+            ],
+        ]);
+
+        $cmd = $client->getCommand('PutObject', [
+            'Bucket'      => config('filesystems.disks.s3.bucket'),
+            'Key'         => $key,
+            'ContentType' => $contentType,
+        ]);
+
+        return response()->json([
+            'success'       => true,
+            'presigned_url' => (string) $client->createPresignedRequest($cmd, '+15 minutes')->getUri(),
+            'key'           => $key,
+        ]);
+    }
+
+    /**
      * Verifica que el usuario autenticado puede acceder al expediente del empleado dado.
      * Admin puede ver a todos; jefatura solo a sí mismo y sus subordinados.
      */
@@ -421,31 +448,26 @@ class ExpedienteController extends RRHHBaseController
         return response()->json(['success' => true, 'message' => 'Estudio eliminado.']);
     }
 
+    public function presignAtestadoEstudio(Request $request, int $empleadoId, int $estudioId): JsonResponse
+    {
+        $this->autorizarAcceso($empleadoId);
+        $ext  = strtolower($request->query('ext', 'pdf'));
+        $mime = $request->query('mime', 'application/pdf');
+        $key  = "rrhh/expediente_empleado/atestados/{$empleadoId}_" . uniqid('est_', true) . ".{$ext}";
+        return $this->generarPresignUrl($key, $mime);
+    }
+
     public function subirAtestadoEstudio(Request $request, int $empleadoId, int $estudioId): JsonResponse
     {
         $this->autorizarAcceso($empleadoId);
-        $request->validate([
-            'atestado' => 'required|file|max:15360|mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx',
-        ]);
-
+        $data = $request->validate(['key' => 'required|string', 'mime' => 'nullable|string']);
         $estudio = ExpedienteEstudio::where('empleado_id', $empleadoId)->findOrFail($estudioId);
-        $file    = $request->file('atestado');
-        $path    = $file->storeAs(
-            'rrhh/expediente_empleado/atestados',
-            "{$empleadoId}_" . uniqid('est_', true) . '.' . $file->getClientOriginalExtension(),
-            's3'
-        );
-
         if ($estudio->atestado_ruta) Storage::disk('s3')->delete($estudio->atestado_ruta);
-        $estudio->update([
-            'atestado_ruta' => $path,
-            'atestado_mime' => $file->getMimeType(),
-        ]);
-
+        $estudio->update(['atestado_ruta' => $data['key'], 'atestado_mime' => $data['mime'] ?? null]);
         return response()->json([
             'success'       => true,
             'atestado_url'  => url("/api/rrhh/expediente/{$empleadoId}/estudios/{$estudioId}/atestado"),
-            'atestado_mime' => $file->getMimeType(),
+            'atestado_mime' => $data['mime'] ?? null,
         ]);
     }
 
@@ -460,26 +482,31 @@ class ExpedienteController extends RRHHBaseController
     // ─────────────────────────────────────────────────────────────────────────
     // Archivos  POST (upload) / DELETE /{id} / GET /{id}/descargar
     // ─────────────────────────────────────────────────────────────────────────
+    public function presignArchivo(Request $request, int $empleadoId): JsonResponse
+    {
+        $this->autorizarAcceso($empleadoId);
+        $tipo    = $request->query('tipo', 'foto_perfil');
+        $ext     = strtolower($request->query('ext', 'jpg'));
+        $mime    = $request->query('mime', 'image/jpeg');
+        $carpeta = $tipo === 'foto_perfil' ? 'foto_perfil' : 'atestados';
+        $key     = "rrhh/expediente_empleado/{$carpeta}/{$empleadoId}_" . uniqid('', true) . ".{$ext}";
+        return $this->generarPresignUrl($key, $mime);
+    }
+
     public function uploadArchivo(Request $request, int $empleadoId): JsonResponse
     {
         $this->autorizarAcceso($empleadoId);
 
-        $request->validate([
-            'archivo'     => 'required|file|max:10240', // 10 MB
+        $data = $request->validate([
+            'key'         => 'required|string',
             'tipo'        => 'required|in:foto_perfil,contrato,atestado,certificado,evaluacion,documento_identidad,otro',
             'nombre'      => 'nullable|string|max:200',
             'descripcion' => 'nullable|string|max:255',
+            'mime_type'   => 'nullable|string|max:100',
+            'tamano_kb'   => 'nullable|integer',
         ]);
 
-        $file    = $request->file('archivo');
-        $ext     = $file->getClientOriginalExtension();
-        $tipo    = $request->input('tipo');
-        $carpeta = $tipo === 'foto_perfil' ? 'foto_perfil' : 'atestados';
-        $path    = $file->storeAs(
-            "rrhh/expediente_empleado/{$carpeta}",
-            "{$empleadoId}_" . uniqid('', true) . ".{$ext}",
-            's3'
-        );
+        $tipo = $data['tipo'];
 
         // Si es foto de perfil, eliminar la anterior
         if ($tipo === 'foto_perfil') {
@@ -492,16 +519,14 @@ class ExpedienteController extends RRHHBaseController
                 });
         }
 
-        $nombre = $request->input('nombre') ?: $file->getClientOriginalName();
-
         $archivo = ExpedienteArchivo::create([
             'empleado_id'   => $empleadoId,
             'tipo'          => $tipo,
-            'nombre'        => $nombre,
-            'descripcion'   => $request->input('descripcion'),
-            'archivo_ruta'  => $path,
-            'mime_type'     => $file->getMimeType(),
-            'tamano_kb'     => (int) ceil($file->getSize() / 1024),
+            'nombre'        => $data['nombre'] ?? basename($data['key']),
+            'descripcion'   => $data['descripcion'] ?? null,
+            'archivo_ruta'  => $data['key'],
+            'mime_type'     => $data['mime_type'] ?? null,
+            'tamano_kb'     => $data['tamano_kb'] ?? null,
             'subido_por_id' => $request->user()?->id,
         ]);
 
@@ -540,25 +565,25 @@ class ExpedienteController extends RRHHBaseController
     // ─────────────────────────────────────────────────────────────────────────
     // Fotos de documentos  PATCH /{docId}/foto/{campo}  GET /{docId}/foto/{campo}
     // ─────────────────────────────────────────────────────────────────────────
+    public function presignFotoDocumento(Request $request, int $empleadoId, int $docId, string $campo): JsonResponse
+    {
+        $this->autorizarAcceso($empleadoId);
+        if (!in_array($campo, ['frente', 'reverso'])) abort(422, 'Campo inválido.');
+        $ext  = strtolower($request->query('ext', 'jpg'));
+        $mime = $request->query('mime', 'image/jpeg');
+        $key  = "rrhh/expediente_empleado/documentos_personales/{$empleadoId}_" . uniqid('doc_', true) . "_{$campo}.{$ext}";
+        return $this->generarPresignUrl($key, $mime);
+    }
+
     public function subirFotoDocumento(Request $request, int $empleadoId, int $docId, string $campo)
     {
         $this->autorizarAcceso($empleadoId);
         if (!in_array($campo, ['frente', 'reverso'])) abort(422, 'Campo inválido.');
-
-        $request->validate(['foto' => 'required|file|image|max:5120']);
-
-        $doc  = ExpedienteDocumento::where('empleado_id', $empleadoId)->findOrFail($docId);
-        $file = $request->file('foto');
-        $path = $file->storeAs(
-            'rrhh/expediente_empleado/documentos_personales',
-            "{$empleadoId}_" . uniqid('doc_', true) . "_{$campo}." . $file->getClientOriginalExtension(),
-            's3'
-        );
-
+        $data    = $request->validate(['key' => 'required|string']);
+        $doc     = ExpedienteDocumento::where('empleado_id', $empleadoId)->findOrFail($docId);
         $columna = "foto_{$campo}_ruta";
         if ($doc->$columna) Storage::disk('s3')->delete($doc->$columna);
-        $doc->update([$columna => $path]);
-
+        $doc->update([$columna => $data['key']]);
         return response()->json([
             'success' => true,
             'url'     => url("/api/rrhh/expediente/{$empleadoId}/documentos/{$docId}/foto/{$campo}"),
@@ -626,18 +651,21 @@ class ExpedienteController extends RRHHBaseController
         return response()->json(['success' => true]);
     }
 
+    public function presignAtestadoIdioma(Request $request, int $empleadoId, int $idiomaId): JsonResponse
+    {
+        $this->autorizarAcceso($empleadoId);
+        $ext  = strtolower($request->query('ext', 'pdf'));
+        $mime = $request->query('mime', 'application/pdf');
+        $key  = "rrhh/expediente_empleado/atestados/{$empleadoId}_" . uniqid('idi_', true) . ".{$ext}";
+        return $this->generarPresignUrl($key, $mime);
+    }
+
     public function subirAtestadoIdioma(Request $request, int $empleadoId, int $idiomaId): JsonResponse
     {
         $this->autorizarAcceso($empleadoId);
-        $request->validate(['atestado' => 'required|file|max:15360|mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx']);
-
+        $data   = $request->validate(['key' => 'required|string', 'mime' => 'nullable|string']);
         $idioma = ExpedienteIdioma::where('empleado_id', $empleadoId)->findOrFail($idiomaId);
-        $file   = $request->file('atestado');
-        $path   = $file->storeAs(
-            'rrhh/expediente_empleado/atestados',
-            "{$empleadoId}_" . uniqid('idi_', true) . '.' . $file->getClientOriginalExtension(),
-            's3'
-        );
+        $path   = $data['key'];
 
         if ($idioma->atestado_ruta) Storage::disk('s3')->delete($idioma->atestado_ruta);
         $idioma->update(['atestado_ruta' => $path]);
