@@ -426,14 +426,15 @@ class ExpedienteController extends RRHHBaseController
         $this->autorizarAcceso($empleadoId);
 
         $data = $request->validate([
-            'nivel'           => 'required|in:primaria,bachillerato,tecnico,universitario,posgrado,maestria,doctorado,diplomado,curso,otro',
-            'titulo'          => 'required|string|max:200',
-            'institucion'     => 'required|string|max:200',
-            'pais'            => 'nullable|string|max:80',
-            'anio_inicio'     => 'nullable|integer|min:1950|max:2099',
-            'anio_graduacion' => 'nullable|integer|min:1950|max:2099',
-            'graduado'        => 'boolean',
-            'notas'           => 'nullable|string|max:255',
+            'nivel'            => 'required|in:primaria,bachillerato,tecnico,universitario,posgrado,maestria,doctorado,diplomado,curso,otro',
+            'especializacion'  => 'nullable|string|max:60',
+            'titulo'           => 'required|string|max:200',
+            'institucion'      => 'required|string|max:200',
+            'pais'             => 'nullable|string|max:80',
+            'anio_inicio'      => 'nullable|integer|min:1950|max:2099',
+            'anio_graduacion'  => 'nullable|integer|min:1950|max:2099',
+            'graduado'         => 'boolean',
+            'notas'            => 'nullable|string|max:255',
         ]);
 
         $estudio = ExpedienteEstudio::create(array_merge($data, ['empleado_id' => $empleadoId]));
@@ -448,14 +449,15 @@ class ExpedienteController extends RRHHBaseController
         $estudio = ExpedienteEstudio::where('empleado_id', $empleadoId)->findOrFail($estudioId);
 
         $data = $request->validate([
-            'nivel'           => 'sometimes|in:primaria,bachillerato,tecnico,universitario,posgrado,maestria,doctorado,diplomado,curso,otro',
-            'titulo'          => 'sometimes|string|max:200',
-            'institucion'     => 'sometimes|string|max:200',
-            'pais'            => 'nullable|string|max:80',
-            'anio_inicio'     => 'nullable|integer|min:1950|max:2099',
-            'anio_graduacion' => 'nullable|integer|min:1950|max:2099',
-            'graduado'        => 'boolean',
-            'notas'           => 'nullable|string|max:255',
+            'nivel'            => 'sometimes|in:primaria,bachillerato,tecnico,universitario,posgrado,maestria,doctorado,diplomado,curso,otro',
+            'especializacion'  => 'nullable|string|max:60',
+            'titulo'           => 'sometimes|string|max:200',
+            'institucion'      => 'sometimes|string|max:200',
+            'pais'             => 'nullable|string|max:80',
+            'anio_inicio'      => 'nullable|integer|min:1950|max:2099',
+            'anio_graduacion'  => 'nullable|integer|min:1950|max:2099',
+            'graduado'         => 'boolean',
+            'notas'            => 'nullable|string|max:255',
         ]);
 
         $estudio->update($data);

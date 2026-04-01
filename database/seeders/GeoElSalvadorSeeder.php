@@ -51,13 +51,13 @@ class GeoElSalvadorSeeder extends Seeder
                 'codigo' => '01', 'nombre' => 'Ahuachapán',
                 'distritos' => [
                     ['codigo' => '0101', 'nombre' => 'Ahuachapán Norte', 'municipios' => [
-                        'Ahuachapán', 'Atiquizaya', 'Turín', 'El Refugio', 'San Lorenzo', 'Guaymango', 'Tacuba',
+                        'Atiquizaya', 'El Refugio', 'San Lorenzo', 'Turín',
                     ]],
-                    ['codigo' => '0102', 'nombre' => 'Apaneca', 'municipios' => [
-                        'Apaneca', 'Concepción de Ataco',
+                    ['codigo' => '0102', 'nombre' => 'Ahuachapán Centro', 'municipios' => [
+                        'Ahuachapán',
                     ]],
-                    ['codigo' => '0103', 'nombre' => 'Jujutla', 'municipios' => [
-                        'Jujutla', 'San Francisco Menéndez', 'San Pedro Puxtla',
+                    ['codigo' => '0103', 'nombre' => 'Ahuachapán Sur', 'municipios' => [
+                        'Apaneca', 'Concepción de Ataco', 'Tacuba', 'Jujutla', 'San Pedro Puxtla', 'Guaymango',
                     ]],
                 ],
             ],
@@ -65,15 +65,14 @@ class GeoElSalvadorSeeder extends Seeder
             [
                 'codigo' => '02', 'nombre' => 'Sonsonate',
                 'distritos' => [
-                    ['codigo' => '0201', 'nombre' => 'Sonsonate', 'municipios' => [
-                        'Sonsonate', 'Sonzacate', 'San Antonio del Monte', 'Armenia', 'Caluco', 'San Julián',
+                    ['codigo' => '0201', 'nombre' => 'Sonsonate Norte', 'municipios' => [
+                        'Juayúa', 'Nahuizalco', 'Salcoatitán', 'Santa Catarina Masahuat',
                     ]],
-                    ['codigo' => '0202', 'nombre' => 'Nahuizalco', 'municipios' => [
-                        'Nahuizalco', 'Izalco', 'Nahulingo', 'Cuisnahuat', 'Santa Catarina Masahuat',
-                        'Santa Isabel Ishuatán', 'Santo Domingo de Guzmán',
+                    ['codigo' => '0202', 'nombre' => 'Sonsonate Centro', 'municipios' => [
+                        'Sonsonate',
                     ]],
-                    ['codigo' => '0203', 'nombre' => 'Acajutla', 'municipios' => [
-                        'Acajutla', 'Juayúa', 'San Marcos',
+                    ['codigo' => '0203', 'nombre' => 'Sonsonate Este', 'municipios' => [
+                        'Izalco', 'Armenia', 'Caluco', 'San Julián', 'Cuisnahuat', 'Santa Isabel Ishuatán',
                     ]],
                 ],
             ],
@@ -81,14 +80,14 @@ class GeoElSalvadorSeeder extends Seeder
             [
                 'codigo' => '03', 'nombre' => 'Santa Ana',
                 'distritos' => [
-                    ['codigo' => '0301', 'nombre' => 'Santa Ana', 'municipios' => [
-                        'Santa Ana', 'El Congo', 'El Porvenir', 'Coatepeque', 'San Antonio Pajonal', 'San Sebastián Salitrillo',
+                    ['codigo' => '0301', 'nombre' => 'Santa Ana Norte', 'municipios' => [
+                        'Metapán', 'Masahuat', 'Santa Rosa Guachipilín', 'Texistepeque',
                     ]],
-                    ['codigo' => '0302', 'nombre' => 'Chalchuapa', 'municipios' => [
-                        'Chalchuapa', 'Texistepeque',
+                    ['codigo' => '0302', 'nombre' => 'Santa Ana Centro', 'municipios' => [
+                        'Santa Ana',
                     ]],
-                    ['codigo' => '0303', 'nombre' => 'Metapán', 'municipios' => [
-                        'Metapán', 'Candelaria de la Frontera', 'Masahuat', 'Santa Rosa Guachipilín', 'Santiago de la Frontera',
+                    ['codigo' => '0303', 'nombre' => 'Santa Ana Este', 'municipios' => [
+                        'Coatepeque', 'El Congo',
                     ]],
                 ],
             ],
@@ -96,20 +95,14 @@ class GeoElSalvadorSeeder extends Seeder
             [
                 'codigo' => '04', 'nombre' => 'Chalatenango',
                 'distritos' => [
-                    ['codigo' => '0401', 'nombre' => 'Chalatenango', 'municipios' => [
-                        'Chalatenango', 'Agua Caliente', 'Azacualpa', 'Cancasque', 'El Carrizal', 'La Laguna',
-                        'Las Vueltas', 'Nombre de Dios', 'Norteamérica', 'Ojos de Agua', 'Potonico',
-                        'San Antonio de la Cruz', 'San Antonio Los Ranchos', 'San Fernando', 'San Isidro Labrador',
-                        'San José Las Flores', 'San Juan Concepción', 'San Luis del Carmen', 'San Rafael',
+                    ['codigo' => '0401', 'nombre' => 'Chalatenango Norte', 'municipios' => [
+                        'La Palma', 'San Ignacio', 'Citalá',
                     ]],
-                    ['codigo' => '0402', 'nombre' => 'La Palma', 'municipios' => [
-                        'La Palma', 'San Ignacio', 'Citalá', 'Arcatao', 'Nueva Trinidad',
+                    ['codigo' => '0402', 'nombre' => 'Chalatenango Centro', 'municipios' => [
+                        'Chalatenango', 'Nueva Concepción', 'San Rafael',
                     ]],
-                    ['codigo' => '0403', 'nombre' => 'Tejutla', 'municipios' => [
-                        'Tejutla', 'San Francisco Morazán', 'Dulce Nombre de María', 'La Reina', 'San Miguel de Mercedes',
-                    ]],
-                    ['codigo' => '0404', 'nombre' => 'Nueva Concepción', 'municipios' => [
-                        'Nueva Concepción', 'Comalapa', 'Concepción Quezaltepeque', 'El Paraíso',
+                    ['codigo' => '0403', 'nombre' => 'Chalatenango Sur', 'municipios' => [
+                        'Dulce Nombre de María', 'El Paraíso', 'La Reina', 'Comalapa', 'Ojos de Agua',
                     ]],
                 ],
             ],
@@ -117,16 +110,20 @@ class GeoElSalvadorSeeder extends Seeder
             [
                 'codigo' => '05', 'nombre' => 'La Libertad',
                 'distritos' => [
-                    ['codigo' => '0501', 'nombre' => 'La Libertad Sur', 'municipios' => [
-                        'Nueva San Salvador (Santa Tecla)', 'Antiguo Cuscatlán', 'Nuevo Cuscatlán', 'San José Villanueva',
-                        'Zaragoza', 'Huizúcar', 'Rosario de Mora', 'Sacacoyo', 'Jayaque',
+                    ['codigo' => '0501', 'nombre' => 'La Libertad Norte', 'municipios' => [
+                        'Quezaltepeque', 'San Matías', 'San Pablo Tacachico',
                     ]],
-                    ['codigo' => '0502', 'nombre' => 'La Libertad Norte', 'municipios' => [
-                        'San Juan Opico', 'Quezaltepeque', 'Ciudad Arce', 'San Matías',
-                        'San Pablo Tacachico', 'Tepecoyo', 'Talnique',
+                    ['codigo' => '0502', 'nombre' => 'La Libertad Centro', 'municipios' => [
+                        'San Juan Opico', 'Ciudad Arce',
                     ]],
-                    ['codigo' => '0503', 'nombre' => 'La Libertad Costa', 'municipios' => [
-                        'La Libertad', 'Comasagua', 'Chiltiupán', 'Jicalapa', 'Teotepeque', 'Tamanique',
+                    ['codigo' => '0503', 'nombre' => 'La Libertad Oeste', 'municipios' => [
+                        'Colón', 'Jayaque', 'Sacacoyo', 'Talnique', 'Tepecoyo',
+                    ]],
+                    ['codigo' => '0504', 'nombre' => 'La Libertad Este', 'municipios' => [
+                        'La Libertad', 'Tamanique', 'Chiltiupán', 'Teotepeque',
+                    ]],
+                    ['codigo' => '0505', 'nombre' => 'La Libertad Costa', 'municipios' => [
+                        'Comasagua',
                     ]],
                 ],
             ],
@@ -134,15 +131,20 @@ class GeoElSalvadorSeeder extends Seeder
             [
                 'codigo' => '06', 'nombre' => 'San Salvador',
                 'distritos' => [
-                    ['codigo' => '0601', 'nombre' => 'San Salvador Norte', 'municipios' => [
-                        'Aguilares', 'Apopa', 'El Paisnal', 'Guazapa', 'Nejapa', 'Tonacatepeque', 'San Martín',
+                    ['codigo' => '0601', 'nombre' => 'San Salvador Centro', 'municipios' => [
+                        'San Salvador', 'Mejicanos', 'Ayutuxtepeque', 'Cuscatancingo', 'Ciudad Delgado',
                     ]],
-                    ['codigo' => '0602', 'nombre' => 'San Salvador Centro', 'municipios' => [
-                        'San Salvador', 'Cuscatancingo', 'Ciudad Delgado', 'Mejicanos',
-                        'Ilopango', 'Ayutuxtepeque', 'Soyapango',
+                    ['codigo' => '0602', 'nombre' => 'San Salvador Este', 'municipios' => [
+                        'Soyapango', 'Ilopango', 'San Martín', 'Tonacatepeque',
                     ]],
-                    ['codigo' => '0603', 'nombre' => 'San Salvador Sur', 'municipios' => [
-                        'Panchimalco', 'San Marcos', 'Santiago Texacuangos', 'Santo Tomás', 'Rosario de Mora',
+                    ['codigo' => '0603', 'nombre' => 'San Salvador Oeste', 'municipios' => [
+                        'Santa Tecla', 'Antiguo Cuscatlán', 'Zaragoza', 'Huizúcar',
+                    ]],
+                    ['codigo' => '0604', 'nombre' => 'San Salvador Norte', 'municipios' => [
+                        'Apopa', 'Nejapa', 'Aguilares', 'El Paisnal',
+                    ]],
+                    ['codigo' => '0605', 'nombre' => 'San Salvador Sur', 'municipios' => [
+                        'Panchimalco', 'Rosario de Mora', 'Santiago Texacuangos', 'Santo Tomás',
                     ]],
                 ],
             ],
@@ -150,13 +152,12 @@ class GeoElSalvadorSeeder extends Seeder
             [
                 'codigo' => '07', 'nombre' => 'Cuscatlán',
                 'distritos' => [
-                    ['codigo' => '0701', 'nombre' => 'Cojutepeque', 'municipios' => [
-                        'Cojutepeque', 'Oratorio de Concepción', 'San Bartolomé Perulapía', 'San Cristóbal',
-                        'San José Guayabal', 'Santa Cruz Analquito', 'Santa Cruz Michapa', 'San Ramón', 'Candelaria',
+                    ['codigo' => '0701', 'nombre' => 'Cuscatlán Norte', 'municipios' => [
+                        'Suchitoto', 'San José Guayabal', 'Oratorio de Concepción',
                     ]],
-                    ['codigo' => '0702', 'nombre' => 'Suchitoto', 'municipios' => [
-                        'Suchitoto', 'San Pedro Perulapán', 'Monte San Juan', 'El Carmen',
-                        'San Isidro', 'San Dionisio', 'San Miguel Tepezontes',
+                    ['codigo' => '0702', 'nombre' => 'Cuscatlán Sur', 'municipios' => [
+                        'Cojutepeque', 'San Rafael Cedros', 'El Carmen', 'Monte San Juan',
+                        'Santa Cruz Michapa', 'San Cristóbal',
                     ]],
                 ],
             ],
@@ -164,17 +165,15 @@ class GeoElSalvadorSeeder extends Seeder
             [
                 'codigo' => '08', 'nombre' => 'La Paz',
                 'distritos' => [
-                    ['codigo' => '0801', 'nombre' => 'Zacatecoluca', 'municipios' => [
-                        'Zacatecoluca', 'Cuyultitán', 'El Rosario', 'Olocuilta', 'Paraíso de Osorio',
-                        'San Antonio Masahuat', 'San Emigdio', 'San Francisco Chinameca', 'San Juan Tepezontes',
-                        'San Miguel Tepezontes', 'Santiago Nonualco',
+                    ['codigo' => '0801', 'nombre' => 'La Paz Oeste', 'municipios' => [
+                        'Zacatecoluca',
                     ]],
-                    ['codigo' => '0802', 'nombre' => 'San Luis Talpa', 'municipios' => [
-                        'San Luis Talpa', 'San Juan Talpa', 'San Luis La Herradura', 'Tapalhuaca', 'Jerusalén',
+                    ['codigo' => '0802', 'nombre' => 'La Paz Centro', 'municipios' => [
+                        'El Rosario', 'San Pedro Masahuat', 'San Juan Nonualco', 'San Rafael Obrajuelo',
                     ]],
-                    ['codigo' => '0803', 'nombre' => 'San Juan Nonualco', 'municipios' => [
-                        'San Juan Nonualco', 'Mercedes La Ceiba', 'San Pedro Masahuat',
-                        'San Pedro Nonualco', 'San Rafael Obrajuelo', 'Santa María Ostuma',
+                    ['codigo' => '0803', 'nombre' => 'La Paz Este', 'municipios' => [
+                        'San Luis Talpa', 'San Juan Talpa', 'Olocuilta', 'San Pedro Nonualco',
+                        'Santiago Nonualco', 'San Luis La Herradura',
                     ]],
                 ],
             ],
@@ -182,11 +181,11 @@ class GeoElSalvadorSeeder extends Seeder
             [
                 'codigo' => '09', 'nombre' => 'Cabañas',
                 'distritos' => [
-                    ['codigo' => '0901', 'nombre' => 'Sensuntepeque', 'municipios' => [
-                        'Sensuntepeque', 'Cinquera', 'Dolores', 'Guacotecti', 'Jutiapa',
+                    ['codigo' => '0901', 'nombre' => 'Cabañas Oeste', 'municipios' => [
+                        'Ilobasco', 'Tejutepeque',
                     ]],
-                    ['codigo' => '0902', 'nombre' => 'Ilobasco', 'municipios' => [
-                        'Ilobasco', 'San Isidro', 'Tejutepeque', 'Villa Victoria',
+                    ['codigo' => '0902', 'nombre' => 'Cabañas Este', 'municipios' => [
+                        'Sensuntepeque', 'Victoria', 'Dolores', 'Guacotecti', 'San Isidro', 'Jutiapa',
                     ]],
                 ],
             ],
@@ -194,12 +193,11 @@ class GeoElSalvadorSeeder extends Seeder
             [
                 'codigo' => '10', 'nombre' => 'San Vicente',
                 'distritos' => [
-                    ['codigo' => '1001', 'nombre' => 'San Vicente', 'municipios' => [
-                        'San Vicente', 'Apastepeque', 'Guadalupe', 'San Cayetano Istepeque',
-                        'San Esteban Catarina', 'San Ildefonso', 'San Lorenzo', 'San Sebastián',
+                    ['codigo' => '1001', 'nombre' => 'San Vicente Norte', 'municipios' => [
+                        'Apastepeque', 'Santa Clara', 'San Ildefonso', 'San Esteban Catarina',
                     ]],
-                    ['codigo' => '1002', 'nombre' => 'Tecoluca', 'municipios' => [
-                        'Tecoluca', 'Santa Clara', 'Santo Domingo', 'Tepetitán', 'Verapaz',
+                    ['codigo' => '1002', 'nombre' => 'San Vicente Sur', 'municipios' => [
+                        'San Vicente', 'Guadalupe', 'Tepetitán', 'Verapaz', 'Tecoluca',
                     ]],
                 ],
             ],
@@ -207,16 +205,14 @@ class GeoElSalvadorSeeder extends Seeder
             [
                 'codigo' => '11', 'nombre' => 'Usulután',
                 'distritos' => [
-                    ['codigo' => '1101', 'nombre' => 'Usulután', 'municipios' => [
-                        'Usulután', 'Berlín', 'California', 'El Triunfo', 'Estanzuelas',
-                        'Jucuapa', 'Mercedes Umaña', 'Nueva Granada', 'Santiago de María',
+                    ['codigo' => '1101', 'nombre' => 'Usulután Norte', 'municipios' => [
+                        'Santiago de María', 'Alegría', 'Mercedes Umaña',
                     ]],
-                    ['codigo' => '1102', 'nombre' => 'Jiquilisco', 'municipios' => [
-                        'Jiquilisco', 'Concepción Batres', 'Ereguayquín', 'Ozatlán',
-                        'Puerto El Triunfo', 'San Dionisio', 'San Francisco Javier', 'Tecapán',
+                    ['codigo' => '1102', 'nombre' => 'Usulután Este', 'municipios' => [
+                        'Usulután', 'Jiquilisco', 'Puerto El Triunfo',
                     ]],
-                    ['codigo' => '1103', 'nombre' => 'Jucuarán', 'municipios' => [
-                        'Jucuarán', 'Alegría', 'San Agustín', 'San Buenaventura', 'Santa Elena', 'Santa María',
+                    ['codigo' => '1103', 'nombre' => 'Usulután Oeste', 'municipios' => [
+                        'Santa Elena', 'Ereguayquín', 'Concepción Batres', 'Ozatlán', 'San Dionisio',
                     ]],
                 ],
             ],
@@ -224,16 +220,17 @@ class GeoElSalvadorSeeder extends Seeder
             [
                 'codigo' => '12', 'nombre' => 'San Miguel',
                 'distritos' => [
-                    ['codigo' => '1201', 'nombre' => 'San Miguel', 'municipios' => [
-                        'San Miguel', 'Chinameca', 'El Tránsito', 'Moncagua', 'Nueva Guadalupe',
-                        'San Jorge', 'San Rafael Oriente', 'Sesori', 'Uluazapa',
+                    ['codigo' => '1201', 'nombre' => 'San Miguel Norte', 'municipios' => [
+                        'Ciudad Barrios', 'Sesori', 'Nuevo Edén de San Juan', 'San Gerardo',
                     ]],
-                    ['codigo' => '1202', 'nombre' => 'San Antonio', 'municipios' => [
-                        'San Antonio', 'Carolina', 'Ciudad Barrios', 'San Luis de la Reina', 'San Gerardo',
+                    ['codigo' => '1202', 'nombre' => 'San Miguel Centro', 'municipios' => [
+                        'San Miguel',
                     ]],
-                    ['codigo' => '1203', 'nombre' => 'Chirilagua', 'municipios' => [
-                        'Chirilagua', 'Chapeltique', 'Comacarán', 'Lolotique',
-                        'Nuevo Edén de San Juan', 'Quelepa',
+                    ['codigo' => '1203', 'nombre' => 'San Miguel Oeste', 'municipios' => [
+                        'Chinameca', 'Nueva Guadalupe',
+                    ]],
+                    ['codigo' => '1204', 'nombre' => 'San Miguel Este', 'municipios' => [
+                        'Chirilagua', 'San Jorge', 'Uluazapa', 'Moncagua', 'Quelepa',
                     ]],
                 ],
             ],
@@ -241,18 +238,11 @@ class GeoElSalvadorSeeder extends Seeder
             [
                 'codigo' => '13', 'nombre' => 'Morazán',
                 'distritos' => [
-                    ['codigo' => '1301', 'nombre' => 'San Francisco Gotera', 'municipios' => [
-                        'San Francisco Gotera', 'Chilanga', 'Delicias de Concepción', 'El Divisadero',
-                        'Guatajiagua', 'Jocoro', 'Lolotiquillo', 'Osicala', 'San Carlos', 'San Simón', 'Sensembra',
+                    ['codigo' => '1301', 'nombre' => 'Morazán Norte', 'municipios' => [
+                        'Perquín', 'Arambala', 'Joateca', 'Cacaopera', 'San Fernando', 'Torola',
                     ]],
-                    ['codigo' => '1302', 'nombre' => 'Corinto', 'municipios' => [
-                        'Corinto', 'Cacaopera', 'Gualococti', 'Guatajiagua', 'Jocoaitique', 'San Isidro',
-                    ]],
-                    ['codigo' => '1303', 'nombre' => 'Sociedad', 'municipios' => [
-                        'Sociedad', 'El Rosario', 'Meanguera', 'San Fernando', 'Torola', 'Yamabal', 'Yoloaiquín',
-                    ]],
-                    ['codigo' => '1304', 'nombre' => 'Perquín', 'municipios' => [
-                        'Perquín', 'Arambala', 'Joateca',
+                    ['codigo' => '1302', 'nombre' => 'Morazán Sur', 'municipios' => [
+                        'San Francisco Gotera', 'Sensembra', 'Yamabal', 'El Divisadero', 'Jocoro', 'Lolotiquillo',
                     ]],
                 ],
             ],
@@ -260,15 +250,11 @@ class GeoElSalvadorSeeder extends Seeder
             [
                 'codigo' => '14', 'nombre' => 'La Unión',
                 'distritos' => [
-                    ['codigo' => '1401', 'nombre' => 'La Unión', 'municipios' => [
-                        'La Unión', 'Conchagua', 'El Carmen', 'Intipucá',
-                        'Meanguera del Golfo', 'San Alejo', 'Yayantique', 'Yucuaiquín',
+                    ['codigo' => '1401', 'nombre' => 'La Unión Norte', 'municipios' => [
+                        'Anamorós', 'Nueva Esparta', 'Polorós', 'Concepción de Oriente',
                     ]],
-                    ['codigo' => '1402', 'nombre' => 'Santa Rosa de Lima', 'municipios' => [
-                        'Santa Rosa de Lima', 'Bolívar', 'El Sauce', 'Lislique', 'Nueva Esparta', 'Pasaquina',
-                    ]],
-                    ['codigo' => '1403', 'nombre' => 'San José', 'municipios' => [
-                        'San José', 'Anamoros', 'Concepción de Oriente', 'Polorós',
+                    ['codigo' => '1402', 'nombre' => 'La Unión Sur', 'municipios' => [
+                        'La Unión', 'Intipucá', 'San Alejo', 'El Carmen', 'Yayantique', 'Bolívar', 'Meanguera del Golfo',
                     ]],
                 ],
             ],
