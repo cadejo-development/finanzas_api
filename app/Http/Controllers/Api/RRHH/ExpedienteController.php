@@ -115,8 +115,8 @@ class ExpedienteController extends RRHHBaseController
             ->latest()
             ->first();
         if ($fotoPerfil) {
-            // Si la key está en DB asumimos que existe; evitamos llamada de red bloqueante
-            $fotoRuta = url("/api/rrhh/expediente/{$empleadoId}/archivos/{$fotoPerfil->id}/descargar");
+            // Presign local (sin llamada de red) para que <img src> cargue directamente desde S3
+            $fotoRuta = $this->s3TemporaryUrl($fotoPerfil->archivo_ruta);
         }
 
         // Seniority
@@ -158,13 +158,13 @@ class ExpedienteController extends RRHHBaseController
         $estudios       = ExpedienteEstudio::where('empleado_id', $empleadoId)->orderByDesc('anio_graduacion')->get()
             ->map(fn ($e) => array_merge($e->toArray(), [
                 'atestado_url' => $e->atestado_ruta
-                    ? url("/api/rrhh/expediente/{$empleadoId}/estudios/{$e->id}/atestado")
+                    ? $this->s3TemporaryUrl($e->atestado_ruta)
                     : null,
             ]));
         $idiomas        = ExpedienteIdioma::where('empleado_id', $empleadoId)->get()
             ->map(fn ($i) => array_merge($i->toArray(), [
                 'atestado_url' => $i->atestado_ruta
-                    ? url("/api/rrhh/expediente/{$empleadoId}/idiomas/{$i->id}/atestado")
+                    ? $this->s3TemporaryUrl($i->atestado_ruta)
                     : null,
             ]));
         $experiencia    = ExpedienteExperienciaLaboral::where('empleado_id', $empleadoId)
@@ -173,10 +173,10 @@ class ExpedienteController extends RRHHBaseController
         $documentos     = ExpedienteDocumento::where('empleado_id', $empleadoId)->get()
             ->map(fn ($d) => array_merge($d->toArray(), [
                 'foto_frente_url' => $d->foto_frente_ruta
-                    ? url("/api/rrhh/expediente/{$empleadoId}/documentos/{$d->id}/foto/frente")
+                    ? $this->s3TemporaryUrl($d->foto_frente_ruta)
                     : null,
                 'foto_reverso_url' => $d->foto_reverso_ruta
-                    ? url("/api/rrhh/expediente/{$empleadoId}/documentos/{$d->id}/foto/reverso")
+                    ? $this->s3TemporaryUrl($d->foto_reverso_ruta)
                     : null,
             ]));
         $cuentasBanco   = ExpedienteCuentaBanco::where('empleado_id', $empleadoId)->orderByDesc('es_principal')->orderBy('id')->get();
@@ -490,7 +490,7 @@ class ExpedienteController extends RRHHBaseController
         $estudio->update(['atestado_ruta' => $data['key'], 'atestado_mime' => $data['mime'] ?? null]);
         return response()->json([
             'success'       => true,
-            'atestado_url'  => url("/api/rrhh/expediente/{$empleadoId}/estudios/{$estudioId}/atestado"),
+            'atestado_url'  => $this->s3TemporaryUrl($data['key']),
             'atestado_mime' => $data['mime'] ?? null,
         ]);
     }
@@ -557,7 +557,7 @@ class ExpedienteController extends RRHHBaseController
         return response()->json([
             'success' => true,
             'data'    => array_merge($archivo->toArray(), [
-                'url' => url("/api/rrhh/expediente/{$empleadoId}/archivos/{$archivo->id}/descargar"),
+                'url' => $this->s3TemporaryUrl($archivo->archivo_ruta),
             ]),
         ], 201);
     }
@@ -606,7 +606,7 @@ class ExpedienteController extends RRHHBaseController
         $doc->update([$columna => $data['key']]);
         return response()->json([
             'success' => true,
-            'url'     => url("/api/rrhh/expediente/{$empleadoId}/documentos/{$docId}/foto/{$campo}"),
+            'url'     => $this->s3TemporaryUrl($data['key']),
         ]);
     }
 
@@ -692,7 +692,7 @@ class ExpedienteController extends RRHHBaseController
 
         return response()->json([
             'success'      => true,
-            'atestado_url' => url("/api/rrhh/expediente/{$empleadoId}/idiomas/{$idiomaId}/atestado"),
+            'atestado_url' => $this->s3TemporaryUrl($path),
         ]);
     }
 
