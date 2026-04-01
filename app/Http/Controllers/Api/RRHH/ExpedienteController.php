@@ -104,7 +104,12 @@ class ExpedienteController extends RRHHBaseController
         $contactos       = ExpedienteContacto::where('empleado_id', $empleadoId)->orderBy('orden')->orderBy('id')->get();
         $direcciones     = ExpedienteDireccion::where('empleado_id', $empleadoId)->get();
         $documentos      = ExpedienteDocumento::where('empleado_id', $empleadoId)->get();
-        $estudios       = ExpedienteEstudio::where('empleado_id', $empleadoId)->orderByDesc('anio_graduacion')->get();
+        $estudios       = ExpedienteEstudio::where('empleado_id', $empleadoId)->orderByDesc('anio_graduacion')->get()
+            ->map(fn ($e) => array_merge($e->toArray(), [
+                'atestado_url' => $e->atestado_ruta
+                    ? url("/api/rrhh/expediente/{$empleadoId}/estudios/{$e->id}/atestado")
+                    : null,
+            ]));
         $idiomas        = ExpedienteIdioma::where('empleado_id', $empleadoId)->get()
             ->map(fn ($i) => array_merge($i->toArray(), [
                 'atestado_url' => $i->atestado_ruta
@@ -410,8 +415,52 @@ class ExpedienteController extends RRHHBaseController
     public function destroyEstudio(int $empleadoId, int $estudioId): JsonResponse
     {
         $this->autorizarAcceso($empleadoId);
-        ExpedienteEstudio::where('empleado_id', $empleadoId)->findOrFail($estudioId)->delete();
+        $estudio = ExpedienteEstudio::where('empleado_id', $empleadoId)->findOrFail($estudioId);
+        if ($estudio->atestado_ruta) Storage::disk('local')->delete($estudio->atestado_ruta);
+        $estudio->delete();
         return response()->json(['success' => true, 'message' => 'Estudio eliminado.']);
+    }
+
+    public function subirAtestadoEstudio(Request $request, int $empleadoId, int $estudioId): JsonResponse
+    {
+        $this->autorizarAcceso($empleadoId);
+        $request->validate([
+            'atestado' => 'required|file|max:15360|mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx',
+        ]);
+
+        $estudio = ExpedienteEstudio::where('empleado_id', $empleadoId)->findOrFail($estudioId);
+        $file    = $request->file('atestado');
+        $path    = $file->storeAs(
+            "rrhh/expedientes/{$empleadoId}/atestados",
+            uniqid('est_', true) . '.' . $file->getClientOriginalExtension(),
+            'local'
+        );
+
+        if ($estudio->atestado_ruta) Storage::disk('local')->delete($estudio->atestado_ruta);
+        $estudio->update([
+            'atestado_ruta' => $path,
+            'atestado_mime' => $file->getMimeType(),
+        ]);
+
+        return response()->json([
+            'success'      => true,
+            'atestado_url' => url("/api/rrhh/expediente/{$empleadoId}/estudios/{$estudioId}/atestado"),
+            'atestado_mime' => $file->getMimeType(),
+        ]);
+    }
+
+    public function verAtestadoEstudio(int $empleadoId, int $estudioId)
+    {
+        $this->autorizarAcceso($empleadoId);
+        $estudio = ExpedienteEstudio::where('empleado_id', $empleadoId)->findOrFail($estudioId);
+        if (!$estudio->atestado_ruta || !Storage::disk('local')->exists($estudio->atestado_ruta)) {
+            abort(404);
+        }
+        $mime = $estudio->atestado_mime ?? 'application/octet-stream';
+        return Storage::disk('local')->response($estudio->atestado_ruta, null, [
+            'Content-Type'        => $mime,
+            'Content-Disposition' => 'inline',
+        ]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

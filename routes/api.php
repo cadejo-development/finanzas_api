@@ -302,9 +302,11 @@ Route::prefix('rrhh/expediente')->middleware(['auth:sanctum', 'role:jefatura,por
     Route::delete('{empleadoId}/documentos/{docId}',     [ExpedienteController::class, 'destroyDocumento']);
 
     // Estudios
-    Route::post('{empleadoId}/estudios',                  [ExpedienteController::class, 'storeEstudio']);
-    Route::put('{empleadoId}/estudios/{estudioId}',       [ExpedienteController::class, 'updateEstudio']);
-    Route::delete('{empleadoId}/estudios/{estudioId}',    [ExpedienteController::class, 'destroyEstudio']);
+    Route::post('{empleadoId}/estudios',                              [ExpedienteController::class, 'storeEstudio']);
+    Route::put('{empleadoId}/estudios/{estudioId}',                   [ExpedienteController::class, 'updateEstudio']);
+    Route::delete('{empleadoId}/estudios/{estudioId}',                [ExpedienteController::class, 'destroyEstudio']);
+    Route::post('{empleadoId}/estudios/{estudioId}/atestado',         [ExpedienteController::class, 'subirAtestadoEstudio']);
+    Route::get('{empleadoId}/estudios/{estudioId}/atestado',          [ExpedienteController::class, 'verAtestadoEstudio']);
 
     // Archivos
     Route::post('{empleadoId}/archivos',                          [ExpedienteController::class, 'uploadArchivo']);

@@ -12,6 +12,7 @@ class ExpedienteEstudio extends Model
     protected $fillable = [
         'empleado_id', 'nivel', 'titulo', 'institucion',
         'pais', 'anio_inicio', 'anio_graduacion', 'graduado', 'notas',
+        'atestado_ruta', 'atestado_mime',
     ];
 
     protected $casts = [
