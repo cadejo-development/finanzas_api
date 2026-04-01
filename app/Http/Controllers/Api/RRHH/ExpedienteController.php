@@ -29,26 +29,28 @@ class ExpedienteController extends RRHHBaseController
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Genera una presigned URL de S3 para que el cliente suba directamente.
-     */
-    private function generarPresignUrl(string $key, string $contentType): JsonResponse
+    private function s3Client(): \Aws\S3\S3Client
     {
-        $client = new \Aws\S3\S3Client([
-            'region'      => config('filesystems.disks.s3.region'),
-            'version'     => 'latest',
-            'credentials' => [
+        return new \Aws\S3\S3Client([
+            'region'          => config('filesystems.disks.s3.region'),
+            'version'         => 'latest',
+            'credentials'     => [
                 'key'    => config('filesystems.disks.s3.key'),
                 'secret' => config('filesystems.disks.s3.secret'),
             ],
+            // Timeout corto para que un fallo de red no bloquee el proceso
+            'http'            => ['timeout' => 5, 'connect_timeout' => 3],
         ]);
+    }
 
-        $cmd = $client->getCommand('PutObject', [
+    private function generarPresignUrl(string $key, string $contentType): JsonResponse
+    {
+        $client = $this->s3Client();
+        $cmd    = $client->getCommand('PutObject', [
             'Bucket'      => config('filesystems.disks.s3.bucket'),
             'Key'         => $key,
             'ContentType' => $contentType,
         ]);
-
         return response()->json([
             'success'       => true,
             'presigned_url' => (string) $client->createPresignedRequest($cmd, '+15 minutes')->getUri(),
@@ -58,21 +60,25 @@ class ExpedienteController extends RRHHBaseController
 
     private function s3TemporaryUrl(string $key, int $minutes = 60): string
     {
-        $client = new \Aws\S3\S3Client([
-            'region'      => config('filesystems.disks.s3.region'),
-            'version'     => 'latest',
-            'credentials' => [
-                'key'    => config('filesystems.disks.s3.key'),
-                'secret' => config('filesystems.disks.s3.secret'),
-            ],
-        ]);
-
-        $cmd = $client->getCommand('GetObject', [
+        $client = $this->s3Client();
+        $cmd    = $client->getCommand('GetObject', [
             'Bucket' => config('filesystems.disks.s3.bucket'),
             'Key'    => $key,
         ]);
-
         return (string) $client->createPresignedRequest($cmd, "+{$minutes} minutes")->getUri();
+    }
+
+    /** Borra un objeto de S3 sin bloquear en caso de fallo de red. */
+    private function s3Delete(string $key): void
+    {
+        try {
+            $this->s3Client()->deleteObject([
+                'Bucket' => config('filesystems.disks.s3.bucket'),
+                'Key'    => $key,
+            ]);
+        } catch (\Throwable) {
+            // No bloquear el proceso si S3 no responde
+        }
     }
 
     /**
@@ -109,9 +115,8 @@ class ExpedienteController extends RRHHBaseController
             ->latest()
             ->first();
         if ($fotoPerfil) {
-            $fotoRuta = Storage::disk('s3')->exists($fotoPerfil->archivo_ruta)
-                ? url("/api/rrhh/expediente/{$empleadoId}/archivos/{$fotoPerfil->id}/descargar")
-                : null;
+            // Si la key está en DB asumimos que existe; evitamos llamada de red bloqueante
+            $fotoRuta = url("/api/rrhh/expediente/{$empleadoId}/archivos/{$fotoPerfil->id}/descargar");
         }
 
         // Seniority
@@ -462,7 +467,7 @@ class ExpedienteController extends RRHHBaseController
     {
         $this->autorizarAcceso($empleadoId);
         $estudio = ExpedienteEstudio::where('empleado_id', $empleadoId)->findOrFail($estudioId);
-        if ($estudio->atestado_ruta) Storage::disk('s3')->delete($estudio->atestado_ruta);
+        if ($estudio->atestado_ruta) $this->s3Delete($estudio->atestado_ruta);
         $estudio->delete();
         return response()->json(['success' => true, 'message' => 'Estudio eliminado.']);
     }
@@ -481,7 +486,7 @@ class ExpedienteController extends RRHHBaseController
         $this->autorizarAcceso($empleadoId);
         $data = $request->validate(['key' => 'required|string', 'mime' => 'nullable|string']);
         $estudio = ExpedienteEstudio::where('empleado_id', $empleadoId)->findOrFail($estudioId);
-        if ($estudio->atestado_ruta) Storage::disk('s3')->delete($estudio->atestado_ruta);
+        if ($estudio->atestado_ruta) $this->s3Delete($estudio->atestado_ruta);
         $estudio->update(['atestado_ruta' => $data['key'], 'atestado_mime' => $data['mime'] ?? null]);
         return response()->json([
             'success'       => true,
@@ -533,7 +538,7 @@ class ExpedienteController extends RRHHBaseController
                 ->where('tipo', 'foto_perfil')
                 ->get()
                 ->each(function ($a) {
-                    Storage::disk('s3')->delete($a->archivo_ruta);
+                    $this->s3Delete($a->archivo_ruta);
                     $a->delete();
                 });
         }
@@ -563,10 +568,6 @@ class ExpedienteController extends RRHHBaseController
 
         $archivo = ExpedienteArchivo::where('empleado_id', $empleadoId)->findOrFail($archivoId);
 
-        if (!Storage::disk('s3')->exists($archivo->archivo_ruta)) {
-            abort(404, 'Archivo no encontrado.');
-        }
-
         return redirect($this->s3TemporaryUrl($archivo->archivo_ruta));
     }
 
@@ -575,7 +576,7 @@ class ExpedienteController extends RRHHBaseController
         $this->autorizarAcceso($empleadoId);
 
         $archivo = ExpedienteArchivo::where('empleado_id', $empleadoId)->findOrFail($archivoId);
-        Storage::disk('s3')->delete($archivo->archivo_ruta);
+        $this->s3Delete($archivo->archivo_ruta);
         $archivo->delete();
 
         return response()->json(['success' => true, 'message' => 'Archivo eliminado.']);
@@ -601,7 +602,7 @@ class ExpedienteController extends RRHHBaseController
         $data    = $request->validate(['key' => 'required|string']);
         $doc     = ExpedienteDocumento::where('empleado_id', $empleadoId)->findOrFail($docId);
         $columna = "foto_{$campo}_ruta";
-        if ($doc->$columna) Storage::disk('s3')->delete($doc->$columna);
+        if ($doc->$columna) $this->s3Delete($doc->$columna);
         $doc->update([$columna => $data['key']]);
         return response()->json([
             'success' => true,
@@ -665,7 +666,7 @@ class ExpedienteController extends RRHHBaseController
     {
         $this->autorizarAcceso($empleadoId);
         $idioma = ExpedienteIdioma::where('empleado_id', $empleadoId)->findOrFail($idiomaId);
-        if ($idioma->atestado_ruta) Storage::disk('s3')->delete($idioma->atestado_ruta);
+        if ($idioma->atestado_ruta) $this->s3Delete($idioma->atestado_ruta);
         $idioma->delete();
         return response()->json(['success' => true]);
     }
@@ -686,7 +687,7 @@ class ExpedienteController extends RRHHBaseController
         $idioma = ExpedienteIdioma::where('empleado_id', $empleadoId)->findOrFail($idiomaId);
         $path   = $data['key'];
 
-        if ($idioma->atestado_ruta) Storage::disk('s3')->delete($idioma->atestado_ruta);
+        if ($idioma->atestado_ruta) $this->s3Delete($idioma->atestado_ruta);
         $idioma->update(['atestado_ruta' => $path]);
 
         return response()->json([
