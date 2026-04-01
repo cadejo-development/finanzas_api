@@ -182,6 +182,31 @@ abstract class RRHHBaseController extends Controller
         return in_array($empleadoId, $this->getSubordinadosIds());
     }
 
+    // ─── S3 helpers ───────────────────────────────────────────────────────────
+
+    protected function s3Client(): \Aws\S3\S3Client
+    {
+        return new \Aws\S3\S3Client([
+            'region'      => config('filesystems.disks.s3.region'),
+            'version'     => 'latest',
+            'credentials' => [
+                'key'    => config('filesystems.disks.s3.key'),
+                'secret' => config('filesystems.disks.s3.secret'),
+            ],
+            'http' => ['timeout' => 5, 'connect_timeout' => 3],
+        ]);
+    }
+
+    protected function s3TemporaryUrl(string $key, int $minutes = 60): string
+    {
+        $client = $this->s3Client();
+        $cmd    = $client->getCommand('GetObject', [
+            'Bucket' => config('filesystems.disks.s3.bucket'),
+            'Key'    => $key,
+        ]);
+        return (string) $client->createPresignedRequest($cmd, "+{$minutes} minutes")->getUri();
+    }
+
     /**
      * Enriquece un array de registros con datos del empleado desde core.
      */

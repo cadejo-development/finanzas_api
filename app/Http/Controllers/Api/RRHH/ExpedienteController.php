@@ -29,20 +29,6 @@ class ExpedienteController extends RRHHBaseController
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
 
-    private function s3Client(): \Aws\S3\S3Client
-    {
-        return new \Aws\S3\S3Client([
-            'region'          => config('filesystems.disks.s3.region'),
-            'version'         => 'latest',
-            'credentials'     => [
-                'key'    => config('filesystems.disks.s3.key'),
-                'secret' => config('filesystems.disks.s3.secret'),
-            ],
-            // Timeout corto para que un fallo de red no bloquee el proceso
-            'http'            => ['timeout' => 5, 'connect_timeout' => 3],
-        ]);
-    }
-
     private function generarPresignUrl(string $key, string $contentType): JsonResponse
     {
         $client = $this->s3Client();
@@ -56,16 +42,6 @@ class ExpedienteController extends RRHHBaseController
             'presigned_url' => (string) $client->createPresignedRequest($cmd, '+15 minutes')->getUri(),
             'key'           => $key,
         ]);
-    }
-
-    private function s3TemporaryUrl(string $key, int $minutes = 60): string
-    {
-        $client = $this->s3Client();
-        $cmd    = $client->getCommand('GetObject', [
-            'Bucket' => config('filesystems.disks.s3.bucket'),
-            'Key'    => $key,
-        ]);
-        return (string) $client->createPresignedRequest($cmd, "+{$minutes} minutes")->getUri();
     }
 
     /** Borra un objeto de S3 sin bloquear en caso de fallo de red. */

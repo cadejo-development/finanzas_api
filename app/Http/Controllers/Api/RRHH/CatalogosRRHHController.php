@@ -58,6 +58,34 @@ class CatalogosRRHHController extends RRHHBaseController
 
         $equipo = $equipoQuery->orderBy('e.apellidos')->get();
 
+        // Fotos de perfil: una sola consulta a RRHH, luego presign local (sin red)
+        $empleadoIds = $equipo->pluck('id')->all();
+        $fotosMap = [];
+        if (!empty($empleadoIds)) {
+            $fotos = DB::connection('rrhh')
+                ->table('expediente_archivos')
+                ->where('tipo', 'foto_perfil')
+                ->whereIn('empleado_id', $empleadoIds)
+                ->orderByDesc('id')               // la más reciente
+                ->select('empleado_id', 'archivo_ruta')
+                ->get()
+                ->unique('empleado_id');          // una por empleado
+            foreach ($fotos as $f) {
+                try {
+                    $fotosMap[$f->empleado_id] = $this->s3TemporaryUrl($f->archivo_ruta, 480); // 8 horas
+                } catch (\Throwable) {
+                    // ignorar si falla el presign
+                }
+            }
+        }
+
+        // Adjuntar foto_url al equipo
+        $equipoConFoto = $equipo->map(function ($e) use ($fotosMap) {
+            $arr = (array) $e;
+            $arr['foto_url'] = $fotosMap[$e->id] ?? null;
+            return $arr;
+        });
+
         // Sucursales (para traslados)
         $sucursales = DB::connection('pgsql')
             ->table('sucursales')
@@ -91,7 +119,7 @@ class CatalogosRRHHController extends RRHHBaseController
                 'tipos_falta'            => TipoFalta::where('activo', true)->get(),
                 'motivos_desvinculacion' => MotivoDesvinculacion::where('activo', true)->get(),
                 'tipos_aumento_salarial' => TipoAumentoSalarial::where('activo', true)->get(),
-                'equipo'                 => $equipo,
+                'equipo'                 => $equipoConFoto,
                 'sucursales'             => $sucursales,
                 'cargos'                 => $cargos,
                 'departamentos'          => $departamentos,
