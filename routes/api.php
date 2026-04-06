@@ -38,6 +38,7 @@ Route::prefix('geo')->group(function () {
     Route::get('departamentos',                    [GeoController::class, 'departamentos']);
     Route::get('departamentos/{id}/distritos',     [GeoController::class, 'distritos']);
     Route::get('distritos/{id}/municipios',        [GeoController::class, 'municipios']);
+    Route::get('municipios/{id}/ubicacion',        [GeoController::class, 'ubicacionMunicipio']);
 });
 
 // ─── Portal SSO (protegido con Sanctum) ──────────────────────────────────
