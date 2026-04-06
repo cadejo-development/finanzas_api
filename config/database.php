@@ -112,6 +112,20 @@ return [
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE_COMPRAS', 'prefer'),
         ],
+        // Conexión de solo-lectura al SQL Server de origen (sistema legado)
+        'origen' => [
+            'driver'   => 'sqlsrv',
+            'host'     => env('DB_HOST_ORIGEN', 'localhost'),
+            'port'     => env('DB_PORT_ORIGEN', '1433'),
+            'database' => env('DB_DATABASE_ORIGEN', ''),
+            'username' => env('DB_USERNAME_ORIGEN', ''),
+            'password' => env('DB_PASSWORD_ORIGEN', ''),
+            'charset'  => 'utf8',
+            'prefix'   => '',
+            'prefix_indexes' => true,
+            'trust_server_certificate' => env('DB_TRUST_CERT_ORIGEN', 'true'),
+        ],
+
         // Conexión personalizada para pagos_db
         'pagos' => [
             'driver' => env('DB_CONNECTION_PAGOS', 'pgsql'),

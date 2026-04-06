@@ -327,7 +327,10 @@ class RecetasController extends Controller
                 'tipo_receta', 'platos_semana', 'precio', 'rendimiento', 'rendimiento_unidad',
                 'activa', 'foto_plato', 'foto_plateria',
             ]));
-            $receta->update(array_merge($campos, ['aud_usuario' => $usuario]));
+            $receta->update(array_merge($campos, [
+                'aud_usuario'           => $usuario,
+                'modificado_localmente' => true,
+            ]));
 
             // Reemplazar ingredientes si se envian
             if (array_key_exists('ingredientes', $validated)) {

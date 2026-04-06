@@ -217,6 +217,8 @@ async function main() {
       'aud_usuario', 'created_at', 'updated_at',
     ];
     // Actualizar nombre, costo, precio, unidad y categoria si ya existe (por codigo)
+    // WHERE productos.modificado_localmente = false → si el usuario editó el producto
+    // en el sistema, el sync NO lo sobreescribe.
     const pConf = `ON CONFLICT (codigo) DO UPDATE SET
       nombre       = EXCLUDED.nombre,
       costo        = EXCLUDED.costo,
@@ -224,7 +226,8 @@ async function main() {
       unidad       = EXCLUDED.unidad,
       categoria_id = EXCLUDED.categoria_id,
       activo       = EXCLUDED.activo,
-      updated_at   = EXCLUDED.updated_at`;
+      updated_at   = EXCLUDED.updated_at
+      WHERE productos.modificado_localmente = false`;
 
     for (let i = 0; i < mps.length; i += BATCH) {
       const chunk = mps.slice(i, i + BATCH);

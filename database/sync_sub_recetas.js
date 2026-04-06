@@ -236,6 +236,29 @@ async function main() {
     const prodCodigoMap = {}; // codigo → pg id
     prodRows.rows.forEach(r => { prodCodigoMap[r.codigo] = r.id; });
 
+    // ── Leer sub-recetas modificadas localmente por el usuario ──────────────
+    // Estas NO se sobreescriben: se omiten en el upsert y en el delete/re-insert
+    // de ingredientes para preservar los cambios que el usuario hizo en el sistema.
+    const modLocRes = await pg.query(`
+      SELECT codigo_origen
+      FROM recetas
+      WHERE tipo_receta = 'sub_receta'
+        AND modificado_localmente = true
+        AND codigo_origen IS NOT NULL
+    `);
+    const modificadasLocalmente = new Set(modLocRes.rows.map(r => String(r.codigo_origen).trim()));
+    if (modificadasLocalmente.size > 0) {
+      log(`      ${modificadasLocalmente.size} sub-receta(s) con modificado_localmente=true — se omitirán del sync.`);
+    }
+
+    // Filtrar subRows: excluir las modificadas localmente
+    const subRowsFiltradas = subRows.filter(r => !modificadasLocalmente.has(String(r.codigo ?? '').trim()));
+    const omitidas = subRows.length - subRowsFiltradas.length;
+    if (omitidas > 0) log(`      ${omitidas} sub-receta(s) omitidas por modificado_localmente.`);
+    // Reemplazar subRows por la versión filtrada para todo el resto del proceso
+    subRows.length = 0;
+    subRows.push(...subRowsFiltradas);
+
     // ── Detectar ingredientes de sub-recetas que no están en productos → insertarlos ──
     const allIngrCodigos = [...new Set(subIngrRows.map(r => String(r.ingr_codigo ?? '').trim()).filter(Boolean))];
     const missingCodigos = allIngrCodigos.filter(c => !prodCodigoMap[c]);
@@ -294,9 +317,12 @@ async function main() {
     // Q_SUB_RECETAS ya filtra por categoría 'Platos Sub-Recetas', así que todos los
     // registros procesados aquí son genuinamente sub-recetas — se puede actualizar
     // tipo_receta sin riesgo de sobreescribir platos del menú.
+    // WHERE recetas.modificado_localmente = false → doble protección por si acaso
+    // (el filtro de subRowsFiltradas ya debió excluirlos, pero esto es seguro).
     const rConf = `ON CONFLICT (codigo_origen) DO UPDATE SET
       nombre=EXCLUDED.nombre, tipo=EXCLUDED.tipo, tipo_receta=EXCLUDED.tipo_receta,
-      updated_at=EXCLUDED.updated_at`;
+      updated_at=EXCLUDED.updated_at
+      WHERE recetas.modificado_localmente = false`;
     const rRet = 'RETURNING id, codigo_origen';
 
     let insertedCount = 0;

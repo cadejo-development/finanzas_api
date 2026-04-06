@@ -220,7 +220,8 @@ class ProductosController extends Controller
         if (isset($data['origen']) && $data['origen'] === null) {
             $data['origen'] = 'restaurante';
         }
-        $data['aud_usuario'] = $request->user()?->email;
+        $data['aud_usuario']           = $request->user()?->email;
+        $data['modificado_localmente'] = true;
 
         $producto->update($data);
         $producto->load('categoria');

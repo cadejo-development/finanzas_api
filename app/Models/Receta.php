@@ -25,11 +25,14 @@ class Receta extends Model
         'foto_plato',
         'foto_plateria',
         'aud_usuario',
+        'codigo_origen',
+        'modificado_localmente',
     ];
 
     protected $casts = [
-        'platos_semana' => 'integer',
-        'activa'        => 'boolean',
+        'platos_semana'        => 'integer',
+        'activa'               => 'boolean',
+        'modificado_localmente'=> 'boolean',
     ];
 
     /**
