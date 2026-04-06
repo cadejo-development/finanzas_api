@@ -72,7 +72,9 @@ class ProductosController extends Controller
             'id'           => $p->id,
             'codigo'       => $p->codigo,
             'nombre'       => $p->nombre,
-            'unidad'       => $p->unidad,
+            'unidad'             => $p->unidad,
+            'unidad_base'        => $p->unidad_base,
+            'factor_conversion'  => $p->factor_conversion ? (float) $p->factor_conversion : null,
             'precio'          => (float) $p->precio,
             'costo'           => (float) $p->costo,
             'precio_unitario' => (float) $p->costo,  // costo para cálculos de recetas
@@ -169,12 +171,14 @@ class ProductosController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'categoria_id' => 'required|integer|exists:compras.categorias,id',
-            'codigo'       => 'required|string|max:30|unique:compras.productos,codigo',
-            'nombre'       => 'required|string|max:150',
-            'unidad'       => 'required|string|exists:compras.unidades_medida,codigo',
-            'precio'       => 'required|numeric|min:0',
-            'origen'       => 'nullable|in:restaurante,centro_produccion',
+            'categoria_id'      => 'required|integer|exists:compras.categorias,id',
+            'codigo'            => 'required|string|max:30|unique:compras.productos,codigo',
+            'nombre'            => 'required|string|max:150',
+            'unidad'            => 'required|string|exists:compras.unidades_medida,codigo',
+            'unidad_base'       => 'nullable|string|max:20',
+            'factor_conversion' => 'nullable|numeric|min:0.0001',
+            'precio'            => 'required|numeric|min:0',
+            'origen'            => 'nullable|in:restaurante,centro_produccion',
         ]);
 
         $data['activo']      = true;
@@ -185,18 +189,20 @@ class ProductosController extends Controller
         $producto->load('categoria');
 
         return response()->json(['data' => [
-            'id'               => $producto->id,
-            'codigo'           => $producto->codigo,
-            'nombre'           => $producto->nombre,
-            'unidad'           => $producto->unidad,
-            'precio'           => (float) $producto->precio,
-            'costo'            => (float) $producto->costo,
-            'precio_unitario'  => (float) $producto->costo,
-            'activo'           => $producto->activo,
-            'categoria_id'     => $producto->categoria_id,
-            'categoria_key'    => $producto->categoria?->key,
-            'categoria_nombre' => $producto->categoria?->nombre,
-            'origen'           => $producto->origen ?? 'restaurante',
+            'id'                => $producto->id,
+            'codigo'            => $producto->codigo,
+            'nombre'            => $producto->nombre,
+            'unidad'            => $producto->unidad,
+            'unidad_base'       => $producto->unidad_base,
+            'factor_conversion' => $producto->factor_conversion ? (float) $producto->factor_conversion : null,
+            'precio'            => (float) $producto->precio,
+            'costo'             => (float) $producto->costo,
+            'precio_unitario'   => (float) $producto->costo,
+            'activo'            => $producto->activo,
+            'categoria_id'      => $producto->categoria_id,
+            'categoria_key'     => $producto->categoria?->key,
+            'categoria_nombre'  => $producto->categoria?->nombre,
+            'origen'            => $producto->origen ?? 'restaurante',
         ]], 201);
     }
 
@@ -209,12 +215,14 @@ class ProductosController extends Controller
         $producto = Producto::where('activo', true)->findOrFail($id);
 
         $data = $request->validate([
-            'categoria_id' => 'sometimes|integer|exists:compras.categorias,id',
-            'codigo'       => "sometimes|string|max:30|unique:compras.productos,codigo,{$id}",
-            'nombre'       => 'sometimes|string|max:150',
-            'unidad'       => 'sometimes|string|exists:compras.unidades_medida,codigo',
-            'precio'       => 'sometimes|numeric|min:0',
-            'origen'       => 'nullable|in:restaurante,centro_produccion',
+            'categoria_id'      => 'sometimes|integer|exists:compras.categorias,id',
+            'codigo'            => "sometimes|string|max:30|unique:compras.productos,codigo,{$id}",
+            'nombre'            => 'sometimes|string|max:150',
+            'unidad'            => 'sometimes|string|exists:compras.unidades_medida,codigo',
+            'unidad_base'       => 'nullable|string|max:20',
+            'factor_conversion' => 'nullable|numeric|min:0.0001',
+            'precio'            => 'sometimes|numeric|min:0',
+            'origen'            => 'nullable|in:restaurante,centro_produccion',
         ]);
 
         if (isset($data['origen']) && $data['origen'] === null) {
@@ -227,18 +235,20 @@ class ProductosController extends Controller
         $producto->load('categoria');
 
         return response()->json(['data' => [
-            'id'               => $producto->id,
-            'codigo'           => $producto->codigo,
-            'nombre'           => $producto->nombre,
-            'unidad'           => $producto->unidad,
-            'precio'           => (float) $producto->precio,
-            'costo'            => (float) $producto->costo,
-            'precio_unitario'  => (float) $producto->costo,
-            'activo'           => $producto->activo,
-            'categoria_id'     => $producto->categoria_id,
-            'categoria_key'    => $producto->categoria?->key,
-            'categoria_nombre' => $producto->categoria?->nombre,
-            'origen'           => $producto->origen ?? 'restaurante',
+            'id'                => $producto->id,
+            'codigo'            => $producto->codigo,
+            'nombre'            => $producto->nombre,
+            'unidad'            => $producto->unidad,
+            'unidad_base'       => $producto->unidad_base,
+            'factor_conversion' => $producto->factor_conversion ? (float) $producto->factor_conversion : null,
+            'precio'            => (float) $producto->precio,
+            'costo'             => (float) $producto->costo,
+            'precio_unitario'   => (float) $producto->costo,
+            'activo'            => $producto->activo,
+            'categoria_id'      => $producto->categoria_id,
+            'categoria_key'     => $producto->categoria?->key,
+            'categoria_nombre'  => $producto->categoria?->nombre,
+            'origen'            => $producto->origen ?? 'restaurante',
         ]]);
     }
 

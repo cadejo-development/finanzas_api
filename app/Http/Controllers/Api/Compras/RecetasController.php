@@ -590,15 +590,14 @@ class RecetasController extends Controller
                 'cantidad_por_plato' => (float) $ing->cantidad_por_plato,
                 'unidad'                 => $ing->unidad,
                 'prod_unidad'            => $ing->producto?->unidad,
+                'prod_unidad_base'        => $ing->producto?->unidad_base,
                 'sub_rendimiento'        => $ing->subReceta ? ((float) ($ing->subReceta->rendimiento ?? 0) ?: null) : null,
                 'sub_rendimiento_unidad' => $ing->subReceta?->rendimiento_unidad,
                 'precio_unitario'    => $ing->sub_receta_id
                     ? $this->calcularCostoSubReceta($ing->subReceta, $ing->unidad)
-                    : $this->convertirCosto(
-                        (float) ($ing->producto?->costo ?? 0),
-                        strtolower(trim($ing->producto?->unidad ?? '')),
-                        strtolower(trim($ing->unidad ?? ''))
-                      ),
+                    : ($ing->producto
+                        ? $this->costoPorUnidadReceta($ing->producto, strtolower(trim($ing->unidad ?? '')))
+                        : 0.0),
             ])->values(),
         ];
 
@@ -615,11 +614,9 @@ class RecetasController extends Controller
                         'costo_grupo'  => 0.0,
                     ];
                 }
-                $costoUnit = $this->convertirCosto(
-                    (float) ($mod->producto?->costo ?? 0),
-                    strtolower(trim($mod->producto?->unidad ?? '')),
-                    strtolower(trim($mod->unidad ?? ''))
-                );
+                $costoUnit = $mod->producto
+                    ? $this->costoPorUnidadReceta($mod->producto, strtolower(trim($mod->unidad ?? '')))
+                    : 0.0;
                 $costoOp = $costoUnit * (float) ($mod->cantidad ?? 0);
                 $grupos[$key]['opciones'][] = [
                     'nombre'      => $mod->opcion_nombre,
@@ -651,11 +648,7 @@ class RecetasController extends Controller
             $prod = \App\Models\Producto::where('codigo', $sub->codigo_origen)->first();
         }
         if ($prod && (float) $prod->costo > 0) {
-            return $this->convertirCosto(
-                (float) $prod->costo,
-                strtolower(trim($prod->unidad ?? '')),
-                strtolower(trim($unidadReceta ?? ''))
-            );
+            return $this->costoPorUnidadReceta($prod, strtolower(trim($unidadReceta ?? '')));
         }
 
         // Cargar ingredientes incluyendo sub-sub-recetas si no están cargados.
@@ -674,9 +667,11 @@ class RecetasController extends Controller
                     * $this->calcularCostoSubReceta($si->subReceta, $si->unidad, $depth + 1);
             }
             $costo    = (float) ($si->producto?->costo ?? 0);
-            $prodUnit = strtolower(trim($si->producto?->unidad ?? ''));
             $ingrUnit = strtolower(trim($si->unidad ?? ''));
-            return (float) $si->cantidad_por_plato * $this->convertirCosto($costo, $prodUnit, $ingrUnit);
+            $costoUnit = $si->producto
+                ? $this->costoPorUnidadReceta($si->producto, $ingrUnit)
+                : 0.0;
+            return (float) $si->cantidad_por_plato * $costoUnit;
         });
 
         // Si la sub-receta tiene rendimiento definido: es el denominador explícito del batch.
@@ -743,6 +738,33 @@ class RecetasController extends Controller
         } catch (\Throwable $e) {
             return $url; // Si falla, devolver la URL original
         }
+    }
+
+    /**
+     * Calcula el costo por unidad de receta para un producto.
+     * Si el producto tiene factor_conversion + unidad_base, primero normaliza
+     * el costo a la unidad_base y luego convierte a la unidad destino.
+     * Ej: 1 caja (costo $85) con 4500g → $0.01889/g → receta en oz → utilizarConversion(g→oz)
+     */
+    private function costoPorUnidadReceta(\App\Models\Producto $prod, string $haciaUnidad): float
+    {
+        $costo = (float) $prod->costo;
+        if ($costo === 0.0) return 0.0;
+
+        $factor   = $prod->factor_conversion ? (float) $prod->factor_conversion : null;
+        $unidBase = $factor ? strtolower(trim($prod->unidad_base ?? '')) : null;
+
+        if ($factor && $factor > 0 && $unidBase) {
+            // Normalizar: costo por unidad_base
+            $costoPorBase = $costo / $factor;
+            if (!$haciaUnidad || $haciaUnidad === $unidBase) return $costoPorBase;
+            return $this->convertirCosto($costoPorBase, $unidBase, $haciaUnidad);
+        }
+
+        // Sin factor: conversión directa entre unidades físicas
+        $prodUnit = strtolower(trim($prod->unidad ?? ''));
+        if (!$haciaUnidad || $haciaUnidad === $prodUnit) return $costo;
+        return $this->convertirCosto($costo, $prodUnit, $haciaUnidad);
     }
 
     /**
