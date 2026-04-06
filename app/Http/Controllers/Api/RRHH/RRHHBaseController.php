@@ -45,7 +45,10 @@ abstract class RRHHBaseController extends Controller
     /**
      * Retorna los IDs del universo de empleados que puede gestionar el usuario:
      *  - rrhh_admin : todos los empleados activos (filtrable por sucursal_id/departamento_id del request).
-     *  - jefatura   : solo los subordinados del departamento a cargo.
+     *  - jefatura   : subordinados de TODOS los departamentos/sucursales a su cargo.
+     *                 Prioridad: (1) departamentos donde es jefe_empleado_id,
+     *                            (2) sucursales en empleado_jefaturas,
+     *                            (3) sucursal propia del usuario (fallback legacy).
      */
     protected function getSubordinadosIds(): array
     {
@@ -60,44 +63,72 @@ abstract class RRHHBaseController extends Controller
             ->where('user_id', $user->id)
             ->value('id');
 
-        if ($jefeEmpleadoId) {
-            $deptId = DB::connection('pgsql')
-                ->table('departamentos')
-                ->where('jefe_empleado_id', $jefeEmpleadoId)
-                ->where('activo', true)
-                ->value('id');
+        if (!$jefeEmpleadoId) return [];
 
-            if ($deptId) {
+        // ── 1. Todos los departamentos donde este empleado es jefe ────────────
+        $deptIds = DB::connection('pgsql')
+            ->table('departamentos')
+            ->where('jefe_empleado_id', $jefeEmpleadoId)
+            ->where('activo', true)
+            ->pluck('id')
+            ->all();
+
+        if (!empty($deptIds)) {
+            return DB::connection('pgsql')
+                ->table('empleados')
+                ->whereIn('departamento_id', $deptIds)
+                ->where('activo', true)
+                ->where('id', '!=', $jefeEmpleadoId)
+                ->pluck('id')
+                ->all();
+        }
+
+        // ── 2. Sin departamentos: buscar sucursales asignadas en empleado_jefaturas ──
+        $jefaturaSucursalIds = DB::connection('pgsql')
+            ->table('empleado_jefaturas')
+            ->where('empleado_id', $jefeEmpleadoId)
+            ->where('activo', true)
+            ->whereNotNull('sucursal_id')
+            ->pluck('sucursal_id')
+            ->all();
+
+        if (!empty($jefaturaSucursalIds)) {
+            // Solo sucursales operativas (no áreas corporativas)
+            $operativaIds = DB::connection('pgsql')
+                ->table('sucursales')
+                ->whereIn('id', $jefaturaSucursalIds)
+                ->where('tipo', 'operativa')
+                ->pluck('id')
+                ->all();
+
+            if (!empty($operativaIds)) {
                 return DB::connection('pgsql')
                     ->table('empleados')
-                    ->where('departamento_id', $deptId)
+                    ->whereIn('sucursal_id', $operativaIds)
                     ->where('activo', true)
                     ->where('id', '!=', $jefeEmpleadoId)
                     ->pluck('id')
                     ->all();
             }
-
-            // No department configured — only allow sucursal-wide scope for
-            // restaurant branches (tipo = 'operativa'). Corporate branches
-            // (area_corporativa) without a dept assignment see nobody.
-            $sucursalTipo = DB::connection('pgsql')
-                ->table('sucursales')
-                ->where('id', $user->sucursal_id)
-                ->value('tipo');
-
-            if ($sucursalTipo === 'operativa') {
-                return DB::connection('pgsql')
-                    ->table('empleados')
-                    ->where('sucursal_id', $user->sucursal_id)
-                    ->where('activo', true)
-                    ->pluck('id')
-                    ->filter(fn($id) => $id !== $jefeEmpleadoId)
-                    ->values()
-                    ->all();
-            }
         }
 
-        // Corporate branch with no dept → jefe sees no subordinates
+        // ── 3. Fallback legacy: sucursal propia del usuario ───────────────────
+        $sucursalTipo = DB::connection('pgsql')
+            ->table('sucursales')
+            ->where('id', $user->sucursal_id)
+            ->value('tipo');
+
+        if ($sucursalTipo === 'operativa') {
+            return DB::connection('pgsql')
+                ->table('empleados')
+                ->where('sucursal_id', $user->sucursal_id)
+                ->where('activo', true)
+                ->pluck('id')
+                ->filter(fn($id) => $id !== $jefeEmpleadoId)
+                ->values()
+                ->all();
+        }
+
         return [];
     }
 
