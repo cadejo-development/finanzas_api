@@ -29,6 +29,8 @@ use App\Http\Controllers\Api\RRHH\TrasladosController;
 use App\Http\Controllers\Api\RRHH\CambiosSalarialesController;
 use App\Http\Controllers\Api\RRHH\DepartamentosController;
 use App\Http\Controllers\Api\RRHH\ExpedienteController;
+use App\Http\Controllers\Api\RRHH\CalendarioController;
+use App\Http\Controllers\Api\RRHH\HistorialController;
 use App\Http\Controllers\Api\GeoController;
 
 // ─── Geo catálogos El Salvador (público, sin auth) ────────────────────────
@@ -223,6 +225,12 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
 
     // Dashboard KPIs
     Route::get('dashboard', [DashboardRRHHController::class, 'resumen']);
+
+    // Calendario de equipo
+    Route::get('calendario', [CalendarioController::class, 'index']);
+
+    // Historial unificado
+    Route::get('historial', [HistorialController::class, 'index']);
 
     // Permisos
     Route::get('permisos/saldos',   [PermisosController::class, 'saldos']);
