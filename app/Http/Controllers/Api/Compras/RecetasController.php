@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace App\Http\Controllers\Api\Compras;
 
@@ -16,11 +16,11 @@ use Illuminate\Support\Facades\Storage;
 
 class RecetasController extends Controller
 {
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     // GET /api/compras/recetas
     // Lista paginada de recetas (con ingredientes + producto).
     // Query opcional: sucursal_id, tipo_receta ('plato'|'sub_receta')
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     public function index(Request $request): JsonResponse
     {
         $perPage    = min((int) $request->query('per_page', 20), 100);
@@ -65,7 +65,7 @@ class RecetasController extends Controller
         }
 
         // Filtro por tipo_receta: 'plato' | 'sub_receta'
-        // Incluye tambiÃ©n registros con tipo (categorÃ­a) que contenga 'Sub-Receta'
+        // Incluye tambi├®n registros con tipo (categor├¡a) que contenga 'Sub-Receta'
         // para compatibilidad con datos migrados antes del campo tipo_receta.
         if ($tipoReceta = $request->query('tipo_receta')) {
             $query->where(function ($q) use ($tipoReceta) {
@@ -74,9 +74,9 @@ class RecetasController extends Controller
                     $q->orWhereRaw("lower(tipo) LIKE '%sub%receta%'");
                 }
             });
-            // En el catÃ¡logo de sub-recetas solo mostrar las de categorÃ­a "Platos Sub-Recetas".
+            // En el cat├ílogo de sub-recetas solo mostrar las de categor├¡a "Platos Sub-Recetas".
             // Las modifier sub-recetas (agua dura, bebidas, etc.) son ingredientes internos
-            // y no deben aparecer en el listado del catÃ¡logo.
+            // y no deben aparecer en el listado del cat├ílogo.
             if ($tipoReceta === 'sub_receta') {
                 $query->where(function ($q) {
                     $q->whereRaw("lower(coalesce(tipo,'')) LIKE '%sub%receta%'")
@@ -85,15 +85,15 @@ class RecetasController extends Controller
             }
         } else {
             // Sin filtro de tipo_receta: excluir los marcados como sub_receta,
-            // y tambiÃ©n los de categorÃ­a "Platos Sub-Recetas" para que no se mezclen.
+            // y tambi├®n los de categor├¡a "Platos Sub-Recetas" para que no se mezclen.
             $query->where(function ($q) {
                 $q->where('tipo_receta', '!=', 'sub_receta')
                   ->orWhereNull('tipo_receta');
             })->whereRaw("lower(coalesce(tipo,'')) NOT LIKE '%sub%receta%'");
         }
 
-        // Excluir recetas cuya categorÃ­a estÃ¡ marcada como inactiva
-        // (cervezas, aguas, cristalerÃ­a, envases, etc. no deben aparecer en el catÃ¡logo)
+        // Excluir recetas cuya categor├¡a est├í marcada como inactiva
+        // (cervezas, aguas, cristaler├¡a, envases, etc. no deben aparecer en el cat├ílogo)
         $query->where(function ($q) {
             $q->whereNull('categoria_id')
               ->orWhereHas('categoria', fn ($sq) => $sq->where('activa', true));
@@ -118,9 +118,9 @@ class RecetasController extends Controller
         ]);
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     // GET /api/compras/recetas/{id}
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     public function show(Request $request, int $id): JsonResponse
     {
         $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
@@ -139,12 +139,12 @@ class RecetasController extends Controller
         return response()->json(['data' => $this->formatReceta($receta, $sucursalId, true)]);
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     // POST /api/compras/recetas/{id}/pdf
     // Body JSON opcional: { foto_plato_b64: "data:image/...", foto_plateria_b64: "..." }
     // El browser convierte las fotos a base64 antes de enviarlas (evita que
     // App Runner intente descargar desde S3, lo cual falla por red).
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     public function pdf(int $id, Request $request): Response
     {
         $receta = Receta::with([
@@ -202,9 +202,9 @@ class RecetasController extends Controller
         }
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     // POST /api/compras/recetas
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -279,9 +279,9 @@ class RecetasController extends Controller
         return response()->json(['data' => $this->formatReceta($receta)], 201);
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     // PUT /api/compras/recetas/{id}
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     public function update(Request $request, int $id): JsonResponse
     {
         $receta = Receta::findOrFail($id);
@@ -350,7 +350,7 @@ class RecetasController extends Controller
             // Sincronizar sucursales si se envian
             if (array_key_exists('sucursal_ids', $validated)) {
                 $nuevasIds = $validated['sucursal_ids'] ?? [];
-                // Desactivar las que ya no estÃ¡n en la lista
+                // Desactivar las que ya no est├ín en la lista
                 RecetaSucursal::where('receta_id', $receta->id)
                     ->whereNotIn('sucursal_id', $nuevasIds)
                     ->update(['activa' => false]);
@@ -390,11 +390,11 @@ class RecetasController extends Controller
         return response()->json(['data' => $this->formatReceta($receta, null, true)]);
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // DELETE /api/compras/recetas/{id}  â€” Inactiva la receta (soft-delete).
-    // Body opcional: { sucursal_ids: [1, 2] } â†’ inactiva solo en esas sucursales.
-    // Sin sucursal_ids â†’ inactiva globalmente (receta + todas sus sucursales).
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+    // DELETE /api/compras/recetas/{id}  ÔÇö Inactiva la receta (soft-delete).
+    // Body opcional: { sucursal_ids: [1, 2] } ÔåÆ inactiva solo en esas sucursales.
+    // Sin sucursal_ids ÔåÆ inactiva globalmente (receta + todas sus sucursales).
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     public function destroy(Request $request, int $id): JsonResponse
     {
         $receta     = Receta::findOrFail($id);
@@ -416,151 +416,119 @@ class RecetasController extends Controller
         return response()->json(['message' => 'Receta inactivada globalmente.']);
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+    // ─────────────────────────────────────────────────────────────────────
     // GET /api/compras/recetas/dashboard
-    // KPIs y listado de platos con costo + precio de venta.
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─────────────────────────────────────────────────────────────────────
     public function dashboard(): JsonResponse
     {
         try {
-        try {
-        // â”€â”€ 1. Totales globales â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        $totalPlatos = Receta::where('activa', true)
-            ->where(fn ($q) => $q->where('tipo_receta', 'plato')->orWhereNull('tipo_receta'))
-            ->whereRaw("lower(coalesce(tipo,'')) NOT LIKE '%sub%receta%'")
-            ->count();
+            $totalPlatos = Receta::where('activa', true)
+                ->where(fn ($q) => $q->where('tipo_receta', 'plato')->orWhereNull('tipo_receta'))
+                ->whereRaw("lower(coalesce(tipo,'')) NOT LIKE '%sub%receta%'")
+                ->count();
 
-        $totalSubRecetas = Receta::where('activa', true)
-            ->where(fn ($q) =>
-                $q->where('tipo_receta', 'sub_receta')
-                  ->orWhereRaw("lower(coalesce(tipo,'')) LIKE '%sub%receta%'")
-            )
-            ->count();
+            $totalSubRecetas = Receta::where('activa', true)
+                ->where(fn ($q) =>
+                    $q->where('tipo_receta', 'sub_receta')
+                      ->orWhereRaw("lower(coalesce(tipo,'')) LIKE '%sub%receta%'")
+                )
+                ->count();
 
-        $totalCategorias = DB::connection('compras')
-            ->table('receta_categorias')
-            ->where('activa', true)
-            ->count();
+            $totalCategorias = DB::connection('compras')
+                ->table('receta_categorias')->where('activa', true)->count();
 
-        // â”€â”€ 2. Por sucursal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        $cuentasSucursal = DB::connection('compras')
-            ->table('receta_sucursal as rs')
-            ->join('recetas as r', 'rs.receta_id', '=', 'r.id')
-            ->where('rs.activa', true)
-            ->where('r.activa', true)
-            ->selectRaw("
-                rs.sucursal_id,
-                SUM(CASE WHEN r.tipo_receta = 'sub_receta'
-                          OR lower(coalesce(r.tipo,'')) LIKE '%sub%receta%'
-                     THEN 1 ELSE 0 END) AS total_sub_recetas,
-                SUM(CASE WHEN (r.tipo_receta IS NULL OR r.tipo_receta = 'plato')
-                          AND lower(coalesce(r.tipo,'')) NOT LIKE '%sub%receta%'
-                     THEN 1 ELSE 0 END) AS total_recetas
-            ")
-            ->groupBy('rs.sucursal_id')
-            ->get();
+            $cuentasSucursal = DB::connection('compras')
+                ->table('receta_sucursal as rs')
+                ->join('recetas as r', 'rs.receta_id', '=', 'r.id')
+                ->where('rs.activa', true)->where('r.activa', true)
+                ->selectRaw("rs.sucursal_id,
+                    SUM(CASE WHEN r.tipo_receta = 'sub_receta' OR lower(coalesce(r.tipo,'')) LIKE '%sub%receta%' THEN 1 ELSE 0 END) AS total_sub_recetas,
+                    SUM(CASE WHEN (r.tipo_receta IS NULL OR r.tipo_receta = 'plato') AND lower(coalesce(r.tipo,'')) NOT LIKE '%sub%receta%' THEN 1 ELSE 0 END) AS total_recetas")
+                ->groupBy('rs.sucursal_id')->get();
 
-        $sucursalIds    = $cuentasSucursal->pluck('sucursal_id')->filter()->all();
-        $sucursalNombres = $sucursalIds
-            ? DB::connection('pgsql')->table('sucursales')->whereIn('id', $sucursalIds)->pluck('nombre', 'id')
-            : collect();
+            $sucursalIds = $cuentasSucursal->pluck('sucursal_id')->filter()->all();
+            $sucursalNombres = $sucursalIds
+                ? DB::connection('pgsql')->table('sucursales')->whereIn('id', $sucursalIds)->pluck('nombre', 'id')
+                : collect();
 
-        $porSucursal = $cuentasSucursal->map(fn ($row) => [
-            'sucursal_id'       => $row->sucursal_id,
-            'sucursal_nombre'   => $sucursalNombres[$row->sucursal_id] ?? "Sucursal {$row->sucursal_id}",
-            'total_recetas'     => (int) $row->total_recetas,
-            'total_sub_recetas' => (int) $row->total_sub_recetas,
-        ])->sortBy('sucursal_nombre')->values();
+            $porSucursal = $cuentasSucursal->map(fn ($row) => [
+                'sucursal_id'       => $row->sucursal_id,
+                'sucursal_nombre'   => $sucursalNombres[$row->sucursal_id] ?? "Sucursal {$row->sucursal_id}",
+                'total_recetas'     => (int) $row->total_recetas,
+                'total_sub_recetas' => (int) $row->total_sub_recetas,
+            ])->sortBy('sucursal_nombre')->values();
 
-        // â”€â”€ 3. Por categorÃ­a â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        $porCategoria = DB::connection('compras')
-            ->table('recetas as r')
-            ->leftJoin('receta_categorias as c', 'r.categoria_id', '=', 'c.id')
-            ->where('r.activa', true)
-            ->selectRaw("
-                coalesce(c.nombre, r.tipo, 'Sin categorÃ­a') as categoria,
-                r.tipo_receta,
-                COUNT(*) as total
-            ")
-            ->groupByRaw("coalesce(c.nombre, r.tipo, 'Sin categorÃ­a'), r.tipo_receta")
-            ->orderByRaw("coalesce(c.nombre, r.tipo, 'Sin categorÃ­a')")
-            ->get()
-            ->map(fn ($row) => [
-                'categoria'   => $row->categoria,
-                'tipo_receta' => $row->tipo_receta ?? 'plato',
-                'total'       => (int) $row->total,
-            ]);
+            $porCategoria = DB::connection('compras')
+                ->table('recetas as r')
+                ->leftJoin('receta_categorias as c', 'r.categoria_id', '=', 'c.id')
+                ->where('r.activa', true)
+                ->selectRaw("coalesce(c.nombre, r.tipo, 'Sin categoria') as categoria, r.tipo_receta, COUNT(*) as total")
+                ->groupByRaw("coalesce(c.nombre, r.tipo, 'Sin categoria'), r.tipo_receta")
+                ->orderByRaw("coalesce(c.nombre, r.tipo, 'Sin categoria')")
+                ->get()->map(fn ($row) => [
+                    'categoria'   => $row->categoria,
+                    'tipo_receta' => $row->tipo_receta ?? 'plato',
+                    'total'       => (int) $row->total,
+                ]);
 
-        // â”€â”€ 4. Platos con costo y precio â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        $platos = Receta::with([
-                'categoria',
-                'ingredientes.producto',
-                'ingredientes.subReceta.productoAsociado',
-                'ingredientes.subReceta.ingredientes.producto',
-                'ingredientes.subReceta.ingredientes.subReceta.productoAsociado',
-                'ingredientes.subReceta.ingredientes.subReceta.ingredientes.producto',
-            ])
-            ->where('activa', true)
-            ->where(fn ($q) => $q->where('tipo_receta', 'plato')->orWhereNull('tipo_receta'))
-            ->whereRaw("lower(coalesce(tipo,'')) NOT LIKE '%sub%receta%'")
-            ->orderBy('nombre')
-            ->get();
+            $platos = Receta::with([
+                    'categoria',
+                    'ingredientes.producto',
+                    'ingredientes.subReceta.productoAsociado',
+                    'ingredientes.subReceta.ingredientes.producto',
+                    'ingredientes.subReceta.ingredientes.subReceta.productoAsociado',
+                    'ingredientes.subReceta.ingredientes.subReceta.ingredientes.producto',
+                ])
+                ->where('activa', true)
+                ->where(fn ($q) => $q->where('tipo_receta', 'plato')->orWhereNull('tipo_receta'))
+                ->whereRaw("lower(coalesce(tipo,'')) NOT LIKE '%sub%receta%'")
+                ->orderBy('nombre')->get();
 
-        $recetasList = $platos->map(function ($r) {
-            $costo = (float) $r->ingredientes->sum(function ($ing) {
-                if ($ing->sub_receta_id && $ing->subReceta) {
-                    return (float) $ing->cantidad_por_plato
-                        * $this->calcularCostoSubReceta($ing->subReceta, $ing->unidad);
-                }
-                if ($ing->producto) {
-                    return (float) $ing->cantidad_por_plato
-                        * $this->costoPorUnidadReceta($ing->producto, strtolower(trim($ing->unidad ?? '')));
-                }
-                return 0.0;
+            $recetasList = $platos->map(function ($r) {
+                $costo = (float) $r->ingredientes->sum(function ($ing) {
+                    if ($ing->sub_receta_id && $ing->subReceta) {
+                        return (float) $ing->cantidad_por_plato * $this->calcularCostoSubReceta($ing->subReceta, $ing->unidad);
+                    }
+                    if ($ing->producto) {
+                        return (float) $ing->cantidad_por_plato * $this->costoPorUnidadReceta($ing->producto, strtolower(trim($ing->unidad ?? '')));
+                    }
+                    return 0.0;
+                });
+                $precio = (float) ($r->precio ?? 0);
+                return [
+                    'id'          => $r->id,
+                    'nombre'      => $r->nombre,
+                    'tipo_receta' => $r->tipo_receta ?? 'plato',
+                    'categoria'   => $r->categoria?->nombre ?? $r->tipo ?? 'Sin categoria',
+                    'precio'      => round($precio, 4),
+                    'costo'       => round($costo, 4),
+                    'margen'      => round($precio - $costo, 4),
+                ];
             });
 
-            $precio = (float) ($r->precio ?? 0);
-
-            return [
-                'id'          => $r->id,
-                'nombre'      => $r->nombre,
-                'tipo_receta' => $r->tipo_receta ?? 'plato',
-                'categoria'   => $r->categoria?->nombre ?? $r->tipo ?? 'Sin categorÃ­a',
-                'precio'      => round($precio, 4),
-                'costo'       => round($costo, 4),
-                'margen'      => round($precio - $costo, 4),
-            ];
-        });
-
-        return response()->json([
-            'data' => [
-                'resumen' => [
-                    'total_platos'      => $totalPlatos,
-                    'total_sub_recetas' => $totalSubRecetas,
-                    'total_categorias'  => $totalCategorias,
+            return response()->json([
+                'data' => [
+                    'resumen'       => ['total_platos' => $totalPlatos, 'total_sub_recetas' => $totalSubRecetas, 'total_categorias' => $totalCategorias],
+                    'por_sucursal'  => $porSucursal,
+                    'por_categoria' => $porCategoria,
+                    'recetas'       => $recetasList,
                 ],
-                'por_sucursal'  => $porSucursal,
-                'por_categoria' => $porCategoria,
-                'recetas'       => $recetasList,
-            ],
-        ]);
+            ]);
         } catch (\Throwable $e) {
             return response()->json([
-                'error'   => $e->getMessage(),
-                'file'    => $e->getFile(),
-                'line'    => $e->getLine(),
-                'trace'   => $e->getTraceAsString(),
+                'error' => $e->getMessage(),
+                'file'  => $e->getFile(),
+                'line'  => $e->getLine(),
             ], 500);
         }
     }
-
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // GET /api/compras/recetas/tipos  (deprecated â†’ usar /receta-categorias)
-    // Mantenido por compatibilidad. Devuelve categorÃ­as activas de la DB.
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // GET /api/compras/recetas/tipos  (deprecated ÔåÆ usar /receta-categorias)
+    // Mantenido por compatibilidad. Devuelve categor├¡as activas de la DB.
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     public function tipos(Request $request): JsonResponse
     {
-        // Retornar las categorÃ­as reales del catÃ¡logo
+        // Retornar las categor├¡as reales del cat├ílogo
         $categorias = \App\Models\RecetaCategoria::where('activa', true)
             ->orderBy('nombre')
             ->get(['id', 'nombre']);
@@ -568,9 +536,9 @@ class RecetasController extends Controller
         return response()->json(['data' => $categorias]);
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     // POST /api/compras/recetas/calcular
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     public function calcular(Request $request): JsonResponse
     {
         $items = $request->validate([
@@ -609,9 +577,9 @@ class RecetasController extends Controller
         return response()->json(['data' => array_values($acumulado)]);
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     // PATCH /api/compras/recetas/{id}/platos-sucursal
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     public function setPlatosSucursal(Request $request, int $id): JsonResponse
     {
         $receta = Receta::findOrFail($id);
@@ -637,18 +605,18 @@ class RecetasController extends Controller
         ]);
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     // POST /api/compras/upload
     // Sube una foto de receta (foto_plato o foto_plateria).
     // Body: multipart/form-data con campo 'foto' (imagen)
     // Retorna: { url: '...' }
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     // GET /api/compras/upload/presign?ext=jpg&mime=image/jpeg
     // Genera una URL pre-firmada de S3 para que el browser suba directamente.
-    // No hace ninguna llamada de red a S3 â€” solo firma localmente.
+    // No hace ninguna llamada de red a S3 ÔÇö solo firma localmente.
     // Retorna: { presigned_url, public_url }
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     public function presignUpload(Request $request): JsonResponse
     {
         $ext      = preg_replace('/[^a-zA-Z0-9]/', '', $request->query('ext', 'jpg'));
@@ -688,9 +656,9 @@ class RecetasController extends Controller
         ]);
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     // Helpers
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
     private function formatReceta(Receta $r, ?int $sucursalId = null, bool $withModificadores = false): array
     {
         $data = [
@@ -789,7 +757,7 @@ class RecetasController extends Controller
             return $this->costoPorUnidadReceta($prod, strtolower(trim($unidadReceta ?? '')));
         }
 
-        // Cargar ingredientes incluyendo sub-sub-recetas si no estÃ¡n cargados.
+        // Cargar ingredientes incluyendo sub-sub-recetas si no est├ín cargados.
         if (!$sub->relationLoaded('ingredientes')) {
             $sub->load([
                 'ingredientes.producto',
@@ -799,7 +767,7 @@ class RecetasController extends Controller
         }
 
         $batchCosto = (float) $sub->ingredientes->sum(function ($si) use ($depth) {
-            // Ingrediente es a su vez una sub-receta â†’ calcular recursivamente.
+            // Ingrediente es a su vez una sub-receta ÔåÆ calcular recursivamente.
             if ($si->sub_receta_id && $si->subReceta) {
                 return (float) $si->cantidad_por_plato
                     * $this->calcularCostoSubReceta($si->subReceta, $si->unidad, $depth + 1);
@@ -812,8 +780,8 @@ class RecetasController extends Controller
             return (float) $si->cantidad_por_plato * $costoUnit;
         });
 
-        // Si la sub-receta tiene rendimiento definido: es el denominador explÃ­cito del batch.
-        // Ej: rinde 10 porciones â†’ costo/porcion = batch/10; padre usa 1 porcion â†’ $batch/10.
+        // Si la sub-receta tiene rendimiento definido: es el denominador expl├¡cito del batch.
+        // Ej: rinde 10 porciones ÔåÆ costo/porcion = batch/10; padre usa 1 porcion ÔåÆ $batch/10.
         $rendimiento = (float) ($sub->rendimiento ?? 0);
         $rendUnidad  = strtolower(trim($sub->rendimiento_unidad ?? ''));
         if ($rendimiento > 0 && $rendUnidad) {
@@ -825,10 +793,10 @@ class RecetasController extends Controller
             return $this->convertirCosto($costePorUnidad, $rendUnidad, $targetUnit);
         }
 
-        // Sin rendimiento explÃ­cito â†’ batch = 1 unidad del producto (ej: 1 lb).
+        // Sin rendimiento expl├¡cito ÔåÆ batch = 1 unidad del producto (ej: 1 lb).
         // Para unidades desconocidas ('tanda', 'u', 'porcion', etc.) se trata como 'lb',
-        // ya que SS usa mxprCantidad en libras internamente y el batch implÃ­citamente
-        // representa el costo por 1 lb de producciÃ³n.
+        // ya que SS usa mxprCantidad en libras internamente y el batch impl├¡citamente
+        // representa el costo por 1 lb de producci├│n.
         $subUnit = strtolower(trim($prod?->unidad ?? ''));
         if ($subUnit && $unidadReceta) {
             $knownUnits = ['lb', 'oz', 'g', 'kg', 'lt', 'ml', 'oz fl', 'galon'];
@@ -840,8 +808,8 @@ class RecetasController extends Controller
     }
 
     /**
-     * Convierte una URL de S3 a una presigned GET URL vÃ¡lida por 2 horas.
-     * La generaciÃ³n es puramente local (HMAC-SHA256), sin llamadas de red a S3.
+     * Convierte una URL de S3 a una presigned GET URL v├ílida por 2 horas.
+     * La generaci├│n es puramente local (HMAC-SHA256), sin llamadas de red a S3.
      * Si la URL no es de nuestro bucket, la devuelve sin cambios.
      */
     private function presignS3Url(?string $url): ?string
@@ -882,7 +850,7 @@ class RecetasController extends Controller
      * Calcula el costo por unidad de receta para un producto.
      * Si el producto tiene factor_conversion + unidad_base, primero normaliza
      * el costo a la unidad_base y luego convierte a la unidad destino.
-     * Ej: 1 caja (costo $85) con 4500g â†’ $0.01889/g â†’ receta en oz â†’ utilizarConversion(gâ†’oz)
+     * Ej: 1 caja (costo $85) con 4500g ÔåÆ $0.01889/g ÔåÆ receta en oz ÔåÆ utilizarConversion(gÔåÆoz)
      */
     private function costoPorUnidadReceta(\App\Models\Producto $prod, string $haciaUnidad): float
     {
@@ -899,7 +867,7 @@ class RecetasController extends Controller
             return $this->convertirCosto($costoPorBase, $unidBase, $haciaUnidad);
         }
 
-        // Sin factor: conversiÃ³n directa entre unidades fÃ­sicas
+        // Sin factor: conversi├│n directa entre unidades f├¡sicas
         $prodUnit = strtolower(trim($prod->unidad ?? ''));
         if (!$haciaUnidad || $haciaUnidad === $prodUnit) return $costo;
         return $this->convertirCosto($costo, $prodUnit, $haciaUnidad);
@@ -907,14 +875,14 @@ class RecetasController extends Controller
 
     /**
      * Convierte el costo almacenado (por unidad de compra) a la unidad usada en la receta.
-     * Ej: costo en $/lb â†’ $/oz multiplica por (1/16).
+     * Ej: costo en $/lb ÔåÆ $/oz multiplica por (1/16).
      */
     private function convertirCosto(float $costo, string $desdePorUnidad, string $haciaUnidad): float
     {
         if ($costo === 0.0 || $desdePorUnidad === $haciaUnidad) return $costo;
 
-        // Tabla de conversiÃ³n: factor[FROM][TO] = # de unidades FROM que caben en 1 unidad TO
-        // costo_TO = costo_FROM Ã— factor
+        // Tabla de conversi├│n: factor[FROM][TO] = # de unidades FROM que caben en 1 unidad TO
+        // costo_TO = costo_FROM ├ù factor
         $conv = [
             // Masa / peso
             'lb'    => ['oz' => 1/16,       'g'    => 1/453.592,  'kg'    => 1/0.453592, 'lb'    => 1],
