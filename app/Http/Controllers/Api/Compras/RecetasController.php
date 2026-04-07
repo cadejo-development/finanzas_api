@@ -417,18 +417,26 @@ class RecetasController extends Controller
     }
 
     // ----------------------------------------------------------------------
-    // ─────────────────────────────────────────────────────────────────────
     // GET /api/compras/recetas/dashboard
-    // ─────────────────────────────────────────────────────────────────────
-    public function dashboard(): JsonResponse
+    // KPIs, por sucursal y por categoria. Acepta ?sucursal_id= para filtrar.
+    // ----------------------------------------------------------------------
+    public function dashboard(Request $request): JsonResponse
     {
         try {
+            $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
+
+            $hasSucursal = fn ($q) => $q->whereHas('sucursalConfig', fn ($sq) =>
+                $sq->where('sucursal_id', $sucursalId)->where('activa', true)
+            );
+
             $totalPlatos = Receta::where('activa', true)
+                ->when($sucursalId, $hasSucursal)
                 ->where(fn ($q) => $q->where('tipo_receta', 'plato')->orWhereNull('tipo_receta'))
                 ->whereRaw("lower(coalesce(tipo,'')) NOT LIKE '%sub%receta%'")
                 ->count();
 
             $totalSubRecetas = Receta::where('activa', true)
+                ->when($sucursalId, $hasSucursal)
                 ->where(fn ($q) =>
                     $q->where('tipo_receta', 'sub_receta')
                       ->orWhereRaw("lower(coalesce(tipo,'')) LIKE '%sub%receta%'")
@@ -438,6 +446,7 @@ class RecetasController extends Controller
             $totalCategorias = DB::connection('compras')
                 ->table('receta_categorias')->where('activa', true)->count();
 
+            // Por sucursal: siempre devuelve TODOS (para el grafico en el front)
             $cuentasSucursal = DB::connection('compras')
                 ->table('receta_sucursal as rs')
                 ->join('recetas as r', 'rs.receta_id', '=', 'r.id')
@@ -447,7 +456,7 @@ class RecetasController extends Controller
                     SUM(CASE WHEN (r.tipo_receta IS NULL OR r.tipo_receta = 'plato') AND lower(coalesce(r.tipo,'')) NOT LIKE '%sub%receta%' THEN 1 ELSE 0 END) AS total_recetas")
                 ->groupBy('rs.sucursal_id')->get();
 
-            $sucursalIds = $cuentasSucursal->pluck('sucursal_id')->filter()->all();
+            $sucursalIds     = $cuentasSucursal->pluck('sucursal_id')->filter()->all();
             $sucursalNombres = $sucursalIds
                 ? DB::connection('pgsql')->table('sucursales')->whereIn('id', $sucursalIds)->pluck('nombre', 'id')
                 : collect();
@@ -459,20 +468,62 @@ class RecetasController extends Controller
                 'total_sub_recetas' => (int) $row->total_sub_recetas,
             ])->sortBy('sucursal_nombre')->values();
 
-            $porCategoria = DB::connection('compras')
+            // Por categoria: filtrada por sucursal si aplica
+            $catQ = DB::connection('compras')
                 ->table('recetas as r')
                 ->leftJoin('receta_categorias as c', 'r.categoria_id', '=', 'c.id')
-                ->where('r.activa', true)
+                ->where('r.activa', true);
+
+            if ($sucursalId) {
+                $catQ->join('receta_sucursal as rs2', function ($j) use ($sucursalId) {
+                    $j->on('rs2.receta_id', '=', 'r.id')
+                      ->where('rs2.sucursal_id', $sucursalId)
+                      ->where('rs2.activa', true);
+                });
+            }
+
+            $porCategoria = $catQ
                 ->selectRaw("coalesce(c.nombre, r.tipo, 'Sin categoria') as categoria, r.tipo_receta, COUNT(*) as total")
                 ->groupByRaw("coalesce(c.nombre, r.tipo, 'Sin categoria'), r.tipo_receta")
                 ->orderByRaw("coalesce(c.nombre, r.tipo, 'Sin categoria')")
-                ->get()->map(fn ($row) => [
+                ->get()
+                ->map(fn ($row) => [
                     'categoria'   => $row->categoria,
                     'tipo_receta' => $row->tipo_receta ?? 'plato',
                     'total'       => (int) $row->total,
                 ]);
 
-            $platos = Receta::with([
+            return response()->json([
+                'data' => [
+                    'resumen'       => [
+                        'total_platos'      => $totalPlatos,
+                        'total_sub_recetas' => $totalSubRecetas,
+                        'total_categorias'  => $totalCategorias,
+                    ],
+                    'por_sucursal'  => $porSucursal,
+                    'por_categoria' => $porCategoria,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage(), 'file' => $e->getFile(), 'line' => $e->getLine()], 500);
+        }
+    }
+
+    // ----------------------------------------------------------------------
+    // GET /api/compras/recetas/costos
+    // Lista paginada de platos con costo calculado + precio de venta.
+    // Params: sucursal_id, page, per_page (max 50), search, categoria_id
+    // ----------------------------------------------------------------------
+    public function costos(Request $request): JsonResponse
+    {
+        try {
+            $page        = max(1,  (int) ($request->query('page',       1)));
+            $perPage     = min(50, (int) ($request->query('per_page',  20)));
+            $search      = $request->query('search');
+            $sucursalId  = $request->query('sucursal_id')  ? (int) $request->query('sucursal_id')  : null;
+            $categoriaId = $request->query('categoria_id') ? (int) $request->query('categoria_id') : null;
+
+            $query = Receta::with([
                     'categoria',
                     'ingredientes.producto',
                     'ingredientes.subReceta.productoAsociado',
@@ -483,15 +534,24 @@ class RecetasController extends Controller
                 ->where('activa', true)
                 ->where(fn ($q) => $q->where('tipo_receta', 'plato')->orWhereNull('tipo_receta'))
                 ->whereRaw("lower(coalesce(tipo,'')) NOT LIKE '%sub%receta%'")
-                ->orderBy('nombre')->get();
+                ->when($sucursalId,  fn ($q) => $q->whereHas('sucursalConfig', fn ($sq) =>
+                    $sq->where('sucursal_id', $sucursalId)->where('activa', true)
+                ))
+                ->when($search,      fn ($q) => $q->where('nombre', 'ilike', "%{$search}%"))
+                ->when($categoriaId, fn ($q) => $q->where('categoria_id', $categoriaId))
+                ->orderBy('nombre');
 
-            $recetasList = $platos->map(function ($r) {
+            $pagina = $query->paginate($perPage, ['*'], 'page', $page);
+
+            $items = $pagina->getCollection()->map(function ($r) {
                 $costo = (float) $r->ingredientes->sum(function ($ing) {
                     if ($ing->sub_receta_id && $ing->subReceta) {
-                        return (float) $ing->cantidad_por_plato * $this->calcularCostoSubReceta($ing->subReceta, $ing->unidad);
+                        return (float) $ing->cantidad_por_plato
+                            * $this->calcularCostoSubReceta($ing->subReceta, $ing->unidad);
                     }
                     if ($ing->producto) {
-                        return (float) $ing->cantidad_por_plato * $this->costoPorUnidadReceta($ing->producto, strtolower(trim($ing->unidad ?? '')));
+                        return (float) $ing->cantidad_por_plato
+                            * $this->costoPorUnidadReceta($ing->producto, strtolower(trim($ing->unidad ?? '')));
                     }
                     return 0.0;
                 });
@@ -508,19 +568,18 @@ class RecetasController extends Controller
             });
 
             return response()->json([
-                'data' => [
-                    'resumen'       => ['total_platos' => $totalPlatos, 'total_sub_recetas' => $totalSubRecetas, 'total_categorias' => $totalCategorias],
-                    'por_sucursal'  => $porSucursal,
-                    'por_categoria' => $porCategoria,
-                    'recetas'       => $recetasList,
+                'data' => $items,
+                'meta' => [
+                    'current_page' => $pagina->currentPage(),
+                    'last_page'    => $pagina->lastPage(),
+                    'per_page'     => $pagina->perPage(),
+                    'total'        => $pagina->total(),
+                    'from'         => $pagina->firstItem() ?? 0,
+                    'to'           => $pagina->lastItem() ?? 0,
                 ],
             ]);
         } catch (\Throwable $e) {
-            return response()->json([
-                'error' => $e->getMessage(),
-                'file'  => $e->getFile(),
-                'line'  => $e->getLine(),
-            ], 500);
+            return response()->json(['error' => $e->getMessage(), 'file' => $e->getFile(), 'line' => $e->getLine()], 500);
         }
     }
     // GET /api/compras/recetas/tipos  (deprecated ÔåÆ usar /receta-categorias)
