@@ -422,6 +422,11 @@ class RecetasController extends Controller
     // ----------------------------------------------------------------------
     public function dashboard(Request $request): JsonResponse
     {
+        $roles = auth()->user()->roles()->pluck('codigo')->toArray();
+        if (!array_intersect(['admin_compras', 'admin_recetas'], $roles)) {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+
         try {
             $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
 
@@ -528,6 +533,11 @@ class RecetasController extends Controller
     // ----------------------------------------------------------------------
     public function costos(Request $request): JsonResponse
     {
+        $roles = auth()->user()->roles()->pluck('codigo')->toArray();
+        if (!array_intersect(['admin_compras', 'admin_recetas'], $roles)) {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+
         try {
             $page        = max(1,  (int) ($request->query('page',       1)));
             $perPage     = min(50, (int) ($request->query('per_page',  20)));
