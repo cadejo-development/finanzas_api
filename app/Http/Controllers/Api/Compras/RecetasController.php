@@ -468,11 +468,14 @@ class RecetasController extends Controller
                 'total_sub_recetas' => (int) $row->total_sub_recetas,
             ])->sortBy('sucursal_nombre')->values();
 
-            // Por categoria: filtrada por sucursal si aplica
+            // Por categoria: solo platos agrupados por categoria real de receta_categorias
+            // (mismas categorias que el catalogo de recetas). Sub-recetas: total global.
             $catQ = DB::connection('compras')
                 ->table('recetas as r')
                 ->leftJoin('receta_categorias as c', 'r.categoria_id', '=', 'c.id')
-                ->where('r.activa', true);
+                ->where('r.activa', true)
+                ->where(fn ($q) => $q->where('r.tipo_receta', 'plato')->orWhereNull('r.tipo_receta'))
+                ->whereRaw("lower(coalesce(r.tipo,'')) NOT LIKE '%sub%receta%'");
 
             if ($sucursalId) {
                 $catQ->join('receta_sucursal as rs2', function ($j) use ($sucursalId) {
@@ -482,16 +485,25 @@ class RecetasController extends Controller
                 });
             }
 
-            $porCategoria = $catQ
-                ->selectRaw("coalesce(c.nombre, r.tipo, 'Sin categoria') as categoria, r.tipo_receta, COUNT(*) as total")
-                ->groupByRaw("coalesce(c.nombre, r.tipo, 'Sin categoria'), r.tipo_receta")
-                ->orderByRaw("coalesce(c.nombre, r.tipo, 'Sin categoria')")
+            $categoriasPlatos = $catQ
+                ->selectRaw("coalesce(c.nombre, 'Sin categoria') as categoria, COUNT(*) as total")
+                ->groupByRaw("coalesce(c.nombre, 'Sin categoria')")
+                ->orderByRaw("coalesce(c.nombre, 'Sin categoria')")
                 ->get()
                 ->map(fn ($row) => [
                     'categoria'   => $row->categoria,
-                    'tipo_receta' => $row->tipo_receta ?? 'plato',
+                    'tipo_receta' => 'plato',
                     'total'       => (int) $row->total,
                 ]);
+
+            // Sub-recetas: todas agrupadas en una sola fila
+            $porCategoria = collect([
+                [
+                    'categoria'   => 'Sub-Recetas',
+                    'tipo_receta' => 'sub_receta',
+                    'total'       => $totalSubRecetas,
+                ],
+            ])->concat($categoriasPlatos)->values();
 
             return response()->json([
                 'data' => [
