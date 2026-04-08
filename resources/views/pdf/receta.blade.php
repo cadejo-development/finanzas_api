@@ -257,40 +257,28 @@ body {
     $totalFilas = max($n, $m, 1);
   @endphp
   {{-- Tabla contenedora: panel izquierdo (ingredientes) + panel derecho (procedimiento) --}}
-  {{-- Dos celdas con sus propias sub-tablas → filas completamente independientes         --}}
+  {{-- Cada panel es una sub-tabla independiente → filas sin acoplamiento de altura       --}}
   <table style="width:100%; border-collapse:collapse; border-top: 1.5px solid #444;" cellpadding="0" cellspacing="0">
-    <thead>
-      <tr>
-        {{-- Headers izquierdo --}}
-        <td style="width:36%; padding:0; vertical-align:top; border-right: 1.5px solid #444;">
-          <table style="width:100%; border-collapse:collapse;" cellpadding="0" cellspacing="0">
-            <tr>
-              <th style="width:58%; padding:5px 8px; font-size:9.5px; font-weight:bold; border-bottom:1.5px solid #444; text-align:left;">Ingredientes:</th>
-              <th style="width:24%; padding:5px 8px; font-size:9.5px; font-weight:bold; border-bottom:1.5px solid #444; border-left:1.5px solid #444; text-align:center;">Cantidad:</th>
-              <th style="width:18%; padding:5px 8px; font-size:9.5px; font-weight:bold; border-bottom:1.5px solid #444; border-left:1.5px solid #444; text-align:center;">Unidad:</th>
-            </tr>
-          </table>
-        </td>
-        {{-- Header derecho --}}
-        <td style="width:64%; padding:0; vertical-align:top;">
-          <table style="width:100%; border-collapse:collapse;" cellpadding="0" cellspacing="0">
-            <tr>
-              <th style="padding:5px 10px; font-size:9.5px; font-weight:bold; border-bottom:1.5px solid #444; text-align:left;">Procedimiento:</th>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </thead>
     <tbody>
       <tr>
-        {{-- Panel ingredientes --}}
-        <td style="padding:0; vertical-align:top; border-right: 1.5px solid #444;">
-          <table style="width:100%; border-collapse:collapse;" cellpadding="0" cellspacing="0">
+        {{-- Panel izquierdo: header + filas de ingredientes en una sola sub-tabla --}}
+        <td style="width:36%; padding:0; vertical-align:top; border-right: 1.5px solid #444;">
+          <table style="width:100%; table-layout:fixed; border-collapse:collapse;" cellpadding="0" cellspacing="0">
+            <colgroup>
+              <col style="width:58%;">
+              <col style="width:24%;">
+              <col style="width:18%;">
+            </colgroup>
+            <tr>
+              <th style="padding:5px 8px; font-size:9.5px; font-weight:bold; border-bottom:1.5px solid #444; text-align:left;">Ingredientes:</th>
+              <th style="padding:5px 8px; font-size:9.5px; font-weight:bold; border-bottom:1.5px solid #444; border-left:1.5px solid #444; text-align:center;">Cantidad:</th>
+              <th style="padding:5px 8px; font-size:9.5px; font-weight:bold; border-bottom:1.5px solid #444; border-left:1.5px solid #444; text-align:center;">Unidad:</th>
+            </tr>
             @foreach($ingredientes as $ing)
             <tr>
-              <td style="width:58%; padding:4px 8px; font-size:9.5px; line-height:1.15; color:#1a1a1a; vertical-align:middle;">{{ $ing['producto_nombre'] ?? '—' }}</td>
-              <td style="width:24%; padding:4px 8px; font-size:9.5px; line-height:1.15; color:#1a1a1a; vertical-align:middle; text-align:right; border-left:1.5px solid #444; white-space:nowrap;">{{ number_format((float)($ing['cantidad_por_plato'] ?? 0), 3) }}</td>
-              <td style="width:18%; padding:4px 8px; font-size:9.5px; line-height:1.15; color:#1a1a1a; vertical-align:middle; text-align:center; border-left:1.5px solid #444;">{{ $ing['unidad'] ?? '' }}</td>
+              <td style="padding:4px 8px; font-size:9.5px; line-height:1.15; color:#1a1a1a; vertical-align:middle;">{{ $ing['producto_nombre'] ?? '—' }}</td>
+              <td style="padding:4px 8px; font-size:9.5px; line-height:1.15; color:#1a1a1a; vertical-align:middle; text-align:right; border-left:1.5px solid #444; white-space:nowrap;">{{ number_format((float)($ing['cantidad_por_plato'] ?? 0), 3) }}</td>
+              <td style="padding:4px 8px; font-size:9.5px; line-height:1.15; color:#1a1a1a; vertical-align:middle; text-align:center; border-left:1.5px solid #444;">{{ $ing['unidad'] ?? '' }}</td>
             </tr>
             @endforeach
             @if(count($ingredientes) === 0)
@@ -300,9 +288,12 @@ body {
             @endif
           </table>
         </td>
-        {{-- Panel procedimiento --}}
-        <td style="padding:0; vertical-align:top;">
-          <table style="width:100%; border-collapse:collapse;" cellpadding="0" cellspacing="0">
+        {{-- Panel derecho: header + filas de procedimiento en una sola sub-tabla --}}
+        <td style="width:64%; padding:0; vertical-align:top;">
+          <table style="width:100%; table-layout:fixed; border-collapse:collapse;" cellpadding="0" cellspacing="0">
+            <tr>
+              <th style="padding:5px 10px; font-size:9.5px; font-weight:bold; border-bottom:1.5px solid #444; text-align:left;">Procedimiento:</th>
+            </tr>
             @if(count($lineas) > 0)
               @foreach($lineas as $linea)
               <tr style="page-break-inside: avoid;">
