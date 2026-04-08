@@ -177,7 +177,8 @@ class ProductosController extends Controller
             'unidad'            => 'required|string|exists:compras.unidades_medida,codigo',
             'unidad_base'       => 'nullable|string|max:20',
             'factor_conversion' => 'nullable|numeric|min:0.0001',
-            'precio'            => 'required|numeric|min:0',
+            'precio'            => 'nullable|numeric|min:0',
+            'costo'             => 'required|numeric|min:0',
             'origen'            => 'nullable|in:restaurante,centro_produccion',
         ]);
 
@@ -222,6 +223,7 @@ class ProductosController extends Controller
             'unidad_base'       => 'nullable|string|max:20',
             'factor_conversion' => 'nullable|numeric|min:0.0001',
             'precio'            => 'sometimes|numeric|min:0',
+            'costo'             => 'sometimes|numeric|min:0',
             'origen'            => 'nullable|in:restaurante,centro_produccion',
         ]);
 
