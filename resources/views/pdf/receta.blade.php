@@ -256,34 +256,67 @@ body {
     $m = count($lineas);
     $totalFilas = max($n, $m, 1);
   @endphp
-  <table class="ing" cellpadding="0" cellspacing="0" style="border-top: 1.5px solid #444;">
+  {{-- Tabla contenedora: panel izquierdo (ingredientes) + panel derecho (procedimiento) --}}
+  {{-- Dos celdas con sus propias sub-tablas → filas completamente independientes         --}}
+  <table style="width:100%; border-collapse:collapse; border-top: 1.5px solid #444;" cellpadding="0" cellspacing="0">
     <thead>
       <tr>
-        <th style="width:22%;">Ingredientes:</th>
-        <th style="width:8%;">Cantidad:</th>
-        <th style="width:6%;">Unidad:</th>
-        <th>Procedimiento:</th>
+        {{-- Headers izquierdo --}}
+        <td style="width:36%; padding:0; vertical-align:top; border-right: 1.5px solid #444;">
+          <table style="width:100%; border-collapse:collapse;" cellpadding="0" cellspacing="0">
+            <tr>
+              <th style="width:58%; padding:5px 8px; font-size:9.5px; font-weight:bold; border-bottom:1.5px solid #444; text-align:left;">Ingredientes:</th>
+              <th style="width:24%; padding:5px 8px; font-size:9.5px; font-weight:bold; border-bottom:1.5px solid #444; border-left:1.5px solid #444; text-align:center;">Cantidad:</th>
+              <th style="width:18%; padding:5px 8px; font-size:9.5px; font-weight:bold; border-bottom:1.5px solid #444; border-left:1.5px solid #444; text-align:center;">Unidad:</th>
+            </tr>
+          </table>
+        </td>
+        {{-- Header derecho --}}
+        <td style="width:64%; padding:0; vertical-align:top;">
+          <table style="width:100%; border-collapse:collapse;" cellpadding="0" cellspacing="0">
+            <tr>
+              <th style="padding:5px 10px; font-size:9.5px; font-weight:bold; border-bottom:1.5px solid #444; text-align:left;">Procedimiento:</th>
+            </tr>
+          </table>
+        </td>
       </tr>
     </thead>
     <tbody>
-      @for($i = 0; $i < $totalFilas; $i++)
-        @php
-          $ing   = $ingredientes[$i] ?? null;
-          $linea = $lineas[$i] ?? '';
-        @endphp
-        <tr style="page-break-inside: avoid;">
-          <td style="color:#1a1a1a;">{{ $ing ? ($ing['producto_nombre'] ?? '—') : '' }}</td>
-          <td class="num" style="color:#1a1a1a;">{{ $ing ? number_format((float)($ing['cantidad_por_plato'] ?? 0), 3) : '' }}</td>
-          <td style="color:#1a1a1a; border-right:none;">{{ $ing ? ($ing['unidad'] ?? '') : '' }}</td>
-          <td class="proc" style="border-left: 1.5px solid #444; border-bottom: none;">
-            @if($linea !== '')
-              {!! $linea !!}
-            @elseif($i === 0 && $m === 0)
-              <span style="color:#bbb; font-style:italic;">Sin instrucciones registradas.</span>
+      <tr>
+        {{-- Panel ingredientes --}}
+        <td style="padding:0; vertical-align:top; border-right: 1.5px solid #444;">
+          <table style="width:100%; border-collapse:collapse;" cellpadding="0" cellspacing="0">
+            @foreach($ingredientes as $ing)
+            <tr>
+              <td style="width:58%; padding:4px 8px; font-size:9.5px; line-height:1.15; color:#1a1a1a; vertical-align:middle;">{{ $ing['producto_nombre'] ?? '—' }}</td>
+              <td style="width:24%; padding:4px 8px; font-size:9.5px; line-height:1.15; color:#1a1a1a; vertical-align:middle; text-align:right; border-left:1.5px solid #444; white-space:nowrap;">{{ number_format((float)($ing['cantidad_por_plato'] ?? 0), 3) }}</td>
+              <td style="width:18%; padding:4px 8px; font-size:9.5px; line-height:1.15; color:#1a1a1a; vertical-align:middle; text-align:center; border-left:1.5px solid #444;">{{ $ing['unidad'] ?? '' }}</td>
+            </tr>
+            @endforeach
+            @if(count($ingredientes) === 0)
+            <tr>
+              <td colspan="3" style="padding:8px; font-size:9.5px; color:#aaa; font-style:italic;">Sin ingredientes.</td>
+            </tr>
             @endif
-          </td>
-        </tr>
-      @endfor
+          </table>
+        </td>
+        {{-- Panel procedimiento --}}
+        <td style="padding:0; vertical-align:top;">
+          <table style="width:100%; border-collapse:collapse;" cellpadding="0" cellspacing="0">
+            @if(count($lineas) > 0)
+              @foreach($lineas as $linea)
+              <tr style="page-break-inside: avoid;">
+                <td style="padding:4px 10px; font-size:9.5px; line-height:1.15; color:#1a1a1a; vertical-align:middle;">{!! $linea !!}</td>
+              </tr>
+              @endforeach
+            @else
+              <tr>
+                <td style="padding:8px 10px; font-size:9.5px; color:#bbb; font-style:italic; vertical-align:middle;">Sin instrucciones registradas.</td>
+              </tr>
+            @endif
+          </table>
+        </td>
+      </tr>
     </tbody>
   </table>
 
