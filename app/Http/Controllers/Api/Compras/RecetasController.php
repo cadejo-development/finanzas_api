@@ -100,7 +100,10 @@ class RecetasController extends Controller
         });
 
         if ($search = $request->query('search')) {
-            $query->where('nombre', 'ilike', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->where('nombre', 'ilike', "%{$search}%")
+                  ->orWhere('codigo_origen', 'ilike', "%{$search}%");
+            });
         }
 
         $pagina = $query->paginate($perPage);
@@ -561,7 +564,10 @@ class RecetasController extends Controller
                 ->when($sucursalId,  fn ($q) => $q->whereHas('sucursalConfig', fn ($sq) =>
                     $sq->where('sucursal_id', $sucursalId)->where('activa', true)
                 ))
-                ->when($search,      fn ($q) => $q->where('nombre', 'ilike', "%{$search}%"))
+                ->when($search, fn ($q) => $q->where(function ($sq) use ($search) {
+                    $sq->where('nombre', 'ilike', "%{$search}%")
+                       ->orWhere('codigo_origen', 'ilike', "%{$search}%");
+                }))
                 ->when($categoriaId, fn ($q) => $q->where('categoria_id', $categoriaId))
                 ->orderBy('nombre');
 
