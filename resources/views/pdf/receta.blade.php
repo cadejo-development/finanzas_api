@@ -271,9 +271,9 @@ body {
           $linea = $lineas[$i] ?? '';
         @endphp
         <tr style="page-break-inside: avoid;">
-          <td style="color:#1a1a1a;">{{ $ing ? ($ing['producto_nombre'] ?? '—') : '' }}</td>
-          <td class="num" style="color:#1a1a1a;">{{ $ing ? number_format((float)($ing['cantidad_por_plato'] ?? 0), 3) : '' }}</td>
-          <td style="color:#1a1a1a;">{{ $ing ? ($ing['unidad'] ?? '') : '' }}</td>
+          <td style="color:#1a1a1a; {{ !$ing ? 'border-bottom:none; border-right:none;' : '' }}">{{ $ing ? ($ing['producto_nombre'] ?? '—') : '' }}</td>
+          <td class="num" style="color:#1a1a1a; {{ !$ing ? 'border-bottom:none; border-right:none;' : '' }}">{{ $ing ? number_format((float)($ing['cantidad_por_plato'] ?? 0), 3) : '' }}</td>
+          <td style="color:#1a1a1a; {{ !$ing ? 'border-bottom:none; border-right:none;' : '' }}">{{ $ing ? ($ing['unidad'] ?? '') : '' }}</td>
           <td class="proc" style="border-left: 1.5px solid #444; border-bottom: none;">
             @if($linea !== '')
               {!! $linea !!}
