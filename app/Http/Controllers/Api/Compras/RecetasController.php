@@ -221,8 +221,8 @@ class RecetasController extends Controller
             'precio'              => 'nullable|numeric|min:0',
             'rendimiento'         => 'nullable|numeric|min:0',
             'rendimiento_unidad'  => 'nullable|string|max:20',
-            'foto_plato'          => 'nullable|string|max:500',
-            'foto_plateria'       => 'nullable|string|max:500',
+            'foto_plato'          => 'nullable|string|max:2000',
+            'foto_plateria'       => 'nullable|string|max:2000',
             'sucursal_ids'        => 'nullable|array',
             'sucursal_ids.*'      => 'integer|min:1',
             'ingredientes'        => 'array',
@@ -248,8 +248,8 @@ class RecetasController extends Controller
                 'precio'             => $validated['precio'] ?? null,
                 'rendimiento'        => $validated['rendimiento'] ?? null,
                 'rendimiento_unidad' => $validated['rendimiento_unidad'] ?? null,
-                'foto_plato'         => $validated['foto_plato'] ?? null,
-                'foto_plateria'      => $validated['foto_plateria'] ?? null,
+                'foto_plato'         => $this->normalizarUrlFoto($validated['foto_plato'] ?? null),
+                'foto_plateria'      => $this->normalizarUrlFoto($validated['foto_plateria'] ?? null),
                 'activa'        => true,
                 'aud_usuario'   => $usuario,
             ]);
@@ -302,8 +302,8 @@ class RecetasController extends Controller
             'rendimiento'         => 'nullable|numeric|min:0',
             'rendimiento_unidad'  => 'nullable|string|max:20',
             'activa'              => 'sometimes|boolean',
-            'foto_plato'          => 'nullable|string|max:500',
-            'foto_plateria'       => 'nullable|string|max:500',
+            'foto_plato'          => 'nullable|string|max:2000',
+            'foto_plateria'       => 'nullable|string|max:2000',
             'sucursal_ids'        => 'nullable|array',
             'sucursal_ids.*'      => 'integer|min:1',
             'ingredientes'        => 'sometimes|array',
@@ -331,6 +331,9 @@ class RecetasController extends Controller
                 'tipo_receta', 'platos_semana', 'precio', 'rendimiento', 'rendimiento_unidad',
                 'activa', 'foto_plato', 'foto_plateria',
             ]));
+            // Normalizar URLs de foto: quitar query params de presigned URLs antes de guardar
+            if (isset($campos['foto_plato']))    $campos['foto_plato']    = $this->normalizarUrlFoto($campos['foto_plato']);
+            if (isset($campos['foto_plateria'])) $campos['foto_plateria'] = $this->normalizarUrlFoto($campos['foto_plateria']);
             $receta->update(array_merge($campos, [
                 'aud_usuario'           => $usuario,
                 'modificado_localmente' => true,
@@ -901,6 +904,18 @@ class RecetasController extends Controller
         }
 
         return $batchCosto;
+    }
+
+    /**
+     * Normaliza una URL de foto antes de guardar en DB.
+     * Si el frontend devuelve una presigned URL (con query params de firma),
+     * extrae solo la parte limpia (sin ?X-Amz-...) para evitar guardar URLs expiradas.
+     */
+    private function normalizarUrlFoto(?string $url): ?string
+    {
+        if (!$url) return null;
+        $pos = strpos($url, '?');
+        return $pos !== false ? substr($url, 0, $pos) : $url;
     }
 
     /**
