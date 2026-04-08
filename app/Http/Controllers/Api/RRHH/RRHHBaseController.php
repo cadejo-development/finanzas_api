@@ -148,9 +148,10 @@ abstract class RRHHBaseController extends Controller
             $query->where('sucursal_id', (int) $sucursalId);
         }
 
-        if ($departamentoId = $request->input('departamento_id')) {
-            $query->where('departamento_id', (int) $departamentoId);
-        }
+        // El filtro por departamento se aplica en getEmpleadosFiltrados
+        // via rrhh.departamento_empleado (tabla usada por el organigrama).
+        // No filtrar aquí por pgsql.empleados.departamento_id para evitar
+        // inconsistencias con la estructura del organigrama.
 
         return $query->pluck('id')->all();
     }
