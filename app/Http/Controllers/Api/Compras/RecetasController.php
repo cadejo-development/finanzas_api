@@ -837,12 +837,19 @@ class RecetasController extends Controller
     {
         if (!$sub || $depth > 5) return 0.0;
 
-        // Si el producto asociado tiene costo pre-almacenado, usarlo directamente.
+        // Resolver productoAsociado (se necesita más abajo como fallback de unidad).
         $prod = $sub->productoAsociado ?? null;
         if (!$prod && $sub->codigo_origen) {
             $prod = \App\Models\Producto::where('codigo', $sub->codigo_origen)->first();
         }
-        if ($prod && (float) $prod->costo > 0) {
+
+        // Shortcut: solo usar el costo pre-almacenado del producto asociado cuando su unidad
+        // es física (lb, oz, g, kg, lt, ml, oz fl, galon). Si la unidad es 'tanda', 'u',
+        // 'porcion', etc., la conversión a la unidad de la receta padre es imposible y
+        // el costo del batch (ingredientes ÷ rendimiento) es la única fuente fiable.
+        $unidadesFisicas = ['lb', 'oz', 'g', 'kg', 'lt', 'ml', 'oz fl', 'galon'];
+        $prodUnit = strtolower(trim($prod?->unidad ?? ''));
+        if ($prod && (float) $prod->costo > 0 && in_array($prodUnit, $unidadesFisicas, true)) {
             return $this->costoPorUnidadReceta($prod, strtolower(trim($unidadReceta ?? '')));
         }
 
