@@ -44,8 +44,9 @@ class ReportesRRHHController extends RRHHBaseController
         [$prevAnio, $prevMes, $prevQ] = $this->quincenaAnterior($anio, $mes, $quincena);
         [$desdePrev, $hastaPrev] = $this->rangoQuincena($prevAnio, $prevMes, $prevQ);
 
-        // Días hábiles de la quincena
-        $diasQuincena = $desdeAct->diffInDays($hastaAct) + 1;
+        // Días hábiles de la quincena actual y anterior
+        $diasQuincena     = $desdeAct->diffInDays($hastaAct) + 1;
+        $diasQuincenaPrev = $desdePrev->diffInDays($hastaPrev) + 1;
 
         // --- Cargar empleados filtrados ---
         $empleados = $this->getEmpleadosFiltrados($subordinadosIds, $sucursalId, $deptoId);
@@ -76,10 +77,19 @@ class ReportesRRHHController extends RRHHBaseController
                 $eid, $permisosAct, $incapAct, $vacacAct, $ausAct, $desdeAct, $hastaAct
             );
 
-            // Días propinas = TODOS los eventos de quincena anterior (sin excepción)
-            $diasPropinas = $this->calcDiasTodosEventos(
-                $eid, $permisosPrev, $incapPrev, $vacacPrev, $ausPrev, $desdePrev, $hastaPrev
-            );
+            // Días propinas: solo empleados de sucursales operativas (restaurante)
+            // Para ellos: días TRABAJADOS en la quincena anterior (= propinas reales)
+            // Para corporativos (Casa Matriz, etc.): 0
+            $esRestaurante = ($emp['sucursal_tipo'] ?? null) === 'operativa';
+
+            if ($esRestaurante) {
+                $eventosPrev = $this->calcDiasTodosEventos(
+                    $eid, $permisosPrev, $incapPrev, $vacacPrev, $ausPrev, $desdePrev, $hastaPrev
+                );
+                $diasPropinas = max(0, $diasQuincenaPrev - $eventosPrev['total']);
+            } else {
+                $diasPropinas = 0;
+            }
 
             $reporte[] = [
                 'empleado_id'     => $eid,
@@ -91,8 +101,7 @@ class ReportesRRHHController extends RRHHBaseController
                 'dias_no_trabajados' => $diasNoTrabajadosAct['total'],
                 'dias_trabajados' => max(0, $diasQuincena - $diasNoTrabajadosAct['total']),
                 'detalles'        => $diasNoTrabajadosAct['detalles'],
-                'dias_propinas'   => $diasPropinas['total'],
-                'detalles_propinas' => $diasPropinas['detalles'],
+                'dias_propinas'   => $diasPropinas,
             ];
         }
 
@@ -192,13 +201,17 @@ class ReportesRRHHController extends RRHHBaseController
             $query->whereIn('e.id', $subIds);
         }
 
-        return $query->select(
-            'e.id',
-            DB::raw("CONCAT(e.nombres, ' ', e.apellidos) as nombre"),
-            's.nombre as sucursal',
-            'e.sucursal_id',
-            'c.nombre as cargo'
-        )->get()->map(fn($r) => (array) $r)->toArray();
+        return $query
+            ->leftJoin('departamentos as dep', 'dep.id', '=', 'e.departamento_id')
+            ->select(
+                'e.id',
+                DB::raw("CONCAT(e.nombres, ' ', e.apellidos) as nombre"),
+                's.nombre as sucursal',
+                's.tipo as sucursal_tipo',
+                'e.sucursal_id',
+                'c.nombre as cargo',
+                'dep.nombre as departamento'
+            )->get()->map(fn($r) => (array) $r)->toArray();
     }
 
     // ─── Cálculos ─────────────────────────────────────────────────────────────
