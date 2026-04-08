@@ -305,10 +305,10 @@ async function main() {
   if (!DRY_RUN) {
     await comp.query('DELETE FROM receta_sucursal');
     await comp.query('DELETE FROM receta_ingredientes');
-    await comp.query('DELETE FROM recetas');
-    await comp.query('DELETE FROM productos');
-    await comp.query('DELETE FROM categorias');
-    log('      OK: tablas vaciadas.');
+    // Solo borrar recetas del menú activo (tipo != sub_receta), para no perder sub-recetas
+    // ya sincronizadas. productos y categorias usan UPSERT, no se borran.
+    await comp.query("DELETE FROM recetas WHERE tipo_receta IS NULL OR tipo_receta = 'plato'");
+    log('      OK: tablas vaciadas (receta_sucursal, receta_ingredientes, recetas plato).');
   } else {
     log('      (dry-run)');
   }

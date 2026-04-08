@@ -37,6 +37,7 @@ class IncapacidadesController extends RRHHBaseController
         $validated = $request->validate([
             'empleado_id'        => 'required|integer',
             'tipo_incapacidad_id'=> 'required|exists:rrhh.tipos_incapacidad,id',
+            'tipo_institucion'   => 'nullable|in:isss,privada',
             'fecha_inicio'       => 'required|date',
             'fecha_fin'          => 'required|date|after_or_equal:fecha_inicio',
             'dias'               => 'required|integer|min:1',
@@ -63,6 +64,7 @@ class IncapacidadesController extends RRHHBaseController
         $incapacidad = Incapacidad::create([
             'empleado_id'         => $validated['empleado_id'],
             'tipo_incapacidad_id' => $validated['tipo_incapacidad_id'],
+            'tipo_institucion'    => $validated['tipo_institucion'] ?? null,
             'registrado_por_id'   => $jefe->id,
             'fecha_inicio'        => $validated['fecha_inicio'],
             'fecha_fin'           => $validated['fecha_fin'],
@@ -99,6 +101,7 @@ class IncapacidadesController extends RRHHBaseController
 
         $validated = $request->validate([
             'tipo_incapacidad_id' => 'sometimes|exists:rrhh.tipos_incapacidad,id',
+            'tipo_institucion'    => 'nullable|in:isss,privada',
             'fecha_inicio'        => 'sometimes|date',
             'fecha_fin'           => 'sometimes|date|after_or_equal:fecha_inicio',
             'dias'                => 'sometimes|integer|min:1',

@@ -10,7 +10,7 @@ class Incapacidad extends Model
     protected $table = 'incapacidades';
 
     protected $fillable = [
-        'empleado_id', 'tipo_incapacidad_id', 'registrado_por_id',
+        'empleado_id', 'tipo_incapacidad_id', 'tipo_institucion', 'registrado_por_id',
         'fecha_inicio', 'fecha_fin', 'dias',
         'archivo_nombre', 'archivo_ruta',
         'homologada', 'homologada_por_id', 'homologada_en',

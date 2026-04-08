@@ -31,6 +31,8 @@ use App\Http\Controllers\Api\RRHH\DepartamentosController;
 use App\Http\Controllers\Api\RRHH\ExpedienteController;
 use App\Http\Controllers\Api\RRHH\CalendarioController;
 use App\Http\Controllers\Api\RRHH\HistorialController;
+use App\Http\Controllers\Api\RRHH\AusenciasController;
+use App\Http\Controllers\Api\RRHH\ReportesRRHHController;
 use App\Http\Controllers\Api\GeoController;
 
 // ─── Geo catálogos El Salvador (público, sin auth) ────────────────────────
@@ -286,6 +288,15 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::get('cambios-salariales/{id}',    [CambiosSalarialesController::class, 'show']);
     Route::put('cambios-salariales/{id}',    [CambiosSalarialesController::class, 'update']);
     Route::delete('cambios-salariales/{id}', [CambiosSalarialesController::class, 'destroy']);
+
+    // Ausencias Injustificadas
+    Route::get('ausencias/resumen-mes',  [AusenciasController::class, 'resumenMes']);
+    Route::get('ausencias',              [AusenciasController::class, 'index']);
+    Route::post('ausencias',             [AusenciasController::class, 'store']);
+    Route::delete('ausencias/{id}',      [AusenciasController::class, 'destroy']);
+
+    // Reportes quincenales
+    Route::get('reportes/quincena', [ReportesRRHHController::class, 'quincena']);
 });
 
 // ─── RRHH Expediente Digital (jefatura, rrhh_admin, portal_admin) ────────────
