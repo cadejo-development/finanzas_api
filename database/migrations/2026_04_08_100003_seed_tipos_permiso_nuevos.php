@@ -20,7 +20,7 @@ return new class extends Migration
             DB::connection('rrhh')->table('tipos_permiso')->insert([
                 'nombre'       => 'Días Cadejo',
                 'codigo'       => 'dias_cadejo',
-                'categoria'    => 'personal',
+                'categoria'    => 'cadejo',
                 'max_dias'     => 3,
                 'permite_horas'=> false,
                 'activo'       => true,
