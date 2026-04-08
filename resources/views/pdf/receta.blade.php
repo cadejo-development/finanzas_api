@@ -116,8 +116,8 @@ body {
 .ing { width: 100%; border-collapse: collapse; }
 
 .ing thead th {
-  padding: 6px 10px;
-  font-size: 10.5px;
+  padding: 5px 8px;
+  font-size: 9.5px;
   font-weight: bold;
   text-align: left;
   border-right: 1.5px solid #444;
@@ -129,22 +129,23 @@ body {
 .ing thead th:last-child { border-right: none; }
 
 .ing tbody td {
-  padding: 5px 10px;
-  font-size: 10.5px;
+  padding: 4px 8px;
+  font-size: 9.5px;
   border-right: 1.5px solid #444;
-  border-bottom: 1.5px solid #444;
+  border-bottom: none;
   vertical-align: top;
   color: #1a1a1a;
+  line-height: 1.15;
 }
 .ing tbody td.num { text-align: right; white-space: nowrap; color: #1a1a1a; }
 
 .ing tbody td.proc {
   border-left: 1.5px solid #444;
   border-right: none;
-  border-bottom: 1px solid #e8e8e8;
-  padding: 4px 12px;
-  font-size: 10.5px;
-  line-height: 1.75;
+  border-bottom: none;
+  padding: 4px 10px;
+  font-size: 9.5px;
+  line-height: 1.15;
   vertical-align: top;
   color: #1a1a1a;
 }
@@ -258,9 +259,9 @@ body {
   <table class="ing" cellpadding="0" cellspacing="0" style="border-top: 1.5px solid #444;">
     <thead>
       <tr>
-        <th style="width:28%;">Ingredientes:</th>
-        <th style="width:10%;">Cantidad:</th>
-        <th style="width:7%;">Unidad:</th>
+        <th style="width:22%;">Ingredientes:</th>
+        <th style="width:8%;">Cantidad:</th>
+        <th style="width:6%;">Unidad:</th>
         <th>Procedimiento:</th>
       </tr>
     </thead>
@@ -271,9 +272,9 @@ body {
           $linea = $lineas[$i] ?? '';
         @endphp
         <tr style="page-break-inside: avoid;">
-          <td style="color:#1a1a1a; {{ !$ing ? 'border-bottom:none; border-right:none;' : '' }}">{{ $ing ? ($ing['producto_nombre'] ?? '—') : '' }}</td>
-          <td class="num" style="color:#1a1a1a; {{ !$ing ? 'border-bottom:none; border-right:none;' : '' }}">{{ $ing ? number_format((float)($ing['cantidad_por_plato'] ?? 0), 3) : '' }}</td>
-          <td style="color:#1a1a1a; {{ !$ing ? 'border-bottom:none; border-right:none;' : '' }}">{{ $ing ? ($ing['unidad'] ?? '') : '' }}</td>
+          <td style="color:#1a1a1a;">{{ $ing ? ($ing['producto_nombre'] ?? '—') : '' }}</td>
+          <td class="num" style="color:#1a1a1a;">{{ $ing ? number_format((float)($ing['cantidad_por_plato'] ?? 0), 3) : '' }}</td>
+          <td style="color:#1a1a1a; border-right:none;">{{ $ing ? ($ing['unidad'] ?? '') : '' }}</td>
           <td class="proc" style="border-left: 1.5px solid #444; border-bottom: none;">
             @if($linea !== '')
               {!! $linea !!}
