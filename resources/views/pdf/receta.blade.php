@@ -265,9 +265,9 @@ body {
         <td style="width:36%; padding:0; vertical-align:top; border-right: 1.5px solid #444;">
           <table style="width:100%; table-layout:fixed; border-collapse:collapse;" cellpadding="0" cellspacing="0">
             <colgroup>
-              <col style="width:58%;">
-              <col style="width:24%;">
+              <col style="width:66%;">
               <col style="width:18%;">
+              <col style="width:16%;">
             </colgroup>
             <tr>
               <th style="padding:5px 8px; font-size:9.5px; font-weight:bold; border-bottom:1.5px solid #444; text-align:left;">Ingredientes:</th>
@@ -277,7 +277,7 @@ body {
             @foreach($ingredientes as $ing)
             <tr>
               <td style="padding:4px 8px; font-size:9.5px; line-height:1.15; color:#1a1a1a; vertical-align:middle;">{{ $ing['producto_nombre'] ?? '—' }}</td>
-              <td style="padding:4px 8px; font-size:9.5px; line-height:1.15; color:#1a1a1a; vertical-align:middle; text-align:right; border-left:1.5px solid #444; white-space:nowrap;">{{ number_format((float)($ing['cantidad_por_plato'] ?? 0), 3) }}</td>
+              <td style="padding:4px 8px; font-size:9.5px; line-height:1.15; color:#1a1a1a; vertical-align:middle; text-align:center; border-left:1.5px solid #444; white-space:nowrap;">{{ number_format((float)($ing['cantidad_por_plato'] ?? 0), 3) }}</td>
               <td style="padding:4px 8px; font-size:9.5px; line-height:1.15; color:#1a1a1a; vertical-align:middle; text-align:center; border-left:1.5px solid #444;">{{ $ing['unidad'] ?? '' }}</td>
             </tr>
             @endforeach
