@@ -258,7 +258,7 @@ body {
   <table class="ing" cellpadding="0" cellspacing="0" style="border-top: 1.5px solid #444;">
     <thead>
       <tr>
-        <th style="width:38%;">Ingredientes:</th>
+        <th style="width:28%;">Ingredientes:</th>
         <th style="width:10%;">Cantidad:</th>
         <th style="width:7%;">Unidad:</th>
         <th>Procedimiento:</th>
