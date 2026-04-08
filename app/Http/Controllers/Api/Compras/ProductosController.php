@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 
 class ProductosController extends Controller
 {
+    use \App\Traits\RecetaCostoTrait;
     /**
      * GET /api/compras/productos
      * Lista paginada de productos activos.
@@ -68,7 +69,32 @@ class ProductosController extends Controller
         $paginado = $query->paginate($perPage);
 
         // Transformar para el frontend (campo categoria_key aplanado)
-        $items = $paginado->getCollection()->map(fn ($p) => [
+        $items = $paginado->getCollection()->map(function ($p) {
+            $costo = (float) $p->costo;
+
+            // Para productos con costo=0 que son sub-recetas, calcular desde ingredientes
+            if ($costo === 0.0) {
+                $receta = \App\Models\Receta::with([
+                    'ingredientes.producto',
+                    'ingredientes.subReceta.productoAsociado',
+                    'ingredientes.subReceta.ingredientes.producto',
+                ])->where('codigo_origen', $p->codigo)
+                  ->where('tipo_receta', 'sub_receta')
+                  ->where('activa', true)
+                  ->first();
+
+                if ($receta) {
+                    $batchCosto  = $this->calcularBatchCostoDirecto($receta);
+                    $rendimiento = (float) ($receta->rendimiento ?? 0);
+                    $costo       = $rendimiento > 0 ? $batchCosto / $rendimiento : $batchCosto;
+                    // Guardar para evitar recalcular en futuros listados
+                    if ($costo > 0) {
+                        $p->update(['costo' => round($costo, 4), 'aud_usuario' => 'sistema-sync']);
+                    }
+                }
+            }
+
+            return [
             'id'           => $p->id,
             'codigo'       => $p->codigo,
             'nombre'       => $p->nombre,
@@ -76,14 +102,15 @@ class ProductosController extends Controller
             'unidad_base'        => $p->unidad_base,
             'factor_conversion'  => $p->factor_conversion ? (float) $p->factor_conversion : null,
             'precio'          => (float) $p->precio,
-            'costo'           => (float) $p->costo,
-            'precio_unitario' => (float) $p->costo,  // costo para cálculos de recetas
+            'costo'           => $costo,
+            'precio_unitario' => $costo,  // costo para cálculos de recetas
             'activo'          => $p->activo,
             'categoria_id'    => $p->categoria_id,
             'categoria_key'    => $p->categoria?->key,
             'categoria_nombre' => $p->categoria?->nombre,
             'origen'           => $p->origen ?? 'restaurante',
-        ]);
+            ];
+        });
 
         return response()->json([
             'data'         => $items,

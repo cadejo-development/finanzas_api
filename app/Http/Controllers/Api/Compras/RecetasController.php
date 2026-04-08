@@ -16,11 +16,11 @@ use Illuminate\Support\Facades\Storage;
 
 class RecetasController extends Controller
 {
-    // ----------------------------------------------------------------------
-    // GET /api/compras/recetas
-    // Lista paginada de recetas (con ingredientes + producto).
-    // Query opcional: sucursal_id, tipo_receta ('plato'|'sub_receta')
-    // ----------------------------------------------------------------------
+    use \App\Traits\RecetaCostoTrait;
+
+    // Nota: los métodos costoPorUnidadReceta, convertirCosto y calcularCostoSubReceta
+    // provienen del trait RecetaCostoTrait. Los métodos privados al final de esta clase
+    // se mantienen como override ya que usan la misma lógica del trait.
     public function index(Request $request): JsonResponse
     {
         $perPage    = min((int) $request->query('per_page', 20), 100);
@@ -275,7 +275,8 @@ class RecetasController extends Controller
             return $receta;
         });
 
-        $receta->load(['ingredientes.producto', 'ingredientes.subReceta', 'sucursalConfig']);
+        $receta->load(['ingredientes.producto', 'ingredientes.subReceta.productoAsociado', 'ingredientes.subReceta.ingredientes.producto', 'sucursalConfig']);
+        $this->sincronizarCostoProducto($receta);
         return response()->json(['data' => $this->formatReceta($receta)], 201);
     }
 
@@ -386,7 +387,8 @@ class RecetasController extends Controller
             }
         });
 
-        $receta->load(['ingredientes.producto', 'ingredientes.subReceta', 'modificadores', 'sucursalConfig']);
+        $receta->load(['ingredientes.producto', 'ingredientes.subReceta.productoAsociado', 'ingredientes.subReceta.ingredientes.producto', 'modificadores', 'sucursalConfig']);
+        $this->sincronizarCostoProducto($receta);
         return response()->json(['data' => $this->formatReceta($receta, null, true)]);
     }
 
