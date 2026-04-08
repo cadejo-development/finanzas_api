@@ -202,15 +202,14 @@ class ReportesRRHHController extends RRHHBaseController
         }
 
         return $query
-            ->leftJoin('departamentos as dep', 'dep.id', '=', 'e.departamento_id')
             ->select(
                 'e.id',
                 DB::raw("CONCAT(e.nombres, ' ', e.apellidos) as nombre"),
                 's.nombre as sucursal',
                 's.tipo as sucursal_tipo',
                 'e.sucursal_id',
-                'c.nombre as cargo',
-                'dep.nombre as departamento'
+                'e.departamento_id',
+                'c.nombre as cargo'
             )->get()->map(fn($r) => (array) $r)->toArray();
     }
 
