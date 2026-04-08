@@ -141,10 +141,10 @@ body {
 .ing tbody td.proc {
   border-left: 1.5px solid #444;
   border-right: none;
-  border-bottom: none;
-  padding: 10px 12px;
+  border-bottom: 1px solid #e8e8e8;
+  padding: 4px 12px;
   font-size: 10.5px;
-  line-height: 1.9;
+  line-height: 1.75;
   vertical-align: top;
   color: #1a1a1a;
 }
@@ -239,57 +239,50 @@ body {
     $ingredientes = $receta['ingredientes'] ?? [];
     $n = count($ingredientes);
 
-    $instruccionesRaw  = trim($receta['instrucciones'] ?? '');
-    $instruccionesHtml = '';
+    // Partir instrucciones en líneas individuales (filtrando líneas completamente vacías)
+    $instruccionesRaw = trim($receta['instrucciones'] ?? '');
+    $lineas = [];
     if ($instruccionesRaw !== '') {
         foreach (explode("\n", $instruccionesRaw) as $linea) {
+            $linea = rtrim($linea);
             if (preg_match('/^(Nota:)(.*)/i', $linea, $m)) {
-                $instruccionesHtml .= '<strong>' . e($m[1]) . '</strong>' . e($m[2]) . '<br/>';
+                $lineas[] = '<strong>' . e($m[1]) . '</strong>' . e($m[2]);
             } else {
-                $instruccionesHtml .= e($linea) . '<br/>';
+                $lineas[] = e($linea);
             }
         }
     }
+    $m = count($lineas);
+    $totalFilas = max($n, $m, 1);
   @endphp
   <table class="ing" cellpadding="0" cellspacing="0" style="border-top: 1.5px solid #444;">
     <thead>
       <tr>
-        <th style="width:36%;">Ingredientes:</th>
-        <th style="width:14%;">Cantidad:</th>
-        <th style="width:10%;">Unidad:</th>
+        <th style="width:38%;">Ingredientes:</th>
+        <th style="width:10%;">Cantidad:</th>
+        <th style="width:7%;">Unidad:</th>
         <th>Procedimiento:</th>
       </tr>
     </thead>
     <tbody>
-      @if($n > 0)
-        @foreach($ingredientes as $idx => $ing)
-        <tr>
-          <td style="color:#1a1a1a;">{{ $ing['producto_nombre'] ?? '—' }}</td>
-          <td class="num" style="color:#1a1a1a;">{{ number_format((float)($ing['cantidad_por_plato'] ?? 0), 3) }}</td>
-          <td style="color:#1a1a1a;">{{ $ing['unidad'] ?? '' }}</td>
-          @if($idx === 0)
-          <td class="proc" rowspan="{{ $n }}">
-            @if($instruccionesHtml !== '')
-              {!! $instruccionesHtml !!}
-            @else
-              <span style="color:#bbb; font-style:italic;">Sin instrucciones registradas.</span>
-            @endif
-          </td>
-          @endif
-        </tr>
-        @endforeach
-      @else
-        <tr>
-          <td colspan="3" style="padding:12px; color:#aaa; font-style:italic;">Sin ingredientes registrados.</td>
-          <td class="proc">
-            @if($instruccionesHtml !== '')
-              {!! $instruccionesHtml !!}
-            @else
+      @for($i = 0; $i < $totalFilas; $i++)
+        @php
+          $ing   = $ingredientes[$i] ?? null;
+          $linea = $lineas[$i] ?? '';
+        @endphp
+        <tr style="page-break-inside: avoid;">
+          <td style="color:#1a1a1a;">{{ $ing ? ($ing['producto_nombre'] ?? '—') : '' }}</td>
+          <td class="num" style="color:#1a1a1a;">{{ $ing ? number_format((float)($ing['cantidad_por_plato'] ?? 0), 3) : '' }}</td>
+          <td style="color:#1a1a1a;">{{ $ing ? ($ing['unidad'] ?? '') : '' }}</td>
+          <td class="proc" style="border-left: 1.5px solid #444; border-bottom: none;">
+            @if($linea !== '')
+              {!! $linea !!}
+            @elseif($i === 0 && $m === 0)
               <span style="color:#bbb; font-style:italic;">Sin instrucciones registradas.</span>
             @endif
           </td>
         </tr>
-      @endif
+      @endfor
     </tbody>
   </table>
 
