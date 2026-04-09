@@ -74,13 +74,14 @@ class RecetasController extends Controller
                     $q->orWhereRaw("lower(tipo) LIKE '%sub%receta%'");
                 }
             });
-            // Para sub-recetas: incluir cualquiera que tenga tipo_receta='sub_receta'
-            // O que tenga tipo/categoria con 'sub receta' (compatibilidad datos migrados).
-            // Ya NO se exige que tenga tipo o categoría con ese texto —
-            // el campo tipo_receta='sub_receta' es suficiente criterio.
+            // En el catálogo de sub-recetas solo mostrar las de categoría "Platos Sub-Recetas".
+            // Las modifier sub-recetas (agua dura, bebidas, etc.) son ingredientes internos
+            // y no deben aparecer en el listado del catálogo.
             if ($tipoReceta === 'sub_receta') {
-                // No agregar filtro adicional: el where tipo_receta=sub_receta (línea 72)
-                // o el orWhere tipo LIKE sub%receta (línea 74) ya cubren todos los casos.
+                $query->where(function ($q) {
+                    $q->whereRaw("lower(coalesce(tipo,'')) LIKE '%sub%receta%'")
+                      ->orWhereHas('categoria', fn ($sq) => $sq->whereRaw("lower(nombre) LIKE '%sub%receta%'"));
+                });
             }
         } else {
             // Sin filtro de tipo_receta: excluir los marcados como sub_receta,
@@ -240,7 +241,7 @@ class RecetasController extends Controller
                 'nombre'        => $validated['nombre'],
                 'descripcion'   => $validated['descripcion'] ?? null,
                 'instrucciones' => $validated['instrucciones'] ?? null,
-                'tipo'          => $validated['tipo'] ?? null,
+                'tipo'          => $tipoReceta === 'sub_receta' ? 'Platos Sub-Recetas' : ($validated['tipo'] ?? null),
                 'categoria_id'  => $validated['categoria_id'] ?? null,
                 'tipo_receta'        => $tipoReceta,
                 'platos_semana'      => $validated['platos_semana'],
