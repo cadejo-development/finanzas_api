@@ -30,6 +30,7 @@ class RecetasController extends Controller
 
         $query = Receta::with([
                 'categoria',
+                'estado',
                 'ingredientes.producto',
                 'ingredientes.subReceta.productoAsociado',
                 'ingredientes.subReceta.ingredientes.producto',
@@ -99,6 +100,13 @@ class RecetasController extends Controller
               ->orWhereHas('categoria', fn ($sq) => $sq->where('activa', true));
         });
 
+        // Filtro por estado_id o código de estado
+        if ($estadoId = $request->query('estado_id')) {
+            $query->where('estado_id', (int) $estadoId);
+        } elseif ($estadoCodigo = $request->query('estado')) {
+            $query->whereHas('estado', fn ($q) => $q->where('codigo', $estadoCodigo));
+        }
+
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('nombre', 'ilike', "%{$search}%")
@@ -122,6 +130,15 @@ class RecetasController extends Controller
     }
 
     // ----------------------------------------------------------------------
+    // GET /api/compras/recetas/estados  — catálogo de estados
+    // ----------------------------------------------------------------------
+    public function estados(): JsonResponse
+    {
+        $estados = \App\Models\EstadoReceta::orderBy('orden')->get(['id', 'codigo', 'nombre', 'color']);
+        return response()->json(['data' => $estados]);
+    }
+
+    // ----------------------------------------------------------------------
     // GET /api/compras/recetas/{id}
     // ----------------------------------------------------------------------
     public function show(Request $request, int $id): JsonResponse
@@ -130,6 +147,7 @@ class RecetasController extends Controller
 
         $receta = Receta::with([
             'categoria',
+            'estado',
             'ingredientes.producto',
             'ingredientes.subReceta.productoAsociado',
             'ingredientes.subReceta.ingredientes.producto',
@@ -235,8 +253,10 @@ class RecetasController extends Controller
         $tipoReceta = $validated['tipo_receta'] ?? 'plato';
         $usuario    = $request->user()?->email ?? 'sistema';
 
+        // Recetas nuevas creadas desde el formulario arrancan en 'borrador'
+        $estadoBorrador = \App\Models\EstadoReceta::where('codigo', 'borrador')->value('id');
 
-        $receta = DB::connection('compras')->transaction(function () use ($validated, $tipoReceta, $usuario): Receta {
+        $receta = DB::connection('compras')->transaction(function () use ($validated, $tipoReceta, $usuario, $estadoBorrador): Receta {
             $receta = Receta::create([
                 'nombre'        => $validated['nombre'],
                 'descripcion'   => $validated['descripcion'] ?? null,
@@ -251,6 +271,7 @@ class RecetasController extends Controller
                 'foto_plato'         => $this->normalizarUrlFoto($validated['foto_plato'] ?? null),
                 'foto_plateria'      => $this->normalizarUrlFoto($validated['foto_plateria'] ?? null),
                 'activa'        => true,
+                'estado_id'     => $estadoBorrador,
                 'aud_usuario'   => $usuario,
             ]);
 
@@ -302,6 +323,7 @@ class RecetasController extends Controller
             'rendimiento'         => 'nullable|numeric|min:0',
             'rendimiento_unidad'  => 'nullable|string|max:20',
             'activa'              => 'sometimes|boolean',
+            'estado_id'           => 'sometimes|integer|exists:compras.estados_receta,id',
             'foto_plato'          => 'nullable|string|max:2000',
             'foto_plateria'       => 'nullable|string|max:2000',
             'sucursal_ids'        => 'nullable|array',
@@ -329,7 +351,7 @@ class RecetasController extends Controller
             $campos = array_intersect_key($validated, array_flip([
                 'nombre', 'descripcion', 'instrucciones', 'tipo', 'categoria_id',
                 'tipo_receta', 'platos_semana', 'precio', 'rendimiento', 'rendimiento_unidad',
-                'activa', 'foto_plato', 'foto_plateria',
+                'activa', 'estado_id', 'foto_plato', 'foto_plateria',
             ]));
             // Normalizar URLs de foto: quitar query params de presigned URLs antes de guardar
             if (isset($campos['foto_plato']))    $campos['foto_plato']    = $this->normalizarUrlFoto($campos['foto_plato']);
@@ -768,6 +790,13 @@ class RecetasController extends Controller
             'rendimiento'        => $r->rendimiento !== null ? (float) $r->rendimiento : null,
             'rendimiento_unidad' => $r->rendimiento_unidad,
             'activa'               => $r->activa,
+            'estado_id'            => $r->estado_id,
+            'estado'               => $r->relationLoaded('estado') ? [
+                'id'     => $r->estado->id,
+                'codigo' => $r->estado->codigo,
+                'nombre' => $r->estado->nombre,
+                'color'  => $r->estado->color,
+            ] : null,
             'foto_plato'    => $this->presignS3Url($r->foto_plato),
             'foto_plateria' => $this->presignS3Url($r->foto_plateria),
             'grupos_modificadores' => (int) ($r->grupos_modificadores ?? 0),

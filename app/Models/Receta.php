@@ -22,6 +22,7 @@ class Receta extends Model
         'rendimiento',
         'rendimiento_unidad',
         'activa',
+        'estado_id',
         'foto_plato',
         'foto_plateria',
         'aud_usuario',
@@ -66,6 +67,14 @@ class Receta extends Model
     public function productoAsociado()
     {
         return $this->hasOne(Producto::class, 'codigo', 'codigo_origen');
+    }
+
+    /**
+     * Estado actual de la receta.
+     */
+    public function estado()
+    {
+        return $this->belongsTo(EstadoReceta::class, 'estado_id');
     }
 
     /**
