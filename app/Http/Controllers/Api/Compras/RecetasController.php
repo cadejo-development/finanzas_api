@@ -74,14 +74,13 @@ class RecetasController extends Controller
                     $q->orWhereRaw("lower(tipo) LIKE '%sub%receta%'");
                 }
             });
-            // En el cat├ílogo de sub-recetas solo mostrar las de categor├¡a "Platos Sub-Recetas".
-            // Las modifier sub-recetas (agua dura, bebidas, etc.) son ingredientes internos
-            // y no deben aparecer en el listado del cat├ílogo.
+            // Para sub-recetas: incluir cualquiera que tenga tipo_receta='sub_receta'
+            // O que tenga tipo/categoria con 'sub receta' (compatibilidad datos migrados).
+            // Ya NO se exige que tenga tipo o categoría con ese texto —
+            // el campo tipo_receta='sub_receta' es suficiente criterio.
             if ($tipoReceta === 'sub_receta') {
-                $query->where(function ($q) {
-                    $q->whereRaw("lower(coalesce(tipo,'')) LIKE '%sub%receta%'")
-                      ->orWhereHas('categoria', fn ($sq) => $sq->whereRaw("lower(nombre) LIKE '%sub%receta%'"));
-                });
+                // No agregar filtro adicional: el where tipo_receta=sub_receta (línea 72)
+                // o el orWhere tipo LIKE sub%receta (línea 74) ya cubren todos los casos.
             }
         } else {
             // Sin filtro de tipo_receta: excluir los marcados como sub_receta,
