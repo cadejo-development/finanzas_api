@@ -178,7 +178,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::patch('recetas/{id}/platos-sucursal',       [RecetasController::class, 'setPlatosSucursal']);
     Route::get('upload/presign',                       [RecetasController::class, 'presignUpload']);
     Route::post('upload',                              [RecetasController::class, 'uploadFoto']);
-    Route::apiResource('recetas',            RecetasController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
+    Route::apiResource('recetas',            RecetasController::class)->only(['index', 'show', 'store', 'update', 'destroy'])->whereNumber('receta');
     // Catálogo de categorías de recetas
     Route::apiResource('receta-categorias',  RecetaCategoriasController::class)->only(['index', 'store', 'update', 'destroy']);
 
