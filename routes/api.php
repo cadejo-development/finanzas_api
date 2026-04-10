@@ -72,11 +72,14 @@ Route::get('ping', function () {
 
 // ─── Autenticación (pública) ───────────────────────────────────────────────
 Route::prefix('auth')->group(function () {
-    Route::post('login', [AuthController::class, 'login']);
+    Route::post('login',             [AuthController::class, 'login']);
+    Route::post('password/request',  [AuthController::class, 'requestPasswordReset']);
+    Route::post('password/reset',    [AuthController::class, 'resetPassword']);
 
     Route::middleware('auth:sanctum')->group(function () {
-        Route::post('logout', [AuthController::class, 'logout']);
-        Route::get('me', [AuthController::class, 'me']);
+        Route::post('logout',           [AuthController::class, 'logout']);
+        Route::get('me',                [AuthController::class, 'me']);
+        Route::post('password/change',  [AuthController::class, 'changePassword']);
     });
 });
 
