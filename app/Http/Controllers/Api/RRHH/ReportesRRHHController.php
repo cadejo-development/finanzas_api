@@ -193,6 +193,7 @@ class ReportesRRHHController extends RRHHBaseController
             ->join('sucursales as s', 's.id', '=', 'e.sucursal_id')
             ->leftJoin('tipos_sucursal as ts', 'ts.id', '=', 's.tipo_sucursal_id')
             ->leftJoin('cargos as c', 'c.id', '=', 'e.cargo_id')
+            ->leftJoin('departamentos as d', 'd.id', '=', 'e.departamento_id')
             ->whereIn('e.id', $ids)
             ->where('e.activo', true);
 
@@ -200,17 +201,11 @@ class ReportesRRHHController extends RRHHBaseController
             $query->where('e.sucursal_id', (int) $sucursalId);
         }
 
-        // departamento_id se guarda en la tabla departamento_empleado del schema rrhh
         if ($deptoId) {
-            $subIds = DB::connection('rrhh')
-                ->table('departamento_empleado')
-                ->where('departamento_id', (int) $deptoId)
-                ->pluck('empleado_id')
-                ->toArray();
-            $query->whereIn('e.id', $subIds);
+            $query->where('e.departamento_id', (int) $deptoId);
         }
 
-        $empleados = $query
+        return $query
             ->select(
                 'e.id',
                 DB::raw("CONCAT(e.nombres, ' ', e.apellidos) as nombre"),
@@ -218,27 +213,9 @@ class ReportesRRHHController extends RRHHBaseController
                 'ts.codigo as sucursal_tipo',
                 'e.sucursal_id',
                 'e.departamento_id',
+                'd.nombre as departamento',
                 'c.nombre as cargo'
             )->get()->map(fn($r) => (array) $r)->toArray();
-
-        // Enriquecer con nombre de departamento (tabla rrhh)
-        if (!empty($empleados)) {
-            $empIds = array_column($empleados, 'id');
-            $deptos = DB::connection('rrhh')
-                ->table('departamento_empleado as de')
-                ->join('departamentos as d', 'd.id', '=', 'de.departamento_id')
-                ->whereIn('de.empleado_id', $empIds)
-                ->select('de.empleado_id', 'd.nombre as departamento_nombre')
-                ->get()
-                ->keyBy('empleado_id');
-
-            $empleados = array_map(function ($emp) use ($deptos) {
-                $emp['departamento'] = $deptos[$emp['id']]->departamento_nombre ?? null;
-                return $emp;
-            }, $empleados);
-        }
-
-        return $empleados;
     }
 
     // ─── Cálculos ─────────────────────────────────────────────────────────────
