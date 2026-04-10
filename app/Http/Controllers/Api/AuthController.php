@@ -10,6 +10,7 @@ use App\Models\Sucursal;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
@@ -129,10 +130,35 @@ class AuthController extends Controller
                 'reset_code_expires_at' => now()->addMinutes(15),
             ]);
 
+            $estado       = 'enviado';
+            $errorMensaje = null;
+            $respuestaApi = null;
+
             try {
                 Mail::to($user->email)->send(new PasswordResetCode($code, $user->name));
+                $respuestaApi = 'OK';
+            } catch (\Throwable $e) {
+                $estado       = 'error';
+                $errorMensaje = $e->getMessage();
+                $respuestaApi = get_class($e);
+            }
+
+            try {
+                DB::connection('pgsql')->table('email_logs')->insert([
+                    'sistema'      => 'portal',
+                    'tipo'         => 'password_reset',
+                    'destinatario' => $user->email,
+                    'asunto'       => 'Código de recuperación de contraseña — Cadejo Brewing Company',
+                    'estado'       => $estado,
+                    'error_mensaje'=> $errorMensaje,
+                    'respuesta_api'=> $respuestaApi,
+                    'enviado_por'  => 'sistema',
+                    'referencia_id'=> $user->id,
+                    'referencia_tipo' => 'user',
+                    'created_at'   => now(),
+                ]);
             } catch (\Throwable) {
-                // No exponer errores de mail al cliente
+                // El log no debe romper el flujo
             }
         }
 
