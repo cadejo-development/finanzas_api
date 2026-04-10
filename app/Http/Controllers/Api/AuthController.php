@@ -168,6 +168,30 @@ class AuthController extends Controller
     }
 
     /**
+     * POST /api/auth/password/verify
+     * Solo valida que el código sea correcto y no haya expirado (sin cambiar contraseña).
+     */
+    public function verifyResetCode(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'code'  => 'required|string|size:6',
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        if (! $user || $user->reset_code !== $request->code) {
+            return response()->json(['message' => 'El código ingresado es inválido.'], 422);
+        }
+
+        if (! $user->reset_code_expires_at || now()->gt($user->reset_code_expires_at)) {
+            return response()->json(['message' => 'El código ha expirado. Solicita uno nuevo.'], 422);
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
      * POST /api/auth/password/reset
      * Valida el código y actualiza la contraseña.
      */

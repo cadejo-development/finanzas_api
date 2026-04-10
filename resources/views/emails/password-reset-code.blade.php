@@ -8,8 +8,7 @@
     body { margin:0; padding:0; background:#0c0a09; font-family:'Segoe UI',Arial,sans-serif; }
     .wrap { max-width:480px; margin:40px auto; background:#1c1917; border-radius:16px; overflow:hidden; border:1px solid #292524; }
     .header { background:linear-gradient(135deg,#1c1917 0%,#292524 100%); padding:32px 32px 24px; text-align:center; border-bottom:1px solid #292524; }
-    .logo-ring { display:inline-block; width:64px; height:64px; border-radius:50%; background:rgba(245,158,11,0.12); border:1.5px solid rgba(245,158,11,0.3); line-height:64px; font-size:28px; margin-bottom:12px; }
-    .brand { color:#f59e0b; font-size:18px; font-weight:700; letter-spacing:0.5px; margin:0; }
+    .brand { color:#f59e0b; font-size:18px; font-weight:700; letter-spacing:0.5px; margin:12px 0 0; }
     .subtitle { color:#78716c; font-size:12px; text-transform:uppercase; letter-spacing:1px; margin:4px 0 0; }
     .body { padding:32px; }
     .greeting { color:#d6d3d1; font-size:15px; margin:0 0 16px; }
@@ -27,7 +26,9 @@
 <body>
   <div class="wrap">
     <div class="header">
-      <div class="logo-ring">🍺</div>
+      <img src="https://cadejo-storage.s3.us-east-2.amazonaws.com/emails/cadejol0g0.png"
+           alt="Cadejo Brewing Company" width="72" height="72"
+           style="border-radius:50%;border:1.5px solid rgba(245,158,11,0.3);background:rgba(245,158,11,0.12);display:block;margin:0 auto;" />
       <p class="brand">Cadejo Brewing Company</p>
       <p class="subtitle">Portal de Sistemas</p>
     </div>

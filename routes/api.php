@@ -74,6 +74,7 @@ Route::get('ping', function () {
 Route::prefix('auth')->group(function () {
     Route::post('login',             [AuthController::class, 'login']);
     Route::post('password/request',  [AuthController::class, 'requestPasswordReset']);
+    Route::post('password/verify',   [AuthController::class, 'verifyResetCode']);
     Route::post('password/reset',    [AuthController::class, 'resetPassword']);
 
     Route::middleware('auth:sanctum')->group(function () {
