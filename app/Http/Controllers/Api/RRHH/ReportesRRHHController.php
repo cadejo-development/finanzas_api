@@ -191,6 +191,7 @@ class ReportesRRHHController extends RRHHBaseController
         $query = DB::connection('pgsql')
             ->table('empleados as e')
             ->join('sucursales as s', 's.id', '=', 'e.sucursal_id')
+            ->leftJoin('tipos_sucursal as ts', 'ts.id', '=', 's.tipo_sucursal_id')
             ->leftJoin('cargos as c', 'c.id', '=', 'e.cargo_id')
             ->whereIn('e.id', $ids)
             ->where('e.activo', true);
@@ -214,7 +215,7 @@ class ReportesRRHHController extends RRHHBaseController
                 'e.id',
                 DB::raw("CONCAT(e.nombres, ' ', e.apellidos) as nombre"),
                 's.nombre as sucursal',
-                's.tipo as sucursal_tipo',
+                'ts.codigo as sucursal_tipo',
                 'e.sucursal_id',
                 'e.departamento_id',
                 'c.nombre as cargo'
