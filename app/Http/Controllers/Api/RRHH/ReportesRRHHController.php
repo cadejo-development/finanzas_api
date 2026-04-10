@@ -210,7 +210,7 @@ class ReportesRRHHController extends RRHHBaseController
             $query->whereIn('e.id', $subIds);
         }
 
-        return $query
+        $empleados = $query
             ->select(
                 'e.id',
                 DB::raw("CONCAT(e.nombres, ' ', e.apellidos) as nombre"),
@@ -220,6 +220,25 @@ class ReportesRRHHController extends RRHHBaseController
                 'e.departamento_id',
                 'c.nombre as cargo'
             )->get()->map(fn($r) => (array) $r)->toArray();
+
+        // Enriquecer con nombre de departamento (tabla rrhh)
+        if (!empty($empleados)) {
+            $empIds = array_column($empleados, 'id');
+            $deptos = DB::connection('rrhh')
+                ->table('departamento_empleado as de')
+                ->join('departamentos as d', 'd.id', '=', 'de.departamento_id')
+                ->whereIn('de.empleado_id', $empIds)
+                ->select('de.empleado_id', 'd.nombre as departamento_nombre')
+                ->get()
+                ->keyBy('empleado_id');
+
+            $empleados = array_map(function ($emp) use ($deptos) {
+                $emp['departamento'] = $deptos[$emp['id']]->departamento_nombre ?? null;
+                return $emp;
+            }, $empleados);
+        }
+
+        return $empleados;
     }
 
     // ─── Cálculos ─────────────────────────────────────────────────────────────
