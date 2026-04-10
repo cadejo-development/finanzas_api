@@ -80,9 +80,34 @@ function buildBatch(table, columns, rows, conflictSql, returningSql = '') {
   return { text, values: params };
 }
 
+// ── Query: costo promedio últimos 3 meses desde olCompras (con signo) ────────
+// Usa maeCompras + detCompras + TiposDocCom para calcular el costo real de compra.
+// Solo documentos posteados, no anulados, con signo definido (excluye ODC, COT, etc.)
+// La unidad usada es dcoUniNombre (unidad de compra, puede diferir de la del producto).
+const Q_COSTOS_COMPRAS = `
+SELECT
+  D.proId,
+  SUM(D.dcoTotalLinea * TDOCC.tdcoSignoCompra)  AS total_monto,
+  SUM(D.dcoCantUnidad * TDOCC.tdcoSignoCompra)  AS total_cantidad,
+  SUM(D.dcoTotalLinea * TDOCC.tdcoSignoCompra) /
+    NULLIF(SUM(D.dcoCantUnidad * TDOCC.tdcoSignoCompra), 0) AS costo_promedio_3m,
+  MAX(MCO.mcoFecha) AS ultima_compra
+FROM olCompras.dbo.detCompras D WITH(NOLOCK)
+INNER JOIN olCompras.dbo.maeCompras MCO WITH(NOLOCK)
+  ON MCO.mcoId = D.mcoId
+INNER JOIN olCompras.dbo.TiposDocCom TDOCC WITH(NOLOCK)
+  ON MCO.mcoTipoDoc = TDOCC.tdcoCodigo
+WHERE MCO.mcoAnulada  = 0
+  AND MCO.mcoPosteada = 1
+  AND TDOCC.tdcoSignoCompra IS NOT NULL
+  AND TDOCC.tdcoEsCompra    = 1
+  AND MCO.mcoFecha >= DATEADD(MONTH, -3, GETDATE())
+GROUP BY D.proId
+`;
+
 // ── Query: todas las materias primas que son ingredientes en MXP ─────────────
 // Incluye cualquier producto que aparezca como proIdMaterial en alguna receta activa.
-// Esto cubre exactamente lo que es "materia prima" en el contexto del sistema.
+// El costo viene de olCompras (costo_promedio_3m); si no tiene compras recientes se usa 0.
 const Q_MATERIAS_PRIMAS = `
 SELECT DISTINCT
   PROM.proId       AS id_origen,
@@ -91,8 +116,6 @@ SELECT DISTINCT
   CPR.cprCodigo    AS cat_codigo,
   CPR.cprNombre    AS cat_nombre,
   UNI.uniNombre    AS unidad_nombre,
-  ISNULL(PROM.proCosto, 0)  AS costo,
-  ISNULL(PROM.proPrecio, 0) AS precio,
   PROM.proActivo   AS activo
 FROM olComun.dbo.MaterialesXProducto MXP WITH(NOLOCK)
 INNER JOIN olComun.dbo.Productos PROM WITH(NOLOCK)
@@ -141,9 +164,21 @@ async function main() {
 
   const now = new Date().toISOString();
 
-  // ── 1. Cargar materias primas desde SS ───────────────────────────────────
-  log('[1/3] Cargando materias primas desde SQL Server...');
-  const mpRows = (await sqlPool.request().query(Q_MATERIAS_PRIMAS)).recordset;
+  // ── 1. Cargar materias primas + costos reales desde SS ──────────────────
+  log('[1/3] Cargando materias primas y costos reales desde SQL Server...');
+  const [mpRows, costoRows] = await Promise.all([
+    sqlPool.request().query(Q_MATERIAS_PRIMAS).then(r => r.recordset),
+    sqlPool.request().query(Q_COSTOS_COMPRAS).then(r => r.recordset),
+  ]);
+
+  // Mapa proId → costo_promedio_3m desde olCompras
+  const costosMap = new Map();
+  for (const c of costoRows) {
+    if (c.costo_promedio_3m !== null && c.costo_promedio_3m > 0) {
+      costosMap.set(c.proId, parseFloat(c.costo_promedio_3m));
+    }
+  }
+  log(`      ${costoRows.length} productos con costos de compra en últimos 3 meses.`);
 
   // Deduplicar por id_origen (por si hay duplicados en MXP)
   const mpMap = new Map();
@@ -237,8 +272,8 @@ async function main() {
         clean(mp.codigo, 50),   // codigo_origen = codigo SS
         clean(mp.nombre, 150),
         normalizeUnit(mp.unidad_nombre),
-        parseFloat(mp.precio) || 0,
-        parseFloat(mp.costo)  || 0,
+        0,                                                  // precio (no se usa de SS)
+        costosMap.get(mp.id_origen) ?? 0,                  // costo real desde olCompras
         'restaurante',
         mp.activo ? true : false,
         'sync_mp',
