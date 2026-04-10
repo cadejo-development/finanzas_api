@@ -25,10 +25,10 @@ RUN composer dump-autoload --no-dev --optimize
 FROM public.ecr.aws/docker/library/php:8.3-cli-alpine
 
 RUN apk add --no-cache \
-        postgresql-dev curl-dev \
+        postgresql-dev curl-dev libxml2-dev \
         freetype-dev libjpeg-turbo-dev libpng-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install pdo_pgsql bcmath gd
+    && docker-php-ext-install pdo_pgsql bcmath gd simplexml
 
 # Increase PHP upload/memory limits (default CLI limits are 2M/128M which
 # cause 502 Bad Gateway on any file upload through App Runner)
