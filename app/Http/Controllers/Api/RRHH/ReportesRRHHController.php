@@ -29,6 +29,7 @@ class ReportesRRHHController extends RRHHBaseController
 {
     public function quincena(Request $request): JsonResponse
     {
+        try {
         $subordinadosIds = $this->getSubordinadosIds();
 
         $anio       = (int) ($request->query('anio', now()->year));
@@ -118,6 +119,13 @@ class ReportesRRHHController extends RRHHBaseController
                 'prev_hasta'  => $hastaPrev->toDateString(),
             ],
         ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'file'    => $e->getFile() . ':' . $e->getLine(),
+            ], 500);
+        }
     }
 
     // ─── Helpers de rango ────────────────────────────────────────────────────
