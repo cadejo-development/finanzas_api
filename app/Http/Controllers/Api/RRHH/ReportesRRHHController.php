@@ -193,7 +193,10 @@ class ReportesRRHHController extends RRHHBaseController
             ->join('sucursales as s', 's.id', '=', 'e.sucursal_id')
             ->leftJoin('tipos_sucursal as ts', 'ts.id', '=', 's.tipo_sucursal_id')
             ->leftJoin('cargos as c', 'c.id', '=', 'e.cargo_id')
+            // Departamento como miembro
             ->leftJoin('departamentos as d', 'd.id', '=', 'e.departamento_id')
+            // Departamento como jefe (cuando departamento_id es null)
+            ->leftJoin('departamentos as dj', 'dj.jefe_empleado_id', '=', 'e.id')
             ->whereIn('e.id', $ids)
             ->where('e.activo', true);
 
@@ -202,7 +205,11 @@ class ReportesRRHHController extends RRHHBaseController
         }
 
         if ($deptoId) {
-            $query->where('e.departamento_id', (int) $deptoId);
+            // Incluir miembros y también el jefe del departamento
+            $query->where(function ($q) use ($deptoId) {
+                $q->where('e.departamento_id', (int) $deptoId)
+                  ->orWhere('dj.id', (int) $deptoId);
+            });
         }
 
         return $query
@@ -213,7 +220,7 @@ class ReportesRRHHController extends RRHHBaseController
                 'ts.codigo as sucursal_tipo',
                 'e.sucursal_id',
                 'e.departamento_id',
-                'd.nombre as departamento',
+                DB::raw("COALESCE(d.nombre, dj.nombre) as departamento"),
                 'c.nombre as cargo'
             )->get()->map(fn($r) => (array) $r)->toArray();
     }
