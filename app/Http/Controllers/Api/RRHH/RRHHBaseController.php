@@ -352,6 +352,10 @@ abstract class RRHHBaseController extends Controller
         string $rutaFrontend,
         bool   $solicitud,
     ): void {
+        $supervisor    = null;
+        $mailable      = null;
+        $supervisorEmail = null;
+
         try {
             $actorEmpleadoId = DB::connection('pgsql')
                 ->table('empleados')
@@ -366,6 +370,8 @@ abstract class RRHHBaseController extends Controller
             );
 
             if (! $supervisor || ! $supervisor->email) return;
+
+            $supervisorEmail = $supervisor->email;
 
             $empleado = DB::connection('pgsql')
                 ->table('empleados')
@@ -384,26 +390,54 @@ abstract class RRHHBaseController extends Controller
                 ? new SolicitudAprobacion($tipo, $empleadoNombre, $supervisorNombre, $detalles, $linkUrl)
                 : new AccionPersonalNotificacion($tipo, $empleadoNombre, $supervisorNombre, $detalles, $linkUrl);
 
-            Mail::to($supervisor->email)->send($mailable);
+            Mail::to($supervisorEmail)->send($mailable);
 
-            // Log for audit
-            DB::connection('pgsql')->table('email_logs')->insertOrIgnore([
-                'sistema'         => 'rrhh',
+            $this->registrarEmailLog([
                 'tipo'            => $solicitud ? 'solicitud_aprobacion' : 'accion_notificacion',
-                'destinatario'    => $supervisor->email,
+                'destinatario'    => $supervisorEmail,
                 'asunto'          => $mailable->envelope()->subject,
                 'estado'          => 'enviado',
                 'enviado_por'     => Auth::user()->email,
                 'referencia_id'   => $empleadoId,
                 'referencia_tipo' => 'empleado',
-                'created_at'      => now(),
             ]);
+
         } catch (\Throwable $e) {
             Log::warning('RRHH: Error enviando notificación por correo', [
                 'empleado_id' => $empleadoId,
                 'tipo'        => $tipo,
                 'error'       => $e->getMessage(),
             ]);
+
+            // Registrar el fallo en email_logs para auditoría
+            $this->registrarEmailLog([
+                'tipo'            => $solicitud ? 'solicitud_aprobacion' : 'accion_notificacion',
+                'destinatario'    => $supervisorEmail ?? 'desconocido',
+                'asunto'          => $mailable?->envelope()->subject ?? "Notificación {$tipo}",
+                'estado'          => 'fallido',
+                'error_mensaje'   => $e->getMessage(),
+                'respuesta_api'   => json_encode([
+                    'class'   => get_class($e),
+                    'message' => $e->getMessage(),
+                    'file'    => $e->getFile(),
+                    'line'    => $e->getLine(),
+                ]),
+                'enviado_por'     => Auth::user()?->email,
+                'referencia_id'   => $empleadoId,
+                'referencia_tipo' => 'empleado',
+            ]);
+        }
+    }
+
+    private function registrarEmailLog(array $data): void
+    {
+        try {
+            DB::connection('pgsql')->table('email_logs')->insert(array_merge(
+                ['sistema' => 'rrhh', 'created_at' => now()],
+                $data,
+            ));
+        } catch (\Throwable $e) {
+            Log::error('RRHH: No se pudo registrar en email_logs', ['error' => $e->getMessage()]);
         }
     }
 }
