@@ -65,6 +65,14 @@ class ExpedienteController extends RRHHBaseController
     {
         if ($this->esAdminRrhh()) return;
 
+        // Rol empleado puro: solo puede ver su propio expediente
+        if ($this->esEmpleado()) {
+            if (!$this->esEmpleadoPropio($empleadoId)) {
+                abort(403, 'Solo puedes ver tu propio expediente.');
+            }
+            return;
+        }
+
         $jefeEmpleado = $this->getJefeEmpleado();
         if (!$jefeEmpleado) abort(403, 'Sin acceso.');
 

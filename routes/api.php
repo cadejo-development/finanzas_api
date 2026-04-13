@@ -304,9 +304,10 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::get('reportes/quincena', [ReportesRRHHController::class, 'quincena']);
 });
 
-// ─── RRHH Expediente Digital (jefatura, rrhh_admin, portal_admin) ────────────
-Route::prefix('rrhh/expediente')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,rrhh_admin'])->group(function () {
-    // Cabecera + secciones
+// ─── RRHH Expediente Digital ────────────────────────────────────────────────
+// Empleados solo pueden leer su propio expediente (GET); el resto requiere jefatura+
+Route::prefix('rrhh/expediente')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,rrhh_admin,empleado'])->group(function () {
+    // Cabecera + secciones (empleado puede ver solo el suyo — validado en autorizarAcceso)
     Route::get('{empleadoId}',                           [ExpedienteController::class, 'show']);
     Route::get('{empleadoId}/acciones',                  [ExpedienteController::class, 'acciones']);
 
