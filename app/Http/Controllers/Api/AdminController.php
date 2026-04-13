@@ -186,7 +186,12 @@ class AdminController extends Controller
         $data = $request->validate([
             'name'        => 'sometimes|nullable|string|max:150',
             'sucursal_id' => 'sometimes|nullable|integer|exists:pgsql.sucursales,id',
+            'email'       => "sometimes|required|email|max:150|unique:pgsql.users,email,{$id}",
         ]);
+
+        if (isset($data['email'])) {
+            $data['email'] = strtolower($data['email']);
+        }
 
         $this->db()->table('users')->where('id', $id)->update(array_merge($data, ['updated_at' => now()]));
         return response()->json(['message' => 'Usuario actualizado.']);
