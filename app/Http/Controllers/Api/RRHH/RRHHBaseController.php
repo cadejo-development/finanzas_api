@@ -3,9 +3,14 @@
 namespace App\Http\Controllers\Api\RRHH;
 
 use App\Http\Controllers\Controller;
+use App\Mail\RRHH\AccionPersonalNotificacion;
+use App\Mail\RRHH\SolicitudAprobacion;
 use App\Models\Empleado;
+use App\Services\RRHH\SupervisorChainService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 /**
  * Controlador base para el módulo RRHH.
@@ -25,6 +30,19 @@ abstract class RRHHBaseController extends Controller
     protected function esAdminRrhh(): bool
     {
         return Auth::user()->hasRole('rrhh_admin');
+    }
+
+    /**
+     * Indica si el usuario autenticado es empleado (solo rol empleado, sin roles de gestión).
+     * Un empleado con rol adicional de jefatura/admin NO se considera solo empleado.
+     */
+    protected function esEmpleado(): bool
+    {
+        $user = Auth::user();
+        return $user->hasRole('empleado')
+            && ! $user->hasRole('rrhh_admin')
+            && ! $user->hasRole('portal_admin')
+            && ! $user->hasRole('jefatura');
     }
 
     /**
@@ -54,6 +72,15 @@ abstract class RRHHBaseController extends Controller
     {
         if ($this->esAdminRrhh()) {
             return $this->getTodosEmpleadosIds();
+        }
+
+        // Empleado con rol básico: solo ve sus propios registros
+        if ($this->esEmpleado()) {
+            $ownId = DB::connection('pgsql')
+                ->table('empleados')
+                ->where('user_id', Auth::id())
+                ->value('id');
+            return $ownId ? [(int) $ownId] : [];
         }
 
         $user = Auth::user();
@@ -183,6 +210,11 @@ abstract class RRHHBaseController extends Controller
                 ->exists();
         }
 
+        // Empleado solo puede gestionar su propio registro
+        if ($this->esEmpleado()) {
+            return $this->esEmpleadoPropio($empleadoId);
+        }
+
         return $this->esEmpleadoPropio($empleadoId) || $this->esSubordinado($empleadoId);
     }
 
@@ -194,6 +226,9 @@ abstract class RRHHBaseController extends Controller
     protected function estadoParaEmpleado(int $empleadoId): string
     {
         if ($this->esAdminRrhh()) return 'aprobado';
+        // Empleado submitting own request always starts as pending
+        if ($this->esEmpleado()) return 'pendiente';
+        // Jefatura acting on subordinate → auto-approve; acting on self → pending
         return $this->esEmpleadoPropio($empleadoId) ? 'pendiente' : 'aprobado';
     }
 
@@ -268,5 +303,107 @@ abstract class RRHHBaseController extends Controller
             $arr['sucursal_nombre']    = $emp?->sucursal_nombre;
             return $arr;
         })->all();
+    }
+
+    // ─── Notification helpers ─────────────────────────────────────────────────
+
+    /**
+     * Determines whether the actor's supervisor should be notified.
+     * Notification is needed only when the actor is the subject of the action
+     * (self-service). When a jefe acts on a subordinate, no email is sent
+     * because the jefe is already aware.
+     */
+    protected function debeNotificar(int $empleadoId): bool
+    {
+        if ($this->esAdminRrhh()) return false;
+        return $this->esEmpleadoPropio($empleadoId);
+    }
+
+    /**
+     * Send a solicitud/approval-required email up the supervisor chain.
+     * Used for actions that require supervisor approval (permisos, vacaciones).
+     *
+     * @param int    $empleadoId  The employee the action is about
+     * @param string $tipo        Human-readable action type (e.g. 'Permiso')
+     * @param array  $detalles    Key-value pairs to display in the email body
+     * @param string $rutaFrontend  Frontend path segment (e.g. 'permisos')
+     */
+    protected function notificarSolicitud(int $empleadoId, string $tipo, array $detalles, string $rutaFrontend): void
+    {
+        $this->enviarNotificacion($empleadoId, $tipo, $detalles, $rutaFrontend, solicitud: true);
+    }
+
+    /**
+     * Send an informational notification email up the supervisor chain.
+     * Used for actions that do NOT require approval (incapacidades, etc.).
+     */
+    protected function notificarAccion(int $empleadoId, string $tipo, array $detalles, string $rutaFrontend): void
+    {
+        $this->enviarNotificacion($empleadoId, $tipo, $detalles, $rutaFrontend, solicitud: false);
+    }
+
+    /**
+     * Internal: resolve supervisor chain and dispatch the appropriate email.
+     */
+    private function enviarNotificacion(
+        int    $empleadoId,
+        string $tipo,
+        array  $detalles,
+        string $rutaFrontend,
+        bool   $solicitud,
+    ): void {
+        try {
+            $actorEmpleadoId = DB::connection('pgsql')
+                ->table('empleados')
+                ->where('user_id', Auth::id())
+                ->value('id');
+
+            if (! $actorEmpleadoId) return;
+
+            $supervisor = (new SupervisorChainService)->resolverSupervisorANotificar(
+                (int) $empleadoId,
+                (int) $actorEmpleadoId,
+            );
+
+            if (! $supervisor || ! $supervisor->email) return;
+
+            $empleado = DB::connection('pgsql')
+                ->table('empleados')
+                ->where('id', $empleadoId)
+                ->first();
+
+            $empleadoNombre   = $empleado
+                ? trim($empleado->nombres . ' ' . $empleado->apellidos)
+                : "Empleado #{$empleadoId}";
+
+            $supervisorNombre = SupervisorChainService::nombreCompleto($supervisor);
+            $baseUrl          = rtrim(config('app.frontend_rrhh_url', 'https://rrhh.cervezacadejo.com'), '/');
+            $linkUrl          = "{$baseUrl}/{$rutaFrontend}";
+
+            $mailable = $solicitud
+                ? new SolicitudAprobacion($tipo, $empleadoNombre, $supervisorNombre, $detalles, $linkUrl)
+                : new AccionPersonalNotificacion($tipo, $empleadoNombre, $supervisorNombre, $detalles, $linkUrl);
+
+            Mail::to($supervisor->email)->send($mailable);
+
+            // Log for audit
+            DB::connection('pgsql')->table('email_logs')->insertOrIgnore([
+                'sistema'         => 'rrhh',
+                'tipo'            => $solicitud ? 'solicitud_aprobacion' : 'accion_notificacion',
+                'destinatario'    => $supervisor->email,
+                'asunto'          => $mailable->envelope()->subject,
+                'estado'          => 'enviado',
+                'enviado_por'     => Auth::user()->email,
+                'referencia_id'   => $empleadoId,
+                'referencia_tipo' => 'empleado',
+                'created_at'      => now(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('RRHH: Error enviando notificación por correo', [
+                'empleado_id' => $empleadoId,
+                'tipo'        => $tipo,
+                'error'       => $e->getMessage(),
+            ]);
+        }
     }
 }

@@ -88,6 +88,12 @@ class AuthController extends Controller
         $todasSucursales    = Sucursal::whereIn('id', $todasSucursalesIds)->orderBy('nombre')->get()
             ->map(fn ($s) => ['id' => $s->id, 'nombre' => $s->nombre]);
 
+        // Empleado vinculado al usuario (necesario para el rol empleado en RRHH)
+        $empleadoId = DB::connection('pgsql')
+            ->table('empleados')
+            ->where('user_id', $user->id)
+            ->value('id');
+
         return response()->json([
             'success' => true,
             'token'   => $token,
@@ -105,6 +111,7 @@ class AuthController extends Controller
                 'centros_costo'         => $centrosCosto,
                 'is_portal_admin'       => $user->hasRole('portal_admin'),
                 'force_password_change' => (bool) $user->force_password_change,
+                'empleado_id'           => $empleadoId,
             ],
         ]);
     }
@@ -312,6 +319,11 @@ class AuthController extends Controller
         $todasSucursales    = Sucursal::whereIn('id', $todasSucursalesIds)->orderBy('nombre')->get()
             ->map(fn ($s) => ['id' => $s->id, 'nombre' => $s->nombre]);
 
+        $empleadoId = DB::connection('pgsql')
+            ->table('empleados')
+            ->where('user_id', $user->id)
+            ->value('id');
+
         return response()->json([
             'success' => true,
             'user'    => [
@@ -327,6 +339,7 @@ class AuthController extends Controller
                 'permisos'        => $permisos,
                 'centros_costo'   => $centrosCosto,
                 'is_portal_admin' => $user->hasRole('portal_admin'),
+                'empleado_id'     => $empleadoId,
             ],
         ]);
     }

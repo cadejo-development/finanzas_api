@@ -76,6 +76,18 @@ class PermisosController extends RRHHBaseController
 
         $permiso->load('tipoPermiso');
 
+        // Notify supervisor when employee submits own request (or jefe submits for themselves)
+        if ($this->debeNotificar($validated['empleado_id'])) {
+            $detalles = array_filter([
+                'Tipo'   => $permiso->tipoPermiso?->nombre,
+                'Fecha'  => $validated['fecha'],
+                'Días'   => isset($validated['dias']) ? $validated['dias'] . ' día(s)' : null,
+                'Horas'  => isset($validated['horas_solicitadas']) ? $validated['horas_solicitadas'] . ' hrs' : null,
+                'Motivo' => $validated['motivo'] ?? null,
+            ]);
+            $this->notificarSolicitud($validated['empleado_id'], 'Permiso', $detalles, 'permisos');
+        }
+
         return response()->json(['success' => true, 'data' => $permiso], 201);
     }
 

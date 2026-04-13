@@ -54,6 +54,17 @@ class VacacionesController extends RRHHBaseController
             'aud_usuario' => Auth::user()->email,
         ]));
 
+        // Notify supervisor when employee submits own request (or jefe submits for themselves)
+        if ($this->debeNotificar($validated['empleado_id'])) {
+            $detalles = array_filter([
+                'Fecha inicio'  => $validated['fecha_inicio'],
+                'Fecha fin'     => $validated['fecha_fin'],
+                'Días'          => $validated['dias'] . ' día(s)',
+                'Observaciones' => $validated['observaciones'] ?? null,
+            ]);
+            $this->notificarSolicitud($validated['empleado_id'], 'Vacaciones', $detalles, 'vacaciones');
+        }
+
         return response()->json(['success' => true, 'data' => $vacacion], 201);
     }
 

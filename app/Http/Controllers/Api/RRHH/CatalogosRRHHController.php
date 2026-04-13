@@ -124,6 +124,8 @@ class CatalogosRRHHController extends RRHHBaseController
                 'cargos'                 => $cargos,
                 'departamentos'          => $departamentos,
                 'es_admin'               => $esAdmin,
+                'es_empleado'            => $this->esEmpleado(),
+                'empleado_id_propio'     => $jefeEmpleadoId,
             ],
         ]);
     }

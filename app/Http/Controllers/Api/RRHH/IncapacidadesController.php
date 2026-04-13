@@ -78,6 +78,24 @@ class IncapacidadesController extends RRHHBaseController
 
         $incapacidad->load('tipoIncapacidad');
 
+        // Notify supervisor when employee submits own incapacidad (informational)
+        if ($this->debeNotificar($validated['empleado_id'])) {
+            $institucionLabel = match ($validated['tipo_institucion'] ?? null) {
+                'isss'    => 'ISSS',
+                'privada' => 'Privada',
+                default   => null,
+            };
+            $detalles = array_filter([
+                'Tipo'        => $incapacidad->tipoIncapacidad?->nombre,
+                'Institución' => $institucionLabel,
+                'Desde'       => $validated['fecha_inicio'],
+                'Hasta'       => $validated['fecha_fin'],
+                'Días'        => $validated['dias'] . ' día(s)',
+                'Observaciones' => $validated['observaciones'] ?? null,
+            ]);
+            $this->notificarAccion($validated['empleado_id'], 'Incapacidad', $detalles, 'incapacidades');
+        }
+
         return response()->json(['success' => true, 'data' => $incapacidad], 201);
     }
 
