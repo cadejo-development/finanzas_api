@@ -253,8 +253,11 @@ class RecetasController extends Controller
         $tipoReceta = $validated['tipo_receta'] ?? 'plato';
         $usuario    = $request->user()?->email ?? 'sistema';
 
-        // Recetas nuevas creadas desde el formulario arrancan en 'borrador'
-        $estadoBorrador = \App\Models\EstadoReceta::where('codigo', 'borrador')->value('id');
+        // Recetas → borrador; Sub-recetas → activa directamente
+        $estadoInicial = $tipoReceta === 'sub_receta'
+            ? \App\Models\EstadoReceta::where('codigo', 'activa')->value('id')
+            : \App\Models\EstadoReceta::where('codigo', 'borrador')->value('id');
+        $estadoBorrador = $estadoInicial;
 
         $receta = DB::connection('compras')->transaction(function () use ($validated, $tipoReceta, $usuario, $estadoBorrador): Receta {
             $receta = Receta::create([
