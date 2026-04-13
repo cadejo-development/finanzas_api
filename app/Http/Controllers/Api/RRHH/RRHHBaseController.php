@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\URL;
 
 /**
  * Controlador base para el módulo RRHH.
@@ -328,9 +329,15 @@ abstract class RRHHBaseController extends Controller
      * @param array  $detalles    Key-value pairs to display in the email body
      * @param string $rutaFrontend  Frontend path segment (e.g. 'permisos')
      */
-    protected function notificarSolicitud(int $empleadoId, string $tipo, array $detalles, string $rutaFrontend): void
-    {
-        $this->enviarNotificacion($empleadoId, $tipo, $detalles, $rutaFrontend, solicitud: true);
+    protected function notificarSolicitud(
+        int     $empleadoId,
+        string  $tipo,
+        array   $detalles,
+        string  $rutaFrontend,
+        ?int    $solicitudId  = null,
+        ?string $tipoModelo   = null,
+    ): void {
+        $this->enviarNotificacion($empleadoId, $tipo, $detalles, $rutaFrontend, solicitud: true, solicitudId: $solicitudId, tipoModelo: $tipoModelo);
     }
 
     /**
@@ -346,11 +353,13 @@ abstract class RRHHBaseController extends Controller
      * Internal: resolve supervisor chain and dispatch the appropriate email.
      */
     private function enviarNotificacion(
-        int    $empleadoId,
-        string $tipo,
-        array  $detalles,
-        string $rutaFrontend,
-        bool   $solicitud,
+        int     $empleadoId,
+        string  $tipo,
+        array   $detalles,
+        string  $rutaFrontend,
+        bool    $solicitud,
+        ?int    $solicitudId = null,
+        ?string $tipoModelo  = null,
     ): void {
         $supervisor    = null;
         $mailable      = null;
@@ -386,8 +395,15 @@ abstract class RRHHBaseController extends Controller
             $baseUrl          = rtrim(config('app.frontend_rrhh_url', 'https://rrhh.cervezacadejo.com'), '/');
             $linkUrl          = "{$baseUrl}/{$rutaFrontend}";
 
+            $aprobarUrl  = null;
+            $rechazarUrl = null;
+            if ($solicitud && $solicitudId && $tipoModelo) {
+                $aprobarUrl  = URL::temporarySignedRoute('rrhh.email.aprobar',  now()->addDays(5), ['tipo' => $tipoModelo, 'id' => $solicitudId]);
+                $rechazarUrl = URL::temporarySignedRoute('rrhh.email.rechazar', now()->addDays(5), ['tipo' => $tipoModelo, 'id' => $solicitudId]);
+            }
+
             $mailable = $solicitud
-                ? new SolicitudAprobacion($tipo, $empleadoNombre, $supervisorNombre, $detalles, $linkUrl)
+                ? new SolicitudAprobacion($tipo, $empleadoNombre, $supervisorNombre, $detalles, $linkUrl, $aprobarUrl, $rechazarUrl)
                 : new AccionPersonalNotificacion($tipo, $empleadoNombre, $supervisorNombre, $detalles, $linkUrl);
 
             Mail::to($supervisorEmail)->send($mailable);

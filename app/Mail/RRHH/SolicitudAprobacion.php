@@ -17,11 +17,13 @@ class SolicitudAprobacion extends Mailable
     use Queueable, SerializesModels;
 
     public function __construct(
-        public readonly string $tipo,
-        public readonly string $empleadoNombre,
-        public readonly string $supervisorNombre,
-        public readonly array  $detalles,
-        public readonly string $linkUrl,
+        public readonly string  $tipo,
+        public readonly string  $empleadoNombre,
+        public readonly string  $supervisorNombre,
+        public readonly array   $detalles,
+        public readonly string  $linkUrl,
+        public readonly ?string $aprobarUrl  = null,
+        public readonly ?string $rechazarUrl = null,
     ) {}
 
     public function envelope(): Envelope

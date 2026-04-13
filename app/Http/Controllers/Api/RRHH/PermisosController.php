@@ -85,7 +85,7 @@ class PermisosController extends RRHHBaseController
                 'Horas'  => isset($validated['horas_solicitadas']) ? $validated['horas_solicitadas'] . ' hrs' : null,
                 'Motivo' => $validated['motivo'] ?? null,
             ]);
-            $this->notificarSolicitud($validated['empleado_id'], 'Permiso', $detalles, 'permisos');
+            $this->notificarSolicitud($validated['empleado_id'], 'Permiso', $detalles, 'permisos', $permiso->id, 'permiso');
         }
 
         return response()->json(['success' => true, 'data' => $permiso], 201);
