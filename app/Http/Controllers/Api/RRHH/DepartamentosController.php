@@ -41,6 +41,7 @@ class DepartamentosController extends Controller
         // Conteo de empleados por departamento
         $deptIds = collect($depts)->pluck('id')->all();
         $counts = [];
+        $preview = [];
         if (!empty($deptIds)) {
             $counts = DB::connection('pgsql')
                 ->table('empleados')
@@ -49,10 +50,32 @@ class DepartamentosController extends Controller
                 ->groupBy('departamento_id')
                 ->selectRaw('departamento_id, COUNT(*) as total')
                 ->get()->keyBy('departamento_id')->toArray();
+
+            // Preview: primeros 4 empleados por departamento (excluye al jefe para no duplicar)
+            $allEmps = DB::connection('pgsql')
+                ->table('empleados')
+                ->whereIn('departamento_id', $deptIds)
+                ->where('activo', true)
+                ->select('id', 'nombres', 'apellidos', 'cargo', 'departamento_id')
+                ->orderBy('nombres')
+                ->get();
+
+            foreach ($allEmps as $emp) {
+                $did = $emp->departamento_id;
+                if (!isset($preview[$did])) $preview[$did] = [];
+                if (count($preview[$did]) < 4) {
+                    $preview[$did][] = [
+                        'id'     => $emp->id,
+                        'nombre' => trim($emp->nombres . ' ' . $emp->apellidos),
+                        'cargo'  => $emp->cargo ?? '',
+                        'inicial'=> mb_strtoupper(mb_substr(trim($emp->nombres), 0, 1)),
+                    ];
+                }
+            }
         }
 
         // Enriquecer con jefe y conteo
-        $depts = collect($depts)->map(function ($d) use ($jefes, $counts) {
+        $depts = collect($depts)->map(function ($d) use ($jefes, $counts, $preview) {
             $d = (array) $d;
             $jefe = $d['jefe_empleado_id'] ? ($jefes[$d['jefe_empleado_id']] ?? null) : null;
             $d['jefe_nombre'] = $jefe
@@ -66,6 +89,7 @@ class DepartamentosController extends Controller
             $d['total_empleados'] = $countEntry
                 ? (int) ($countEntry instanceof \stdClass ? $countEntry->total : $countEntry['total'])
                 : 0;
+            $d['empleados_preview'] = $preview[$d['id']] ?? [];
             $d['children'] = [];
             return $d;
         })->all();
