@@ -94,8 +94,10 @@ class ReportesRRHHController extends RRHHBaseController
 
             $reporte[] = [
                 'empleado_id'     => $eid,
+                'codigo'          => $emp['codigo'] ?? null,
                 'nombre'          => $emp['nombre'] ?? ($emp['nombre_completo'] ?? '—'),
                 'sucursal'        => $emp['sucursal'] ?? null,
+                'sucursal_tipo'   => $emp['sucursal_tipo'] ?? null,
                 'departamento'    => $emp['departamento'] ?? null,
                 'cargo'           => $emp['cargo'] ?? null,
                 'dias_quincena'   => $diasQuincena,
