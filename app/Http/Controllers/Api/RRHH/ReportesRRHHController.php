@@ -215,6 +215,7 @@ class ReportesRRHHController extends RRHHBaseController
         return $query
             ->select(
                 'e.id',
+                'e.codigo',
                 DB::raw("CONCAT(e.nombres, ' ', e.apellidos) as nombre"),
                 's.nombre as sucursal',
                 'ts.codigo as sucursal_tipo',
