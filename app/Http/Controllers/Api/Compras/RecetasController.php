@@ -241,6 +241,7 @@ class RecetasController extends Controller
             'rendimiento_unidad'  => 'nullable|string|max:20',
             'foto_plato'          => 'nullable|string|max:2000',
             'foto_plateria'       => 'nullable|string|max:2000',
+            'estado_id'           => 'nullable|integer|exists:compras.estados_receta,id',
             'sucursal_ids'        => 'nullable|array',
             'sucursal_ids.*'      => 'integer|min:1',
             'ingredientes'        => 'array',
@@ -253,11 +254,9 @@ class RecetasController extends Controller
         $tipoReceta = $validated['tipo_receta'] ?? 'plato';
         $usuario    = $request->user()?->email ?? 'sistema';
 
-        // Recetas → borrador; Sub-recetas → activa directamente
-        $estadoInicial = $tipoReceta === 'sub_receta'
-            ? \App\Models\EstadoReceta::where('codigo', 'activa')->value('id')
-            : \App\Models\EstadoReceta::where('codigo', 'borrador')->value('id');
-        $estadoBorrador = $estadoInicial;
+        // Usar estado_id enviado por el form si existe, sino borrador por defecto
+        $estadoBorrador = $validated['estado_id']
+            ?? \App\Models\EstadoReceta::where('codigo', 'borrador')->value('id');
 
         $receta = DB::connection('compras')->transaction(function () use ($validated, $tipoReceta, $usuario, $estadoBorrador): Receta {
             $receta = Receta::create([
