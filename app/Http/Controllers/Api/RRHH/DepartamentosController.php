@@ -56,7 +56,7 @@ class DepartamentosController extends Controller
                 ->table('empleados')
                 ->whereIn('departamento_id', $deptIds)
                 ->where('activo', true)
-                ->select('id', 'nombres', 'apellidos', 'cargo', 'departamento_id')
+                ->select('id', 'nombres', 'apellidos', 'departamento_id')
                 ->orderBy('nombres')
                 ->get();
 
@@ -67,7 +67,6 @@ class DepartamentosController extends Controller
                     $preview[$did][] = [
                         'id'     => $emp->id,
                         'nombre' => trim($emp->nombres . ' ' . $emp->apellidos),
-                        'cargo'  => $emp->cargo ?? '',
                         'inicial'=> mb_strtoupper(mb_substr(trim($emp->nombres), 0, 1)),
                     ];
                 }
