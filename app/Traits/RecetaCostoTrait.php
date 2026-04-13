@@ -100,6 +100,45 @@ trait RecetaCostoTrait
     }
 
     /**
+     * Crea o actualiza el producto espejo de una sub-receta en la tabla productos.
+     * El vínculo es: producto.codigo = producto.codigo_origen = receta.codigo_origen = 'SUBR{id}'.
+     * Llamar justo después de crear/actualizar una sub-receta.
+     */
+    protected function upsertProductoSubReceta(Receta $receta): void
+    {
+        if ($receta->tipo_receta !== 'sub_receta') return;
+
+        // Generar / asegurar codigo_origen en la receta
+        $codigo = $receta->codigo_origen ?? sprintf('SUBR%06d', $receta->id);
+
+        if (!$receta->codigo_origen) {
+            $receta->update(['codigo_origen' => $codigo]);
+            $receta->refresh();
+        }
+
+        // Categoría "Platos Sub-Recetas" (key PL-20)
+        $categoriaId = \App\Models\Categoria::where('key', 'PL-20')->value('id');
+        if (!$categoriaId) return;
+
+        $unidad = $receta->rendimiento_unidad ?: 'u';
+
+        \App\Models\Producto::updateOrCreate(
+            ['codigo_origen' => $codigo],
+            [
+                'codigo'      => $codigo,
+                'nombre'      => $receta->nombre,
+                'categoria_id'=> $categoriaId,
+                'unidad'      => $unidad,
+                'precio'      => $receta->precio ?? 0,
+                'costo'       => 0,
+                'origen'      => 'sub_receta',
+                'activo'      => true,
+                'aud_usuario' => 'sistema',
+            ]
+        );
+    }
+
+    /**
      * Sincroniza productos.costo con el costo calculado de la sub-receta.
      * Llamar después de guardar/actualizar una sub-receta.
      */

@@ -300,6 +300,7 @@ class RecetasController extends Controller
         });
 
         $receta->load(['ingredientes.producto', 'ingredientes.subReceta.productoAsociado', 'ingredientes.subReceta.ingredientes.producto', 'sucursalConfig']);
+        $this->upsertProductoSubReceta($receta);
         $this->sincronizarCostoProducto($receta);
         return response()->json(['data' => $this->formatReceta($receta)], 201);
     }
@@ -416,6 +417,7 @@ class RecetasController extends Controller
         });
 
         $receta->load(['ingredientes.producto', 'ingredientes.subReceta.productoAsociado', 'ingredientes.subReceta.ingredientes.producto', 'modificadores', 'sucursalConfig']);
+        $this->upsertProductoSubReceta($receta);
         $this->sincronizarCostoProducto($receta);
         return response()->json(['data' => $this->formatReceta($receta, null, true)]);
     }
