@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Mail\RRHH\SolicitudAprobacion;
+use App\Mail\RRHH\VeredictoSolicitud;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -10,14 +11,23 @@ use Illuminate\Support\Facades\URL;
 
 class RrhhTestEmail extends Command
 {
-    protected $signature   = 'rrhh:test-email {to? : Correo destino (default: javiermejia@cervezacadejo.com)}';
-    protected $description = 'Envía un correo de prueba de solicitud de permiso RRHH y registra en email_logs';
+    protected $signature   = 'rrhh:test-email {to? : Correo destino (default: javiermejia@cervezacadejo.com)} {--veredicto= : Enviar solo correo veredicto: aprobado|rechazado}';
+    protected $description = 'Envía correos de prueba RRHH (solicitud con botones aprobar/rechazar, o veredicto al empleado)';
 
     public function handle(): int
     {
-        $to = $this->argument('to') ?? 'javiermejia@cervezacadejo.com';
+        $to       = $this->argument('to') ?? 'javiermejia@cervezacadejo.com';
+        $veredicto = $this->option('veredicto');
 
-        $aprobarUrl  = URL::temporarySignedRoute('rrhh.email.aprobar',  now()->addDays(5), ['tipo' => 'permiso', 'id' => 999]);
+        if ($veredicto) {
+            return $this->enviarVeredicto($to, $veredicto);
+        }
+
+        return $this->enviarSolicitud($to);
+    }
+
+    private function enviarSolicitud(string $to): int
+    {
         $rechazarUrl = URL::temporarySignedRoute('rrhh.email.rechazar', now()->addDays(5), ['tipo' => 'permiso', 'id' => 999]);
 
         $mailable = new SolicitudAprobacion(
@@ -79,5 +89,39 @@ class RrhhTestEmail extends Command
         }
 
         return $estado === 'enviado' ? self::SUCCESS : self::FAILURE;
+    }
+
+    private function enviarVeredicto(string $to, string $estadoVeredicto): int
+    {
+        if (! in_array($estadoVeredicto, ['aprobado', 'rechazado'])) {
+            $this->error('--veredicto debe ser aprobado o rechazado');
+            return self::FAILURE;
+        }
+
+        $mailable = new VeredictoSolicitud(
+            tipo:             'Permiso',
+            empleadoNombre:   'Carlos Alberto Mejía López',
+            supervisorNombre: 'Javier Mejía',
+            estado:           $estadoVeredicto,
+            detalles:         [
+                'Tipo de permiso' => 'Personal',
+                'Fecha inicio'    => '2026-04-14',
+                'Fecha fin'       => '2026-04-15',
+                'Días'            => '2 días',
+                'Motivo'          => 'Cita médica familiar',
+            ],
+            linkUrl: 'https://talentohumano.cervezacadejo.com/permisos',
+        );
+
+        $this->info("Enviando correo veredicto ({$estadoVeredicto}) a: {$to}");
+
+        try {
+            Mail::to($to)->send($mailable);
+            $this->info('✓ Correo veredicto enviado correctamente.');
+            return self::SUCCESS;
+        } catch (\Throwable $e) {
+            $this->error('✗ Error: ' . $e->getMessage());
+            return self::FAILURE;
+        }
     }
 }
