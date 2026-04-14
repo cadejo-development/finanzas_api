@@ -310,9 +310,48 @@ class AuditoriaRecetasController extends Controller
             'notas'              => $a->notas,
             'estado'             => $a->estado,
             'fotos'              => $a->relationLoaded('fotos')
-                ? $a->fotos->map(fn ($f) => ['id' => $f->id, 'url' => $f->url, 'descripcion' => $f->descripcion])
+                ? $a->fotos->map(fn ($f) => [
+                    'id'          => $f->id,
+                    'url'         => $this->presignS3Url($f->url),
+                    'descripcion' => $f->descripcion,
+                  ])
                 : [],
             'created_at'         => $a->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Convierte una URL de S3 a una presigned GET URL válida por 2 horas.
+     * Generación local (HMAC-SHA256), sin llamadas de red.
+     */
+    private function presignS3Url(?string $url): ?string
+    {
+        if (!$url) return null;
+
+        $bucket = config('filesystems.disks.s3.bucket');
+        $region = config('filesystems.disks.s3.region');
+        $prefix = "https://{$bucket}.s3.{$region}.amazonaws.com/";
+
+        if (!str_starts_with($url, $prefix)) return $url;
+
+        $key = substr($url, strlen($prefix));
+
+        try {
+            static $s3Client = null;
+            if (!$s3Client) {
+                $s3Client = new \Aws\S3\S3Client([
+                    'region'      => $region,
+                    'version'     => 'latest',
+                    'credentials' => [
+                        'key'    => config('filesystems.disks.s3.key'),
+                        'secret' => config('filesystems.disks.s3.secret'),
+                    ],
+                ]);
+            }
+            $cmd = $s3Client->getCommand('GetObject', ['Bucket' => $bucket, 'Key' => $key]);
+            return (string) $s3Client->createPresignedRequest($cmd, '+2 hours')->getUri();
+        } catch (\Throwable) {
+            return $url;
+        }
     }
 }
