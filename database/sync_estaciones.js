@@ -36,7 +36,7 @@ const SUCURSAL_MAP = [
   { keys: ['SANTA ELENA'],     id: 8  },
   { keys: ['HUIZUCAR'],        id: 9  },
   { keys: ['OPICO'],           id: 10 },
-  { keys: ['CASA GUIROLA', 'GUIROLA'], id: 19 },
+  { keys: ['CASA GUIROLA', 'GUIROLA'], id: 11 },
   { keys: ['MALCRIADA'],       id: 16 },
 ];
 

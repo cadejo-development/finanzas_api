@@ -265,12 +265,14 @@ class AuditoriaRecetasController extends Controller
             ->select('e.id', DB::raw("CONCAT(e.nombres, ' ', e.apellidos) as nombre_completo"), 'c.nombre as cargo', 'e.sucursal_id')
             ->get();
 
-        // Sucursales operativas activas (excluir área corporativa)
+        // Sucursales operativas activas (excluir área corporativa y duplicados)
+        // sucursal_id=19 "RES - CASA GUIROLA" es duplicado de id=11 "RESTAURANTE CASA GUIROLA" sin empleados
         $sucursales = DB::connection('pgsql')
             ->table('sucursales as s')
             ->join('tipos_sucursal as ts', 'ts.id', '=', 's.tipo_sucursal_id')
             ->where('s.activa', true)
             ->where('ts.codigo', 'operativa')
+            ->whereNotIn('s.id', [19])
             ->orderBy('s.nombre')
             ->select('s.id', 's.nombre')
             ->get();
