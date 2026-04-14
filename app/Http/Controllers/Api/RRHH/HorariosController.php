@@ -204,10 +204,12 @@ class HorariosController extends RRHHBaseController
         if (!$this->esAdminRrhh()) return null;
 
         return DB::connection('pgsql')
-            ->table('sucursales')
-            ->where('activa', true)
-            ->orderBy('nombre')
-            ->select('id', 'nombre')
+            ->table('sucursales as s')
+            ->leftJoin('tipos_sucursal as t', 't.id', 's.tipo_sucursal_id')
+            ->where('s.activa', true)
+            ->where('t.codigo', 'operativa')
+            ->orderBy('s.nombre')
+            ->select('s.id', 's.nombre')
             ->get()
             ->toArray();
     }
