@@ -255,13 +255,11 @@ class AuditoriaRecetasController extends Controller
         if ($sucursalId) $estacionesQ->where('sucursal_id', $sucursalId);
         $estaciones = $estacionesQ->get(['id', 'codigo', 'nombre', 'sucursal_id']);
 
-        // Cocineros (cargos de cocina) desde pgsql core_db
-        $cargosCocinaCodigos = [18, 19, 20, 45, 60, 62, 63]; // Chef, Cocinero/a, Jefe Cocina, Sous Chef...
+        // Responsables: todos los empleados activos de la sucursal
         $cocineros = DB::connection('pgsql')
             ->table('empleados as e')
-            ->join('cargos as c', 'c.id', '=', 'e.cargo_id')
+            ->leftJoin('cargos as c', 'c.id', '=', 'e.cargo_id')
             ->where('e.activo', true)
-            ->whereIn('e.cargo_id', $cargosCocinaCodigos)
             ->when($sucursalId, fn ($q) => $q->where('e.sucursal_id', $sucursalId))
             ->orderBy('e.nombres')
             ->select('e.id', DB::raw("CONCAT(e.nombres, ' ', e.apellidos) as nombre_completo"), 'c.nombre as cargo', 'e.sucursal_id')
