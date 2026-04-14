@@ -263,8 +263,8 @@ class AuditoriaRecetasController extends Controller
             ->where('e.activo', true)
             ->whereIn('e.cargo_id', $cargosCocinaCodigos)
             ->when($sucursalId, fn ($q) => $q->where('e.sucursal_id', $sucursalId))
-            ->orderBy('e.nombre')
-            ->select('e.id', DB::raw("CONCAT(e.nombre, ' ', e.apellidos) as nombre_completo"), 'c.nombre as cargo', 'e.sucursal_id')
+            ->orderBy('e.nombres')
+            ->select('e.id', DB::raw("CONCAT(e.nombres, ' ', e.apellidos) as nombre_completo"), 'c.nombre as cargo', 'e.sucursal_id')
             ->get();
 
         // Sucursales operativas activas (excluir área corporativa)
