@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\Compras\ProductosController;
 use App\Http\Controllers\Api\Compras\PedidosController;
 use App\Http\Controllers\Api\Compras\RecetasController;
 use App\Http\Controllers\Api\Compras\RecetaCategoriasController;
+use App\Http\Controllers\Api\Compras\AuditoriaRecetasController;
 use App\Http\Controllers\Api\PortalController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\RRHH\CatalogosRRHHController;
@@ -185,6 +186,14 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::apiResource('recetas',            RecetasController::class)->only(['index', 'show', 'store', 'update', 'destroy'])->whereNumber('receta');
     // Catálogo de categorías de recetas
     Route::apiResource('receta-categorias',  RecetaCategoriasController::class)->only(['index', 'store', 'update', 'destroy']);
+
+    // Auditorías de recetas
+    Route::get('auditorias/dashboard',  [AuditoriaRecetasController::class, 'dashboard']);
+    Route::get('auditorias/catalogos',  [AuditoriaRecetasController::class, 'catalogos']);
+    Route::get('auditorias',            [AuditoriaRecetasController::class, 'index']);
+    Route::post('auditorias',           [AuditoriaRecetasController::class, 'store']);
+    Route::get('auditorias/{id}',       [AuditoriaRecetasController::class, 'show']);
+    Route::delete('auditorias/{id}',    [AuditoriaRecetasController::class, 'destroy']);
 
     // Ventas semanales
     Route::get('ventas',              [VentasController::class, 'index']);
