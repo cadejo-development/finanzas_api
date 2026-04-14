@@ -102,13 +102,45 @@ abstract class RRHHBaseController extends Controller
             ->all();
 
         if (!empty($deptIds)) {
-            return DB::connection('pgsql')
+            // ── Empleados directos del equipo (en los depts donde es jefe) ───────
+            $directIds = DB::connection('pgsql')
                 ->table('empleados')
                 ->whereIn('departamento_id', $deptIds)
                 ->where('activo', true)
                 ->where('id', '!=', $jefeEmpleadoId)
                 ->pluck('id')
-                ->all();
+                ->map(fn($id) => (int) $id)
+                ->toArray();
+
+            // ── Jefes de departamentos descendientes (CTE recursiva en pgsql) ───
+            // Recorre el árbol de departamentos hijos y recoge sus jefe_empleado_id.
+            // Esto permite que Rosa (Operaciones) gestione a los jefes de cada
+            // restaurante hijo, y el jefe de Gerencia General gestione a Rosa, etc.
+            $inPlaceholders = implode(',', array_fill(0, count($deptIds), '?'));
+            $childJefes = DB::connection('pgsql')->select(<<<SQL
+                WITH RECURSIVE sub_depts AS (
+                    SELECT id, jefe_empleado_id
+                    FROM departamentos
+                    WHERE parent_id IN ({$inPlaceholders}) AND activo = true
+                    UNION ALL
+                    SELECT d.id, d.jefe_empleado_id
+                    FROM departamentos d
+                    INNER JOIN sub_depts s ON d.parent_id = s.id
+                    WHERE d.activo = true
+                )
+                SELECT DISTINCT e.id
+                FROM sub_depts s2
+                INNER JOIN empleados e ON e.id = s2.jefe_empleado_id
+                WHERE e.activo = true
+                  AND e.id != ?
+            SQL, array_merge($deptIds, [$jefeEmpleadoId]));
+
+            $childJefeIds = collect($childJefes)
+                ->pluck('id')
+                ->map(fn($id) => (int) $id)
+                ->toArray();
+
+            return array_values(array_unique(array_merge($directIds, $childJefeIds)));
         }
 
         // ── 2. Sin departamentos: buscar sucursales asignadas en empleado_jefaturas ──
