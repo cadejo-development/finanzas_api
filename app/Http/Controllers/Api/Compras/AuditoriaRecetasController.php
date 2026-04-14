@@ -247,6 +247,7 @@ class AuditoriaRecetasController extends Controller
     // Devuelve estaciones y cocineros filtrados por sucursal
     public function catalogos(Request $request): JsonResponse
     {
+        try {
         $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
 
         // Estaciones
@@ -263,33 +264,31 @@ class AuditoriaRecetasController extends Controller
             ->whereIn('e.cargo_id', $cargosCocinaCodigos)
             ->when($sucursalId, fn ($q) => $q->where('e.sucursal_id', $sucursalId))
             ->orderBy('e.nombre')
-            ->select('e.id', DB::raw("CONCAT(e.nombre, ' ', e.apellido) as nombre_completo"), 'c.nombre as cargo', 'e.sucursal_id')
+            ->select('e.id', DB::raw("CONCAT(e.nombre, ' ', e.apellidos) as nombre_completo"), 'c.nombre as cargo', 'e.sucursal_id')
             ->get();
 
-        // Sucursales disponibles para el selector
+        // Sucursales operativas activas (excluir área corporativa)
         $sucursales = DB::connection('pgsql')
             ->table('sucursales as s')
             ->join('tipos_sucursal as ts', 'ts.id', '=', 's.tipo_sucursal_id')
             ->where('s.activa', true)
-            ->whereIn('ts.codigo', ['restaurante', 'bar', 'res'])
+            ->where('ts.codigo', 'operativa')
             ->orderBy('s.nombre')
             ->select('s.id', 's.nombre')
             ->get();
-
-        // Si no hay restaurantes con ese filtro, devolver todas activas
-        if ($sucursales->isEmpty()) {
-            $sucursales = DB::connection('pgsql')
-                ->table('sucursales')
-                ->where('activa', true)
-                ->orderBy('nombre')
-                ->get(['id', 'nombre']);
-        }
 
         return response()->json([
             'estaciones' => $estaciones,
             'cocineros'  => $cocineros,
             'sucursales' => $sucursales,
         ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+            ], 500);
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────
