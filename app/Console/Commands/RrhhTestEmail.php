@@ -28,6 +28,7 @@ class RrhhTestEmail extends Command
 
     private function enviarSolicitud(string $to): int
     {
+        $aprobarUrl  = URL::temporarySignedRoute('rrhh.email.aprobar',  now()->addDays(5), ['tipo' => 'permiso', 'id' => 999]);
         $rechazarUrl = URL::temporarySignedRoute('rrhh.email.rechazar', now()->addDays(5), ['tipo' => 'permiso', 'id' => 999]);
 
         $mailable = new SolicitudAprobacion(

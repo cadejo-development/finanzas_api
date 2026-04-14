@@ -1,147 +1,161 @@
-<!DOCTYPE html>
-<html lang="es">
+﻿<!DOCTYPE html>
+<html lang="es" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="supported-color-schemes" content="dark" />
+  <!--[if mso]>
+  <noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+  <![endif]-->
   <title>Veredicto de solicitud</title>
   <style>
-    body { margin:0; padding:0; background:#0c0a09; font-family:'Segoe UI',Arial,sans-serif; }
-    .wrap { max-width:520px; margin:40px auto; background:#1c1917; border-radius:16px; overflow:hidden; border:1px solid #292524; }
-
-    .header { padding:48px 32px 32px; text-align:center; border-bottom:1px solid #292524; }
-    .header-aprobado { background:linear-gradient(135deg, #052e16 0%, #14532d 100%); }
-    .header-rechazado { background:linear-gradient(135deg, #1c1917 0%, #292524 100%); }
-
-    .brand   { font-size:18px; font-weight:700; letter-spacing:0.5px; margin:16px 0 0; }
-    .brand-aprobado  { color:#86efac; }
-    .brand-rechazado { color:#f59e0b; }
-    .subtitle { color:#78716c; font-size:12px; text-transform:uppercase; letter-spacing:1px; margin:5px 0 0; }
-
-    .verdict-badge { display:inline-block; border-radius:50px; padding:8px 22px; font-size:13px; font-weight:800; letter-spacing:1px; text-transform:uppercase; margin-top:18px; }
-    .badge-aprobado  { background:rgba(34,197,94,.15); border:1.5px solid rgba(34,197,94,.4); color:#86efac; }
-    .badge-rechazado { background:rgba(239,68,68,.12); border:1.5px solid rgba(239,68,68,.35); color:#fca5a5; }
-
-    .body { padding:28px 32px; }
-    .greeting { color:#d6d3d1; font-size:15px; margin:0 0 14px; }
-    .msg { color:#a8a29e; font-size:14px; line-height:1.6; margin:0 0 22px; }
-
-    .tipo-badge { display:inline-block; background:#f59e0b1a; border:1px solid #f59e0b40; color:#f59e0b; border-radius:8px; padding:4px 14px; font-size:13px; font-weight:700; margin-bottom:20px; letter-spacing:0.5px; }
-
-    .result-card { border-radius:12px; padding:18px 20px; margin:0 0 22px; }
-    .card-aprobado  { background:#052e1680; border:1.5px solid rgba(34,197,94,.25); }
-    .card-rechazado { background:#450a0a40; border:1.5px solid rgba(239,68,68,.2); }
-    .result-icon { font-size:24px; margin:0 0 6px; }
-    .result-title { font-size:15px; font-weight:700; margin:0 0 4px; }
-    .title-aprobado  { color:#86efac; }
-    .title-rechazado { color:#fca5a5; }
-    .result-sub { color:#78716c; font-size:13px; margin:0; }
-
-    .details-table { width:100%; border-collapse:collapse; margin:0 0 24px; }
-    .details-table tr { border-bottom:1px solid #292524; }
-    .details-table tr:last-child { border-bottom:none; }
-    .details-table td { padding:9px 4px; font-size:13px; }
-    .details-table td:first-child { color:#78716c; width:40%; }
-    .details-table td:last-child { color:#d6d3d1; font-weight:600; text-align:right; }
-
-    .reviewer { background:#292524; border:1px solid #44403c; border-radius:10px; padding:12px 16px; margin:0 0 24px; display:flex; align-items:center; gap:12px; }
-    .reviewer-avatar { width:36px; height:36px; border-radius:50%; background:#f59e0b1a; border:1.5px solid #f59e0b40; display:flex; align-items:center; justify-content:center; color:#f59e0b; font-size:14px; font-weight:800; flex-shrink:0; }
-    .reviewer-name  { color:#d6d3d1; font-size:13px; font-weight:700; margin:0 0 2px; }
-    .reviewer-label { color:#78716c; font-size:11px; margin:0; }
-
-    .cta-wrap { text-align:center; margin:8px 0 8px; }
-    .cta-btn  { display:inline-block; background:#f59e0b; color:#1c1917; text-decoration:none; border-radius:10px; padding:13px 32px; font-size:14px; font-weight:800; letter-spacing:0.5px; }
-
-    .footer { padding:18px 32px 24px; text-align:center; border-top:1px solid #292524; }
-    .footer p { color:#57534e; font-size:11px; margin:3px 0; line-height:1.5; }
+    :root { color-scheme: dark; }
+    body, #bodyTable { margin:0 !important; padding:0 !important; background-color:#111110 !important; }
+    u + #body .wrap { min-width:100vw; }
   </style>
 </head>
-<body>
+<body id="body" style="margin:0;padding:0;background-color:#111110;font-family:'Segoe UI',Arial,sans-serif;">
 @php
 use Carbon\Carbon;
-
-$dias  = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+$dias  = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
 $meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-
 $formatearFecha = function($valor) use ($dias, $meses) {
     try {
         $c = Carbon::parse($valor);
         return $dias[$c->dayOfWeek] . ', ' . $c->day . ' de ' . $meses[$c->month - 1] . ' de ' . $c->year;
-    } catch (\Throwable $e) {
-        return $valor;
-    }
+    } catch (\Throwable $e) { return $valor; }
 };
-
 $esFecha = function($label) {
     $lower = mb_strtolower($label);
     return str_contains($lower, 'fecha') || str_contains($lower, 'inicio') || str_contains($lower, 'fin');
 };
-
 $aprobado = $estado === 'aprobado';
+$accentLight  = $aprobado ? '#86efac'  : '#fca5a5';
+$accentBg     = $aprobado ? '#052e16'  : '#1a0505';
+$accentBorder = $aprobado ? '#16a34a'  : '#b91c1c';
+$bannerBg     = $aprobado ? '#166534'  : '#7f1d1d';
+$accentColor  = $aprobado ? '#22c55e'  : '#ef4444';
+$badgeLabel   = $aprobado ? '&#10003; APROBADO' : '&#10007; RECHAZADO';
 @endphp
+<table id="bodyTable" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#111110;width:100%;margin:0;padding:0;">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+      <table width="520" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;width:100%;background-color:#1c1917;border-radius:16px;overflow:hidden;border:1px solid #292524;">
 
-  <div class="wrap">
-    <div class="header {{ $aprobado ? 'header-aprobado' : 'header-rechazado' }}">
-      <img src="https://cadejo-storage.s3.us-east-2.amazonaws.com/emails/cadejol0g0.png"
-           alt="Cadejo Brewing Company" width="88" height="88"
-           style="border-radius:50%;border:2px solid rgba(245,158,11,0.35);background:rgba(245,158,11,0.1);display:block;margin:0 auto;padding:4px;" />
-      <p class="brand {{ $aprobado ? 'brand-aprobado' : 'brand-rechazado' }}">Cadejo Brewing Company</p>
-      <p class="subtitle">Gestión de Talento</p>
-      <span class="verdict-badge {{ $aprobado ? 'badge-aprobado' : 'badge-rechazado' }}">
-        {{ $aprobado ? '✓ Aprobado' : '✗ Rechazado' }}
-      </span>
-    </div>
-
-    <div class="body">
-      <p class="greeting">Hola, <strong style="color:#e7e5e4">{{ $empleadoNombre }}</strong></p>
-
-      <p class="msg">
-        @if($aprobado)
-          Tu solicitud de <strong style="color:#86efac">{{ $tipo }}</strong> ha sido
-          <strong style="color:#86efac">aprobada</strong>. Puedes revisar el detalle a continuación.
-        @else
-          Tu solicitud de <strong style="color:#fca5a5">{{ $tipo }}</strong> ha sido
-          <strong style="color:#fca5a5">rechazada</strong>. Puedes comunicarte con tu jefe para más información.
-        @endif
-      </p>
-
-      <span class="tipo-badge">{{ strtoupper($tipo) }}</span>
-
-      <div class="result-card {{ $aprobado ? 'card-aprobado' : 'card-rechazado' }}">
-        <p class="result-icon">{{ $aprobado ? '✓' : '✗' }}</p>
-        <p class="result-title {{ $aprobado ? 'title-aprobado' : 'title-rechazado' }}">
-          Solicitud {{ $aprobado ? 'aprobada' : 'rechazada' }}
-        </p>
-        <p class="result-sub">Revisada por tu supervisor directo</p>
-      </div>
-
-      @if(count($detalles))
-      <table class="details-table">
-        @foreach(array_filter($detalles) as $label => $valor)
+        <!-- HEADER -->
         <tr>
-          <td>{{ $label }}</td>
-          <td>{{ $esFecha($label) ? $formatearFecha($valor) : $valor }}</td>
+          <td bgcolor="{{ $accentBg }}" align="center" style="background-color:{{ $accentBg }};padding:40px 32px 28px;border-bottom:2px solid {{ $accentBorder }};">
+            <img src="https://cadejo-storage.s3.us-east-2.amazonaws.com/emails/cadejol0g0.png" alt="Cadejo" width="80" height="80" style="display:block;margin:0 auto;border-radius:50%;border:2px solid rgba(245,158,11,0.4);background-color:rgba(245,158,11,0.12);padding:4px;" />
+            <p style="margin:14px 0 2px;font-size:17px;font-weight:700;color:#f59e0b;font-family:'Segoe UI',Arial,sans-serif;">Cadejo Brewing Company</p>
+            <p style="margin:0 0 16px;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#78716c;font-family:'Segoe UI',Arial,sans-serif;">Gestion de Talento</p>
+            <table cellpadding="0" cellspacing="0" border="0" align="center">
+              <tr>
+                <td bgcolor="{{ $bannerBg }}" align="center" style="background-color:{{ $bannerBg }};border-radius:50px;padding:8px 28px;border:1.5px solid {{ $accentColor }};">
+                  <span style="font-size:12px;font-weight:800;letter-spacing:1.5px;color:{{ $accentLight }};font-family:'Segoe UI',Arial,sans-serif;">{!! $badgeLabel !!}</span>
+                </td>
+              </tr>
+            </table>
+          </td>
         </tr>
-        @endforeach
+
+        <!-- BODY -->
+        <tr>
+          <td bgcolor="#1c1917" style="background-color:#1c1917;padding:28px 32px 8px;">
+            <p style="margin:0 0 10px;font-size:15px;color:#d6d3d1;font-family:'Segoe UI',Arial,sans-serif;">Hola, <strong style="color:#f5f5f4;">{{ $empleadoNombre }}</strong></p>
+            <p style="margin:0 0 20px;font-size:14px;color:#a8a29e;line-height:1.65;font-family:'Segoe UI',Arial,sans-serif;">
+              @if($aprobado)
+                Tu solicitud de <strong style="color:#86efac;">{{ $tipo }}</strong> ha sido <strong style="color:#86efac;">aprobada</strong>. Puedes revisar el detalle a continuacion.
+              @else
+                Tu solicitud de <strong style="color:#fca5a5;">{{ $tipo }}</strong> ha sido <strong style="color:#fca5a5;">rechazada</strong>. Puedes comunicarte con tu jefe para mas informacion.
+              @endif
+            </p>
+            <table cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td bgcolor="#292014" style="background-color:#292014;border-radius:8px;padding:5px 16px;border:1px solid #78450a;">
+                  <span style="font-size:12px;font-weight:800;color:#f59e0b;letter-spacing:0.5px;font-family:'Segoe UI',Arial,sans-serif;">{{ strtoupper($tipo) }}</span>
+                </td>
+              </tr>
+            </table>
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0 0;">
+              <tr>
+                <td bgcolor="{{ $accentBg }}" style="background-color:{{ $accentBg }};border-radius:12px;padding:16px 20px;border:1.5px solid {{ $accentBorder }};">
+                  <p style="margin:0 0 4px;font-size:22px;line-height:1;color:{{ $accentLight }};">{{ $aprobado ? '&#10003;' : '&#10007;' }}</p>
+                  <p style="margin:0 0 3px;font-size:14px;font-weight:700;color:{{ $accentLight }};font-family:'Segoe UI',Arial,sans-serif;">Solicitud {{ $aprobado ? 'aprobada' : 'rechazada' }}</p>
+                  <p style="margin:0;font-size:12px;color:#78716c;font-family:'Segoe UI',Arial,sans-serif;">Revisada por tu supervisor directo</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- DETAILS -->
+        @if(count($detalles))
+        <tr>
+          <td bgcolor="#1c1917" style="background-color:#1c1917;padding:8px 32px 0;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              @foreach(array_filter($detalles) as $label => $valor)
+              <tr>
+                <td style="padding:10px 0;font-size:13px;color:#78716c;border-bottom:1px solid #292524;font-family:'Segoe UI',Arial,sans-serif;width:42%;">{{ $label }}</td>
+                <td style="padding:10px 0;font-size:13px;color:#d6d3d1;font-weight:600;text-align:right;border-bottom:1px solid #292524;font-family:'Segoe UI',Arial,sans-serif;">{{ $esFecha($label) ? $formatearFecha($valor) : $valor }}</td>
+              </tr>
+              @endforeach
+            </table>
+          </td>
+        </tr>
+        @endif
+
+        <!-- REVIEWER -->
+        <tr>
+          <td bgcolor="#1c1917" style="background-color:#1c1917;padding:20px 32px 0;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td bgcolor="#242120" style="background-color:#242120;border-radius:10px;padding:12px 16px;border:1px solid #3c3835;">
+                  <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                    <tr>
+                      <td width="44" valign="middle">
+                        <table cellpadding="0" cellspacing="0" border="0"><tr>
+                          <td bgcolor="#291e07" align="center" width="38" height="38" style="background-color:#291e07;border-radius:50%;width:38px;height:38px;border:1.5px solid #78450a;text-align:center;vertical-align:middle;">
+                            <span style="font-size:15px;font-weight:800;color:#f59e0b;font-family:'Segoe UI',Arial,sans-serif;line-height:38px;display:inline-block;">{{ mb_strtoupper(mb_substr($supervisorNombre, 0, 1)) }}</span>
+                          </td>
+                        </tr></table>
+                      </td>
+                      <td style="padding-left:12px;" valign="middle">
+                        <p style="margin:0 0 2px;font-size:13px;font-weight:700;color:#e7e5e4;font-family:'Segoe UI',Arial,sans-serif;">{{ $supervisorNombre }}</p>
+                        <p style="margin:0;font-size:11px;color:#78716c;font-family:'Segoe UI',Arial,sans-serif;">Supervisor &mdash; emitio el veredicto</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- CTA -->
+        <tr>
+          <td bgcolor="#1c1917" style="background-color:#1c1917;padding:24px 32px 28px;text-align:center;">
+            <table cellpadding="0" cellspacing="0" border="0" align="center">
+              <tr>
+                <td bgcolor="#f59e0b" style="background-color:#f59e0b;border-radius:10px;padding:14px 36px;">
+                  <a href="{{ $linkUrl }}" style="font-size:14px;font-weight:800;color:#1c1917;text-decoration:none;font-family:'Segoe UI',Arial,sans-serif;letter-spacing:0.4px;display:inline-block;">Ver mi solicitud</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- FOOTER -->
+        <tr>
+          <td bgcolor="#161513" style="background-color:#161513;padding:16px 32px 20px;text-align:center;border-top:1px solid #292524;">
+            <p style="margin:3px 0;font-size:11px;color:#57534e;font-family:'Segoe UI',Arial,sans-serif;">Este correo fue generado automaticamente por el modulo de Gestion de Talento.</p>
+            <p style="margin:3px 0;font-size:11px;color:#57534e;font-family:'Segoe UI',Arial,sans-serif;">&copy; {{ date('Y') }} Cadejo Brewing Company &mdash; Todos los derechos reservados.</p>
+          </td>
+        </tr>
+
       </table>
-      @endif
-
-      <div class="reviewer">
-        <div class="reviewer-avatar">{{ mb_strtoupper(mb_substr($supervisorNombre, 0, 1)) }}</div>
-        <div>
-          <p class="reviewer-name">{{ $supervisorNombre }}</p>
-          <p class="reviewer-label">Supervisor — emitió el veredicto</p>
-        </div>
-      </div>
-
-      <div class="cta-wrap">
-        <a href="{{ $linkUrl }}" class="cta-btn">Ver mi solicitud</a>
-      </div>
-    </div>
-
-    <div class="footer">
-      <p>Este correo fue generado automáticamente por el módulo de Gestión de Talento.</p>
-      <p>© {{ date('Y') }} Cadejo Brewing Company — Todos los derechos reservados.</p>
-    </div>
-  </div>
+    </td>
+  </tr>
+</table>
 </body>
 </html>
