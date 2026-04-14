@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\RRHH\CalendarioController;
 use App\Http\Controllers\Api\RRHH\HistorialController;
 use App\Http\Controllers\Api\RRHH\AusenciasController;
 use App\Http\Controllers\Api\RRHH\ReportesRRHHController;
+use App\Http\Controllers\Api\RRHH\HorariosController;
 use App\Http\Controllers\Api\GeoController;
 
 // ─── Geo catálogos El Salvador (público, sin auth) ────────────────────────
@@ -311,6 +312,11 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
 
     // Reportes quincenales
     Route::get('reportes/quincena', [ReportesRRHHController::class, 'quincena']);
+
+    // Horarios semanales
+    Route::get('horarios',                        [HorariosController::class, 'index']);
+    Route::post('horarios/bulk',                  [HorariosController::class, 'bulk']);
+    Route::delete('horarios/{empleadoId}/{fecha}', [HorariosController::class, 'destroy']);
 });
 
 // ─── RRHH Expediente Digital ────────────────────────────────────────────────
