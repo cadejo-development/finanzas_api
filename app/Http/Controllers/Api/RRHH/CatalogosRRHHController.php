@@ -107,7 +107,7 @@ class CatalogosRRHHController extends RRHHBaseController
             ? DB::connection('pgsql')
                 ->table('departamentos')
                 ->where('activo', true)
-                ->select('id', 'nombre', 'sucursal_id')
+                ->select('id', 'nombre', 'sucursal_id', 'jefe_empleado_id')
                 ->orderBy('nombre')
                 ->get()
             : collect();
