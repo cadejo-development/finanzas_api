@@ -241,7 +241,7 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
 });
 
 // ─── RRHH (protegido con Sanctum + rol jefatura o admin o empleado) ─────────
-Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,rrhh_admin,empleado'])->group(function () {
+Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,rrhh_admin,empleado', 'view-as'])->group(function () {
 
     // Catálogos + equipo a cargo
     Route::get('catalogos', [CatalogosRRHHController::class, 'index']);
@@ -324,7 +324,7 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
 
 // ─── RRHH Expediente Digital ────────────────────────────────────────────────
 // Empleados solo pueden leer su propio expediente (GET); el resto requiere jefatura+
-Route::prefix('rrhh/expediente')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,rrhh_admin,empleado'])->group(function () {
+Route::prefix('rrhh/expediente')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,rrhh_admin,empleado', 'view-as'])->group(function () {
     // Cabecera + secciones (empleado puede ver solo el suyo — validado en autorizarAcceso)
     Route::get('{empleadoId}',                           [ExpedienteController::class, 'show']);
     Route::get('{empleadoId}/acciones',                  [ExpedienteController::class, 'acciones']);
@@ -390,6 +390,7 @@ Route::prefix('rrhh/expediente')->middleware(['auth:sanctum', 'role:jefatura,por
 
 // ─── RRHH Admin — Departamentos (portal_admin o rrhh_admin) ─────────────────
 Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh_admin'])->group(function () {
+    Route::get('view-as/{identifier}',                       [\App\Http\Controllers\Api\RRHH\ViewAsController::class, 'lookup']);
     Route::get('departamentos',                              [DepartamentosController::class, 'index']);
     Route::post('departamentos',                             [DepartamentosController::class, 'store']);
     Route::put('departamentos/{id}',                         [DepartamentosController::class, 'update']);
