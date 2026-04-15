@@ -31,9 +31,11 @@ class ViewAsMiddleware
             if ($realUser->hasRole('rrhh_admin')) {
                 $targetUser = \App\Models\User::find((int) $viewAsUserId);
 
-                if ($targetUser && $targetUser->activo) {
-                    // Swap auth user for this request only
-                    Auth::login($targetUser);
+                if ($targetUser) {
+                    // Swap the authenticated user on the sanctum guard for this request only.
+                    // setUser() does not touch the session or fire login events,
+                    // making it safe for stateless Sanctum API requests.
+                    Auth::guard('sanctum')->setUser($targetUser);
                 }
             }
         }
