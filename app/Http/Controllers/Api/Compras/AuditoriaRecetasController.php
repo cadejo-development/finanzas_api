@@ -298,6 +298,9 @@ class AuditoriaRecetasController extends Controller
             'items.*.foto_url'            => 'nullable|string|max:1000',
             'observaciones_generales'     => 'nullable|string|max:2000',
             'acciones_correctivas'        => 'nullable|string|max:2000',
+            'secciones_fotos'             => 'nullable|array',
+            'secciones_fotos.*'           => 'array',
+            'secciones_fotos.*.*'         => 'string|max:1000',
         ]);
 
         DB::connection('compras')->transaction(function () use ($auditoria, $validated) {
@@ -310,6 +313,25 @@ class AuditoriaRecetasController extends Controller
                         'foto_url'      => $item['foto_url'] ?? null,
                     ]
                 );
+            }
+
+            // Fotos por sección: descripcion = 'sec:NombreSeccion'
+            if (!empty($validated['secciones_fotos'])) {
+                $seccionNames = array_map(fn ($s) => 'sec:' . $s, array_keys($validated['secciones_fotos']));
+                AuditoriaFoto::where('auditoria_id', $auditoria->id)
+                    ->whereIn('descripcion', $seccionNames)
+                    ->delete();
+
+                foreach ($validated['secciones_fotos'] as $seccion => $urls) {
+                    foreach ($urls as $idx => $url) {
+                        AuditoriaFoto::create([
+                            'auditoria_id' => $auditoria->id,
+                            'url'          => $url,
+                            'descripcion'  => 'sec:' . $seccion,
+                            'orden'        => $idx,
+                        ]);
+                    }
+                }
             }
 
             // Calcular calificación: cumple / (cumple + no_cumple) × 100 (N/A y sin evaluar no cuentan)

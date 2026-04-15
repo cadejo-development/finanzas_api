@@ -11,20 +11,24 @@ ALTER TABLE auditorias_receta
     ADD COLUMN IF NOT EXISTS observaciones_generales TEXT        DEFAULT NULL,
     ADD COLUMN IF NOT EXISTS acciones_correctivas   TEXT        DEFAULT NULL;
 
--- 2. Columna peso en auditoria_criterios
+-- 2. Columnas adicionales en auditoria_fotos (descripcion para fotos por sección)
+ALTER TABLE auditoria_fotos
+    ADD COLUMN IF NOT EXISTS descripcion VARCHAR(200) DEFAULT NULL;
+
+-- 3. Columna peso en auditoria_criterios
 ALTER TABLE auditoria_criterios
     ADD COLUMN IF NOT EXISTS peso INTEGER NOT NULL DEFAULT 1;
 
--- 3. Índice único para upsert idempotente
+-- 4. Índice único para upsert idempotente
 CREATE UNIQUE INDEX IF NOT EXISTS aud_criterios_cat_nombre_uidx
     ON auditoria_criterios (categoria, nombre);
 
--- 4. Inactivar criterios anteriores (del formato provisional)
+-- 5. Inactivar criterios anteriores (del formato provisional)
 UPDATE auditoria_criterios
     SET activo = FALSE
     WHERE categoria IN ('Receta', 'Sub Receta');
 
--- 5. Insertar los 39 criterios del formato oficial
+-- 6. Insertar los 39 criterios del formato oficial
 --    Orden de secciones: Mise en Place, Cumplimiento del Procedimiento,
 --    Control de Medición y Porcionado, Control de Calidad del Producto Final,
 --    Higiene y Seguridad Alimentaria
