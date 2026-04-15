@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\Compras;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditoriaFoto;
+use App\Models\AuditoriaItem;
+use App\Models\AuditoriaCriterio;
 use App\Models\AuditoriaReceta;
 use App\Models\Estacion;
 use Illuminate\Http\JsonResponse;
@@ -243,8 +245,73 @@ class AuditoriaRecetasController extends Controller
         ]);
     }
 
+    // ── GET /api/compras/auditorias/criterios ────────────────────────
+    public function criterios(): JsonResponse
+    {
+        $criterios = AuditoriaCriterio::where('activo', true)
+            ->orderBy('orden')
+            ->get(['id', 'categoria', 'nombre', 'orden']);
+
+        $grouped = $criterios->groupBy('categoria')->map(fn ($items, $cat) => [
+            'categoria' => $cat,
+            'items'     => $items->map(fn ($c) => ['id' => $c->id, 'nombre' => $c->nombre])->values(),
+        ])->values();
+
+        return response()->json(['data' => $grouped]);
+    }
+
+    // ── GET /api/compras/auditorias/{id}/items ───────────────────────
+    public function itemsShow(int $id): JsonResponse
+    {
+        $auditoria = AuditoriaReceta::findOrFail($id);
+
+        $items = AuditoriaItem::where('auditoria_id', $auditoria->id)
+            ->with('criterio')
+            ->get()
+            ->map(fn ($i) => [
+                'criterio_id'  => $i->criterio_id,
+                'categoria'    => $i->criterio?->categoria,
+                'nombre'       => $i->criterio?->nombre,
+                'resultado'    => $i->resultado,
+                'observaciones'=> $i->observaciones,
+                'foto_url'     => $i->foto_url ? $this->presignS3Url($i->foto_url) : null,
+            ]);
+
+        return response()->json(['data' => $items]);
+    }
+
+    // ── POST /api/compras/auditorias/{id}/items ──────────────────────
+    public function itemsSave(Request $request, int $id): JsonResponse
+    {
+        $auditoria = AuditoriaReceta::findOrFail($id);
+
+        $validated = $request->validate([
+            'items'                => 'required|array',
+            'items.*.criterio_id'  => 'required|integer|exists:compras.auditoria_criterios,id',
+            'items.*.resultado'    => 'nullable|in:cumple,no_cumple,na',
+            'items.*.observaciones'=> 'nullable|string|max:500',
+            'items.*.foto_url'     => 'nullable|string|max:1000',
+        ]);
+
+        DB::connection('compras')->transaction(function () use ($auditoria, $validated) {
+            foreach ($validated['items'] as $item) {
+                AuditoriaItem::updateOrCreate(
+                    ['auditoria_id' => $auditoria->id, 'criterio_id' => $item['criterio_id']],
+                    [
+                        'resultado'     => $item['resultado'] ?? null,
+                        'observaciones' => $item['observaciones'] ?? null,
+                        'foto_url'      => $item['foto_url'] ?? null,
+                    ]
+                );
+            }
+            // Marcar auditoría con evaluación completada
+            $auditoria->update(['estado' => 'evaluada']);
+        });
+
+        return response()->json(['message' => 'Evaluación guardada.']);
+    }
+
     // ── GET /api/compras/auditorias/catalogos ────────────────────────
-    // Devuelve estaciones y cocineros filtrados por sucursal
     public function catalogos(Request $request): JsonResponse
     {
         try {
