@@ -86,9 +86,10 @@ class CatalogosRRHHController extends RRHHBaseController
             return $arr;
         });
 
-        // Sucursales (para traslados)
+        // Sucursales (para traslados) — solo activas
         $sucursales = DB::connection('pgsql')
             ->table('sucursales')
+            ->where('activa', true)
             ->select('id', 'codigo', 'nombre')
             ->orderBy('nombre')
             ->get();
