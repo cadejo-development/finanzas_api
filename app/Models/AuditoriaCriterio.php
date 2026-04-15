@@ -9,7 +9,7 @@ class AuditoriaCriterio extends Model
     protected $connection = 'compras';
     protected $table      = 'auditoria_criterios';
 
-    protected $fillable = ['categoria', 'nombre', 'activo', 'orden'];
+    protected $fillable = ['categoria', 'categoria_orden', 'nombre', 'peso', 'activo', 'orden'];
 
     public function items()
     {

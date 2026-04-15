@@ -250,8 +250,9 @@ class AuditoriaRecetasController extends Controller
     public function criterios(Request $request): JsonResponse
     {
         $criterios = AuditoriaCriterio::where('activo', true)
+            ->orderBy('categoria_orden')
             ->orderBy('orden')
-            ->get(['id', 'categoria', 'nombre', 'peso', 'orden']);
+            ->get(['id', 'categoria', 'categoria_orden', 'nombre', 'peso', 'orden']);
 
         $grouped = $criterios->groupBy('categoria')->map(fn ($items, $cat) => [
             'categoria' => $cat,
