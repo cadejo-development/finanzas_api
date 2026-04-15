@@ -246,31 +246,19 @@ class AuditoriaRecetasController extends Controller
     }
 
     // ── GET /api/compras/auditorias/criterios ────────────────────────
-    // ?tipo_receta=plato|sub_receta  →  filtra criterios por categoría
+    // Devuelve las 5 secciones del formato oficial (todas las auditorías usan los mismos criterios)
     public function criterios(Request $request): JsonResponse
     {
-        $tipoReceta = $request->query('tipo_receta');
-
-        // Mapa tipo_receta → categoría de criterios
-        $categoriaMap = [
-            'plato'      => 'Receta',
-            'sub_receta' => 'Sub Receta',
-        ];
-
-        $query = AuditoriaCriterio::where('activo', true)->orderBy('orden');
-
-        if ($tipoReceta && isset($categoriaMap[$tipoReceta])) {
-            $query->where('categoria', $categoriaMap[$tipoReceta]);
-        }
-
-        $criterios = $query->get(['id', 'categoria', 'nombre', 'peso', 'orden']);
+        $criterios = AuditoriaCriterio::where('activo', true)
+            ->orderBy('orden')
+            ->get(['id', 'categoria', 'nombre', 'peso', 'orden']);
 
         $grouped = $criterios->groupBy('categoria')->map(fn ($items, $cat) => [
             'categoria' => $cat,
             'items'     => $items->map(fn ($c) => [
                 'id'     => $c->id,
                 'nombre' => $c->nombre,
-                'peso'   => $c->peso ?? 25,
+                'peso'   => $c->peso ?? 1,
             ])->values(),
         ])->values();
 
@@ -303,11 +291,13 @@ class AuditoriaRecetasController extends Controller
         $auditoria = AuditoriaReceta::findOrFail($id);
 
         $validated = $request->validate([
-            'items'                => 'required|array',
-            'items.*.criterio_id'  => 'required|integer|exists:compras.auditoria_criterios,id',
-            'items.*.resultado'    => 'nullable|in:cumple,no_cumple,na',
-            'items.*.observaciones'=> 'nullable|string|max:500',
-            'items.*.foto_url'     => 'nullable|string|max:1000',
+            'items'                       => 'required|array',
+            'items.*.criterio_id'         => 'required|integer|exists:compras.auditoria_criterios,id',
+            'items.*.resultado'           => 'nullable|in:cumple,no_cumple,na',
+            'items.*.observaciones'       => 'nullable|string|max:500',
+            'items.*.foto_url'            => 'nullable|string|max:1000',
+            'observaciones_generales'     => 'nullable|string|max:2000',
+            'acciones_correctivas'        => 'nullable|string|max:2000',
         ]);
 
         DB::connection('compras')->transaction(function () use ($auditoria, $validated) {
@@ -322,20 +312,20 @@ class AuditoriaRecetasController extends Controller
                 );
             }
 
-            // Calcular calificación: suma de pesos de criterios que cumplen
+            // Calcular calificación: cumple / (cumple + no_cumple) × 100 (N/A y sin evaluar no cuentan)
             $criterioIds = collect($validated['items'])->pluck('criterio_id')->filter()->all();
             $pesos = AuditoriaCriterio::whereIn('id', $criterioIds)
                 ->get(['id', 'peso'])
                 ->keyBy('id');
 
-            $totalPeso   = 0;
+            $totalPeso    = 0;
             $pesoObtenido = 0;
-            $evaluados   = 0;
+            $evaluados    = 0;
 
             foreach ($validated['items'] as $item) {
                 $resultado = $item['resultado'] ?? null;
-                if (!$resultado || $resultado === 'na') continue; // sin evaluar / N/A no cuentan
-                $peso = $pesos[$item['criterio_id']]?->peso ?? 25;
+                if (!$resultado || $resultado === 'na') continue;
+                $peso = $pesos[$item['criterio_id']]?->peso ?? 1;
                 $totalPeso += $peso;
                 if ($resultado === 'cumple') {
                     $pesoObtenido += $peso;
@@ -343,14 +333,25 @@ class AuditoriaRecetasController extends Controller
                 $evaluados++;
             }
 
-            // Si todos son N/A o sin evaluar, calificación = null
             $calificacion = $evaluados > 0
                 ? round(($pesoObtenido / $totalPeso) * 100, 1)
                 : null;
 
+            // Clasificación según umbrales del formato oficial
+            $clasificacion = null;
+            if ($calificacion !== null) {
+                if ($calificacion >= 90)      $clasificacion = 'Excelente';
+                elseif ($calificacion >= 75)  $clasificacion = 'Bueno';
+                elseif ($calificacion >= 60)  $clasificacion = 'Aceptable';
+                else                          $clasificacion = 'Deficiente';
+            }
+
             $auditoria->update([
-                'estado'       => 'evaluada',
-                'calificacion' => $calificacion,
+                'estado'                  => 'evaluada',
+                'calificacion'            => $calificacion,
+                'clasificacion'           => $clasificacion,
+                'observaciones_generales' => $validated['observaciones_generales'] ?? null,
+                'acciones_correctivas'    => $validated['acciones_correctivas'] ?? null,
             ]);
         });
 
@@ -406,31 +407,34 @@ class AuditoriaRecetasController extends Controller
     private function formatAuditoria(AuditoriaReceta $a, $sucursales): array
     {
         return [
-            'id'                 => $a->id,
-            'fecha'              => $a->fecha?->format('Y-m-d'),
-            'hora'               => substr($a->hora ?? '', 0, 5),
-            'sucursal_id'        => $a->sucursal_id,
-            'sucursal'           => $sucursales[$a->sucursal_id] ?? null,
-            'estacion_id'        => $a->estacion_id,
-            'estacion'           => $a->estacion?->nombre,
-            'receta_id'          => $a->receta_id,
-            'receta'             => $a->receta?->nombre,
-            'tipo_receta'        => $a->tipo_receta,
-            'responsable_id'     => $a->responsable_id,
-            'responsable_nombre' => $a->responsable_nombre,
-            'evaluador_id'       => $a->evaluador_id,
-            'evaluador_nombre'   => $a->evaluador_nombre,
-            'notas'              => $a->notas,
-            'estado'             => $a->estado,
-            'calificacion'       => $a->calificacion !== null ? (float) $a->calificacion : null,
-            'fotos'              => $a->relationLoaded('fotos')
+            'id'                      => $a->id,
+            'fecha'                   => $a->fecha?->format('Y-m-d'),
+            'hora'                    => substr($a->hora ?? '', 0, 5),
+            'sucursal_id'             => $a->sucursal_id,
+            'sucursal'                => $sucursales[$a->sucursal_id] ?? null,
+            'estacion_id'             => $a->estacion_id,
+            'estacion'                => $a->estacion?->nombre,
+            'receta_id'               => $a->receta_id,
+            'receta'                  => $a->receta?->nombre,
+            'tipo_receta'             => $a->tipo_receta,
+            'responsable_id'          => $a->responsable_id,
+            'responsable_nombre'      => $a->responsable_nombre,
+            'evaluador_id'            => $a->evaluador_id,
+            'evaluador_nombre'        => $a->evaluador_nombre,
+            'notas'                   => $a->notas,
+            'estado'                  => $a->estado,
+            'calificacion'            => $a->calificacion !== null ? (float) $a->calificacion : null,
+            'clasificacion'           => $a->clasificacion,
+            'observaciones_generales' => $a->observaciones_generales,
+            'acciones_correctivas'    => $a->acciones_correctivas,
+            'fotos'                   => $a->relationLoaded('fotos')
                 ? $a->fotos->map(fn ($f) => [
                     'id'          => $f->id,
                     'url'         => $this->presignS3Url($f->url),
                     'descripcion' => $f->descripcion,
                   ])
                 : [],
-            'created_at'         => $a->created_at?->toIso8601String(),
+            'created_at'              => $a->created_at?->toIso8601String(),
         ];
     }
 
