@@ -106,7 +106,7 @@ class ExpedienteController extends RRHHBaseController
         // Seniority
         $anios = null;
         if ($empleado->fecha_ingreso) {
-            $anios = (int) now()->diffInYears($empleado->fecha_ingreso);
+            $anios = (int) $empleado->fecha_ingreso->diffInYears(now());
         }
 
         return [
