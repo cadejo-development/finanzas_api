@@ -13,8 +13,10 @@ class Traslado extends Model
         'empleado_id', 'solicitado_por_id',
         'sucursal_origen_id', 'sucursal_origen_nombre',
         'cargo_origen_id', 'cargo_origen_nombre',
+        'departamento_origen_id', 'departamento_origen_nombre',
         'sucursal_destino_id', 'sucursal_destino_nombre',
         'cargo_destino_id', 'cargo_destino_nombre',
+        'departamento_destino_id', 'departamento_destino_nombre',
         'fecha_efectiva', 'motivo', 'estado', 'aud_usuario',
     ];
 
