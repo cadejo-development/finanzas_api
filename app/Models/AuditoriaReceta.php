@@ -12,7 +12,7 @@ class AuditoriaReceta extends Model
     protected $fillable = [
         'fecha', 'hora', 'sucursal_id', 'estacion_id', 'receta_id',
         'tipo_receta', 'responsable_id', 'responsable_nombre',
-        'evaluador_id', 'evaluador_nombre', 'notas', 'estado', 'aud_usuario',
+        'evaluador_id', 'evaluador_nombre', 'notas', 'estado', 'calificacion', 'aud_usuario',
     ];
 
     protected $casts = [

@@ -246,15 +246,32 @@ class AuditoriaRecetasController extends Controller
     }
 
     // ── GET /api/compras/auditorias/criterios ────────────────────────
-    public function criterios(): JsonResponse
+    // ?tipo_receta=plato|sub_receta  →  filtra criterios por categoría
+    public function criterios(Request $request): JsonResponse
     {
-        $criterios = AuditoriaCriterio::where('activo', true)
-            ->orderBy('orden')
-            ->get(['id', 'categoria', 'nombre', 'orden']);
+        $tipoReceta = $request->query('tipo_receta');
+
+        // Mapa tipo_receta → categoría de criterios
+        $categoriaMap = [
+            'plato'      => 'Receta',
+            'sub_receta' => 'Sub Receta',
+        ];
+
+        $query = AuditoriaCriterio::where('activo', true)->orderBy('orden');
+
+        if ($tipoReceta && isset($categoriaMap[$tipoReceta])) {
+            $query->where('categoria', $categoriaMap[$tipoReceta]);
+        }
+
+        $criterios = $query->get(['id', 'categoria', 'nombre', 'peso', 'orden']);
 
         $grouped = $criterios->groupBy('categoria')->map(fn ($items, $cat) => [
             'categoria' => $cat,
-            'items'     => $items->map(fn ($c) => ['id' => $c->id, 'nombre' => $c->nombre])->values(),
+            'items'     => $items->map(fn ($c) => [
+                'id'     => $c->id,
+                'nombre' => $c->nombre,
+                'peso'   => $c->peso ?? 25,
+            ])->values(),
         ])->values();
 
         return response()->json(['data' => $grouped]);
@@ -304,8 +321,37 @@ class AuditoriaRecetasController extends Controller
                     ]
                 );
             }
-            // Marcar auditoría con evaluación completada
-            $auditoria->update(['estado' => 'evaluada']);
+
+            // Calcular calificación: suma de pesos de criterios que cumplen
+            $criterioIds = collect($validated['items'])->pluck('criterio_id')->filter()->all();
+            $pesos = AuditoriaCriterio::whereIn('id', $criterioIds)
+                ->get(['id', 'peso'])
+                ->keyBy('id');
+
+            $totalPeso   = 0;
+            $pesoObtenido = 0;
+            $evaluados   = 0;
+
+            foreach ($validated['items'] as $item) {
+                $resultado = $item['resultado'] ?? null;
+                if (!$resultado || $resultado === 'na') continue; // sin evaluar / N/A no cuentan
+                $peso = $pesos[$item['criterio_id']]?->peso ?? 25;
+                $totalPeso += $peso;
+                if ($resultado === 'cumple') {
+                    $pesoObtenido += $peso;
+                }
+                $evaluados++;
+            }
+
+            // Si todos son N/A o sin evaluar, calificación = null
+            $calificacion = $evaluados > 0
+                ? round(($pesoObtenido / $totalPeso) * 100, 1)
+                : null;
+
+            $auditoria->update([
+                'estado'       => 'evaluada',
+                'calificacion' => $calificacion,
+            ]);
         });
 
         return response()->json(['message' => 'Evaluación guardada.']);
@@ -376,6 +422,7 @@ class AuditoriaRecetasController extends Controller
             'evaluador_nombre'   => $a->evaluador_nombre,
             'notas'              => $a->notas,
             'estado'             => $a->estado,
+            'calificacion'       => $a->calificacion !== null ? (float) $a->calificacion : null,
             'fotos'              => $a->relationLoaded('fotos')
                 ? $a->fotos->map(fn ($f) => [
                     'id'          => $f->id,
