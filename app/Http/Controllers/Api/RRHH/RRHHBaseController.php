@@ -254,21 +254,21 @@ abstract class RRHHBaseController extends Controller
 
     /**
      * Devuelve el estado inicial para un registro según quién lo crea:
-     *  - rrhh_admin o jefatura para subordinados → 'aprobado'
-     *  - empleado para sí mismo → 'pendiente'
-     *  - jefatura para sí mismo → 'pendiente' (sube al jefe del dept padre)
+     *
+     *  - rrhh_admin para un SUBORDINADO (no él mismo) → 'aprobado'  (el admin autoriza)
+     *  - rrhh_admin para SÍ MISMO                    → 'pendiente' (sube al jefe del dept)
+     *  - jefatura   para un SUBORDINADO               → 'aprobado'  (el jefe autoriza)
+     *  - jefatura   para SÍ MISMO                    → 'pendiente' (sube al jefe del dept padre)
+     *  - empleado   para sí mismo                    → 'pendiente'
      *
      * Guarda de seguridad: nunca auto-aprobar si jefe_id == empleado_id.
      */
     protected function estadoParaEmpleado(int $empleadoId, ?int $jefeId = null): string
     {
         if ($this->esAdminRrhh()) return 'aprobado';
-        // Empleado submitting own request always starts as pending
         if ($this->esEmpleado()) return 'pendiente';
-        // Jefatura acting on subordinate → auto-approve; acting on self → pending
         $esPropio = $this->esEmpleadoPropio($empleadoId);
         if ($esPropio) return 'pendiente';
-        // Safety: never auto-approve if approver and requester are the same person
         if ($jefeId !== null && $jefeId === $empleadoId) return 'pendiente';
         return 'aprobado';
     }
@@ -277,19 +277,23 @@ abstract class RRHHBaseController extends Controller
      * Devuelve el ID del empleado que debe aprobar la solicitud de $empleadoId.
      *
      * Reglas:
-     *  - Si el actor es jefatura y está creando para un subordinado → él mismo aprueba.
-     *  - Si el actor es empleado o jefatura creando para sí mismo → el jefe de su departamento.
-     *  - Si el empleado es el jefe de su propio departamento → el jefe del departamento padre.
+     *  - Actor creando para un SUBORDINADO → él mismo aprueba (auto-aprobación).
+     *  - Actor creando para SÍ MISMO       → jefe del departamento del empleado.
+     *  - Si el empleado ES el jefe de su dept → jefe del departamento padre.
      *  - Fallback: null (sin aprobador identificado → quedará pendiente).
      */
     protected function getAprobadorPara(int $empleadoId): ?int
     {
-        // Jefatura creating for a subordinate → the logged-in user approves
-        if (! $this->esEmpleado() && ! $this->esEmpleadoPropio($empleadoId)) {
-            return $this->getJefeEmpleado()->id;
+        // Actor creando para un subordinado (no para sí mismo) → él mismo aprueba
+        if (! $this->esEmpleadoPropio($empleadoId)) {
+            try {
+                return $this->getJefeEmpleado()->id;
+            } catch (\Throwable) {
+                // rrhh_admin sin empleado vinculado → buscar por jerarquía
+            }
         }
 
-        // Employee or jefe creating for themselves → look up dept hierarchy
+        // Actor creando para sí mismo → buscar quién lo aprueba en la jerarquía
         return $this->getJefeDepartamento($empleadoId);
     }
 
