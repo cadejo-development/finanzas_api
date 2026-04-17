@@ -7,6 +7,7 @@ use App\Models\RRHH\Permiso;
 use App\Models\RRHH\Vacacion;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 
@@ -118,7 +119,7 @@ class ReenviarSolicitudPendiente extends Command
         }
 
         // ── Enviar ────────────────────────────────────────────────────────────
-        Mail::to($jefe->email)->send(new SolicitudAprobacion(
+        $mailable = new SolicitudAprobacion(
             tipo:             $tipoLabel,
             empleadoNombre:   $empleadoNombre,
             supervisorNombre: $supervisorNombre,
@@ -126,9 +127,43 @@ class ReenviarSolicitudPendiente extends Command
             linkUrl:          $linkUrl,
             aprobarUrl:       $aprobarUrl,
             rechazarUrl:      $rechazarUrl,
-        ));
+        );
 
-        $this->info("Correo enviado a {$jefe->email} con botones Aprobar/Rechazar.");
+        try {
+            Mail::to($jefe->email)->send($mailable);
+
+            DB::connection('pgsql')->table('email_logs')->insert([
+                'sistema'         => 'rrhh',
+                'tipo'            => 'solicitud_aprobacion',
+                'destinatario'    => $jefe->email,
+                'asunto'          => $mailable->envelope()->subject,
+                'estado'          => 'enviado',
+                'enviado_por'     => 'artisan:rrhh:reenviar-solicitud',
+                'referencia_id'   => $solicitud->empleado_id,
+                'referencia_tipo' => 'empleado',
+                'created_at'      => now(),
+            ]);
+
+            $this->info("Correo enviado a {$jefe->email} con botones Aprobar/Rechazar.");
+
+        } catch (\Throwable $e) {
+            DB::connection('pgsql')->table('email_logs')->insert([
+                'sistema'         => 'rrhh',
+                'tipo'            => 'solicitud_aprobacion',
+                'destinatario'    => $jefe->email,
+                'asunto'          => $mailable->envelope()->subject,
+                'estado'          => 'fallido',
+                'error_mensaje'   => $e->getMessage(),
+                'enviado_por'     => 'artisan:rrhh:reenviar-solicitud',
+                'referencia_id'   => $solicitud->empleado_id,
+                'referencia_tipo' => 'empleado',
+                'created_at'      => now(),
+            ]);
+
+            Log::error('rrhh:reenviar-solicitud: error enviando correo', ['error' => $e->getMessage()]);
+            $this->error("Error al enviar: " . $e->getMessage());
+            return self::FAILURE;
+        }
 
         return self::SUCCESS;
     }
