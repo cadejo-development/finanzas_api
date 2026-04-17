@@ -194,7 +194,6 @@ class ComprimirFotosRecetas extends Command
                     'Key'         => $key,
                     'Body'        => $nuevoBinario,
                     'ContentType' => $mime === 'image/png' ? 'image/png' : 'image/jpeg',
-                    'ACL'         => 'public-read',
                 ]);
 
                 $this->newLine();
