@@ -255,15 +255,74 @@ abstract class RRHHBaseController extends Controller
     /**
      * Devuelve el estado inicial para un registro según quién lo crea:
      *  - rrhh_admin o jefatura para subordinados → 'aprobado'
-     *  - jefatura para sí mismo → 'pendiente'
+     *  - empleado para sí mismo → 'pendiente'
+     *  - jefatura para sí mismo → 'pendiente' (sube al jefe del dept padre)
+     *
+     * Guarda de seguridad: nunca auto-aprobar si jefe_id == empleado_id.
      */
-    protected function estadoParaEmpleado(int $empleadoId): string
+    protected function estadoParaEmpleado(int $empleadoId, ?int $jefeId = null): string
     {
         if ($this->esAdminRrhh()) return 'aprobado';
         // Empleado submitting own request always starts as pending
         if ($this->esEmpleado()) return 'pendiente';
         // Jefatura acting on subordinate → auto-approve; acting on self → pending
-        return $this->esEmpleadoPropio($empleadoId) ? 'pendiente' : 'aprobado';
+        $esPropio = $this->esEmpleadoPropio($empleadoId);
+        if ($esPropio) return 'pendiente';
+        // Safety: never auto-approve if approver and requester are the same person
+        if ($jefeId !== null && $jefeId === $empleadoId) return 'pendiente';
+        return 'aprobado';
+    }
+
+    /**
+     * Devuelve el ID del empleado que debe aprobar la solicitud de $empleadoId.
+     *
+     * Reglas:
+     *  - Si el actor es jefatura y está creando para un subordinado → él mismo aprueba.
+     *  - Si el actor es empleado o jefatura creando para sí mismo → el jefe de su departamento.
+     *  - Si el empleado es el jefe de su propio departamento → el jefe del departamento padre.
+     *  - Fallback: null (sin aprobador identificado → quedará pendiente).
+     */
+    protected function getAprobadorPara(int $empleadoId): ?int
+    {
+        // Jefatura creating for a subordinate → the logged-in user approves
+        if (! $this->esEmpleado() && ! $this->esEmpleadoPropio($empleadoId)) {
+            return $this->getJefeEmpleado()->id;
+        }
+
+        // Employee or jefe creating for themselves → look up dept hierarchy
+        return $this->getJefeDepartamento($empleadoId);
+    }
+
+    /**
+     * Devuelve el jefe_empleado_id del departamento del empleado.
+     * Si el empleado ya ES el jefe de su departamento, sube al padre.
+     */
+    protected function getJefeDepartamento(int $empleadoId): ?int
+    {
+        $row = DB::connection('pgsql')
+            ->table('empleados as e')
+            ->join('departamentos as d', 'd.id', '=', 'e.departamento_id')
+            ->where('e.id', $empleadoId)
+            ->where('d.activo', true)
+            ->select('d.id as dept_id', 'd.jefe_empleado_id', 'd.parent_id')
+            ->first();
+
+        if (! $row) return null;
+
+        // Si el propio empleado es el jefe → subir al departamento padre
+        if ((int) $row->jefe_empleado_id === $empleadoId) {
+            if (! $row->parent_id) return null;
+
+            $padre = DB::connection('pgsql')
+                ->table('departamentos')
+                ->where('id', $row->parent_id)
+                ->where('activo', true)
+                ->value('jefe_empleado_id');
+
+            return $padre ? (int) $padre : null;
+        }
+
+        return (int) $row->jefe_empleado_id;
     }
 
     /**

@@ -68,9 +68,10 @@ class PermisosController extends RRHHBaseController
             $validated['horas_solicitadas'] = null;
         }
 
+        $aprobadorId = $this->getAprobadorPara($validated['empleado_id']);
         $permiso = Permiso::create(array_merge($validated, [
-            'jefe_id'     => $jefe->id,
-            'estado'      => $this->estadoParaEmpleado($validated['empleado_id']),
+            'jefe_id'     => $aprobadorId ?? $jefe->id,
+            'estado'      => $this->estadoParaEmpleado($validated['empleado_id'], $aprobadorId),
             'aud_usuario' => Auth::user()->email,
         ]));
 

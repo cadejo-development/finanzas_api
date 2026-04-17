@@ -48,9 +48,10 @@ class VacacionesController extends RRHHBaseController
             ], 403);
         }
 
+        $aprobadorId = $this->getAprobadorPara($validated['empleado_id']);
         $vacacion = Vacacion::create(array_merge($validated, [
-            'jefe_id'     => $jefe->id,
-            'estado'      => $this->estadoParaEmpleado($validated['empleado_id']),
+            'jefe_id'     => $aprobadorId ?? $jefe->id,
+            'estado'      => $this->estadoParaEmpleado($validated['empleado_id'], $aprobadorId),
             'aud_usuario' => Auth::user()->email,
         ]));
 
