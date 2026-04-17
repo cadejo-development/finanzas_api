@@ -113,6 +113,11 @@ class TrasladosController extends RRHHBaseController
             $this->ejecutarTraslado($traslado);
         }
 
+        // Notificar a Informática si el traslado quedó aprobado desde la creación
+        if ($estado === 'aprobado') {
+            $this->notificarTrasladoInformatica($traslado);
+        }
+
         return response()->json(['success' => true, 'data' => $traslado], 201);
     }
 
@@ -167,13 +172,20 @@ class TrasladosController extends RRHHBaseController
 
         $traslado->update(array_merge($validated, ['aud_usuario' => Auth::user()->email]));
 
+        $trasladoFresh = $traslado->fresh();
+
         // Si el estado cambia a aprobado y la fecha efectiva ya llegó → ejecutar traslado
         if (($validated['estado'] ?? null) === 'aprobado'
-            && $traslado->fresh()->fecha_efectiva->lte(now()->startOfDay())) {
-            $this->ejecutarTraslado($traslado->fresh());
+            && $trasladoFresh->fecha_efectiva->lte(now()->startOfDay())) {
+            $this->ejecutarTraslado($trasladoFresh);
         }
 
-        return response()->json(['success' => true, 'data' => $traslado->fresh()]);
+        // Notificar a Informática cuando el estado cambia a aprobado
+        if (($validated['estado'] ?? null) === 'aprobado') {
+            $this->notificarTrasladoInformatica($trasladoFresh);
+        }
+
+        return response()->json(['success' => true, 'data' => $trasladoFresh]);
     }
 
     /**
@@ -183,6 +195,31 @@ class TrasladosController extends RRHHBaseController
     {
         Traslado::findOrFail($id)->delete();
         return response()->json(['success' => true, 'message' => 'Traslado eliminado.']);
+    }
+
+    /**
+     * Notifica al departamento de Informática (GEN_INF) de un traslado aprobado.
+     */
+    private function notificarTrasladoInformatica(Traslado $traslado): void
+    {
+        $enriched   = $this->enrichWithEmpleadoData([$traslado->toArray()]);
+        $empNombre  = $enriched[0]['empleado_nombre'] ?? "Empleado #{$traslado->empleado_id}";
+
+        $this->notificarDepartamentoCodigo(
+            codigoDept:    'GEN_INF',
+            tipo:          'Traslado Aprobado',
+            empleadoNombre: $empNombre,
+            detalles: array_filter([
+                'Colaborador'          => $empNombre,
+                'Sucursal de origen'   => $traslado->sucursal_origen_nombre  ?? '—',
+                'Sucursal de destino'  => $traslado->sucursal_destino_nombre ?? '—',
+                'Cargo de origen'      => $traslado->cargo_origen_nombre     ?? null,
+                'Cargo de destino'     => $traslado->cargo_destino_nombre    ?? null,
+                'Departamento destino' => $traslado->departamento_destino_nombre ?? null,
+                'Fecha efectiva'       => $traslado->fecha_efectiva?->toDateString() ?? '—',
+            ]),
+            rutaFrontend: 'traslados',
+        );
     }
 
     /**

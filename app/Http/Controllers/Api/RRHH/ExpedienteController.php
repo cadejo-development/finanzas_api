@@ -260,6 +260,7 @@ class ExpedienteController extends RRHHBaseController
             'etiqueta'        => 'nullable|string|max:60',
             'valor'           => 'required|string|max:150',
             'nombre_contacto' => 'nullable|string|max:120',
+            'relacion'        => 'nullable|string|max:80',
             'es_emergencia'   => 'boolean',
             'orden'           => 'integer|min:0',
         ]);
@@ -280,6 +281,7 @@ class ExpedienteController extends RRHHBaseController
             'etiqueta'        => 'nullable|string|max:60',
             'valor'           => 'sometimes|string|max:150',
             'nombre_contacto' => 'nullable|string|max:120',
+            'relacion'        => 'nullable|string|max:80',
             'es_emergencia'   => 'boolean',
             'orden'           => 'integer|min:0',
         ]);

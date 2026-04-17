@@ -85,6 +85,19 @@ class AusenciasController extends RRHHBaseController
         ]);
 
         $arr = $this->enrichWithEmpleadoData([$ausencia->toArray()]);
+
+        // Notificar al empleado
+        $this->notificarAlEmpleado(
+            empleadoId:   $validated['empleado_id'],
+            tipo:         'Ausencia Injustificada',
+            mensaje:      "Se ha registrado una ausencia injustificada en tu expediente. Si consideras que este registro es incorrecto, comunicate con tu jefe inmediato.",
+            detalles: array_filter([
+                'Fecha'       => $validated['fecha'],
+                'Descripcion' => $validated['descripcion'] ?? null,
+            ]),
+            rutaFrontend: 'mi-expediente',
+        );
+
         return response()->json(['success' => true, 'data' => $arr[0]], 201);
     }
 

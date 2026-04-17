@@ -11,7 +11,7 @@ class ExpedienteContacto extends Model
 
     protected $fillable = [
         'empleado_id', 'tipo', 'etiqueta', 'valor',
-        'nombre_contacto', 'es_emergencia', 'orden',
+        'nombre_contacto', 'relacion', 'es_emergencia', 'orden',
     ];
 
     protected $casts = [

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\RRHH;
 
 use App\Http\Controllers\Controller;
 use App\Mail\RRHH\AccionPersonalNotificacion;
+use App\Mail\RRHH\NotificacionAlEmpleado;
 use App\Mail\RRHH\SolicitudAprobacion;
 use App\Models\Empleado;
 use App\Services\RRHH\SupervisorChainService;
@@ -473,6 +474,214 @@ abstract class RRHHBaseController extends Controller
                 'enviado_por'     => Auth::user()?->email,
                 'referencia_id'   => $empleadoId,
                 'referencia_tipo' => 'empleado',
+            ]);
+        }
+    }
+
+    /**
+     * Envía un correo directamente al empleado afectado.
+     * Usado para: amonestaciones, ausencias, etc.
+     *
+     * @param int    $empleadoId       ID del empleado que recibirá el correo
+     * @param string $tipo             Tipo de acción (e.g. 'Amonestación')
+     * @param string $mensaje          Texto introductorio del correo
+     * @param array  $detalles         Key-value pairs para mostrar en el cuerpo
+     * @param string $rutaFrontend     Path frontend (e.g. 'amonestaciones')
+     */
+    protected function notificarAlEmpleado(
+        int    $empleadoId,
+        string $tipo,
+        string $mensaje,
+        array  $detalles,
+        string $rutaFrontend,
+    ): void {
+        $destinatarioEmail = null;
+        $mailable          = null;
+
+        try {
+            $row = DB::connection('pgsql')
+                ->table('empleados as e')
+                ->join('users as u', 'u.id', '=', 'e.user_id')
+                ->where('e.id', $empleadoId)
+                ->select('e.nombres', 'e.apellidos', 'u.email')
+                ->first();
+
+            if (! $row || ! $row->email) return;
+
+            $destinatarioEmail  = $row->email;
+            $empleadoNombre     = trim($row->nombres . ' ' . $row->apellidos);
+            $baseUrl            = rtrim(config('app.frontend_rrhh_url', 'https://rrhh.cervezacadejo.com'), '/');
+
+            $mailable = new NotificacionAlEmpleado(
+                tipo:               $tipo,
+                empleadoNombre:     $empleadoNombre,
+                mensaje:            $mensaje,
+                detalles:           $detalles,
+                linkUrl:            "{$baseUrl}/{$rutaFrontend}",
+                destinatarioNombre: $empleadoNombre,
+            );
+
+            Mail::to($destinatarioEmail)->send($mailable);
+
+            $this->registrarEmailLog([
+                'tipo'            => 'notificacion_empleado',
+                'destinatario'    => $destinatarioEmail,
+                'asunto'          => $mailable->envelope()->subject,
+                'estado'          => 'enviado',
+                'enviado_por'     => Auth::user()->email,
+                'referencia_id'   => $empleadoId,
+                'referencia_tipo' => 'empleado',
+            ]);
+
+        } catch (\Throwable $e) {
+            Log::warning('RRHH: Error enviando notificación al empleado', [
+                'empleado_id' => $empleadoId,
+                'tipo'        => $tipo,
+                'error'       => $e->getMessage(),
+            ]);
+            $this->registrarEmailLog([
+                'tipo'            => 'notificacion_empleado',
+                'destinatario'    => $destinatarioEmail ?? 'desconocido',
+                'asunto'          => $mailable?->envelope()->subject ?? "Notificación {$tipo}",
+                'estado'          => 'fallido',
+                'error_mensaje'   => $e->getMessage(),
+                'enviado_por'     => Auth::user()?->email,
+                'referencia_id'   => $empleadoId,
+                'referencia_tipo' => 'empleado',
+            ]);
+        }
+    }
+
+    /**
+     * Envía un correo a todos los usuarios con rol rrhh_admin.
+     * Usado para: desvinculaciones (despidos, renuncias).
+     *
+     * @param string $tipo            Tipo de acción (e.g. 'Desvinculación')
+     * @param string $empleadoNombre  Nombre del empleado desvinculado
+     * @param array  $detalles        Key-value pairs para mostrar en el cuerpo
+     * @param string $rutaFrontend    Path frontend (e.g. 'desvinculaciones')
+     */
+    protected function notificarAdminsRrhh(
+        string $tipo,
+        string $empleadoNombre,
+        array  $detalles,
+        string $rutaFrontend,
+    ): void {
+        try {
+            $admins = DB::connection('pgsql')
+                ->table('model_has_roles as mhr')
+                ->join('roles as r',  'r.id',  '=', 'mhr.role_id')
+                ->join('users as u',  'u.id',  '=', 'mhr.model_id')
+                ->where('r.name', 'rrhh_admin')
+                ->where('mhr.model_type', 'App\\Models\\User')
+                ->whereNotNull('u.email')
+                ->select('u.id', 'u.name', 'u.email')
+                ->get();
+
+            if ($admins->isEmpty()) return;
+
+            $baseUrl = rtrim(config('app.frontend_rrhh_url', 'https://rrhh.cervezacadejo.com'), '/');
+            $linkUrl = "{$baseUrl}/{$rutaFrontend}";
+
+            foreach ($admins as $admin) {
+                $mailable = new NotificacionAlEmpleado(
+                    tipo:               $tipo,
+                    empleadoNombre:     $empleadoNombre,
+                    mensaje:            "Se ha registrado una nueva {$tipo} para el siguiente colaborador. Este es un correo informativo dirigido al equipo de RRHH.",
+                    detalles:           $detalles,
+                    linkUrl:            $linkUrl,
+                    destinatarioNombre: $admin->name,
+                );
+
+                Mail::to($admin->email)->send($mailable);
+
+                $this->registrarEmailLog([
+                    'tipo'            => 'notificacion_admins_rrhh',
+                    'destinatario'    => $admin->email,
+                    'asunto'          => $mailable->envelope()->subject,
+                    'estado'          => 'enviado',
+                    'enviado_por'     => Auth::user()->email,
+                    'referencia_tipo' => 'empleado',
+                ]);
+            }
+
+        } catch (\Throwable $e) {
+            Log::warning('RRHH: Error notificando a admins RRHH', [
+                'tipo'  => $tipo,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Envía un correo a todos los empleados activos del departamento con el código dado.
+     * Usado para: traslados aprobados → notificar a Informática (GEN_INF).
+     *
+     * @param string $codigoDept       Código del departamento destino (e.g. 'GEN_INF')
+     * @param string $tipo             Tipo de acción (e.g. 'Traslado Aprobado')
+     * @param string $empleadoNombre   Nombre del empleado trasladado
+     * @param array  $detalles         Key-value pairs para mostrar en el cuerpo
+     * @param string $rutaFrontend     Path frontend (e.g. 'traslados')
+     */
+    protected function notificarDepartamentoCodigo(
+        string $codigoDept,
+        string $tipo,
+        string $empleadoNombre,
+        array  $detalles,
+        string $rutaFrontend,
+    ): void {
+        try {
+            $deptId = DB::connection('pgsql')
+                ->table('departamentos')
+                ->where('codigo', $codigoDept)
+                ->where('activo', true)
+                ->value('id');
+
+            if (! $deptId) {
+                Log::warning("RRHH: Departamento con código '{$codigoDept}' no encontrado para notificación.");
+                return;
+            }
+
+            $miembros = DB::connection('pgsql')
+                ->table('empleados as e')
+                ->join('users as u', 'u.id', '=', 'e.user_id')
+                ->where('e.departamento_id', $deptId)
+                ->where('e.activo', true)
+                ->whereNotNull('u.email')
+                ->select('u.name', 'u.email')
+                ->get();
+
+            if ($miembros->isEmpty()) return;
+
+            $baseUrl = rtrim(config('app.frontend_rrhh_url', 'https://rrhh.cervezacadejo.com'), '/');
+            $linkUrl = "{$baseUrl}/{$rutaFrontend}";
+
+            foreach ($miembros as $miembro) {
+                $mailable = new NotificacionAlEmpleado(
+                    tipo:               $tipo,
+                    empleadoNombre:     $empleadoNombre,
+                    mensaje:            "Se ha aprobado un traslado que requiere acciones de configuracion por parte del equipo de Informatica.",
+                    detalles:           $detalles,
+                    linkUrl:            $linkUrl,
+                    destinatarioNombre: $miembro->name,
+                );
+
+                Mail::to($miembro->email)->send($mailable);
+
+                $this->registrarEmailLog([
+                    'tipo'            => 'notificacion_departamento',
+                    'destinatario'    => $miembro->email,
+                    'asunto'          => $mailable->envelope()->subject,
+                    'estado'          => 'enviado',
+                    'enviado_por'     => Auth::user()->email,
+                    'referencia_tipo' => 'departamento',
+                ]);
+            }
+
+        } catch (\Throwable $e) {
+            Log::warning("RRHH: Error notificando al departamento '{$codigoDept}'", [
+                'tipo'  => $tipo,
+                'error' => $e->getMessage(),
             ]);
         }
     }

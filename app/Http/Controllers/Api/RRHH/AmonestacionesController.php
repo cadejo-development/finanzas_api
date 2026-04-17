@@ -78,6 +78,28 @@ class AmonestacionesController extends RRHHBaseController
 
         $amonestacion->load(['tipoFalta', 'diasSuspension']);
 
+        // Notificar al empleado amonestado
+        $enriched = $this->enrichWithEmpleadoData([$amonestacion->toArray()]);
+        $empNombre = $enriched[0]['empleado_nombre'] ?? "Empleado #{$validated['empleado_id']}";
+
+        $detallesEmail = [
+            'Tipo de falta'      => $amonestacion->tipoFalta?->nombre ?? '—',
+            'Fecha'              => $validated['fecha_amonestacion'],
+            'Descripción'        => $validated['descripcion'],
+            'Aplica suspensión'  => $aplica ? 'Sí' : 'No',
+        ];
+        if ($aplica && ! empty($validated['dias_suspension'])) {
+            $detallesEmail['Días de suspensión'] = implode(', ', $validated['dias_suspension']);
+        }
+
+        $this->notificarAlEmpleado(
+            empleadoId:   $validated['empleado_id'],
+            tipo:         'Amonestación',
+            mensaje:      "Tu jefe inmediato ha registrado una amonestacion en tu expediente. A continuacion encontraras los detalles del registro.",
+            detalles:     $detallesEmail,
+            rutaFrontend: 'mi-expediente',
+        );
+
         return response()->json(['success' => true, 'data' => $amonestacion], 201);
     }
 
