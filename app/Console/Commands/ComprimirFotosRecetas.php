@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Receta;
 use Aws\S3\S3Client;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -30,12 +29,12 @@ class ComprimirFotosRecetas extends Command
     protected $description = 'Comprime y redimensiona las fotos de recetas ya almacenadas en S3';
 
     private S3Client $s3;
-    private string   $bucket;
-    private string   $region;
-    private string   $prefix;
 
     public function handle(): int
     {
+        // Imágenes grandes necesitan bastante RAM en GD
+        ini_set('memory_limit', '512M');
+
         if (! extension_loaded('gd')) {
             $this->error('La extensión GD de PHP no está disponible. Instala php-gd e intenta de nuevo.');
             return self::FAILURE;
@@ -46,16 +45,17 @@ class ComprimirFotosRecetas extends Command
         $calidad = (int)  $this->option('calidad');
         $soloId  = $this->option('solo') ? (int) $this->option('solo') : null;
 
-        $this->bucket = config('filesystems.disks.s3.bucket');
-        $this->region = config('filesystems.disks.s3.region');
-        $this->prefix = "https://{$this->bucket}.s3.{$this->region}.amazonaws.com/";
+        // Las credenciales y bucket pueden venir de config O directamente de variables de entorno
+        // En producción (App Runner) AWS_BUCKET está en las env vars del servidor, no en .env local.
+        // Por eso extraemos bucket/region/key de las URLs almacenadas en la DB cuando config esté vacío.
+        $this->region = config('filesystems.disks.s3.region') ?: env('AWS_DEFAULT_REGION', 'us-east-1');
 
         $this->s3 = new S3Client([
             'region'      => $this->region,
             'version'     => 'latest',
             'credentials' => [
-                'key'    => config('filesystems.disks.s3.key'),
-                'secret' => config('filesystems.disks.s3.secret'),
+                'key'    => config('filesystems.disks.s3.key')    ?: env('AWS_ACCESS_KEY_ID'),
+                'secret' => config('filesystems.disks.s3.secret') ?: env('AWS_SECRET_ACCESS_KEY'),
             ],
         ]);
 
@@ -65,8 +65,9 @@ class ComprimirFotosRecetas extends Command
         // Recoger todas las fotos únicas (foto_plato + foto_plateria)
         $query = DB::connection('compras')
             ->table('recetas')
-            ->whereNotNull('foto_plato')
-            ->orWhereNotNull('foto_plateria');
+            ->where(function ($q) {
+                $q->whereNotNull('foto_plato')->orWhereNotNull('foto_plateria');
+            });
 
         if ($soloId) {
             $query = DB::connection('compras')
@@ -76,14 +77,26 @@ class ComprimirFotosRecetas extends Command
 
         $recetas = $query->get(['id', 'nombre', 'foto_plato', 'foto_plateria']);
 
-        // Aplanar en una lista de [receta_id, campo, url]
+        // Aplanar en una lista de [receta_id, campo, url, bucket, key]
+        // Extraemos bucket/key de la URL directamente para no depender de config vacío
         $tareas = [];
         foreach ($recetas as $r) {
             foreach (['foto_plato', 'foto_plateria'] as $campo) {
                 $url = $r->$campo ?? null;
-                if ($url && str_starts_with($url, $this->prefix)) {
-                    $tareas[] = ['id' => $r->id, 'nombre' => $r->nombre, 'campo' => $campo, 'url' => $url];
-                }
+                if (! $url) continue;
+
+                // Parsear la URL para extraer bucket y key
+                // Formato: https://{bucket}.s3.{region}.amazonaws.com/{key}
+                if (! preg_match('#^https://([^.]+)\.s3\.[^.]+\.amazonaws\.com/(.+)$#', $url, $m)) continue;
+
+                $tareas[] = [
+                    'id'     => $r->id,
+                    'nombre' => $r->nombre,
+                    'campo'  => $campo,
+                    'url'    => $url,
+                    'bucket' => $m[1],
+                    'key'    => $m[2],
+                ];
             }
         }
 
@@ -104,18 +117,29 @@ class ComprimirFotosRecetas extends Command
         $bar->start();
 
         foreach ($tareas as $tarea) {
-            $key  = substr($tarea['url'], strlen($this->prefix));
+            $key    = $tarea['key'];
+            $bucket = $tarea['bucket'];
             $bar->setMessage("[{$tarea['id']}] {$tarea['nombre']} ({$tarea['campo']})");
             $bar->advance();
 
+            // En dry-run solo listamos sin descargar nada
+            if ($dryRun) {
+                $this->newLine();
+                $this->line("  [DRY] {$bucket}/{$key}");
+                $ok++;
+                continue;
+            }
+
             try {
                 // Descargar desde S3
-                $result  = $this->s3->getObject(['Bucket' => $this->bucket, 'Key' => $key]);
+                $result  = $this->s3->getObject(['Bucket' => $bucket, 'Key' => $key]);
                 $binario = (string) $result['Body'];
                 $mime    = $result['ContentType'] ?? 'image/jpeg';
+                $tamOriginal = strlen($binario);
 
-                // Crear imagen GD
+                // Crear imagen GD y liberar el binario crudo cuanto antes
                 $src = @imagecreatefromstring($binario);
+                unset($binario); // liberar memoria inmediatamente
                 if (! $src) {
                     $this->newLine();
                     $this->warn("  No se pudo leer como imagen: {$key}");
@@ -126,7 +150,7 @@ class ComprimirFotosRecetas extends Command
                 $w = imagesx($src);
                 $h = imagesy($src);
 
-                // Verificar si ya es pequeña
+                // Si ya es suficientemente pequeña, omitir
                 if ($w <= $maxDim && $h <= $maxDim) {
                     imagedestroy($src);
                     $omitidas++;
@@ -137,14 +161,6 @@ class ComprimirFotosRecetas extends Command
                 $ratio = min($maxDim / $w, $maxDim / $h);
                 $nw    = (int) round($w * $ratio);
                 $nh    = (int) round($h * $ratio);
-
-                if ($dryRun) {
-                    $this->newLine();
-                    $this->line("  [DRY] {$key}: {$w}x{$h} → {$nw}x{$nh}");
-                    imagedestroy($src);
-                    $ok++;
-                    continue;
-                }
 
                 // Redimensionar
                 $dst = imagecreatetruecolor($nw, $nh);
@@ -158,24 +174,23 @@ class ComprimirFotosRecetas extends Command
                 }
 
                 imagecopyresampled($dst, $src, 0, 0, 0, 0, $nw, $nh, $w, $h);
-                imagedestroy($src);
+                imagedestroy($src); // liberar imagen original
 
                 // Capturar output en buffer
                 ob_start();
                 if ($mime === 'image/png') {
-                    imagepng($dst, null, 6); // compresión 0-9, 6 es buen balance
+                    imagepng($dst, null, 6);
                 } else {
                     imagejpeg($dst, null, $calidad);
                 }
                 $nuevoBinario = ob_get_clean();
                 imagedestroy($dst);
 
-                $tamOriginal = strlen($binario);
-                $tamNuevo    = strlen($nuevoBinario);
+                $tamNuevo = strlen($nuevoBinario);
 
                 // Subir de vuelta al mismo key
                 $this->s3->putObject([
-                    'Bucket'      => $this->bucket,
+                    'Bucket'      => $bucket,
                     'Key'         => $key,
                     'Body'        => $nuevoBinario,
                     'ContentType' => $mime === 'image/png' ? 'image/png' : 'image/jpeg',
