@@ -110,7 +110,7 @@ class AuthController extends Controller
                 'permisos'              => $permisos,
                 'centros_costo'         => $centrosCosto,
                 'is_portal_admin'       => $user->hasRole('portal_admin'),
-                'force_password_change' => (bool) $user->force_password_change,
+                'force_password_change' => $user->force_password_change || Hash::check('C@dejo2026', $user->password),
                 'empleado_id'           => $empleadoId,
             ],
         ]);

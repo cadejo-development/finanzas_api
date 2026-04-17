@@ -220,14 +220,17 @@ class AdminController extends Controller
             $nombreCompleto = $empleado->email;
         }
 
+        $isDefaultPassword = $data['password'] === 'C@dejo2026';
+
         $userId = $this->db()->table('users')->insertGetId([
-            'name'        => $nombreCompleto,
-            'email'       => strtolower($empleado->email),
-            'password'    => Hash::make($data['password']),
-            'activo'      => true,
-            'aud_usuario' => 'portal_admin',
-            'created_at'  => now(),
-            'updated_at'  => now(),
+            'name'                  => $nombreCompleto,
+            'email'                 => strtolower($empleado->email),
+            'password'              => Hash::make($data['password']),
+            'activo'                => true,
+            'force_password_change' => $isDefaultPassword,
+            'aud_usuario'           => 'portal_admin',
+            'created_at'            => now(),
+            'updated_at'            => now(),
         ]);
 
         if (!empty($data['role_ids'])) {
