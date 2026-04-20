@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\Compras\PedidosController;
 use App\Http\Controllers\Api\Compras\RecetasController;
 use App\Http\Controllers\Api\Compras\RecetaCategoriasController;
 use App\Http\Controllers\Api\Compras\AuditoriaRecetasController;
+use App\Http\Controllers\Api\Compras\InventarioController;
 use App\Http\Controllers\Api\PortalController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\RRHH\CatalogosRRHHController;
@@ -204,6 +205,17 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('ventas/sugerencia',   [VentasController::class, 'sugerencia']);
     Route::get('ventas/{id}',         [VentasController::class, 'show']);
     Route::post('ventas/import',      [VentasController::class, 'import']);
+
+    // Inventario
+    Route::get('inventario/pedido-sugerido',    [InventarioController::class, 'pedidoSugerido']);
+    Route::get('inventario/consumo',            [InventarioController::class, 'consumo']);
+    Route::get('inventario/movimientos',        [InventarioController::class, 'movimientos']);
+    Route::get('inventario',                    [InventarioController::class, 'index']);
+    Route::post('inventario/cargar',            [InventarioController::class, 'cargar']);
+    Route::post('inventario/ajuste',            [InventarioController::class, 'ajuste']);
+    Route::post('inventario/aplicar-consumo',   [InventarioController::class, 'aplicarConsumo']);
+    Route::post('inventario/agregar-al-pedido', [InventarioController::class, 'agregarAlPedido']);
+    Route::put('inventario/{id}/stock-minimo',  [InventarioController::class, 'actualizarStockMinimo']);
 });
 
 // ─── Admin Portal (protegido con Sanctum + portal_admin) ────────────────
@@ -314,7 +326,8 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::delete('ausencias/{id}',      [AusenciasController::class, 'destroy']);
 
     // Reportes quincenales
-    Route::get('reportes/quincena', [ReportesRRHHController::class, 'quincena']);
+    Route::get('reportes/quincena',  [ReportesRRHHController::class, 'quincena']);
+    Route::get('reportes/unidades',  [ReportesRRHHController::class, 'unidades']);
 
     // Horarios semanales
     Route::get('horarios',                        [HorariosController::class, 'index']);
