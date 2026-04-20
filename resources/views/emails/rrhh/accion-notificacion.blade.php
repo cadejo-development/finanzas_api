@@ -20,7 +20,7 @@
     .body-bg      { background:#f5f0e8 !important; }
     .card-bg      { background:#ffffff !important; }
     .header-bg    { background:#1a1a1a !important; }
-    .banner-bg    { background:#1d4ed8 !important; }
+    .banner-bg    { background:#b45309 !important; }
     .label-color  { color:#6b7280 !important; }
     .value-color  { color:#111827 !important; }
     .body-text    { color:#333333 !important; }
@@ -30,8 +30,8 @@
     .row-border   { border-bottom:1px solid #f3f4f6 !important; }
     .table-border { border:1px solid #e5e7eb !important; }
     .emp-card-bg  { background:#f9fafb !important; border:1px solid #e5e7eb !important; }
-    .info-bg      { background:#eff6ff !important; border-left:4px solid #3b82f6 !important; }
-    .info-text    { color:#1e40af !important; }
+    .warn-bg      { background:#fff8ec !important; border-left:4px solid #f59e0b !important; }
+    .warn-text    { color:#7a5000 !important; }
     .footer-bg    { background:#1a1a1a !important; }
     .footer-text  { color:#6b7280 !important; }
     .brand-text   { color:#f59e0b !important; }
@@ -50,8 +50,8 @@
       .row-border   { border-bottom:1px solid #44403c !important; }
       .table-border { border:1px solid #44403c !important; }
       .emp-card-bg  { background:#1c1917 !important; border:1px solid #44403c !important; }
-      .info-bg      { background:#172554 !important; border-left:4px solid #3b82f6 !important; }
-      .info-text    { color:#bfdbfe !important; }
+      .warn-bg      { background:#451a03 !important; border-left:4px solid #f59e0b !important; }
+      .warn-text    { color:#fde68a !important; }
       .footer-text  { color:#78716c !important; }
     }
 
@@ -66,8 +66,8 @@
     [data-ogsc] .row-border   { border-bottom:1px solid #44403c !important; }
     [data-ogsc] .table-border { border:1px solid #44403c !important; }
     [data-ogsc] .emp-card-bg  { background:#1c1917 !important; border:1px solid #44403c !important; }
-    [data-ogsc] .info-bg      { background:#172554 !important; border-left:4px solid #3b82f6 !important; }
-    [data-ogsc] .info-text    { color:#bfdbfe !important; }
+    [data-ogsc] .warn-bg      { background:#451a03 !important; border-left:4px solid #f59e0b !important; }
+    [data-ogsc] .warn-text    { color:#fde68a !important; }
     [data-ogsc] .footer-text  { color:#78716c !important; }
   </style>
 </head>
@@ -103,7 +103,7 @@
             Se ha registrado una nueva <strong>{{ strtolower($tipo) }}</strong> para el siguiente colaborador a tu cargo:
           </p>
           <p style="margin:0 0 20px;">
-            <span style="display:inline-block;background:#eff6ff;color:#1d4ed8;font-size:12px;font-weight:700;letter-spacing:0.5px;padding:4px 14px;border-radius:20px;border:1px solid #bfdbfe;">{{ strtoupper($tipo) }}</span>
+            <span style="display:inline-block;background:#fef3c7;color:#92400e;font-size:12px;font-weight:700;letter-spacing:0.5px;padding:4px 14px;border-radius:20px;border:1px solid #fcd34d;">{{ strtoupper($tipo) }}</span>
           </p>
         </td>
       </tr>
@@ -143,8 +143,8 @@
         <td style="padding:8px 40px 24px;">
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
-              <td class="info-bg" style="border-radius:4px;padding:14px 18px;">
-                <p class="info-text" style="margin:0;font-size:13px;line-height:1.6;">Este es un correo informativo. No se requiere ninguna accion de tu parte.</p>
+              <td class="warn-bg" style="border-radius:4px;padding:14px 18px;">
+                <p class="warn-text" style="margin:0;font-size:13px;line-height:1.6;">Este es un correo informativo. No se requiere ninguna accion de tu parte.</p>
               </td>
             </tr>
           </table>
