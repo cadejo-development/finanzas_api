@@ -13,21 +13,31 @@ class DesvinculacionesController extends RRHHBaseController
 {
     /**
      * GET /api/rrhh/desvinculaciones
-     * Acepta ?tipo=despido|renuncia para filtrar
+     * Acepta ?tipo=despido|renuncia para filtrar.
+     *
+     * Se filtra por procesado_por_id (quién registró) en vez de por los
+     * subordinados activos actuales, para que los registros queden visibles
+     * aunque el empleado ya haya sido inactivado.
      */
     public function index(Request $request): JsonResponse
     {
-        $subordinadosIds = $this->getSubordinadosIds();
+        $query = Desvinculacion::with('motivo')->orderByDesc('id');
 
-        $query = Desvinculacion::with('motivo')
-            ->whereIn('empleado_id', $subordinadosIds)
-            ->orderByDesc('id');
+        if ($this->esAdminRrhh()) {
+            // Admin ve todo, opcionalmente filtrable
+        } else {
+            // Jefatura: solo las que él mismo procesó
+            $jefe = $this->getJefeEmpleado();
+            $query->where('procesado_por_id', $jefe->id);
+        }
 
         if ($request->filled('tipo')) {
             $query->where('tipo', $request->tipo);
         }
 
         $desvinculaciones = $query->get();
+
+        // enrichWithEmpleadoData no filtra por activo, solo hace JOIN por id
         $data = $this->enrichWithEmpleadoData($desvinculaciones->toArray());
 
         return response()->json(['success' => true, 'data' => $data]);
