@@ -7,6 +7,7 @@ use App\Models\RRHH\DiaSuspension;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class AmonestacionesController extends RRHHBaseController
 {
@@ -43,6 +44,7 @@ class AmonestacionesController extends RRHHBaseController
             'aplica_suspension'  => 'boolean',
             'dias_suspension'    => 'nullable|array|required_if:aplica_suspension,true',
             'dias_suspension.*'  => 'date',
+            'archivo'            => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
         ]);
 
         if (!$this->puedeGestionar($validated['empleado_id'])) {
@@ -63,6 +65,15 @@ class AmonestacionesController extends RRHHBaseController
             ], 422);
         }
 
+        $archivoNombre = null;
+        $archivoRuta   = null;
+
+        if ($request->hasFile('archivo')) {
+            $file          = $request->file('archivo');
+            $archivoNombre = $file->getClientOriginalName();
+            $archivoRuta   = $file->store('rrhh/amonestaciones', 's3');
+        }
+
         $amonestacion = Amonestacion::create([
             'empleado_id'        => $validated['empleado_id'],
             'jefe_id'            => $jefe->id,
@@ -71,6 +82,8 @@ class AmonestacionesController extends RRHHBaseController
             'descripcion'        => $validated['descripcion'],
             'accion_tomada'      => $validated['accion_tomada'] ?? null,
             'aplica_suspension'  => $aplica,
+            'archivo_nombre'     => $archivoNombre,
+            'archivo_ruta'       => $archivoRuta,
             'aud_usuario'        => Auth::user()->email,
         ]);
 
@@ -171,9 +184,31 @@ class AmonestacionesController extends RRHHBaseController
     public function destroy(int $id): JsonResponse
     {
         $amonestacion = Amonestacion::findOrFail($id);
+
+        if ($amonestacion->archivo_ruta) {
+            Storage::disk('s3')->delete($amonestacion->archivo_ruta);
+        }
+
         $amonestacion->diasSuspension()->delete();
         $amonestacion->delete();
 
         return response()->json(['success' => true, 'message' => 'Amonestación eliminada.']);
+    }
+
+    /**
+     * GET /api/rrhh/amonestaciones/{id}/descargar
+     * Devuelve una URL presignada (60 min) para descargar el adjunto.
+     */
+    public function descargar(int $id): JsonResponse
+    {
+        $amonestacion = Amonestacion::findOrFail($id);
+
+        if (!$amonestacion->archivo_ruta) {
+            return response()->json(['success' => false, 'message' => 'Esta amonestación no tiene adjunto.'], 404);
+        }
+
+        $url = $this->s3TemporaryUrl($amonestacion->archivo_ruta, 60);
+
+        return response()->json(['success' => true, 'url' => $url, 'nombre' => $amonestacion->archivo_nombre]);
     }
 }

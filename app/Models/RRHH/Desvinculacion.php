@@ -13,6 +13,7 @@ class Desvinculacion extends Model
         'empleado_id', 'procesado_por_id', 'motivo_id',
         'tipo', 'fecha_efectiva', 'observaciones',
         'empleado_nombre', 'cargo_nombre', 'sucursal_nombre',
+        'archivo_nombre', 'archivo_ruta',
         'aud_usuario',
     ];
 

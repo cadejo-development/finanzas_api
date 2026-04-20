@@ -292,18 +292,20 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::patch('incapacidades/{id}/homologar',     [IncapacidadesController::class, 'homologar']);
 
     // Amonestaciones
-    Route::get('amonestaciones',         [AmonestacionesController::class, 'index']);
-    Route::post('amonestaciones',        [AmonestacionesController::class, 'store']);
-    Route::get('amonestaciones/{id}',    [AmonestacionesController::class, 'show']);
-    Route::put('amonestaciones/{id}',    [AmonestacionesController::class, 'update']);
-    Route::delete('amonestaciones/{id}', [AmonestacionesController::class, 'destroy']);
+    Route::get('amonestaciones',                    [AmonestacionesController::class, 'index']);
+    Route::post('amonestaciones',                   [AmonestacionesController::class, 'store']);
+    Route::get('amonestaciones/{id}',               [AmonestacionesController::class, 'show']);
+    Route::put('amonestaciones/{id}',               [AmonestacionesController::class, 'update']);
+    Route::delete('amonestaciones/{id}',            [AmonestacionesController::class, 'destroy']);
+    Route::get('amonestaciones/{id}/descargar',     [AmonestacionesController::class, 'descargar']);
 
     // Desvinculaciones (despidos + renuncias, filtrar por ?tipo=despido|renuncia)
-    Route::get('desvinculaciones',         [DesvinculacionesController::class, 'index']);
-    Route::post('desvinculaciones',        [DesvinculacionesController::class, 'store']);
-    Route::get('desvinculaciones/{id}',    [DesvinculacionesController::class, 'show']);
-    Route::put('desvinculaciones/{id}',    [DesvinculacionesController::class, 'update']);
-    Route::delete('desvinculaciones/{id}', [DesvinculacionesController::class, 'destroy']);
+    Route::get('desvinculaciones',                  [DesvinculacionesController::class, 'index']);
+    Route::post('desvinculaciones',                 [DesvinculacionesController::class, 'store']);
+    Route::get('desvinculaciones/{id}',             [DesvinculacionesController::class, 'show']);
+    Route::put('desvinculaciones/{id}',             [DesvinculacionesController::class, 'update']);
+    Route::delete('desvinculaciones/{id}',          [DesvinculacionesController::class, 'destroy']);
+    Route::get('desvinculaciones/{id}/descargar',   [DesvinculacionesController::class, 'descargar']);
 
     // Traslados
     Route::get('traslados',         [TrasladosController::class, 'index']);

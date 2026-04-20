@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class DesvinculacionesController extends RRHHBaseController
 {
@@ -45,6 +46,7 @@ class DesvinculacionesController extends RRHHBaseController
             'tipo'          => 'required|in:despido,renuncia',
             'fecha_efectiva'=> 'required|date',
             'observaciones' => 'nullable|string|max:1000',
+            'archivo'       => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
         ]);
 
         if (!$this->esSubordinado($validated['empleado_id'])) {
@@ -63,11 +65,22 @@ class DesvinculacionesController extends RRHHBaseController
             ->select('e.nombres', 'e.apellidos', 'c.nombre as cargo', 's.nombre as sucursal')
             ->first();
 
+        $archivoNombre = null;
+        $archivoRuta   = null;
+
+        if ($request->hasFile('archivo')) {
+            $file          = $request->file('archivo');
+            $archivoNombre = $file->getClientOriginalName();
+            $archivoRuta   = $file->store('rrhh/desvinculaciones', 's3');
+        }
+
         $desvinculacion = Desvinculacion::create(array_merge($validated, [
             'procesado_por_id'  => $jefe->id,
             'empleado_nombre'   => $empData ? trim($empData->nombres . ' ' . $empData->apellidos) : null,
             'cargo_nombre'      => $empData?->cargo,
             'sucursal_nombre'   => $empData?->sucursal,
+            'archivo_nombre'    => $archivoNombre,
+            'archivo_ruta'      => $archivoRuta,
             'aud_usuario'       => Auth::user()->email,
         ]));
 
@@ -126,7 +139,30 @@ class DesvinculacionesController extends RRHHBaseController
      */
     public function destroy(int $id): JsonResponse
     {
-        Desvinculacion::findOrFail($id)->delete();
+        $desvinculacion = Desvinculacion::findOrFail($id);
+
+        if ($desvinculacion->archivo_ruta) {
+            Storage::disk('s3')->delete($desvinculacion->archivo_ruta);
+        }
+
+        $desvinculacion->delete();
         return response()->json(['success' => true, 'message' => 'Desvinculación eliminada.']);
+    }
+
+    /**
+     * GET /api/rrhh/desvinculaciones/{id}/descargar
+     * Devuelve una URL presignada (60 min) para descargar el adjunto.
+     */
+    public function descargar(int $id): JsonResponse
+    {
+        $desvinculacion = Desvinculacion::findOrFail($id);
+
+        if (!$desvinculacion->archivo_ruta) {
+            return response()->json(['success' => false, 'message' => 'Esta desvinculación no tiene adjunto.'], 404);
+        }
+
+        $url = $this->s3TemporaryUrl($desvinculacion->archivo_ruta, 60);
+
+        return response()->json(['success' => true, 'url' => $url, 'nombre' => $desvinculacion->archivo_nombre]);
     }
 }
