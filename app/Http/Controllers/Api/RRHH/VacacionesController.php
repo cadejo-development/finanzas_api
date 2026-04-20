@@ -48,6 +48,32 @@ class VacacionesController extends RRHHBaseController
             ], 403);
         }
 
+        // ── Validaciones de negocio ───────────────────────────────────────────
+        $diasSolicitados = (float) $validated['dias'];
+
+        // Mínimo 5 días por solicitud
+        if ($diasSolicitados < 5) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El mínimo de días de vacaciones por solicitud es 5.',
+            ], 422);
+        }
+
+        // Máximo 15 días en total al año (suma de todas las solicitudes pendientes/aprobadas)
+        $diasAcumulados = Vacacion::where('empleado_id', $validated['empleado_id'])
+            ->whereYear('fecha_inicio', now()->year)
+            ->whereIn('estado', ['pendiente', 'aprobado'])
+            ->sum('dias');
+
+        $disponibles = max(15 - (float) $diasAcumulados, 0);
+
+        if ($diasSolicitados > $disponibles) {
+            return response()->json([
+                'success' => false,
+                'message' => "Solo quedan {$disponibles} día(s) de vacaciones disponibles para este año (máximo 15). Ya se han solicitado {$diasAcumulados} días.",
+            ], 422);
+        }
+
         $aprobadorId = $this->getAprobadorPara($validated['empleado_id']);
         $vacacion = Vacacion::create(array_merge($validated, [
             'jefe_id'     => $aprobadorId ?? $jefe->id,

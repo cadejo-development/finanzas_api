@@ -68,6 +68,46 @@ class PermisosController extends RRHHBaseController
             $validated['horas_solicitadas'] = null;
         }
 
+        // ── Validaciones de negocio por tipo de permiso ───────────────────────
+        $tipoPermiso = TipoPermiso::find($validated['tipo_permiso_id']);
+
+        // Consulta médica: máximo 4 horas por permiso
+        if ($tipoPermiso?->codigo === 'consulta_medica') {
+            $horas = (float) ($validated['horas_solicitadas'] ?? 0);
+            if ($horas > 4) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La consulta médica tiene un máximo de 4 horas por permiso.',
+                ], 422);
+            }
+            if ($horas <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La consulta médica debe registrarse en horas (permiso parcial).',
+                ], 422);
+            }
+        }
+
+        // Permiso personal: máximo según max_dias del tipo (default 5 días/año)
+        if ($tipoPermiso?->codigo === 'PERSONAL') {
+            $maxDias    = (float) ($tipoPermiso->max_dias ?? 5);
+            $diasUsados = Permiso::where('empleado_id', $validated['empleado_id'])
+                ->where('tipo_permiso_id', $validated['tipo_permiso_id'])
+                ->whereYear('fecha', now()->year)
+                ->whereIn('estado', ['pendiente', 'aprobado'])
+                ->sum('dias');
+
+            $diasSolicitados = (float) ($validated['dias'] ?? 0);
+            $disponibles     = max($maxDias - (float) $diasUsados, 0);
+
+            if ($diasSolicitados > $disponibles) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Solo quedan {$disponibles} día(s) de permiso personal disponibles para este año. Ya se han usado {$diasUsados} de {$maxDias}.",
+                ], 422);
+            }
+        }
+
         $aprobadorId = $this->getAprobadorPara($validated['empleado_id']);
         $permiso = Permiso::create(array_merge($validated, [
             'jefe_id'     => $aprobadorId ?? $jefe->id,

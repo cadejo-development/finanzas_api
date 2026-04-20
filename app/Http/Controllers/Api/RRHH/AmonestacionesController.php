@@ -52,7 +52,16 @@ class AmonestacionesController extends RRHHBaseController
             ], 403);
         }
 
-        $aplica = $validated['aplica_suspension'] ?? false;
+        // Falta leve no puede aplicar suspensión
+        $tipoFalta = \App\Models\RRHH\TipoFalta::find($validated['tipo_falta_id']);
+        $aplica    = $validated['aplica_suspension'] ?? false;
+
+        if ($aplica && $tipoFalta?->gravedad === 'leve') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Las faltas leves no pueden incluir días de suspensión. Solo las faltas graves permiten suspensión.',
+            ], 422);
+        }
 
         $amonestacion = Amonestacion::create([
             'empleado_id'        => $validated['empleado_id'],
