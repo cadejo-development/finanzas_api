@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:v="urn:schemas-microsoft-com:vml">
 <head>
   <meta charset="UTF-8" />
@@ -72,6 +72,21 @@
   </style>
 </head>
 <body class="body-bg" style="margin:0;padding:0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+@php
+use Carbon\Carbon;
+$dias  = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
+$meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+$formatearFecha = function($valor) use ($dias, $meses) {
+    try {
+        $c = Carbon::parse($valor);
+        return $dias[$c->dayOfWeek] . ', ' . $c->day . ' de ' . $meses[$c->month - 1] . ' de ' . $c->year;
+    } catch (\Throwable $e) { return $valor; }
+};
+$esFecha = function($label) {
+    $lower = mb_strtolower($label);
+    return str_contains($lower, 'fecha') || str_contains($lower, 'dia') || str_contains($lower, 'inicio') || str_contains($lower, 'fin') || str_contains($lower, 'desde') || str_contains($lower, 'hasta');
+};
+@endphp
 
 <table width="100%" cellpadding="0" cellspacing="0" class="body-bg" style="padding:32px 16px;">
   <tr><td align="center">
@@ -130,7 +145,7 @@
             @foreach(array_filter($detalles) as $label => $valor)
             <tr>
               <td class="label-color {{ $loop->odd ? 'row-odd-bg' : 'row-even-bg' }} row-border" style="padding:12px 18px;font-size:13px;width:42%;">{{ $label }}</td>
-              <td class="value-color {{ $loop->odd ? 'row-odd-bg' : 'row-even-bg' }} row-border" style="padding:12px 18px;font-size:13px;font-weight:600;text-align:right;">{{ $valor }}</td>
+              <td class="value-color {{ $loop->odd ? 'row-odd-bg' : 'row-even-bg' }} row-border" style="padding:12px 18px;font-size:13px;font-weight:600;text-align:right;">{{ $esFecha($label) ? $formatearFecha($valor) : $valor }}</td>
             </tr>
             @endforeach
           </table>
@@ -138,26 +153,28 @@
       </tr>
       @endif
 
-      {{-- Aviso informativo --}}
+      {{-- CTA --}}
       <tr>
-        <td style="padding:8px 40px 24px;">
-          <table width="100%" cellpadding="0" cellspacing="0">
+        <td style="padding:18px 40px 36px;text-align:center;">
+          <table cellpadding="0" cellspacing="0" align="center">
             <tr>
-              <td class="warn-bg" style="border-radius:4px;padding:14px 18px;">
-                <p class="warn-text" style="margin:0;font-size:13px;line-height:1.6;">Este es un correo informativo. No se requiere ninguna accion de tu parte.</p>
+              <td class="cta-bg" style="border-radius:8px;padding:12px 32px;">
+                <a href="{{ $linkUrl }}" class="cta-text" style="font-size:14px;font-weight:700;text-decoration:none;display:inline-block;letter-spacing:0.3px;">Ver en el sistema</a>
               </td>
             </tr>
           </table>
         </td>
       </tr>
 
-      {{-- CTA --}}
+      {{-- Aviso informativo --}}
       <tr>
-        <td style="padding:0 40px 36px;text-align:center;">
-          <table cellpadding="0" cellspacing="0" align="center">
+        <td style="padding:0 40px 28px;">
+          <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
-              <td class="cta-bg" style="border-radius:8px;padding:12px 32px;">
-                <a href="{{ $linkUrl }}" class="cta-text" style="font-size:14px;font-weight:700;text-decoration:none;display:inline-block;letter-spacing:0.3px;">Ver en el sistema</a>
+              <td class="warn-bg" style="border-radius:4px;padding:14px 18px;">
+                <p class="warn-text" style="margin:0;font-size:13px;line-height:1.6;">
+                  Este es un correo informativo. No se requiere ninguna accion de tu parte.
+                </p>
               </td>
             </tr>
           </table>
