@@ -105,99 +105,119 @@ class DashboardRRHHController extends RRHHBaseController
         }
 
         // ── Género ────────────────────────────────────────────────────────────
-        $generoRaw = DB::connection('rrhh')
+        // Contar TODOS los empleados activos; los que no tienen expediente
+        // o tienen género no definido van a "sin_definir".
+        $totalActivos = DB::connection('pgsql')
+            ->table('empleados')
+            ->where('activo', true)
+            ->count();
+
+        $generoExpediente = DB::connection('rrhh')
             ->table('expediente_datos_personales')
-            ->selectRaw("COALESCE(genero, 'no_especificado') as genero, COUNT(*) as total")
-            ->groupBy('genero')
+            ->selectRaw("LOWER(TRIM(genero)) as genero, COUNT(*) as total")
+            ->groupByRaw("LOWER(TRIM(genero))")
             ->get();
 
         $genero = [
-            'masculino'       => 0,
-            'femenino'        => 0,
-            'no_especificado' => 0,
+            'masculino'   => 0,
+            'femenino'    => 0,
+            'sin_definir' => 0,
         ];
-        foreach ($generoRaw as $row) {
-            $key = in_array($row->genero, array_keys($genero)) ? $row->genero : 'no_especificado';
-            $genero[$key] += (int) $row->total;
+        foreach ($generoExpediente as $row) {
+            if ($row->genero === 'masculino') {
+                $genero['masculino'] += (int) $row->total;
+            } elseif ($row->genero === 'femenino') {
+                $genero['femenino'] += (int) $row->total;
+            }
+            // null / otro / no_especificado se ignoran aquí;
+            // se calculan como diferencia con el total
         }
+        $genero['sin_definir'] = max(0, $totalActivos - $genero['masculino'] - $genero['femenino']);
 
         // ── Edades ────────────────────────────────────────────────────────────
-        $edadesRaw = DB::connection('rrhh')
-            ->table('expediente_datos_personales')
-            ->whereNotNull('fecha_nacimiento')
-            ->selectRaw("
-                CASE
-                    WHEN EXTRACT(YEAR FROM AGE(fecha_nacimiento)) < 20         THEN '<20'
-                    WHEN EXTRACT(YEAR FROM AGE(fecha_nacimiento)) BETWEEN 20 AND 29 THEN '20-29'
-                    WHEN EXTRACT(YEAR FROM AGE(fecha_nacimiento)) BETWEEN 30 AND 39 THEN '30-39'
-                    WHEN EXTRACT(YEAR FROM AGE(fecha_nacimiento)) BETWEEN 40 AND 49 THEN '40-49'
-                    WHEN EXTRACT(YEAR FROM AGE(fecha_nacimiento)) BETWEEN 50 AND 59 THEN '50-59'
-                    WHEN EXTRACT(YEAR FROM AGE(fecha_nacimiento)) BETWEEN 60 AND 65 THEN '60-65'
-                    ELSE '+65'
-                END as rango,
-                COUNT(*) as total
-            ")
-            ->groupByRaw('rango')
-            ->get();
-
+        // Se lee fecha_nacimiento del expediente. Agrupamos en PHP para evitar
+        // dependencias de GROUP BY alias en distintos modos de PostgreSQL.
         $edadesOrden = ['<20', '20-29', '30-39', '40-49', '50-59', '60-65', '+65'];
         $edades = array_fill_keys($edadesOrden, 0);
-        foreach ($edadesRaw as $row) {
-            if (isset($edades[$row->rango])) {
-                $edades[$row->rango] = (int) $row->total;
-            }
+
+        $nacimientos = DB::connection('rrhh')
+            ->table('expediente_datos_personales')
+            ->whereNotNull('fecha_nacimiento')
+            ->pluck('fecha_nacimiento');
+
+        foreach ($nacimientos as $fn) {
+            $edad = (int) Carbon::parse($fn)->age;
+            $rango = match(true) {
+                $edad < 20  => '<20',
+                $edad <= 29 => '20-29',
+                $edad <= 39 => '30-39',
+                $edad <= 49 => '40-49',
+                $edad <= 59 => '50-59',
+                $edad <= 65 => '60-65',
+                default     => '+65',
+            };
+            $edades[$rango]++;
         }
 
         // ── Estudios (nivel más alto por empleado) ────────────────────────────
-        // Usamos COUNT DISTINCT de empleados por nivel (un empleado puede tener
-        // varios registros; contamos cada uno una sola vez).
+        // Tomamos el nivel más alto registrado por empleado.
+        $jerarquia = ['doctorado' => 6, 'maestria' => 5, 'posgrado' => 5, 'grado' => 4,
+                      'universitario' => 4, 'tecnico' => 3, 'bachillerato' => 2, 'otro' => 1];
+
         $estudiosRaw = DB::connection('rrhh')
             ->table('expediente_estudios')
             ->whereNotNull('nivel')
-            ->selectRaw("nivel, COUNT(DISTINCT empleado_id) as total")
-            ->groupBy('nivel')
+            ->select('empleado_id', 'nivel')
             ->get();
 
-        $nivelesOrden = ['bachillerato', 'tecnico', 'grado', 'maestria', 'doctorado', 'otro'];
-        $estudios = array_fill_keys($nivelesOrden, 0);
+        // Un empleado puede tener múltiples entradas; conservar el nivel más alto
+        $nivelPorEmpleado = [];
         foreach ($estudiosRaw as $row) {
-            $nivel = strtolower(trim($row->nivel ?? ''));
-            // Normalizar variaciones comunes
-            $nivel = match(true) {
-                str_contains($nivel, 'maestr') || str_contains($nivel, 'master') => 'maestria',
-                str_contains($nivel, 'doctor')                                   => 'doctorado',
-                str_contains($nivel, 'grado') || str_contains($nivel, 'licencia') || str_contains($nivel, 'ingeni') => 'grado',
-                str_contains($nivel, 'tecnico') || str_contains($nivel, 'técnico') => 'tecnico',
-                str_contains($nivel, 'bachiller')                                => 'bachillerato',
-                default                                                          => 'otro',
+            $n = strtolower(trim($row->nivel ?? ''));
+            $n = match(true) {
+                str_contains($n, 'doctor')                                                     => 'doctorado',
+                str_contains($n, 'maestr') || str_contains($n, 'master')                      => 'maestria',
+                str_contains($n, 'postgrado') || str_contains($n, 'posgrado')                 => 'posgrado',
+                str_contains($n, 'universit') || str_contains($n, 'grado')
+                    || str_contains($n, 'licencia') || str_contains($n, 'ingeni')              => 'grado',
+                str_contains($n, 'tecnico') || str_contains($n, 'técnico')
+                    || str_contains($n, 'técnica') || str_contains($n, 'tecnica')             => 'tecnico',
+                str_contains($n, 'bachiller')                                                  => 'bachillerato',
+                default                                                                        => 'otro',
             };
-            $estudios[$nivel] += (int) $row->total;
+            $actual = $nivelPorEmpleado[$row->empleado_id] ?? null;
+            if ($actual === null || ($jerarquia[$n] ?? 0) > ($jerarquia[$actual] ?? 0)) {
+                $nivelPorEmpleado[$row->empleado_id] = $n;
+            }
+        }
+
+        $nivelesOrden = ['bachillerato', 'tecnico', 'grado', 'posgrado', 'maestria', 'doctorado', 'otro'];
+        $estudios = array_fill_keys($nivelesOrden, 0);
+        foreach ($nivelPorEmpleado as $nivel) {
+            if (isset($estudios[$nivel])) $estudios[$nivel]++;
         }
 
         // ── Antigüedad laboral ────────────────────────────────────────────────
-        $antiguedadRaw = DB::connection('pgsql')
+        // Se lee fecha_ingreso de empleados activos. Agrupamos en PHP.
+        $antiguedadOrden = ['<1', '1-3', '3-5', '5-10', '+10'];
+        $antiguedad = array_fill_keys($antiguedadOrden, 0);
+
+        $ingresos = DB::connection('pgsql')
             ->table('empleados')
             ->where('activo', true)
             ->whereNotNull('fecha_ingreso')
-            ->selectRaw("
-                CASE
-                    WHEN EXTRACT(YEAR FROM AGE(fecha_ingreso::date)) < 1              THEN '<1'
-                    WHEN EXTRACT(YEAR FROM AGE(fecha_ingreso::date)) BETWEEN 1 AND 3  THEN '1-3'
-                    WHEN EXTRACT(YEAR FROM AGE(fecha_ingreso::date)) BETWEEN 3 AND 5  THEN '3-5'
-                    WHEN EXTRACT(YEAR FROM AGE(fecha_ingreso::date)) BETWEEN 5 AND 10 THEN '5-10'
-                    ELSE '+10'
-                END as rango,
-                COUNT(*) as total
-            ")
-            ->groupByRaw('rango')
-            ->get();
+            ->pluck('fecha_ingreso');
 
-        $antiguedadOrden = ['<1', '1-3', '3-5', '5-10', '+10'];
-        $antiguedad = array_fill_keys($antiguedadOrden, 0);
-        foreach ($antiguedadRaw as $row) {
-            if (isset($antiguedad[$row->rango])) {
-                $antiguedad[$row->rango] = (int) $row->total;
-            }
+        foreach ($ingresos as $fi) {
+            $anios = (int) Carbon::parse($fi)->diffInYears(now());
+            $rango = match(true) {
+                $anios < 1  => '<1',
+                $anios <= 3 => '1-3',
+                $anios <= 5 => '3-5',
+                $anios <= 10 => '5-10',
+                default     => '+10',
+            };
+            $antiguedad[$rango]++;
         }
 
         return response()->json([
