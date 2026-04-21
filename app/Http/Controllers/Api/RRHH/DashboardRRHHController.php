@@ -106,7 +106,8 @@ class DashboardRRHHController extends RRHHBaseController
 
         // ── Género ────────────────────────────────────────────────────────────
         // Contar TODOS los empleados activos; los que no tienen expediente
-        // o tienen género no definido van a "sin_definir".
+        // o tienen género null/vacío van a "sin_definir".
+        // Los que pusieron explícitamente "otro" van a su propia categoría.
         $totalActivos = DB::connection('pgsql')
             ->table('empleados')
             ->where('activo', true)
@@ -121,18 +122,26 @@ class DashboardRRHHController extends RRHHBaseController
         $genero = [
             'masculino'   => 0,
             'femenino'    => 0,
+            'otro'        => 0,
             'sin_definir' => 0,
         ];
+        $conExpediente = 0;
         foreach ($generoExpediente as $row) {
             if ($row->genero === 'masculino') {
                 $genero['masculino'] += (int) $row->total;
+                $conExpediente += (int) $row->total;
             } elseif ($row->genero === 'femenino') {
                 $genero['femenino'] += (int) $row->total;
+                $conExpediente += (int) $row->total;
+            } elseif (!is_null($row->genero) && $row->genero !== '') {
+                // Cualquier otro valor explícito ("otro", "no_binario", etc.) → Otro
+                $genero['otro'] += (int) $row->total;
+                $conExpediente += (int) $row->total;
             }
-            // null / otro / no_especificado se ignoran aquí;
-            // se calculan como diferencia con el total
+            // null / vacío: no suma a conExpediente, cae en sin_definir
         }
-        $genero['sin_definir'] = max(0, $totalActivos - $genero['masculino'] - $genero['femenino']);
+        // Sin definir = empleados activos sin expediente o con género null/vacío
+        $genero['sin_definir'] = max(0, $totalActivos - $conExpediente);
 
         // ── Edades ────────────────────────────────────────────────────────────
         // Se lee fecha_nacimiento del expediente. Agrupamos en PHP para evitar
