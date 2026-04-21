@@ -67,6 +67,14 @@ class ReportesRRHHController extends RRHHBaseController
         $ausAct   = $this->getAusencias($empIds, $desdeAct, $hastaAct);
         $ausPrev  = $this->getAusencias($empIds, $desdePrev, $hastaPrev);
 
+        // --- Horas nocturnas (horarios con hora_fin > 19:00) ---
+        $horasNocturnasMap = $this->getHorasNocturnas($empIds, $desdeAct, $hastaAct);
+
+        // --- Mapa de tipo de sucursal por empleado (fallback si el join devolvió null) ---
+        $sucursalTipoMap = $this->getSucursalTiposMap(
+            array_unique(array_column($empleados, 'sucursal_id'))
+        );
+
         // --- Construir report por empleado ---
         $reporte = [];
 
@@ -78,10 +86,12 @@ class ReportesRRHHController extends RRHHBaseController
                 $eid, $permisosAct, $incapAct, $vacacAct, $ausAct, $desdeAct, $hastaAct
             );
 
+            // Tipo de sucursal: usar el del JOIN; si es null, buscar por sucursal_id
+            $sucursalTipo = $emp['sucursal_tipo']
+                ?? ($sucursalTipoMap[$emp['sucursal_id'] ?? 0] ?? null);
+
             // Días propinas: solo empleados de sucursales operativas (restaurante)
-            // Para ellos: días TRABAJADOS en la quincena anterior (= propinas reales)
-            // Para corporativos (Casa Matriz, etc.): 0
-            $esRestaurante = ($emp['sucursal_tipo'] ?? null) === 'operativa';
+            $esRestaurante = $sucursalTipo === 'operativa';
 
             if ($esRestaurante) {
                 $eventosPrev = $this->calcDiasTodosEventos(
@@ -93,18 +103,19 @@ class ReportesRRHHController extends RRHHBaseController
             }
 
             $reporte[] = [
-                'empleado_id'     => $eid,
-                'codigo'          => $emp['codigo'] ?? null,
-                'nombre'          => $emp['nombre'] ?? ($emp['nombre_completo'] ?? '—'),
-                'sucursal'        => $emp['sucursal'] ?? null,
-                'sucursal_tipo'   => $emp['sucursal_tipo'] ?? null,
-                'departamento'    => $emp['departamento'] ?? null,
-                'cargo'           => $emp['cargo'] ?? null,
-                'dias_quincena'   => $diasQuincena,
+                'empleado_id'        => $eid,
+                'codigo'             => $emp['codigo'] ?? null,
+                'nombre'             => $emp['nombre'] ?? ($emp['nombre_completo'] ?? '—'),
+                'sucursal'           => $emp['sucursal'] ?? null,
+                'sucursal_tipo'      => $sucursalTipo,
+                'departamento'       => $emp['departamento'] ?? null,
+                'cargo'              => $emp['cargo'] ?? null,
+                'dias_quincena'      => $diasQuincena,
                 'dias_no_trabajados' => $diasNoTrabajadosAct['total'],
-                'dias_trabajados' => max(0, $diasQuincena - $diasNoTrabajadosAct['total']),
-                'detalles'        => $diasNoTrabajadosAct['detalles'],
-                'dias_propinas'   => $diasPropinas,
+                'dias_trabajados'    => max(0, $diasQuincena - $diasNoTrabajadosAct['total']),
+                'detalles'           => $diasNoTrabajadosAct['detalles'],
+                'dias_propinas'      => $diasPropinas,
+                'horas_nocturnas'    => round($horasNocturnasMap[$eid] ?? 0, 2),
             ];
         }
 
@@ -338,5 +349,80 @@ class ReportesRRHHController extends RRHHBaseController
         $start = max(Carbon::parse($inicio), $desde);
         $end   = min(Carbon::parse($fin), $hasta);
         return max(0, $start->diffInDays($end) + 1);
+    }
+
+    /**
+     * Calcula horas nocturnas (>= 19:00) por empleado en la quincena.
+     * Solo se consideran horarios de tipo 'normal'.
+     *
+     * @return array<int, float>  empleado_id => horas_nocturnas
+     */
+    private function getHorasNocturnas(array $empIds, Carbon $desde, Carbon $hasta): array
+    {
+        if (empty($empIds)) return [];
+
+        $horarios = DB::connection('pgsql')
+            ->table('horarios_empleado')
+            ->whereIn('empleado_id', $empIds)
+            ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->where('tipo', 'normal')
+            ->whereNotNull('hora_inicio')
+            ->whereNotNull('hora_fin')
+            ->get(['empleado_id', 'hora_inicio', 'hora_fin']);
+
+        $result = [];
+        $INICIO_NOCTURNO = 19 * 60; // 19:00 = 1140 min
+
+        $timeToMins = function (string $t): int {
+            [$hh, $mm] = array_pad(explode(':', $t), 2, '0');
+            return (int) $hh * 60 + (int) $mm;
+        };
+
+        foreach ($horarios as $h) {
+            $eid = (int) $h->empleado_id;
+            if (!isset($result[$eid])) $result[$eid] = 0;
+
+            $inicioMins = $timeToMins($h->hora_inicio);
+            $finMins    = $timeToMins($h->hora_fin);
+
+            // Turno nocturno cruzando medianoche (ej. 22:00–06:00)
+            if ($finMins < $inicioMins) {
+                $finMins += 24 * 60;
+            }
+
+            if ($finMins > $INICIO_NOCTURNO) {
+                $nocturnoDesde = max($inicioMins, $INICIO_NOCTURNO);
+                $result[$eid] += ($finMins - $nocturnoDesde) / 60;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Devuelve el tipo de sucursal ('operativa' | 'area_corporativa' | null)
+     * para un array de sucursal_id. Usado como fallback cuando el LEFT JOIN
+     * en getEmpleadosFiltrados devuelve null (tipo_sucursal_id no mapeado).
+     *
+     * @param  int[]  $sucursalIds
+     * @return array<int, string|null>
+     */
+    private function getSucursalTiposMap(array $sucursalIds): array
+    {
+        $ids = array_filter($sucursalIds);
+        if (empty($ids)) return [];
+
+        $rows = DB::connection('pgsql')
+            ->table('sucursales as s')
+            ->leftJoin('tipos_sucursal as ts', 'ts.id', '=', 's.tipo_sucursal_id')
+            ->whereIn('s.id', $ids)
+            ->select('s.id', 'ts.codigo as sucursal_tipo')
+            ->get();
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[(int) $row->id] = $row->sucursal_tipo;
+        }
+        return $map;
     }
 }

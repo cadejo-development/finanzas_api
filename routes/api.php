@@ -259,7 +259,8 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::get('catalogos', [CatalogosRRHHController::class, 'index']);
 
     // Dashboard KPIs
-    Route::get('dashboard', [DashboardRRHHController::class, 'resumen']);
+    Route::get('dashboard',              [DashboardRRHHController::class, 'resumen']);
+    Route::get('dashboard/demograficos', [DashboardRRHHController::class, 'demograficos']);
 
     // Calendario de equipo
     Route::get('calendario', [CalendarioController::class, 'index']);

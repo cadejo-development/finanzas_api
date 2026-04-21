@@ -29,8 +29,8 @@ class CatalogosRRHHController extends RRHHBaseController
 
         $equipoQuery = DB::connection('pgsql')
             ->table('empleados as e')
-            ->join('cargos as c', 'e.cargo_id', '=', 'c.id')
-            ->join('sucursales as s', 'e.sucursal_id', '=', 's.id')
+            ->leftJoin('cargos as c', 'e.cargo_id', '=', 'c.id')
+            ->leftJoin('sucursales as s', 'e.sucursal_id', '=', 's.id')
             ->where('e.activo', true)
             ->select('e.id', 'e.codigo', 'e.nombres', 'e.apellidos', 'e.fecha_ingreso', 'e.sucursal_id', 'e.departamento_id', 'c.nombre as cargo', 's.nombre as sucursal');
 
