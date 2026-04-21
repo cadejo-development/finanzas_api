@@ -53,7 +53,8 @@ return [
     */
 
     'url' => env('APP_URL', 'http://localhost'),
-    'frontend_rrhh_url' => env('FRONTEND_RRHH_URL', 'https://rrhh.cervezacadejo.com'),
+    'frontend_rrhh_url'       => env('FRONTEND_RRHH_URL', 'https://rrhh.cervezacadejo.com'),
+    'rrhh_inicio_propinas'    => env('RRHH_INICIO_PROPINAS', '2026-04-16'),
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

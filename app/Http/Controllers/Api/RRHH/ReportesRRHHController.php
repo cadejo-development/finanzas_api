@@ -91,9 +91,11 @@ class ReportesRRHHController extends RRHHBaseController
                 ?? ($sucursalTipoMap[$emp['sucursal_id'] ?? 0] ?? null);
 
             // Días propinas: solo empleados de sucursales operativas (restaurante)
+            // Si la quincena anterior es antes del inicio del sistema → 0 (sin datos históricos)
             $esRestaurante = $sucursalTipo === 'operativa';
+            $inicioSistema = Carbon::parse(config('app.rrhh_inicio_propinas', '2026-04-16'));
 
-            if ($esRestaurante) {
+            if ($esRestaurante && $hastaPrev->gte($inicioSistema)) {
                 $eventosPrev = $this->calcDiasTodosEventos(
                     $eid, $permisosPrev, $incapPrev, $vacacPrev, $ausPrev, $desdePrev, $hastaPrev
                 );

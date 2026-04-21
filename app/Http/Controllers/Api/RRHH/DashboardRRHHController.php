@@ -146,7 +146,7 @@ class DashboardRRHHController extends RRHHBaseController
         // ── Edades ────────────────────────────────────────────────────────────
         // Se lee fecha_nacimiento del expediente. Agrupamos en PHP para evitar
         // dependencias de GROUP BY alias en distintos modos de PostgreSQL.
-        $edadesOrden = ['<20', '20-29', '30-39', '40-49', '50-59', '60-65', '+65'];
+        $edadesOrden = ['<20', '20-29', '30-39', '40-49', '50-59', '60-69', '+70'];
         $edades = array_fill_keys($edadesOrden, 0);
 
         $nacimientos = DB::connection('rrhh')
@@ -162,16 +162,18 @@ class DashboardRRHHController extends RRHHBaseController
                 $edad <= 39 => '30-39',
                 $edad <= 49 => '40-49',
                 $edad <= 59 => '50-59',
-                $edad <= 65 => '60-65',
-                default     => '+65',
+                $edad <= 69 => '60-69',
+                default     => '+70',
             };
             $edades[$rango]++;
         }
 
-        // ── Estudios (nivel más alto por empleado) ────────────────────────────
-        // Tomamos el nivel más alto registrado por empleado.
-        $jerarquia = ['doctorado' => 6, 'maestria' => 5, 'posgrado' => 5, 'grado' => 4,
-                      'universitario' => 4, 'tecnico' => 3, 'bachillerato' => 2, 'otro' => 1];
+        // ── Estudios (nivel más alto por empleado, agrupado en 4 categorías) ──────
+        // bachiller = bachillerato
+        // grado     = técnico + grado/licenciatura/universitario
+        // maestria+ = posgrado + maestría + doctorado
+        // otro      = cualquier otro
+        $jerarquia = ['maestria_plus' => 5, 'grado' => 3, 'bachillerato' => 2, 'otro' => 1];
 
         $estudiosRaw = DB::connection('rrhh')
             ->table('expediente_estudios')
@@ -183,24 +185,24 @@ class DashboardRRHHController extends RRHHBaseController
         $nivelPorEmpleado = [];
         foreach ($estudiosRaw as $row) {
             $n = strtolower(trim($row->nivel ?? ''));
-            $n = match(true) {
-                str_contains($n, 'doctor')                                                     => 'doctorado',
-                str_contains($n, 'maestr') || str_contains($n, 'master')                      => 'maestria',
-                str_contains($n, 'postgrado') || str_contains($n, 'posgrado')                 => 'posgrado',
+            $cat = match(true) {
+                str_contains($n, 'doctor')
+                    || str_contains($n, 'maestr') || str_contains($n, 'master')
+                    || str_contains($n, 'postgrado') || str_contains($n, 'posgrado') => 'maestria_plus',
                 str_contains($n, 'universit') || str_contains($n, 'grado')
-                    || str_contains($n, 'licencia') || str_contains($n, 'ingeni')              => 'grado',
-                str_contains($n, 'tecnico') || str_contains($n, 'técnico')
-                    || str_contains($n, 'técnica') || str_contains($n, 'tecnica')             => 'tecnico',
-                str_contains($n, 'bachiller')                                                  => 'bachillerato',
-                default                                                                        => 'otro',
+                    || str_contains($n, 'licencia') || str_contains($n, 'ingeni')
+                    || str_contains($n, 'tecnico') || str_contains($n, 'técnico')
+                    || str_contains($n, 'técnica') || str_contains($n, 'tecnica')    => 'grado',
+                str_contains($n, 'bachiller')                                        => 'bachillerato',
+                default                                                               => 'otro',
             };
             $actual = $nivelPorEmpleado[$row->empleado_id] ?? null;
-            if ($actual === null || ($jerarquia[$n] ?? 0) > ($jerarquia[$actual] ?? 0)) {
-                $nivelPorEmpleado[$row->empleado_id] = $n;
+            if ($actual === null || ($jerarquia[$cat] ?? 0) > ($jerarquia[$actual] ?? 0)) {
+                $nivelPorEmpleado[$row->empleado_id] = $cat;
             }
         }
 
-        $nivelesOrden = ['bachillerato', 'tecnico', 'grado', 'posgrado', 'maestria', 'doctorado', 'otro'];
+        $nivelesOrden = ['bachillerato', 'grado', 'maestria_plus', 'otro'];
         $estudios = array_fill_keys($nivelesOrden, 0);
         foreach ($nivelPorEmpleado as $nivel) {
             if (isset($estudios[$nivel])) $estudios[$nivel]++;
