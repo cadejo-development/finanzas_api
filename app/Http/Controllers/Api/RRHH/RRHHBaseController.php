@@ -26,25 +26,27 @@ use Illuminate\Support\Facades\URL;
  */
 abstract class RRHHBaseController extends Controller
 {
+    // ID del sistema RRHH en la tabla systems/roles
+    private const RRHH_SYSTEM_ID = 5;
+
     /**
-     * Indica si el usuario autenticado tiene rol rrhh_admin.
+     * Indica si el usuario autenticado tiene rol rrhh_admin (scoped al sistema RRHH).
      */
     protected function esAdminRrhh(): bool
     {
-        return Auth::user()->hasRole('rrhh_admin');
+        return Auth::user()->hasRole('rrhh_admin', self::RRHH_SYSTEM_ID);
     }
 
     /**
-     * Indica si el usuario autenticado es empleado (solo rol empleado, sin roles de gestión).
-     * Un empleado con rol adicional de jefatura/admin NO se considera solo empleado.
+     * Indica si el usuario autenticado es empleado-solo en el sistema RRHH.
+     * Solo chequea roles del sistema RRHH — roles de otros sistemas (portal_admin, etc.) son irrelevantes.
      */
     protected function esEmpleado(): bool
     {
         $user = Auth::user();
-        return $user->hasRole('empleado')
-            && ! $user->hasRole('rrhh_admin')
-            && ! $user->hasRole('portal_admin')
-            && ! $user->hasRole('jefatura');
+        return $user->hasRole('empleado', self::RRHH_SYSTEM_ID)
+            && ! $user->hasRole('rrhh_admin', self::RRHH_SYSTEM_ID)
+            && ! $user->hasRole('jefatura', self::RRHH_SYSTEM_ID);
     }
 
     /**
