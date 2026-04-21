@@ -94,7 +94,7 @@ class PermisosController extends RRHHBaseController
             $diasUsados = Permiso::where('empleado_id', $validated['empleado_id'])
                 ->where('tipo_permiso_id', $validated['tipo_permiso_id'])
                 ->whereYear('fecha', now()->year)
-                ->whereIn('estado', ['pendiente', 'aprobado'])
+                ->where('estado', 'aprobado')
                 ->sum('dias');
 
             $diasSolicitados = (float) ($validated['dias'] ?? 0);
@@ -207,13 +207,13 @@ class PermisosController extends RRHHBaseController
             $diasUsados = Permiso::where('empleado_id', $empId)
                 ->where('tipo_permiso_id', $tipoPersonal?->id)
                 ->whereYear('fecha', $anio)
-                ->whereIn('estado', ['pendiente', 'aprobado'])
+                ->where('estado', 'aprobado')
                 ->sum('dias');
 
             $horasUsadas = Permiso::where('empleado_id', $empId)
                 ->where('tipo_permiso_id', $tipoPersonal?->id)
                 ->whereYear('fecha', $anio)
-                ->whereIn('estado', ['pendiente', 'aprobado'])
+                ->where('estado', 'aprobado')
                 ->sum('horas_solicitadas');
 
             return [
