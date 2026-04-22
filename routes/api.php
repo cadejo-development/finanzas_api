@@ -269,12 +269,13 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::get('historial', [HistorialController::class, 'index']);
 
     // Permisos
-    Route::get('permisos/saldos',   [PermisosController::class, 'saldos']);
-    Route::get('permisos',          [PermisosController::class, 'index']);
-    Route::post('permisos',         [PermisosController::class, 'store']);
-    Route::get('permisos/{id}',     [PermisosController::class, 'show']);
-    Route::put('permisos/{id}',     [PermisosController::class, 'update']);
-    Route::delete('permisos/{id}',  [PermisosController::class, 'destroy']);
+    Route::get('permisos/saldos',         [PermisosController::class, 'saldos']);
+    Route::get('permisos',                [PermisosController::class, 'index']);
+    Route::post('permisos',               [PermisosController::class, 'store']);
+    Route::get('permisos/{id}',           [PermisosController::class, 'show']);
+    Route::put('permisos/{id}',           [PermisosController::class, 'update']);
+    Route::delete('permisos/{id}',        [PermisosController::class, 'destroy']);
+    Route::get('permisos/{id}/descargar', [PermisosController::class, 'descargar']);
 
     // Vacaciones
     Route::get('vacaciones/saldos',     [VacacionesController::class, 'saldos']);

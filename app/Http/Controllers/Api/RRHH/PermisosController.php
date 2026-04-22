@@ -8,6 +8,7 @@ use App\Models\RRHH\TipoPermiso;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class PermisosController extends RRHHBaseController
 {
@@ -47,6 +48,7 @@ class PermisosController extends RRHHBaseController
             'dias'              => 'nullable|numeric|min:0.5|required_if:es_dia_completo,true',
             'motivo'            => 'nullable|string|max:500',
             'observaciones_jefe'=> 'nullable|string|max:500',
+            'archivo'           => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
         ]);
 
         if (!$this->puedeGestionar($validated['empleado_id'])) {
@@ -108,11 +110,22 @@ class PermisosController extends RRHHBaseController
             }
         }
 
+        // Subir adjunto a S3 si viene en la solicitud
+        $archivoNombre = null;
+        $archivoRuta   = null;
+        if ($request->hasFile('archivo')) {
+            $file          = $request->file('archivo');
+            $archivoNombre = $file->getClientOriginalName();
+            $archivoRuta   = $file->store('rrhh/permisos', 's3');
+        }
+
         $aprobadorId = $this->getAprobadorPara($validated['empleado_id']);
         $permiso = Permiso::create(array_merge($validated, [
-            'jefe_id'     => $aprobadorId ?? $jefe->id,
-            'estado'      => $this->estadoParaEmpleado($validated['empleado_id'], $aprobadorId),
-            'aud_usuario' => Auth::user()->email,
+            'jefe_id'        => $aprobadorId ?? $jefe->id,
+            'estado'         => $this->estadoParaEmpleado($validated['empleado_id'], $aprobadorId),
+            'archivo_nombre' => $archivoNombre,
+            'archivo_ruta'   => $archivoRuta,
+            'aud_usuario'    => Auth::user()->email,
         ]));
 
         $permiso->load('tipoPermiso');
@@ -140,7 +153,29 @@ class PermisosController extends RRHHBaseController
         $permiso = Permiso::with('tipoPermiso')->findOrFail($id);
         $arr = $this->enrichWithEmpleadoData([$permiso->toArray()]);
 
+        // Adjuntar URL presignada si existe
+        if ($permiso->archivo_ruta) {
+            $arr[0]['archivo_url'] = $this->s3TemporaryUrl($permiso->archivo_ruta, 60);
+        }
+
         return response()->json(['success' => true, 'data' => $arr[0]]);
+    }
+
+    /**
+     * GET /api/rrhh/permisos/{id}/descargar
+     * Devuelve una URL presignada (60 min) para descargar el adjunto.
+     */
+    public function descargar(int $id): JsonResponse
+    {
+        $permiso = Permiso::findOrFail($id);
+
+        if (!$permiso->archivo_ruta) {
+            return response()->json(['success' => false, 'message' => 'Este permiso no tiene adjunto.'], 404);
+        }
+
+        $url = $this->s3TemporaryUrl($permiso->archivo_ruta, 60);
+
+        return response()->json(['success' => true, 'url' => $url, 'nombre' => $permiso->archivo_nombre]);
     }
 
     /**
@@ -187,7 +222,11 @@ class PermisosController extends RRHHBaseController
      */
     public function destroy(int $id): JsonResponse
     {
-        Permiso::findOrFail($id)->delete();
+        $permiso = Permiso::findOrFail($id);
+        if ($permiso->archivo_ruta) {
+            Storage::disk('s3')->delete($permiso->archivo_ruta);
+        }
+        $permiso->delete();
         return response()->json(['success' => true, 'message' => 'Permiso eliminado.']);
     }
 

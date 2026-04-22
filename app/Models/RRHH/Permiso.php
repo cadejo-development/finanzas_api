@@ -12,7 +12,9 @@ class Permiso extends Model
     protected $fillable = [
         'empleado_id', 'jefe_id', 'tipo_permiso_id',
         'fecha', 'es_dia_completo', 'hora_inicio', 'hora_fin', 'horas_solicitadas',
-        'dias', 'motivo', 'estado', 'observaciones_jefe', 'aud_usuario',
+        'dias', 'motivo', 'estado', 'observaciones_jefe',
+        'archivo_nombre', 'archivo_ruta',
+        'aud_usuario',
     ];
 
     protected $casts = [
