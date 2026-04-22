@@ -110,20 +110,18 @@ class GeoElSalvadorSeeder extends Seeder
             [
                 'codigo' => '05', 'nombre' => 'La Libertad',
                 'distritos' => [
-                    ['codigo' => '0501', 'nombre' => 'La Libertad Norte', 'municipios' => [
-                        'Quezaltepeque', 'San Matías', 'San Pablo Tacachico',
+                    ['codigo' => '0501', 'nombre' => 'La Libertad Sur', 'municipios' => [
+                        'Antiguo Cuscatlán', 'Colón', 'Huizúcar', 'Jayaque',
+                        'Nueva San Salvador (Santa Tecla)', 'Nuevo Cuscatlán',
+                        'Sacacoyo', 'San José Villanueva', 'Zaragoza',
                     ]],
-                    ['codigo' => '0502', 'nombre' => 'La Libertad Centro', 'municipios' => [
-                        'San Juan Opico', 'Ciudad Arce',
+                    ['codigo' => '0502', 'nombre' => 'La Libertad Norte', 'municipios' => [
+                        'Ciudad Arce', 'Quezaltepeque', 'San Juan Opico',
+                        'San Matías', 'San Pablo Tacachico', 'Talnique', 'Tepecoyo',
                     ]],
-                    ['codigo' => '0503', 'nombre' => 'La Libertad Oeste', 'municipios' => [
-                        'Colón', 'Jayaque', 'Sacacoyo', 'Talnique', 'Tepecoyo',
-                    ]],
-                    ['codigo' => '0504', 'nombre' => 'La Libertad Este', 'municipios' => [
-                        'La Libertad', 'Tamanique', 'Chiltiupán', 'Teotepeque',
-                    ]],
-                    ['codigo' => '0505', 'nombre' => 'La Libertad Costa', 'municipios' => [
-                        'Comasagua',
+                    ['codigo' => '0503', 'nombre' => 'La Libertad Costa', 'municipios' => [
+                        'Chiltiupán', 'Comasagua', 'Jicalapa',
+                        'La Libertad', 'Tamanique', 'Teotepeque',
                     ]],
                 ],
             ],
@@ -235,11 +233,20 @@ class GeoElSalvadorSeeder extends Seeder
             [
                 'codigo' => '13', 'nombre' => 'Morazán',
                 'distritos' => [
-                    ['codigo' => '1301', 'nombre' => 'Morazán Norte', 'municipios' => [
-                        'Perquín', 'Arambala', 'Joateca', 'Cacaopera', 'San Fernando', 'Torola',
+                    ['codigo' => '1301', 'nombre' => 'San Francisco Gotera', 'municipios' => [
+                        'Chilanga', 'Delicias de Concepción', 'El Divisadero', 'Guatajiagua',
+                        'Jocoro', 'Lolotiquillo', 'Osicala', 'San Carlos',
+                        'San Francisco Gotera', 'San Simón', 'Sensembra',
                     ]],
-                    ['codigo' => '1302', 'nombre' => 'Morazán Sur', 'municipios' => [
-                        'San Francisco Gotera', 'Sensembra', 'Yamabal', 'El Divisadero', 'Jocoro', 'Lolotiquillo',
+                    ['codigo' => '1302', 'nombre' => 'Corinto', 'municipios' => [
+                        'Cacaopera', 'Corinto', 'Gualococti', 'Jocoaitique', 'San Isidro',
+                    ]],
+                    ['codigo' => '1303', 'nombre' => 'Sociedad', 'municipios' => [
+                        'El Rosario', 'Meanguera', 'San Fernando', 'Sociedad',
+                        'Torola', 'Yamabal', 'Yoloaiquin',
+                    ]],
+                    ['codigo' => '1304', 'nombre' => 'Perquín', 'municipios' => [
+                        'Arambala', 'Joateca', 'Perquín',
                     ]],
                 ],
             ],
