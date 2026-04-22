@@ -79,11 +79,13 @@ class IncapacidadesController extends RRHHBaseController
 
         $incapacidad->load('tipoIncapacidad');
 
-        // Revertir ausencias injustificadas cubiertas por esta incapacidad (solo ISSS, ≤ 3 días)
+        // Marcar ausencias injustificadas como cubiertas por esta incapacidad (solo ISSS, ≤ 3 días)
+        // El registro de ausencia se conserva pero no se descuenta al empleado
         if (($validated['tipo_institucion'] ?? null) === 'isss' && $validated['dias'] <= 3) {
             AusenciaInjustificada::where('empleado_id', $validated['empleado_id'])
                 ->whereBetween('fecha', [$validated['fecha_inicio'], $validated['fecha_fin']])
-                ->delete();
+                ->whereNull('cubierta_por_incapacidad_id')
+                ->update(['cubierta_por_incapacidad_id' => $incapacidad->id]);
         }
 
         // Notify supervisor when employee submits own incapacidad (informational)
@@ -150,6 +152,10 @@ class IncapacidadesController extends RRHHBaseController
         if ($incapacidad->archivo_ruta) {
             Storage::disk('local')->delete($incapacidad->archivo_ruta);
         }
+
+        // Revertir el marcado en ausencias que esta incapacidad cubría
+        AusenciaInjustificada::where('cubierta_por_incapacidad_id', $incapacidad->id)
+            ->update(['cubierta_por_incapacidad_id' => null]);
 
         $incapacidad->delete();
 
