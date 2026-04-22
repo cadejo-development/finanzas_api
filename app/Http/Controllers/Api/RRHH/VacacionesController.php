@@ -74,12 +74,18 @@ class VacacionesController extends RRHHBaseController
             ], 422);
         }
 
-        $aprobadorId = $this->getAprobadorPara($validated['empleado_id']);
+        $aprobadorId  = $this->getAprobadorPara($validated['empleado_id']);
+        $estadoInicial = $this->estadoParaEmpleado($validated['empleado_id'], $aprobadorId);
         $vacacion = Vacacion::create(array_merge($validated, [
             'jefe_id'     => $aprobadorId ?? $jefe->id,
-            'estado'      => $this->estadoParaEmpleado($validated['empleado_id'], $aprobadorId),
+            'estado'      => $estadoInicial,
             'aud_usuario' => Auth::user()->email,
         ]));
+
+        // Si se crea directamente como aprobado (jefe aprueba para subordinado), descontar saldo
+        if ($estadoInicial === 'aprobado') {
+            $this->descontarSaldo($validated['empleado_id'], (float) $validated['dias']);
+        }
 
         // Notify supervisor when employee submits own request (or jefe submits for themselves)
         if ($this->debeNotificar($validated['empleado_id'])) {
