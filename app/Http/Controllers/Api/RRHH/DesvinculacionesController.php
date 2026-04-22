@@ -66,6 +66,36 @@ class DesvinculacionesController extends RRHHBaseController
             ], 403);
         }
 
+        // Validaciones específicas para renuncias voluntarias
+        if ($validated['tipo'] === 'renuncia') {
+            // Requiere documento adjunto (carta notariada o documento oficial)
+            if (!$request->hasFile('archivo')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La renuncia voluntaria requiere adjuntar una carta notariada o documento oficial.',
+                ], 422);
+            }
+
+            // Aviso previo: 30 días si es jefe, 15 días si es empleado
+            $esJefe = DB::connection('pgsql')
+                ->table('empleados')
+                ->where('jefe_id', $validated['empleado_id'])
+                ->where('activo', true)
+                ->exists();
+
+            $diasMinimos      = $esJefe ? 30 : 15;
+            $fechaMinima      = now()->addDays($diasMinimos)->toDateString();
+            $fechaEfectiva    = $validated['fecha_efectiva'];
+
+            if ($fechaEfectiva < $fechaMinima) {
+                $tipoEmpleado = $esJefe ? 'jefe (30 días)' : 'empleado (15 días)';
+                return response()->json([
+                    'success' => false,
+                    'message' => "La fecha efectiva debe ser al menos {$diasMinimos} días después de hoy para un {$tipoEmpleado}. Fecha mínima: {$fechaMinima}.",
+                ], 422);
+            }
+        }
+
         // Capturar datos del empleado para historial denormalizado
         $empData = DB::connection('pgsql')
             ->table('empleados as e')

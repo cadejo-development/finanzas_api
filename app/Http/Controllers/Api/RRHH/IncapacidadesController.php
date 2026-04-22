@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\RRHH;
 
+use App\Models\RRHH\AusenciaInjustificada;
 use App\Models\RRHH\Incapacidad;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -77,6 +78,13 @@ class IncapacidadesController extends RRHHBaseController
         ]);
 
         $incapacidad->load('tipoIncapacidad');
+
+        // Revertir ausencias injustificadas cubiertas por esta incapacidad (solo ISSS, ≤ 3 días)
+        if (($validated['tipo_institucion'] ?? null) === 'isss' && $validated['dias'] <= 3) {
+            AusenciaInjustificada::where('empleado_id', $validated['empleado_id'])
+                ->whereBetween('fecha', [$validated['fecha_inicio'], $validated['fecha_fin']])
+                ->delete();
+        }
 
         // Notify supervisor when employee submits own incapacidad (informational)
         if ($this->debeNotificar($validated['empleado_id'])) {

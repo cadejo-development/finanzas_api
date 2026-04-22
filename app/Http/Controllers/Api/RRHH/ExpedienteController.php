@@ -202,7 +202,13 @@ class ExpedienteController extends RRHHBaseController
         $permisos     = Permiso::with('tipoPermiso')->where('empleado_id', $empleadoId)->orderByDesc('fecha')->get()->map(fn ($p) => $enrichProcesador(array_merge($p->toArray(), ['_tipo_accion' => 'permiso'])));
         $vacaciones   = Vacacion::where('empleado_id', $empleadoId)->orderByDesc('fecha_inicio')->get()->map(fn ($v) => $enrichProcesador(array_merge($v->toArray(), ['_tipo_accion' => 'vacacion'])));
         $incapacidades = Incapacidad::with('tipoIncapacidad')->where('empleado_id', $empleadoId)->orderByDesc('fecha_inicio')->get()->map(fn ($i) => $enrichProcesador(array_merge($i->toArray(), ['_tipo_accion' => 'incapacidad'])));
-        $amonestaciones = Amonestacion::with('tipoFalta')->where('empleado_id', $empleadoId)->orderByDesc('fecha_amonestacion')->get()->map(fn ($a) => $enrichProcesador(array_merge($a->toArray(), ['_tipo_accion' => 'amonestacion'])));
+        // Amonestaciones: solo las de los últimos 3 años (se inactivan pasado ese tiempo)
+        $amonestaciones = Amonestacion::with('tipoFalta')
+            ->where('empleado_id', $empleadoId)
+            ->where('fecha_amonestacion', '>=', now()->subYears(3)->toDateString())
+            ->orderByDesc('fecha_amonestacion')
+            ->get()
+            ->map(fn ($a) => $enrichProcesador(array_merge($a->toArray(), ['_tipo_accion' => 'amonestacion'])));
         $traslados    = Traslado::where('empleado_id', $empleadoId)->orderByDesc('fecha_efectiva')->get()->map(fn ($t) => $enrichProcesador(array_merge($t->toArray(), ['_tipo_accion' => 'traslado'])));
         $cambiosSalariales = CambioSalarial::with('tipoAumento')->where('empleado_id', $empleadoId)->orderByDesc('fecha_efectiva')->get()->map(fn ($c) => $enrichProcesador(array_merge($c->toArray(), ['_tipo_accion' => 'cambio_salarial'])));
         $desvinculaciones  = Desvinculacion::with('motivo')->where('empleado_id', $empleadoId)->orderByDesc('fecha_efectiva')->get()->map(fn ($d) => $enrichProcesador(array_merge($d->toArray(), ['_tipo_accion' => 'desvinculacion'])));
