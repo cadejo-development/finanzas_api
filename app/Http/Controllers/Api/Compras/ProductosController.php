@@ -26,7 +26,34 @@ class ProductosController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $perPage = min((int) $request->query('per_page', 10), 50);
+        // Si se solicita 'all=1', devolver todos sin paginar (solo para uso interno como CSV matching)
+        if ($request->boolean('all')) {
+            $query = Producto::with('categoria')
+                ->where('activo', true)
+                ->orderBy('nombre');
+
+            if ($cat = $request->query('categoria')) {
+                $query->whereHas('categoria', fn ($q) => $q->where('key', $cat));
+            }
+            if ($prefijo = $request->query('prefijo')) {
+                $query->whereHas('categoria', fn ($q) => $q->where('key', 'ilike', $prefijo . '%'));
+            }
+            if ($search = $request->query('search')) {
+                $query->where(fn ($q) => $q->where('nombre', 'ilike', "%{$search}%")->orWhere('codigo', 'ilike', "%{$search}%"));
+            }
+
+            $items = $query->get()->map(fn ($p) => [
+                'id'     => $p->id,
+                'codigo' => $p->codigo,
+                'nombre' => $p->nombre,
+                'unidad' => $p->unidad,
+                'origen' => $p->origen ?? 'restaurante',
+            ]);
+
+            return response()->json(['data' => $items]);
+        }
+
+        $perPage = min((int) $request->query('per_page', 10), 200);
 
         $query = Producto::with('categoria')
             ->where('activo', true)
