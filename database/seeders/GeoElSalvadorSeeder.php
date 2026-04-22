@@ -131,20 +131,17 @@ class GeoElSalvadorSeeder extends Seeder
             [
                 'codigo' => '06', 'nombre' => 'San Salvador',
                 'distritos' => [
-                    ['codigo' => '0601', 'nombre' => 'San Salvador Centro', 'municipios' => [
-                        'San Salvador', 'Mejicanos', 'Ayutuxtepeque', 'Cuscatancingo', 'Ciudad Delgado',
+                    ['codigo' => '0601', 'nombre' => 'San Salvador Norte', 'municipios' => [
+                        'Aguilares', 'Apopa', 'El Paisnal', 'Guazapa', 'Nejapa',
                     ]],
-                    ['codigo' => '0602', 'nombre' => 'San Salvador Este', 'municipios' => [
-                        'Soyapango', 'Ilopango', 'San Martín', 'Tonacatepeque',
+                    ['codigo' => '0602', 'nombre' => 'San Salvador Centro', 'municipios' => [
+                        'Ayutuxtepeque', 'Ciudad Delgado', 'Cuscatancingo', 'Mejicanos', 'San Salvador',
                     ]],
-                    ['codigo' => '0603', 'nombre' => 'San Salvador Oeste', 'municipios' => [
-                        'Santa Tecla', 'Antiguo Cuscatlán', 'Zaragoza', 'Huizúcar',
+                    ['codigo' => '0603', 'nombre' => 'San Salvador Sur', 'municipios' => [
+                        'Panchimalco', 'Rosario de Mora', 'San Marcos', 'Santiago Texacuangos', 'Santo Tomás',
                     ]],
-                    ['codigo' => '0604', 'nombre' => 'San Salvador Norte', 'municipios' => [
-                        'Apopa', 'Nejapa', 'Aguilares', 'El Paisnal',
-                    ]],
-                    ['codigo' => '0605', 'nombre' => 'San Salvador Sur', 'municipios' => [
-                        'Panchimalco', 'Rosario de Mora', 'Santiago Texacuangos', 'Santo Tomás',
+                    ['codigo' => '0604', 'nombre' => 'San Salvador Este', 'municipios' => [
+                        'Ilopango', 'San Martín', 'Soyapango', 'Tonacatepeque',
                     ]],
                 ],
             ],
