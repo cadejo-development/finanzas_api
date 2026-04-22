@@ -11,7 +11,7 @@ class Amonestacion extends Model
 
     protected $fillable = [
         'empleado_id', 'jefe_id', 'tipo_falta_id',
-        'fecha_amonestacion', 'descripcion', 'accion_tomada',
+        'fecha_amonestacion', 'descripcion', 'observacion', 'accion_tomada',
         'aplica_suspension', 'archivo_nombre', 'archivo_ruta',
         'aud_usuario',
     ];
