@@ -418,4 +418,11 @@ Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh
     Route::patch('departamentos/{id}/jefe/{empId}',          [DepartamentosController::class, 'asignarJefe']);
     Route::delete('departamentos/{id}/jefe',                 [DepartamentosController::class, 'quitarJefe']);
     Route::get('empleados',                                  [DepartamentosController::class, 'todosEmpleados']);
+
+    // ── Error logs (visible solo para GEN_INF en el frontend) ────────────
+    Route::get('error-logs',                                 [\App\Http\Controllers\Api\RRHH\ErrorLogsController::class, 'index']);
+    Route::get('error-logs/stats',                           [\App\Http\Controllers\Api\RRHH\ErrorLogsController::class, 'stats']);
+    Route::patch('error-logs/{id}/resolver',                 [\App\Http\Controllers\Api\RRHH\ErrorLogsController::class, 'resolver']);
+    Route::delete('error-logs/{id}',                         [\App\Http\Controllers\Api\RRHH\ErrorLogsController::class, 'destroy']);
+    Route::delete('error-logs',                              [\App\Http\Controllers\Api\RRHH\ErrorLogsController::class, 'clear']);
 });

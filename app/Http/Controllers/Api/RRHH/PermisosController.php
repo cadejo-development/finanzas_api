@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\RRHH;
 use App\Models\RRHH\Permiso;
 use App\Models\RRHH\SaldoVacaciones;
 use App\Models\RRHH\TipoPermiso;
+use App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -12,6 +13,7 @@ use Illuminate\Support\Facades\Storage;
 
 class PermisosController extends RRHHBaseController
 {
+    use RRHHCapturesExceptions;
     /**
      * Lista permisos del equipo del jefe.
      * GET /api/rrhh/permisos
@@ -36,30 +38,7 @@ class PermisosController extends RRHHBaseController
      */
     public function store(Request $request): JsonResponse
     {
-        try {
-            return $this->doStore($request);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => collect($e->errors())->flatten()->first() ?? 'Error de validación.',
-                'errors'  => $e->errors(),
-            ], 422);
-        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], $e->getStatusCode());
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('PermisosController@store: ' . $e->getMessage(), [
-                'user'  => \Illuminate\Support\Facades\Auth::user()?->email,
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    private function doStore(Request $request): JsonResponse
-    {
+        return $this->captureAndRespond($request, function () use ($request) {
 
         $validated = $request->validate([
             'empleado_id'       => 'required|integer',
@@ -144,7 +123,7 @@ class PermisosController extends RRHHBaseController
 
         $aprobadorId = $this->getAprobadorPara($validated['empleado_id']);
         $permiso = Permiso::create(array_merge($validated, [
-            'jefe_id'        => $aprobadorId ?? $jefe->id,
+            'jefe_id'        => $aprobadorId,
             'estado'         => $this->estadoParaEmpleado($validated['empleado_id'], $aprobadorId),
             'archivo_nombre' => $archivoNombre,
             'archivo_ruta'   => $archivoRuta,
@@ -166,6 +145,7 @@ class PermisosController extends RRHHBaseController
         }
 
         return response()->json(['success' => true, 'data' => $permiso], 201);
+        }); // fin captureAndRespond
     }
 
     /**
