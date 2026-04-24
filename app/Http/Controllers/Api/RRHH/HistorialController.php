@@ -29,6 +29,16 @@ class HistorialController extends RRHHBaseController
     {
         $subordinadosIds = $this->getSubordinadosIds();
 
+        // Incluir el propio empleado del jefe en el historial
+        // (getSubordinadosIds lo excluye para evitar auto-aprobaciones,
+        //  pero en el historial el jefe sí debe verse a sí mismo)
+        try {
+            $propioId = $this->getJefeEmpleado()->id;
+            $subordinadosIds = array_values(array_unique(array_merge($subordinadosIds, [$propioId])));
+        } catch (\Throwable) {
+            // rrhh_admin sin empleado vinculado — no pasa nada, ya tiene todos
+        }
+
         if (empty($subordinadosIds)) {
             return response()->json(['success' => true, 'data' => []]);
         }

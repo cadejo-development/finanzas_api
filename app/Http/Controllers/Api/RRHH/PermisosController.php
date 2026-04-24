@@ -21,6 +21,12 @@ class PermisosController extends RRHHBaseController
     {
         $subordinadosIds = $this->getSubordinadosIds();
 
+        // Incluir al propio jefe para que vea sus propias solicitudes
+        try {
+            $propioId = $this->getJefeEmpleado()->id;
+            $subordinadosIds = array_values(array_unique(array_merge($subordinadosIds, [$propioId])));
+        } catch (\Throwable) {}
+
         $permisos = Permiso::with('tipoPermiso')
             ->whereIn('empleado_id', $subordinadosIds)
             ->orderByDesc('id')
