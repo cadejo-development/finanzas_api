@@ -30,12 +30,20 @@ class DepartamentosController extends Controller
         // Jefes
         $jefeIds = collect($depts)->pluck('jefe_empleado_id')->filter()->unique()->values()->all();
         $jefes = [];
+        $jefesInactivos = [];
         if (!empty($jefeIds)) {
-            $jefes = DB::connection('pgsql')
+            $todosJefes = DB::connection('pgsql')
                 ->table('empleados')
                 ->whereIn('id', $jefeIds)
-                ->select('id', 'nombres', 'apellidos', 'codigo')
-                ->get()->keyBy('id')->toArray();
+                ->select('id', 'nombres', 'apellidos', 'codigo', 'activo')
+                ->get();
+            foreach ($todosJefes as $j) {
+                if ($j->activo) {
+                    $jefes[$j->id] = $j;
+                } else {
+                    $jefesInactivos[$j->id] = true;
+                }
+            }
         }
 
         // Conteo de empleados por departamento
@@ -74,7 +82,7 @@ class DepartamentosController extends Controller
         }
 
         // Enriquecer con jefe y conteo
-        $depts = collect($depts)->map(function ($d) use ($jefes, $counts, $preview) {
+        $depts = collect($depts)->map(function ($d) use ($jefes, $jefesInactivos, $counts, $preview) {
             $d = (array) $d;
             $jefe = $d['jefe_empleado_id'] ? ($jefes[$d['jefe_empleado_id']] ?? null) : null;
             $d['jefe_nombre'] = $jefe
@@ -84,6 +92,9 @@ class DepartamentosController extends Controller
             $d['jefe_codigo'] = $jefe
                 ? ($jefe instanceof \stdClass ? $jefe->codigo : $jefe['codigo'])
                 : null;
+            $d['jefe_inactivo'] = $d['jefe_empleado_id']
+                && !$jefe
+                && isset($jefesInactivos[$d['jefe_empleado_id']]);
             $countEntry = $counts[$d['id']] ?? null;
             $d['total_empleados'] = $countEntry
                 ? (int) ($countEntry instanceof \stdClass ? $countEntry->total : $countEntry['total'])
