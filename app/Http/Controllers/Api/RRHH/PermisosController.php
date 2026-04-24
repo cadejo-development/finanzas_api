@@ -36,7 +36,30 @@ class PermisosController extends RRHHBaseController
      */
     public function store(Request $request): JsonResponse
     {
-        $jefe = $this->getJefeEmpleado();
+        try {
+            return $this->doStore($request);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => collect($e->errors())->flatten()->first() ?? 'Error de validación.',
+                'errors'  => $e->errors(),
+            ], 422);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], $e->getStatusCode());
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('PermisosController@store: ' . $e->getMessage(), [
+                'user'  => \Illuminate\Support\Facades\Auth::user()?->email,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function doStore(Request $request): JsonResponse
+    {
 
         $validated = $request->validate([
             'empleado_id'       => 'required|integer',
