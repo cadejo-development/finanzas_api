@@ -41,16 +41,10 @@ use Throwable;
  */
 trait CapturesExceptions
 {
-    /**
-     * Conexión DB donde persiste la tabla `error_logs`.
-     * Cada sistema sobreescribe esta propiedad.
-     */
-    protected string $errorLogConnection = 'rrhh';
-
-    /**
-     * Etiqueta del sistema que aparece en el log (ej. RRHH, COMPRAS, PAGOS).
-     */
-    protected string $errorLogSistema = 'RRHH';
+    // ── Propiedades a declarar por el trait de cada sistema ───────────────────
+    // protected string $errorLogConnection = 'mi_conexion';
+    // protected string $errorLogSistema    = 'MI_SISTEMA';
+    // ─────────────────────────────────────────────────────────────────────────
 
     // ──────────────────────────────────────────────────────────────────────────
 
