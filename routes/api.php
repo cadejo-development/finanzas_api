@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\Compras\RecetasController;
 use App\Http\Controllers\Api\Compras\RecetaCategoriasController;
 use App\Http\Controllers\Api\Compras\AuditoriaRecetasController;
 use App\Http\Controllers\Api\Compras\InventarioController;
+use App\Http\Controllers\Api\Compras\ExportBriloController;
 use App\Http\Controllers\Api\PortalController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\RRHH\CatalogosRRHHController;
@@ -205,6 +206,10 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('ventas/sugerencia',   [VentasController::class, 'sugerencia']);
     Route::get('ventas/{id}',         [VentasController::class, 'show']);
     Route::post('ventas/import',      [VentasController::class, 'import']);
+
+    // Exportación BRILO (solo admin_compras / admin_recetas)
+    Route::get('export/brilo/materiales-x-producto', [ExportBriloController::class, 'materialesXProducto']);
+    Route::get('export/brilo/productos',              [ExportBriloController::class, 'productos']);
 
     // Inventario
     Route::get('inventario/pedido-sugerido',    [InventarioController::class, 'pedidoSugerido']);
