@@ -27,17 +27,19 @@ class ExportBriloController extends Controller
     //           G=Cód.Presentación, H=Cantidad Presentación
     //
     // Parámetros query opcionales:
-    //   tipo_receta   = plato | sub_receta | (vacío = todos)
-    //   solo_con_codigo = 1  → solo recetas que tienen codigo_origen
-    //   estado_id     = ID del estado de receta para filtrar
+    //   tipo_receta        = plato | sub_receta | (vacío = todos)
+    //   solo_con_codigo    = 1  → solo recetas que tienen codigo_origen
+    //   estado_id          = ID del estado de receta para filtrar
+    //   solo_modificados   = 1 (default) → solo recetas con modificado_localmente = true
     // ──────────────────────────────────────────────────────────────────────────
     public function materialesXProducto(Request $request): StreamedResponse
     {
         $this->requireAdminRol();
 
-        $tipoReceta   = $request->query('tipo_receta');     // plato | sub_receta | null
-        $soloConCodigo = (bool) $request->query('solo_con_codigo', 1);
-        $estadoId      = $request->query('estado_id') ? (int) $request->query('estado_id') : null;
+        $tipoReceta       = $request->query('tipo_receta');
+        $soloConCodigo    = (bool) $request->query('solo_con_codigo', 1);
+        $estadoId         = $request->query('estado_id') ? (int) $request->query('estado_id') : null;
+        $soloModificados  = (bool) $request->query('solo_modificados', 1);
 
         // ── Consulta principal ──────────────────────────────────────────────
         // Recetas activas + sus ingredientes (productos y sub-recetas)
@@ -56,6 +58,10 @@ class ExportBriloController extends Controller
                 'ri.cantidad_por_plato',
                 'ri.unidad',
             ]);
+
+        if ($soloModificados) {
+            $query->where('r.modificado_localmente', true);
+        }
 
         if ($soloConCodigo) {
             $query->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '');
@@ -127,14 +133,15 @@ class ExportBriloController extends Controller
     // 46 columnas según el formato oficial.
     //
     // Parámetros query opcionales:
-    //   solo_activos = 1 (default) | 0
-    //   tipo         = P | S (filtrar por tipo asignado al exportar)
+    //   solo_activos     = 1 (default) | 0
+    //   solo_modificados = 1 (default) → solo productos con modificado_localmente = true
     // ──────────────────────────────────────────────────────────────────────────
     public function productos(Request $request): StreamedResponse
     {
         $this->requireAdminRol();
 
-        $soloActivos = (bool) $request->query('solo_activos', 1);
+        $soloActivos     = (bool) $request->query('solo_activos', 1);
+        $soloModificados = (bool) $request->query('solo_modificados', 1);
 
         $query = DB::connection('compras')
             ->table('productos as p')
@@ -148,6 +155,10 @@ class ExportBriloController extends Controller
                 'p.activo',
                 'c.nombre as categoria_nombre',
             ]);
+
+        if ($soloModificados) {
+            $query->where('p.modificado_localmente', true);
+        }
 
         if ($soloActivos) {
             $query->where('p.activo', true);
