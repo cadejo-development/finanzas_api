@@ -89,10 +89,15 @@ class AuthController extends Controller
             ->map(fn ($s) => ['id' => $s->id, 'nombre' => $s->nombre]);
 
         // Empleado vinculado al usuario (necesario para el rol empleado en RRHH)
-        $empleadoId = DB::connection('pgsql')
-            ->table('empleados')
-            ->where('user_id', $user->id)
-            ->value('id');
+        $empRow = DB::connection('pgsql')
+            ->table('empleados as e')
+            ->leftJoin('departamentos as d', 'd.id', '=', 'e.departamento_id')
+            ->where('e.user_id', $user->id)
+            ->select('e.id as emp_id', 'd.codigo as dept_codigo')
+            ->first();
+
+        $empleadoId         = $empRow?->emp_id;
+        $departamentoCodigo = $empRow?->dept_codigo;
 
         return response()->json([
             'success' => true,
@@ -112,6 +117,7 @@ class AuthController extends Controller
                 'is_portal_admin'       => $user->hasRole('portal_admin'),
                 'force_password_change' => $user->force_password_change || Hash::check('C@dejo2026', $user->password),
                 'empleado_id'           => $empleadoId,
+                'departamento_codigo'   => $departamentoCodigo,
             ],
         ]);
     }
@@ -319,10 +325,15 @@ class AuthController extends Controller
         $todasSucursales    = Sucursal::whereIn('id', $todasSucursalesIds)->orderBy('nombre')->get()
             ->map(fn ($s) => ['id' => $s->id, 'nombre' => $s->nombre]);
 
-        $empleadoId = DB::connection('pgsql')
-            ->table('empleados')
-            ->where('user_id', $user->id)
-            ->value('id');
+        $empRow = DB::connection('pgsql')
+            ->table('empleados as e')
+            ->leftJoin('departamentos as d', 'd.id', '=', 'e.departamento_id')
+            ->where('e.user_id', $user->id)
+            ->select('e.id as emp_id', 'd.codigo as dept_codigo')
+            ->first();
+
+        $empleadoId         = $empRow?->emp_id;
+        $departamentoCodigo = $empRow?->dept_codigo;
 
         return response()->json([
             'success' => true,
@@ -340,6 +351,7 @@ class AuthController extends Controller
                 'centros_costo'   => $centrosCosto,
                 'is_portal_admin' => $user->hasRole('portal_admin'),
                 'empleado_id'     => $empleadoId,
+                'departamento_codigo' => $departamentoCodigo,
             ],
         ]);
     }

@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Storage;
 
 class PermisosController extends RRHHBaseController
 {
+    use \App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
     /**
      * Lista permisos del equipo del jefe.
      * GET /api/rrhh/permisos

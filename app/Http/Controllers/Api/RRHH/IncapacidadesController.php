@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Storage;
 
 class IncapacidadesController extends RRHHBaseController
 {
+    use \App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
     /**
      * GET /api/rrhh/incapacidades
      */

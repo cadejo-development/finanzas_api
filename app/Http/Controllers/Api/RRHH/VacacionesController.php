@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 
 class VacacionesController extends RRHHBaseController
 {
+    use \App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
     /**
      * GET /api/rrhh/vacaciones
      */
