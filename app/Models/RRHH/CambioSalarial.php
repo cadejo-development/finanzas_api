@@ -13,6 +13,7 @@ class CambioSalarial extends Model
         'empleado_id', 'solicitado_por_id', 'tipo_aumento_id',
         'salario_anterior', 'salario_nuevo', 'porcentaje',
         'fecha_efectiva', 'justificacion', 'estado', 'aud_usuario',
+        'documento_ruta', 'documento_nombre', 'documento_mime',
     ];
 
     protected $casts = [

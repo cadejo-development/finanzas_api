@@ -28,6 +28,20 @@ class CambiosSalarialesController extends RRHHBaseController
         $cambios = $query->get();
         $data = $this->enrichWithEmpleadoData($cambios->toArray());
 
+        // Agregar URL presignada de documento si existe
+        $data = array_map(function ($item) {
+            if (!empty($item['documento_ruta'])) {
+                try {
+                    $item['documento_url'] = $this->s3TemporaryUrl($item['documento_ruta'], 60);
+                } catch (\Throwable) {
+                    $item['documento_url'] = null;
+                }
+            } else {
+                $item['documento_url'] = null;
+            }
+            return $item;
+        }, $data);
+
         return response()->json(['success' => true, 'data' => $data]);
     }
 
@@ -78,8 +92,19 @@ class CambiosSalarialesController extends RRHHBaseController
     {
         $cambio = CambioSalarial::with('tipoAumento')->findOrFail($id);
         $arr = $this->enrichWithEmpleadoData([$cambio->toArray()]);
+        $item = $arr[0];
 
-        return response()->json(['success' => true, 'data' => $arr[0]]);
+        if (!empty($item['documento_ruta'])) {
+            try {
+                $item['documento_url'] = $this->s3TemporaryUrl($item['documento_ruta'], 60);
+            } catch (\Throwable) {
+                $item['documento_url'] = null;
+            }
+        } else {
+            $item['documento_url'] = null;
+        }
+
+        return response()->json(['success' => true, 'data' => $item]);
     }
 
     /**
@@ -119,7 +144,104 @@ class CambiosSalarialesController extends RRHHBaseController
      */
     public function destroy(int $id): JsonResponse
     {
-        CambioSalarial::findOrFail($id)->delete();
+        $cambio = CambioSalarial::findOrFail($id);
+        if ($cambio->documento_ruta) {
+            $this->s3DeleteKey($cambio->documento_ruta);
+        }
+        $cambio->delete();
         return response()->json(['success' => true, 'message' => 'Cambio salarial eliminado.']);
+    }
+
+    /**
+     * GET /api/rrhh/cambios-salariales/{id}/presign
+     * Genera URL presignada para subir documento de respaldo.
+     */
+    public function presignDocumento(Request $request, int $id): JsonResponse
+    {
+        CambioSalarial::findOrFail($id); // validar que existe
+
+        $ext  = strtolower($request->query('ext', 'pdf'));
+        $mime = $request->query('mime', 'application/pdf');
+        $key  = "rrhh/cambios_salariales/{$id}_" . uniqid('doc_', true) . ".{$ext}";
+
+        $client = $this->s3Client();
+        $cmd    = $client->getCommand('PutObject', [
+            'Bucket'      => config('filesystems.disks.s3.bucket'),
+            'Key'         => $key,
+            'ContentType' => $mime,
+        ]);
+
+        return response()->json([
+            'success'       => true,
+            'presigned_url' => (string) $client->createPresignedRequest($cmd, '+15 minutes')->getUri(),
+            'key'           => $key,
+        ]);
+    }
+
+    /**
+     * PATCH /api/rrhh/cambios-salariales/{id}/documento
+     * Guarda la referencia al documento ya subido en S3.
+     */
+    public function confirmarDocumento(Request $request, int $id): JsonResponse
+    {
+        $cambio = CambioSalarial::findOrFail($id);
+
+        $data = $request->validate([
+            'key'    => 'required|string',
+            'nombre' => 'nullable|string|max:255',
+            'mime'   => 'nullable|string|max:100',
+        ]);
+
+        // Borrar documento anterior si existe
+        if ($cambio->documento_ruta) {
+            $this->s3DeleteKey($cambio->documento_ruta);
+        }
+
+        $cambio->update([
+            'documento_ruta'   => $data['key'],
+            'documento_nombre' => $data['nombre'] ?? basename($data['key']),
+            'documento_mime'   => $data['mime']   ?? null,
+        ]);
+
+        return response()->json([
+            'success'          => true,
+            'documento_url'    => $this->s3TemporaryUrl($data['key']),
+            'documento_nombre' => $cambio->documento_nombre,
+            'documento_mime'   => $cambio->documento_mime,
+        ]);
+    }
+
+    /**
+     * DELETE /api/rrhh/cambios-salariales/{id}/documento
+     * Elimina el documento adjunto.
+     */
+    public function eliminarDocumento(int $id): JsonResponse
+    {
+        $cambio = CambioSalarial::findOrFail($id);
+
+        if ($cambio->documento_ruta) {
+            $this->s3DeleteKey($cambio->documento_ruta);
+        }
+
+        $cambio->update([
+            'documento_ruta'   => null,
+            'documento_nombre' => null,
+            'documento_mime'   => null,
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Documento eliminado.']);
+    }
+
+    /** Elimina un objeto de S3 sin bloquear en caso de error. */
+    private function s3DeleteKey(string $key): void
+    {
+        try {
+            $this->s3Client()->deleteObject([
+                'Bucket' => config('filesystems.disks.s3.bucket'),
+                'Key'    => $key,
+            ]);
+        } catch (\Throwable) {
+            // ignorar
+        }
     }
 }

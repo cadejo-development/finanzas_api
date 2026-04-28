@@ -322,11 +322,14 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::delete('traslados/{id}', [TrasladosController::class, 'destroy']);
 
     // Cambios salariales (aumentos + nivelaciones, filtrar por ?tipo_aumento_id=X)
-    Route::get('cambios-salariales',         [CambiosSalarialesController::class, 'index']);
-    Route::post('cambios-salariales',        [CambiosSalarialesController::class, 'store']);
-    Route::get('cambios-salariales/{id}',    [CambiosSalarialesController::class, 'show']);
-    Route::put('cambios-salariales/{id}',    [CambiosSalarialesController::class, 'update']);
-    Route::delete('cambios-salariales/{id}', [CambiosSalarialesController::class, 'destroy']);
+    Route::get('cambios-salariales',                         [CambiosSalarialesController::class, 'index']);
+    Route::post('cambios-salariales',                        [CambiosSalarialesController::class, 'store']);
+    Route::get('cambios-salariales/{id}',                    [CambiosSalarialesController::class, 'show']);
+    Route::put('cambios-salariales/{id}',                    [CambiosSalarialesController::class, 'update']);
+    Route::delete('cambios-salariales/{id}',                 [CambiosSalarialesController::class, 'destroy']);
+    Route::get('cambios-salariales/{id}/presign',            [CambiosSalarialesController::class, 'presignDocumento']);
+    Route::patch('cambios-salariales/{id}/documento',        [CambiosSalarialesController::class, 'confirmarDocumento']);
+    Route::delete('cambios-salariales/{id}/documento',       [CambiosSalarialesController::class, 'eliminarDocumento']);
 
     // Ausencias Injustificadas
     Route::get('ausencias/resumen-mes',  [AusenciasController::class, 'resumenMes']);
