@@ -103,15 +103,13 @@ class CatalogosRRHHController extends RRHHBaseController
             ->orderBy('nombre')
             ->get();
 
-        // Departamentos (para admin: permite filtrar equipo por departamento)
-        $departamentos = $esAdmin
-            ? DB::connection('pgsql')
-                ->table('departamentos')
-                ->where('activo', true)
-                ->select('id', 'nombre', 'sucursal_id', 'jefe_empleado_id')
-                ->orderBy('nombre')
-                ->get()
-            : collect();
+        // Departamentos — siempre visibles (traslados a Casa Matriz los necesita para jefatura también)
+        $departamentos = DB::connection('pgsql')
+            ->table('departamentos')
+            ->where('activo', true)
+            ->select('id', 'nombre', 'sucursal_id', 'jefe_empleado_id')
+            ->orderBy('nombre')
+            ->get();
 
         return response()->json([
             'success' => true,
