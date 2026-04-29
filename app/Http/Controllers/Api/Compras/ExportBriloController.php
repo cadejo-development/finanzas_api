@@ -104,19 +104,41 @@ class ExportBriloController extends Controller
 
             foreach ($filas as $fila) {
                 // Col B: código del ingrediente. Si es sub-receta usa su codigo_origen, si no, el código del producto.
+                $esSub = !is_null($fila->sub_codigo);
                 $codIngrediente = $fila->sub_codigo ?? $fila->prod_codigo ?? '';
                 if (!$codIngrediente) continue; // ingrediente sin código → omitir
 
-                fputcsv($handle, [
-                    $fila->receta_codigo ?? '',          // A
-                    $codIngrediente,                     // B
-                    $this->formatNum($fila->cantidad_por_plato), // C
-                    'SI',                                // D
-                    '',                                  // E - Detiene Explotación
-                    '',                                  // F - Código Ubicación
-                    '',                                  // G - Código Presentación (completar manualmente)
-                    '',                                  // H - Cantidad Presentación
-                ]);
+                /*
+                 * Regla de columnas C vs G/H:
+                 *   - Materia prima (MR*): cantidad en C, BRILO conoce su presentación internamente.
+                 *   - Sub-receta (PL*):    C vacío, G = código presentación local, H = cantidad.
+                 *     Razón: BRILO usa la unidad base del ingrediente-PL (LB, TDA, etc.) al leer C,
+                 *     pero al leer G+H usa el código de presentación para convertir automáticamente.
+                 */
+                if ($esSub) {
+                    $codPres = $this->unidadACodigoBrilo($fila->unidad ?? '');
+                    fputcsv($handle, [
+                        $fila->receta_codigo ?? '',               // A
+                        $codIngrediente,                          // B
+                        '',                                       // C - vacío para sub-recetas
+                        'SI',                                     // D
+                        '',                                       // E
+                        '',                                       // F
+                        $codPres,                                 // G - Código Presentación
+                        $this->formatNum($fila->cantidad_por_plato), // H - Cantidad Presentación
+                    ]);
+                } else {
+                    fputcsv($handle, [
+                        $fila->receta_codigo ?? '',               // A
+                        $codIngrediente,                          // B
+                        $this->formatNum($fila->cantidad_por_plato), // C
+                        'SI',                                     // D
+                        '',                                       // E
+                        '',                                       // F
+                        '',                                       // G
+                        '',                                       // H
+                    ]);
+                }
             }
 
             fclose($handle);
@@ -308,5 +330,26 @@ class ExportBriloController extends Controller
         if ($n == 0) return '';
         // Hasta 4 decimales, sin trailing zeros
         return rtrim(rtrim(number_format($n, 4, '.', ''), '0'), '.');
+    }
+
+    /**
+     * Convierte la unidad local (campo ri.unidad) al código de presentación de BRILO.
+     * Los códigos de presentación deben coincidir exactamente con los configurados en BRILO.
+     */
+    private function unidadACodigoBrilo(string $unidad): string
+    {
+        return match (strtolower(trim($unidad))) {
+            'oz', 'oz fl'                      => 'OZ001',
+            'lb', 'libra', 'libras'            => 'LB001',
+            'kg', 'kilogramo', 'kilogramos'    => 'KG001',
+            'lt', 'litro', 'litros'            => 'LT001',
+            'g', 'gr', 'gramo', 'gramos'       => 'GR001',
+            'porcion', 'porción'               => 'PORCION',
+            'u', 'und', 'unidad', 'unidades'   => 'UNIDAD',
+            'galon', 'galón', 'gal'            => 'GAL001',
+            'botella'                           => 'BOTELLA',
+            'rebanada'                          => 'REBANADA',
+            default                             => strtoupper($unidad), // fallback: devolver tal cual en mayúsculas
+        };
     }
 }
