@@ -75,13 +75,19 @@ class RecetasController extends Controller
                     $q->orWhereRaw("lower(tipo) LIKE '%sub%receta%'");
                 }
             });
-            // En el catálogo de sub-recetas solo mostrar las de categoría "Platos Sub-Recetas".
-            // Las modifier sub-recetas (agua dura, bebidas, etc.) son ingredientes internos
-            // y no deben aparecer en el listado del catálogo.
+            // Para sub_receta: si el registro tiene tipo_receta explícito, se confía en él.
+            // El filtro de tipo/categoria solo aplica a registros SIN tipo_receta seteado
+            // (registros legados importados antes de que existiera el campo tipo_receta).
             if ($tipoReceta === 'sub_receta') {
                 $query->where(function ($q) {
-                    $q->whereRaw("lower(coalesce(tipo,'')) LIKE '%sub%receta%'")
-                      ->orWhereHas('categoria', fn ($sq) => $sq->whereRaw("lower(nombre) LIKE '%sub%receta%'"));
+                    $q->where('tipo_receta', 'sub_receta')
+                      ->orWhere(function ($sq) {
+                          $sq->whereNull('tipo_receta')
+                             ->where(function ($q2) {
+                                 $q2->whereRaw("lower(coalesce(tipo,'')) LIKE '%sub%receta%'")
+                                    ->orWhereHas('categoria', fn ($q3) => $q3->whereRaw("lower(nombre) LIKE '%sub%receta%'"));
+                             });
+                      });
                 });
             }
         } else {
