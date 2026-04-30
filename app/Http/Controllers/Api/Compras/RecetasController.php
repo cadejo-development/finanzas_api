@@ -27,6 +27,8 @@ class RecetasController extends Controller
         $sucursalId  = $request->query('sucursal_id')  ? (int) $request->query('sucursal_id') : null;
         // sucursal_ids: array de IDs para gerentes multi-sucursal (e.g. ?sucursal_ids[]=1&sucursal_ids[]=5)
         $sucursalIds = $request->query('sucursal_ids') ? array_map('intval', (array) $request->query('sucursal_ids')) : null;
+        // tipo_receta se determina aquí para decidir si aplica filtro de sucursal
+        $tipoRecetaParam = $request->query('tipo_receta');
 
         $query = Receta::with([
                 'categoria',
@@ -44,18 +46,22 @@ class RecetasController extends Controller
             ->where('activa', true)
             ->orderBy('nombre');
 
-        // Filtrar solo recetas activas en esa sucursal + cargar su config
-        if ($sucursalId !== null) {
-            $query->whereHas('sucursalConfig', fn ($q) =>
-                $q->where('sucursal_id', $sucursalId)->where('activa', true)
-            );
-            $query->with(['sucursalConfig' => fn ($q) => $q->where('sucursal_id', $sucursalId)]);
-        } elseif (!empty($sucursalIds)) {
-            // Gerente multi-sucursal: mostrar recetas activas en CUALQUIERA de sus sucursales
-            $query->whereHas('sucursalConfig', fn ($q) =>
-                $q->whereIn('sucursal_id', $sucursalIds)->where('activa', true)
-            );
-            $query->with(['sucursalConfig' => fn ($q) => $q->whereIn('sucursal_id', $sucursalIds)]);
+        // Filtrar por sucursal solo para platos/recetas de menú.
+        // Las sub-recetas son ingredientes globales (no items de menú por sucursal),
+        // así que se muestran sin filtro de sucursal.
+        if ($tipoRecetaParam !== 'sub_receta') {
+            if ($sucursalId !== null) {
+                $query->whereHas('sucursalConfig', fn ($q) =>
+                    $q->where('sucursal_id', $sucursalId)->where('activa', true)
+                );
+                $query->with(['sucursalConfig' => fn ($q) => $q->where('sucursal_id', $sucursalId)]);
+            } elseif (!empty($sucursalIds)) {
+                // Gerente multi-sucursal: mostrar recetas activas en CUALQUIERA de sus sucursales
+                $query->whereHas('sucursalConfig', fn ($q) =>
+                    $q->whereIn('sucursal_id', $sucursalIds)->where('activa', true)
+                );
+                $query->with(['sucursalConfig' => fn ($q) => $q->whereIn('sucursal_id', $sucursalIds)]);
+            }
         }
 
         // Filtro por categoria_id (nuevo) o tipo texto (legado)
@@ -66,28 +72,21 @@ class RecetasController extends Controller
         }
 
         // Filtro por tipo_receta: 'plato' | 'sub_receta'
-        // Incluye tambi├®n registros con tipo (categor├¡a) que contenga 'Sub-Receta'
-        // para compatibilidad con datos migrados antes del campo tipo_receta.
-        if ($tipoReceta = $request->query('tipo_receta')) {
-            $query->where(function ($q) use ($tipoReceta) {
-                $q->where('tipo_receta', $tipoReceta);
-                if ($tipoReceta === 'sub_receta') {
-                    $q->orWhereRaw("lower(tipo) LIKE '%sub%receta%'");
-                }
-            });
-            // Para sub_receta: si el registro tiene tipo_receta explícito, se confía en él.
-            // El filtro de tipo/categoria solo aplica a registros SIN tipo_receta seteado
-            // (registros legados importados antes de que existiera el campo tipo_receta).
+        if ($tipoReceta = $tipoRecetaParam) {
             if ($tipoReceta === 'sub_receta') {
+                // Solo sub-recetas culinarias reales.
+                // No se confía en tipo_receta='sub_receta' solo: cervezas, bebidas y otros
+                // productos también pueden tener ese valor pero NO son sub-recetas de cocina.
+                // Se requiere que tipo o categoría digan 'sub-receta', o que el código
+                // origen sea PL20xxx (categoría "Platos Sub-Recetas" en BRILO).
                 $query->where(function ($q) {
-                    $q->where('tipo_receta', 'sub_receta')
-                      ->orWhere(function ($sq) {
-                          $sq->whereNull('tipo_receta')
-                             ->where(function ($q2) {
-                                 $q2->whereRaw("lower(coalesce(tipo,'')) LIKE '%sub%receta%'")
-                                    ->orWhereHas('categoria', fn ($q3) => $q3->whereRaw("lower(nombre) LIKE '%sub%receta%'"));
-                             });
-                      });
+                    $q->whereRaw("lower(coalesce(tipo,'')) LIKE '%sub%receta%'")
+                      ->orWhereHas('categoria', fn ($q3) => $q3->whereRaw("lower(nombre) LIKE '%sub%receta%'"))
+                      ->orWhereRaw("lower(coalesce(codigo_origen,'')) LIKE 'pl20%'");
+                });
+            } else {
+                $query->where(function ($q) use ($tipoReceta) {
+                    $q->where('tipo_receta', $tipoReceta);
                 });
             }
         } else {

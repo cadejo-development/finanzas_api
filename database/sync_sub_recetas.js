@@ -307,8 +307,12 @@ async function main() {
       }
     }
 
+    // Obtener estado_id para 'activa' (requerido NOT NULL en recetas)
+    const estadoRes = await pg.query("SELECT id FROM estados_receta WHERE codigo = 'activa' LIMIT 1");
+    const estadoActivoId = estadoRes.rows[0]?.id ?? 4;
+
     // Upsert sub-recetas en recetas
-    const rCols = ['nombre','codigo_origen','tipo','tipo_receta','platos_semana','activa','precio','aud_usuario','created_at','updated_at'];
+    const rCols = ['nombre','codigo_origen','tipo','tipo_receta','platos_semana','activa','precio','estado_id','aud_usuario','created_at','updated_at'];
     const rConf = `ON CONFLICT (codigo_origen) DO UPDATE SET
       nombre=EXCLUDED.nombre, tipo=EXCLUDED.tipo, tipo_receta=EXCLUDED.tipo_receta,
       updated_at=EXCLUDED.updated_at
@@ -323,7 +327,7 @@ async function main() {
         clean(r.codigo, 50),
         clean(r.tipo, 80) || 'Sub-Receta',
         'sub_receta',
-        0, true, 0,
+        0, true, 0, estadoActivoId,
         'sync_sub_recetas', now, now,
       ]);
       const q = buildBatch('recetas', rCols, rows, rConf, rRet);
@@ -359,15 +363,23 @@ async function main() {
     const riCols = ['receta_id','producto_id','cantidad_por_plato','unidad','aud_usuario','created_at','updated_at'];
     const riConf = ''; // INSERT simple (borramos primero)
 
-    const subRecetaIds = Object.values(subRecetaPgIdMap).filter(Boolean);
+    // Solo borrar ingredientes de las sub-recetas que SÍ se van a re-migrar
+    // (las que están en subRows filtradas = NO tienen modificado_localmente).
+    // NUNCA borrar ingredientes de sub-recetas con modificado_localmente=true.
+    const codigosASincronizar = new Set(subRows.map(r => String(r.codigo ?? '').trim()));
+    const subRecetaIds = Object.entries(subRecetaPgIdMap)
+      .filter(([codigo]) => codigosASincronizar.has(codigo))
+      .map(([, id]) => id)
+      .filter(Boolean);
 
-    // Borrar ingredientes anteriores de las sub-recetas migradas
+    // Borrar ingredientes solo de las sub-recetas que se van a re-sincronizar
     if (subRecetaIds.length > 0) {
       for (let i = 0; i < subRecetaIds.length; i += 500) {
         const chunk = subRecetaIds.slice(i, i + 500);
         await pg.query('DELETE FROM receta_ingredientes WHERE receta_id = ANY($1::int[])', [chunk]);
       }
     }
+    log(`      Borrando ingredientes de ${subRecetaIds.length} sub-recetas a re-sincronizar (modificado_localmente=false).`);
 
     for (const [subIdOrigen, ingredientes] of Object.entries(ingrPorSub)) {
       const subCodigo = subCodigoMap[subIdOrigen];
