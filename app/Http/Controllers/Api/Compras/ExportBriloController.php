@@ -27,15 +27,22 @@ class ExportBriloController extends Controller
     //           G=Cód.Presentación, H=Cantidad Presentación
     //
     // Parámetros query opcionales:
+    //   nivel              = 1 | 2 | 3 (ver detalle abajo)
     //   tipo_receta        = plato | sub_receta | (vacío = todos)
     //   solo_con_codigo    = 1  → solo recetas que tienen codigo_origen
     //   estado_id          = ID del estado de receta para filtrar
     //   solo_modificados   = 1 (default) → solo recetas con modificado_localmente = true
+    //
+    // Niveles de importación (orden obligatorio en BRILO):
+    //   nivel=1 → Sub-recetas cuyos ingredientes son SOLO materias primas (importar primero)
+    //   nivel=2 → Sub-recetas que llevan otras sub-recetas como ingredientes (importar segundo)
+    //   nivel=3 → Platos (importar último)
     // ──────────────────────────────────────────────────────────────────────────
     public function materialesXProducto(Request $request): StreamedResponse
     {
         $this->requireAdminRol();
 
+        $nivel            = $request->query('nivel') ? (int) $request->query('nivel') : null;
         $tipoReceta       = $request->query('tipo_receta');
         $soloConCodigo    = (bool) $request->query('solo_con_codigo', 1);
         $estadoId         = $request->query('estado_id') ? (int) $request->query('estado_id') : null;
@@ -67,7 +74,28 @@ class ExportBriloController extends Controller
             $query->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '');
         }
 
-        if ($tipoReceta === 'plato') {
+        // ── Filtro por nivel de importación ────────────────────────────────
+        if ($nivel === 1) {
+            // Sub-recetas cuyos ingredientes son SOLO materias primas
+            $query->where('r.tipo_receta', 'sub_receta')
+                  ->whereNotIn('r.id', function ($sub) {
+                      $sub->select('receta_id')
+                          ->from('receta_ingredientes')
+                          ->whereNotNull('sub_receta_id');
+                  });
+        } elseif ($nivel === 2) {
+            // Sub-recetas que llevan otras sub-recetas como ingredientes
+            $query->where('r.tipo_receta', 'sub_receta')
+                  ->whereIn('r.id', function ($sub) {
+                      $sub->select('receta_id')
+                          ->from('receta_ingredientes')
+                          ->whereNotNull('sub_receta_id');
+                  });
+        } elseif ($nivel === 3) {
+            // Platos
+            $query->where(fn ($q) => $q->where('r.tipo_receta', 'plato')->orWhereNull('r.tipo_receta'))
+                  ->whereRaw("lower(coalesce(r.tipo_receta,'')) NOT LIKE '%sub%receta%'");
+        } elseif ($tipoReceta === 'plato') {
             $query->where(fn ($q) => $q->where('r.tipo_receta', 'plato')->orWhereNull('r.tipo_receta'))
                   ->whereRaw("lower(coalesce(r.tipo,'')) NOT LIKE '%sub%receta%'");
         } elseif ($tipoReceta === 'sub_receta') {
@@ -81,8 +109,14 @@ class ExportBriloController extends Controller
 
         $filas = $query->orderBy('r.codigo_origen')->orderBy('ri.id')->get();
 
-        // ── Stream CSV ─────────────────────────────────────────────────────
-        $filename = 'INV_Materiales_X_Producto_' . now()->format('Ymd_His') . '.csv';
+        // ── Nombre de archivo según nivel ──────────────────────────────────
+        $nivelSufijo = match($nivel) {
+            1 => '_Nivel1_SubRecetas_Simples_',
+            2 => '_Nivel2_SubRecetas_Compuestas_',
+            3 => '_Nivel3_Platos_',
+            default => '_',
+        };
+        $filename = 'INV_Materiales_X_Producto' . $nivelSufijo . now()->format('Ymd_His') . '.csv';
 
         return response()->streamDownload(function () use ($filas) {
             $handle = fopen('php://output', 'w');
