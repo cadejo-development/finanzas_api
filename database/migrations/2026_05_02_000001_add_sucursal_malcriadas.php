@@ -9,15 +9,20 @@ return new class extends Migration
 
     public function up(): void
     {
-        DB::connection('pgsql')->table('sucursales')->insertOrIgnore([
+        $schema = \Illuminate\Support\Facades\Schema::connection('pgsql');
+
+        $row = [
             'codigo'      => 'SUC-ML',
             'nombre'      => 'RESTAURANTE MALCRIADAS',
-            'tipo'        => 'operativa',
-            'activa'      => true,
             'aud_usuario' => 'migration',
             'created_at'  => now(),
             'updated_at'  => now(),
-        ]);
+        ];
+
+        if ($schema->hasColumn('sucursales', 'tipo'))   $row['tipo']   = 'operativa';
+        if ($schema->hasColumn('sucursales', 'activa')) $row['activa'] = true;
+
+        DB::connection('pgsql')->table('sucursales')->insertOrIgnore($row);
     }
 
     public function down(): void
