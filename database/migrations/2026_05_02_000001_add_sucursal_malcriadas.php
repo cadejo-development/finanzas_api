@@ -19,8 +19,9 @@ return new class extends Migration
             'updated_at'  => now(),
         ];
 
-        if ($schema->hasColumn('sucursales', 'tipo'))   $row['tipo']   = 'operativa';
-        if ($schema->hasColumn('sucursales', 'activa')) $row['activa'] = true;
+        if ($schema->hasColumn('sucursales', 'tipo'))             $row['tipo']             = 'operativa';
+        if ($schema->hasColumn('sucursales', 'activa'))           $row['activa']           = true;
+        if ($schema->hasColumn('sucursales', 'tipo_sucursal_id')) $row['tipo_sucursal_id'] = 1;
 
         DB::connection('pgsql')->table('sucursales')->insertOrIgnore($row);
     }
