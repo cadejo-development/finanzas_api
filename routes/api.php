@@ -210,6 +210,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     // Exportación BRILO (solo admin_compras / admin_recetas)
     Route::get('export/brilo/materiales-x-producto', [ExportBriloController::class, 'materialesXProducto']);
     Route::get('export/brilo/productos',              [ExportBriloController::class, 'productos']);
+    Route::get('export/brilo/sub-recetas-ven',        [ExportBriloController::class, 'subRecetasVen']);
 
     // Inventario
     Route::get('inventario/pedido-sugerido',    [InventarioController::class, 'pedidoSugerido']);

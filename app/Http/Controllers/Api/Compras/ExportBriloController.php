@@ -183,6 +183,132 @@ class ExportBriloController extends Controller
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    // GET /api/compras/export/brilo/sub-recetas-ven
+    //
+    // Exporta sub-recetas al formato VEN de BRILO, para poder crearlas como
+    // productos en BRILO ANTES de importar los archivos INV de materiales.
+    // 46 columnas según el formato oficial.
+    //
+    // Parámetros query opcionales:
+    //   nivel            = 1 | 2  → mismo criterio que en materialesXProducto
+    //   solo_con_codigo  = 1 (default) → solo sub-recetas con codigo_origen
+    //   solo_modificados = 1 (default) → solo con modificado_localmente = true
+    // ──────────────────────────────────────────────────────────────────────────
+    public function subRecetasVen(Request $request): StreamedResponse
+    {
+        $this->requireAdminRol();
+
+        $nivel           = $request->query('nivel') ? (int) $request->query('nivel') : null;
+        $soloConCodigo   = (bool) $request->query('solo_con_codigo', 1);
+        $soloModificados = (bool) $request->query('solo_modificados', 1);
+
+        $query = DB::connection('compras')
+            ->table('recetas as r')
+            ->where('r.tipo_receta', 'sub_receta')
+            ->where('r.activa', true)
+            ->select([
+                'r.id',
+                'r.codigo_origen',
+                'r.nombre',
+                'r.rendimiento',
+                'r.rendimiento_unidad',
+                'r.precio',
+                'r.activa',
+            ]);
+
+        if ($soloModificados) {
+            $query->where('r.modificado_localmente', true);
+        }
+
+        if ($soloConCodigo) {
+            $query->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '');
+        }
+
+        if ($nivel === 1) {
+            // Sub-recetas simples: sus ingredientes son SOLO materias primas
+            $query->whereNotIn('r.id', function ($sub) {
+                $sub->select('receta_id')
+                    ->from('receta_ingredientes')
+                    ->whereNotNull('sub_receta_id');
+            });
+        } elseif ($nivel === 2) {
+            // Sub-recetas compuestas: llevan otras sub-recetas como ingredientes
+            $query->whereIn('r.id', function ($sub) {
+                $sub->select('receta_id')
+                    ->from('receta_ingredientes')
+                    ->whereNotNull('sub_receta_id');
+            });
+        }
+
+        $filas = $query->orderBy('r.codigo_origen')->get();
+
+        $nivelSufijo = match($nivel) {
+            1 => '_Nivel1_',
+            2 => '_Nivel2_',
+            default => '_',
+        };
+        $filename = 'VEN_SubRecetas' . $nivelSufijo . now()->format('Ymd_His') . '.csv';
+
+        $cabecera = $this->venCabecera();
+
+        return response()->streamDownload(function () use ($filas, $cabecera) {
+            $handle = fopen('php://output', 'w');
+            fwrite($handle, "\xEF\xBB\xBF");
+            fputcsv($handle, $cabecera);
+
+            foreach ($filas as $fila) {
+                $precioLista = (float) ($fila->precio ?? 0) > 0
+                    ? $this->formatNum($fila->precio)
+                    : '';
+
+                $fila46 = [
+                    $fila->codigo_origen,                   // A - Código Único
+                    $fila->nombre,                          // B - Descripción
+                    'P',                                    // C - Tipo: Inventariado
+                    '',                                     // D - Modelo
+                    $precioLista,                           // E - Precio de Lista
+                    'NO',                                   // F - Exento
+                    '',                                     // G - Cat Padre
+                    '',                                     // H - Cat Hija
+                    $fila->rendimiento_unidad ?? '',        // I - Presentación Base
+                    '', '', '', '',                         // J-M - Precios venta 2-5
+                    '', '', '',                             // N-P - Cuentas contables (completar manualmente)
+                    '', '',                                 // Q-R - CodBarra1-2
+                    '',                                     // S - Marca
+                    'NO',                                   // T - Avería
+                    'NO',                                   // U - No Comisionable
+                    '',                                     // V - % Variación Costo
+                    '', '', '',                             // W-Y - Estilo, Talla, Color
+                    'SI',                                   // Z - MostrarEnVentas
+                    'SI',                                   // AA - MostrarEnCompras
+                    '', '',                                 // AB-AC - CC Variación
+                    '',                                     // AD - Precio Sugerido
+                    '', '',                                 // AE-AF - Meta Inv / Cadena
+                    '',                                     // AG - Código Ubicación Default
+                    'NO',                                   // AH - Requiere Lote
+                    $fila->activa ? 'SI' : 'NO',           // AI - Activo
+                    'NO',                                   // AJ - Requiere Serie
+                    '',                                     // AK - Factor Ganancia
+                    'NO', 'NO',                             // AL-AM - Viñeta
+                    'NO',                                   // AN - Agrupar por Cat.
+                    '',                                     // AO - Descripción Extendida
+                    '', '',                                 // AP-AQ - Centro de Costos
+                    '',                                     // AR - #Días Abastecerse
+                    '',                                     // AS - Código Partida Arancelaria
+                    '',                                     // AT - Cuenta Inventario en Proceso
+                ];
+
+                fputcsv($handle, $fila46);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // GET /api/compras/export/brilo/productos
     //
     // Exporta materias primas al formato VEN de BRILO.
@@ -224,55 +350,7 @@ class ExportBriloController extends Controller
 
         $filename = 'VEN_Productos_Servicios_' . now()->format('Ymd_His') . '.csv';
 
-        // 46 columnas del formato VEN (A..AT)
-        $cabecera = [
-            'Codigo Unico/De Barras',           // A  - obligatorio
-            'Descripcion',                       // B  - obligatorio
-            'Tipo',                              // C  - obligatorio  P=Inventariado
-            'Modelo',                            // D
-            'Precio de Lista (SIN IVA)',         // E
-            'Exento',                            // F
-            'Categoria Principal (Padre)',       // G
-            'Categoria Principal (Hija)',        // H
-            'Presentacion Base',                 // I
-            'NomPrecioVenta2',                   // J
-            'NomPrecioVenta3',                   // K
-            'NomPrecioVenta4',                   // L
-            'NomPrecioVenta5',                   // M
-            'Cuenta Contable Ingresos',          // N  - obligatorio (completar manualmente)
-            'Cuenta Contable Gastos/Inventario', // O  - obligatorio (completar manualmente)
-            'Cuenta Contable Costo de Venta',   // P  - obligatorio (completar manualmente)
-            'CodBarra1',                         // Q
-            'CodBarra2',                         // R
-            'Marca',                             // S
-            'Averia',                            // T
-            'No Comisionable',                   // U
-            '% Variacion Costo Neg Req Autoriz', // V
-            'Estilo',                            // W
-            'Talla',                             // X
-            'Color',                             // Y
-            'MostrarEnVentas',                   // Z
-            'MostrarEnCompras',                  // AA
-            'Cuenta Contable Variacion Costo',   // AB
-            'Cuenta Contable Variacion Consumo', // AC
-            'Precio Sugerido',                   // AD
-            'Meta Inventario',                   // AE
-            'Meta Cadena Produccion',            // AF
-            'Codigo Ubicacion Default',          // AG
-            'Requiere Lote',                     // AH
-            'Activo',                            // AI - obligatorio
-            'Requiere Serie',                    // AJ
-            'Factor Ganancia',                   // AK
-            'Permite Gen Viñeta Incentivo',      // AL
-            'Genera Viñeta Incentivo',           // AM
-            'Agrupar Por Cat. EnVenta',          // AN
-            'Descripción Extendida para Cot',    // AO
-            'Centro de Costos',                  // AP
-            'Sub Centro de Costos',              // AQ
-            '#Dias Abastecerse',                 // AR
-            'Codigo Partida Arancelaria',        // AS
-            'Cuenta Inventario en Proceso',      // AT
-        ];
+        $cabecera = $this->venCabecera();
 
         return response()->streamDownload(function () use ($filas, $cabecera) {
             $handle = fopen('php://output', 'w');
@@ -347,6 +425,59 @@ class ExportBriloController extends Controller
     // ──────────────────────────────────────────────────────────────────────────
     // Helpers
     // ──────────────────────────────────────────────────────────────────────────
+
+    /** Cabecera de 46 columnas del formato VEN de BRILO. */
+    private function venCabecera(): array
+    {
+        return [
+            'Codigo Unico/De Barras',           // A  - obligatorio
+            'Descripcion',                       // B  - obligatorio
+            'Tipo',                              // C  - obligatorio  P=Inventariado
+            'Modelo',                            // D
+            'Precio de Lista (SIN IVA)',         // E
+            'Exento',                            // F
+            'Categoria Principal (Padre)',       // G
+            'Categoria Principal (Hija)',        // H
+            'Presentacion Base',                 // I
+            'NomPrecioVenta2',                   // J
+            'NomPrecioVenta3',                   // K
+            'NomPrecioVenta4',                   // L
+            'NomPrecioVenta5',                   // M
+            'Cuenta Contable Ingresos',          // N
+            'Cuenta Contable Gastos/Inventario', // O
+            'Cuenta Contable Costo de Venta',   // P
+            'CodBarra1',                         // Q
+            'CodBarra2',                         // R
+            'Marca',                             // S
+            'Averia',                            // T
+            'No Comisionable',                   // U
+            '% Variacion Costo Neg Req Autoriz', // V
+            'Estilo',                            // W
+            'Talla',                             // X
+            'Color',                             // Y
+            'MostrarEnVentas',                   // Z
+            'MostrarEnCompras',                  // AA
+            'Cuenta Contable Variacion Costo',   // AB
+            'Cuenta Contable Variacion Consumo', // AC
+            'Precio Sugerido',                   // AD
+            'Meta Inventario',                   // AE
+            'Meta Cadena Produccion',            // AF
+            'Codigo Ubicacion Default',          // AG
+            'Requiere Lote',                     // AH
+            'Activo',                            // AI - obligatorio
+            'Requiere Serie',                    // AJ
+            'Factor Ganancia',                   // AK
+            'Permite Gen Viñeta Incentivo',      // AL
+            'Genera Viñeta Incentivo',           // AM
+            'Agrupar Por Cat. EnVenta',          // AN
+            'Descripción Extendida para Cot',    // AO
+            'Centro de Costos',                  // AP
+            'Sub Centro de Costos',              // AQ
+            '#Dias Abastecerse',                 // AR
+            'Codigo Partida Arancelaria',        // AS
+            'Cuenta Inventario en Proceso',      // AT
+        ];
+    }
 
     private function requireAdminRol(): void
     {
