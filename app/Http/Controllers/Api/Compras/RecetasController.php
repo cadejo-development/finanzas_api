@@ -490,6 +490,36 @@ class RecetasController extends Controller
             $totalCategorias = DB::connection('compras')
                 ->table('receta_categorias')->where('activa', true)->count();
 
+            // Sincronización con BRILO: solo recetas con codigo_origen (tienen equivalente en SS)
+            $sincBase = Receta::where('activa', true)
+                ->when($sucursalId, $hasSucursal)
+                ->whereNotNull('codigo_origen')
+                ->where('codigo_origen', '!=', '');
+
+            $platosSincronizados = (clone $sincBase)
+                ->where(fn ($q) => $q->where('tipo_receta', 'plato')->orWhereNull('tipo_receta'))
+                ->whereRaw("lower(coalesce(tipo,'')) NOT LIKE '%sub%receta%'")
+                ->where(fn ($q) => $q->where('modificado_localmente', false)->orWhereNull('modificado_localmente'))
+                ->count();
+
+            $platosPendientes = (clone $sincBase)
+                ->where(fn ($q) => $q->where('tipo_receta', 'plato')->orWhereNull('tipo_receta'))
+                ->whereRaw("lower(coalesce(tipo,'')) NOT LIKE '%sub%receta%'")
+                ->where('modificado_localmente', true)
+                ->count();
+
+            $subSincronizadas = (clone $sincBase)
+                ->where(fn ($q) => $q->where('tipo_receta', 'sub_receta')
+                    ->orWhereRaw("lower(coalesce(tipo,'')) LIKE '%sub%receta%'"))
+                ->where(fn ($q) => $q->where('modificado_localmente', false)->orWhereNull('modificado_localmente'))
+                ->count();
+
+            $subPendientes = (clone $sincBase)
+                ->where(fn ($q) => $q->where('tipo_receta', 'sub_receta')
+                    ->orWhereRaw("lower(coalesce(tipo,'')) LIKE '%sub%receta%'"))
+                ->where('modificado_localmente', true)
+                ->count();
+
             // Por sucursal: siempre devuelve TODOS (para el grafico en el front)
             $cuentasSucursal = DB::connection('compras')
                 ->table('receta_sucursal as rs')
@@ -555,6 +585,12 @@ class RecetasController extends Controller
                         'total_platos'      => $totalPlatos,
                         'total_sub_recetas' => $totalSubRecetas,
                         'total_categorias'  => $totalCategorias,
+                    ],
+                    'sincronizacion' => [
+                        'platos_sincronizados' => $platosSincronizados,
+                        'platos_pendientes'    => $platosPendientes,
+                        'sub_sincronizadas'    => $subSincronizadas,
+                        'sub_pendientes'       => $subPendientes,
                     ],
                     'por_sucursal'  => $porSucursal,
                     'por_categoria' => $porCategoria,
