@@ -240,8 +240,9 @@ class ExpedienteController extends RRHHBaseController
             'estado_civil'     => 'nullable|in:soltero,casado,divorciado,viudo,union_libre',
             'nacionalidad'     => 'nullable|string|max:60',
             'grupo_sanguineo'  => 'nullable|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
-            'lugar_nacimiento' => 'nullable|string|max:150',
-            'notas'            => 'nullable|string|max:2000',
+            'lugar_nacimiento'        => 'nullable|string|max:150',
+            'nacimiento_municipio_id' => 'nullable|integer',
+            'notas'                   => 'nullable|string|max:2000',
         ]);
 
         $data['aud_usuario'] = $request->user()?->email;
@@ -377,6 +378,15 @@ class ExpedienteController extends RRHHBaseController
             'lugar_exp_municipio_id'=> 'nullable|integer',
             'lugar_exp_texto'       => 'nullable|string|max:200',
         ]);
+
+        if ($data['tipo'] !== 'otro') {
+            if (ExpedienteDocumento::where('empleado_id', $empleadoId)->where('tipo', $data['tipo'])->exists()) {
+                return response()->json([
+                    'message' => 'Ya existe un documento de ese tipo para este empleado.',
+                    'errors'  => ['tipo' => ['Ya existe un documento de este tipo.']],
+                ], 422);
+            }
+        }
 
         $doc = ExpedienteDocumento::create(array_merge($data, ['empleado_id' => $empleadoId]));
 

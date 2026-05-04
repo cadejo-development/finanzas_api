@@ -12,7 +12,7 @@ class ExpedienteDatosPersonales extends Model
     protected $fillable = [
         'empleado_id', 'fecha_nacimiento', 'genero', 'estado_civil',
         'nacionalidad', 'grupo_sanguineo', 'lugar_nacimiento',
-        'notas', 'aud_usuario',
+        'nacimiento_municipio_id', 'notas', 'aud_usuario',
     ];
 
     protected $casts = [
