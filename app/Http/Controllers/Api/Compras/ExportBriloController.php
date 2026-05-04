@@ -373,17 +373,19 @@ class ExportBriloController extends Controller
     private function unidadACodigoBrilo(string $unidad): string
     {
         return match (strtolower(trim($unidad))) {
-            'oz', 'oz fl'                      => 'OZ001',
-            'lb', 'libra', 'libras'            => 'LB001',
-            'kg', 'kilogramo', 'kilogramos'    => 'KG001',
-            'lt', 'litro', 'litros'            => 'LT001',
-            'g', 'gr', 'gramo', 'gramos'       => 'GR001',
-            'porcion', 'porción'               => 'PORCION',
-            'u', 'und', 'unidad', 'unidades'   => 'UNIDAD',
-            'galon', 'galón', 'gal'            => 'GAL001',
-            'botella'                           => 'BOTELLA',
-            'rebanada'                          => 'REBANADA',
-            default                             => strtoupper($unidad), // fallback: devolver tal cual en mayúsculas
+            'oz', 'onza', 'onzas'                          => 'OZ001',
+            'oz fl', 'fl oz', 'ozf',
+                'onza fluida', 'onzas fluidas'             => 'OZF',    // ONZAS FLUIDAS — código distinto en BRILO
+            'lb', 'libra', 'libras'                        => 'LB001',
+            'kg', 'kilogramo', 'kilogramos'                => 'KG001',
+            'lt', 'litro', 'litros'                        => 'LT001',
+            'g', 'gr', 'gramo', 'gramos'                   => 'GR001',
+            'porcion', 'porción'                           => 'UNIDAD', // PORCION no existe en BRILO → usar UNIDAD
+            'u', 'und', 'unidad', 'unidades'               => 'UNIDAD',
+            'galon', 'galón', 'gal'                        => 'GAL001',
+            'botella'                                       => 'BOTELLA',
+            'rebanada'                                      => 'REBANADA',
+            default                                        => strtoupper($unidad),
         };
     }
 }
