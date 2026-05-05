@@ -38,8 +38,6 @@ class VacacionesController extends RRHHBaseController
      */
     public function store(Request $request): JsonResponse
     {
-        $jefe = $this->getJefeEmpleado();
-
         $validated = $request->validate([
             'empleado_id'  => 'required|integer',
             'fecha_inicio' => 'required|date',
@@ -47,6 +45,8 @@ class VacacionesController extends RRHHBaseController
             'dias'         => 'required|numeric|min:0.5',
             'observaciones'=> 'nullable|string|max:500',
         ]);
+
+        $jefe = $this->getJefeEmpleado();
 
         if (!$this->puedeGestionar($validated['empleado_id'])) {
             return response()->json([

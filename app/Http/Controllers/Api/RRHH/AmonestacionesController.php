@@ -34,8 +34,6 @@ class AmonestacionesController extends RRHHBaseController
      */
     public function store(Request $request): JsonResponse
     {
-        $jefe = $this->getJefeEmpleado();
-
         $validated = $request->validate([
             'empleado_id'        => 'required|integer',
             'tipo_falta_id'      => 'required|exists:rrhh.tipos_falta,id',
@@ -48,6 +46,8 @@ class AmonestacionesController extends RRHHBaseController
             'dias_suspension.*'  => 'date',
             'archivo'            => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
         ]);
+
+        $jefe = $this->getJefeEmpleado();
 
         if (!$this->puedeGestionar($validated['empleado_id'])) {
             return response()->json([

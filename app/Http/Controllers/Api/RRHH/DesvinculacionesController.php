@@ -48,8 +48,6 @@ class DesvinculacionesController extends RRHHBaseController
      */
     public function store(Request $request): JsonResponse
     {
-        $jefe = $this->getJefeEmpleado();
-
         $validated = $request->validate([
             'empleado_id'   => 'required|integer',
             'motivo_id'     => 'required|exists:rrhh.motivos_desvinculacion,id',
@@ -58,6 +56,8 @@ class DesvinculacionesController extends RRHHBaseController
             'observaciones' => 'nullable|string|max:1000',
             'archivo'       => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
         ]);
+
+        $jefe = $this->getJefeEmpleado();
 
         if (!$this->esSubordinado($validated['empleado_id'])) {
             return response()->json([

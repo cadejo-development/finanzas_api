@@ -31,8 +31,6 @@ class TrasladosController extends RRHHBaseController
      */
     public function store(Request $request): JsonResponse
     {
-        $jefe = $this->getJefeEmpleado();
-
         $validated = $request->validate([
             'empleado_id'              => 'required|integer',
             'sucursal_destino_id'      => 'required|integer',
@@ -41,6 +39,8 @@ class TrasladosController extends RRHHBaseController
             'fecha_efectiva'           => 'required|date',
             'motivo'                   => 'nullable|string|max:500',
         ]);
+
+        $jefe = $this->getJefeEmpleado();
 
         if (!$this->esSubordinado($validated['empleado_id'])) {
             return response()->json([

@@ -50,8 +50,6 @@ class CambiosSalarialesController extends RRHHBaseController
      */
     public function store(Request $request): JsonResponse
     {
-        $jefe = $this->getJefeEmpleado();
-
         $validated = $request->validate([
             'empleado_id'     => 'required|integer',
             'tipo_aumento_id' => 'required|exists:rrhh.tipos_aumento_salarial,id',
@@ -60,6 +58,8 @@ class CambiosSalarialesController extends RRHHBaseController
             'fecha_efectiva'  => 'required|date',
             'justificacion'   => 'nullable|string|max:1000',
         ]);
+
+        $jefe = $this->getJefeEmpleado();
 
         if (!$this->esSubordinado($validated['empleado_id'])) {
             return response()->json([

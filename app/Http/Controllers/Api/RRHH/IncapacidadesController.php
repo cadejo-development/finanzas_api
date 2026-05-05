@@ -40,8 +40,6 @@ class IncapacidadesController extends RRHHBaseController
      */
     public function store(Request $request): JsonResponse
     {
-        $jefe = $this->getJefeEmpleado();
-
         $validated = $request->validate([
             'empleado_id'        => 'required|integer',
             'tipo_incapacidad_id'=> 'required|exists:rrhh.tipos_incapacidad,id',
@@ -51,10 +49,12 @@ class IncapacidadesController extends RRHHBaseController
             'numero_certificado' => 'nullable|string|max:80',
             'fecha_inicio'       => 'required|date',
             'fecha_fin'          => 'required|date|after_or_equal:fecha_inicio',
-            'dias'               => 'required|integer|min:1',
+            'dias'               => 'nullable|integer|min:1',  // auto-calculado si no se envía
             'observaciones'      => 'nullable|string|max:500',
             'archivo'            => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
         ]);
+
+        $jefe = $this->getJefeEmpleado();
 
         if (!$this->puedeGestionar($validated['empleado_id'])) {
             return response()->json([
@@ -62,6 +62,12 @@ class IncapacidadesController extends RRHHBaseController
                 'message' => 'El empleado no pertenece a tu equipo.',
             ], 403);
         }
+
+        // Calcular días automáticamente si el frontend no los envió
+        $dias = $validated['dias'] ?? (
+            \Carbon\Carbon::parse($validated['fecha_inicio'])
+                ->diffInDays(\Carbon\Carbon::parse($validated['fecha_fin'])) + 1
+        );
 
         $archivoNombre = null;
         $archivoRuta   = null;
@@ -82,7 +88,7 @@ class IncapacidadesController extends RRHHBaseController
             'registrado_por_id'   => $jefe->id,
             'fecha_inicio'        => $validated['fecha_inicio'],
             'fecha_fin'           => $validated['fecha_fin'],
-            'dias'                => $validated['dias'],
+            'dias'                => $dias,
             'observaciones'       => $validated['observaciones'] ?? null,
             'archivo_nombre'      => $archivoNombre,
             'archivo_ruta'        => $archivoRuta,
