@@ -298,6 +298,7 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::put('incapacidades/{id}',                 [IncapacidadesController::class, 'update']);
     Route::delete('incapacidades/{id}',              [IncapacidadesController::class, 'destroy']);
     Route::patch('incapacidades/{id}/homologar',     [IncapacidadesController::class, 'homologar']);
+    Route::get('incapacidades/{id}/archivo',         [IncapacidadesController::class, 'archivo']);
 
     // Amonestaciones
     Route::get('amonestaciones',                    [AmonestacionesController::class, 'index']);

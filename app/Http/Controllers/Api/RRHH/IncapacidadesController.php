@@ -192,10 +192,28 @@ class IncapacidadesController extends RRHHBaseController
     }
 
     /**
+     * GET /api/rrhh/incapacidades/{id}/archivo
+     * Devuelve una URL firmada temporal (15 min) para ver/descargar el archivo en S3.
+     */
+    public function archivo(Request $request, int $id): JsonResponse
+    {
+        return $this->captureAndRespond($request, function () use ($id) {
+            $incapacidad = Incapacidad::findOrFail($id);
+
+            if (! $incapacidad->archivo_ruta) {
+                return response()->json(['success' => false, 'message' => 'Esta incapacidad no tiene archivo adjunto.'], 404);
+            }
+
+            $url = Storage::disk('s3')->temporaryUrl($incapacidad->archivo_ruta, now()->addMinutes(15));
+
+            return response()->json(['success' => true, 'url' => $url]);
+        });
+    }
+
+    /**
      * Marcar incapacidad como homologada.
      * PATCH /api/rrhh/incapacidades/{id}/homologar
-     */
-    public function homologar(Request $request, int $id): JsonResponse
+     */    public function homologar(Request $request, int $id): JsonResponse
     {
         return $this->captureAndRespond($request, function () use ($id) {
             $jefe        = $this->getJefeEmpleado();

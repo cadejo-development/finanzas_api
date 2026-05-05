@@ -80,7 +80,7 @@ trait CapturesExceptions
             );
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Ocurrió un error inesperado. El equipo técnico ha sido notificado.',
             ], 500);
         }
     }
