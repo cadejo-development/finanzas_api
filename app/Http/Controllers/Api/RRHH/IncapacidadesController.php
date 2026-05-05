@@ -75,7 +75,7 @@ class IncapacidadesController extends RRHHBaseController
         if ($request->hasFile('archivo')) {
             $file          = $request->file('archivo');
             $archivoNombre = $file->getClientOriginalName();
-            $archivoRuta   = $file->store('rrhh/incapacidades', 'local');
+            $archivoRuta   = $file->store('rrhh/incapacidades', 's3');
         }
 
         $incapacidad = Incapacidad::create([
@@ -100,7 +100,7 @@ class IncapacidadesController extends RRHHBaseController
 
         // Marcar ausencias injustificadas como cubiertas por esta incapacidad (solo ISSS, ≤ 3 días)
         // El registro de ausencia se conserva pero no se descuenta al empleado
-        if (($validated['tipo_institucion'] ?? null) === 'isss' && $validated['dias'] <= 3) {
+        if (($validated['tipo_institucion'] ?? null) === 'isss' && $dias <= 3) {
             AusenciaInjustificada::where('empleado_id', $validated['empleado_id'])
                 ->whereBetween('fecha', [$validated['fecha_inicio'], $validated['fecha_fin']])
                 ->whereNull('cubierta_por_incapacidad_id')
@@ -119,7 +119,7 @@ class IncapacidadesController extends RRHHBaseController
                 'Institución' => $institucionLabel,
                 'Desde'       => $validated['fecha_inicio'],
                 'Hasta'       => $validated['fecha_fin'],
-                'Días'        => $validated['dias'] . ' día(s)',
+                'Días'        => $dias . ' día(s)',
                 'Observaciones' => $validated['observaciones'] ?? null,
             ]);
             $this->notificarAccion($validated['empleado_id'], 'Incapacidad', $detalles, 'incapacidades');
@@ -169,7 +169,7 @@ class IncapacidadesController extends RRHHBaseController
         $incapacidad = Incapacidad::findOrFail($id);
 
         if ($incapacidad->archivo_ruta) {
-            Storage::disk('local')->delete($incapacidad->archivo_ruta);
+            Storage::disk('s3')->delete($incapacidad->archivo_ruta);
         }
 
         // Revertir el marcado en ausencias que esta incapacidad cubría
