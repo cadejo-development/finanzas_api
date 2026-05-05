@@ -615,7 +615,7 @@ class RecetasController extends Controller
 
         try {
             $page        = max(1,  (int) ($request->query('page',       1)));
-            $perPage     = min(50, (int) ($request->query('per_page',  20)));
+            $perPage     = min(500, (int) ($request->query('per_page', 20)));
             $search      = $request->query('search');
             $sucursalId  = $request->query('sucursal_id')  ? (int) $request->query('sucursal_id')  : null;
             $categoriaId = $request->query('categoria_id') ? (int) $request->query('categoria_id') : null;
