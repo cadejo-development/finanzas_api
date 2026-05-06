@@ -279,10 +279,11 @@ class VentasController extends Controller
                     return $costoUnit * (float) ($mod->cantidad ?? 0);
                 });
 
-                $costoPlato  = $costoIngredientes + $costoModificadores;
-                $precioVenta = (float) ($receta->precio ?: $p['precio_unitario']);
+                $costoPlato    = $costoIngredientes + $costoModificadores;
+                $precioVenta   = (float) ($receta->precio ?: $p['precio_unitario']);
+                $precioSinIva  = $precioVenta / 1.13;
                 $p['costo_receta']  = round($costoPlato, 4);
-                $p['pct_food_cost'] = $precioVenta > 0 ? round(($costoPlato / $precioVenta) * 100, 1) : null;
+                $p['pct_food_cost'] = $precioSinIva > 0 ? round(($costoPlato / $precioSinIva) * 100, 1) : null;
                 return $p;
             }, $platos);
         }
