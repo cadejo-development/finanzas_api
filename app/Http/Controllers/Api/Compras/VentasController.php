@@ -234,42 +234,48 @@ class VentasController extends Controller
             return $p;
         }, array_values($platos));
 
-        // ── Food cost: costo de ingredientes directos por receta ──────────────
+        // ── Food cost: costo de ingredientes directos + sub-recetas ──────────
         $codigos = array_filter(array_column($platos, 'codigo'));
         if (!empty($codigos)) {
-            $placeholders = implode(',', array_fill(0, count($codigos), '?'));
+            $ph  = implode(',', array_fill(0, count($codigos), '?'));
+            $cod = array_values($codigos);
+            $convCase = "CASE
+                WHEN LOWER(ri.unidad) = LOWER(p.unidad) THEN 1
+                WHEN p.factor_conversion IS NOT NULL AND p.unidad_base IS NOT NULL
+                 AND LOWER(ri.unidad) = LOWER(p.unidad_base) THEN 1.0/p.factor_conversion
+                WHEN LOWER(ri.unidad)='oz'  AND LOWER(p.unidad)='lb'               THEN 1.0/16
+                WHEN LOWER(ri.unidad)='lb'  AND LOWER(p.unidad)='oz'               THEN 16
+                WHEN LOWER(ri.unidad)='g'   AND LOWER(p.unidad)='kg'               THEN 1.0/1000
+                WHEN LOWER(ri.unidad)='kg'  AND LOWER(p.unidad)='g'                THEN 1000
+                WHEN LOWER(ri.unidad)='g'   AND LOWER(p.unidad)='lb'               THEN 1.0/453.592
+                WHEN LOWER(ri.unidad)='lb'  AND LOWER(p.unidad)='g'                THEN 453.592
+                WHEN LOWER(ri.unidad)='ml'  AND LOWER(p.unidad) IN ('l','lt','lts') THEN 1.0/1000
+                WHEN LOWER(ri.unidad) IN ('l','lt','lts') AND LOWER(p.unidad)='ml' THEN 1000
+                ELSE 1 END";
+
             $costos = DB::connection('compras')->select("
-                SELECT
-                    r.codigo_origen,
-                    r.precio AS precio_lista,
-                    SUM(
-                        ri.cantidad_por_plato
-                        * COALESCE(p.costo, 0)
-                        * CASE
-                            WHEN LOWER(ri.unidad) = LOWER(p.unidad) THEN 1
-                            WHEN p.factor_conversion IS NOT NULL
-                             AND p.unidad_base IS NOT NULL
-                             AND LOWER(ri.unidad) = LOWER(p.unidad_base)
-                                THEN 1.0 / p.factor_conversion
-                            WHEN LOWER(ri.unidad)='oz'  AND LOWER(p.unidad)='lb'  THEN 1.0/16
-                            WHEN LOWER(ri.unidad)='lb'  AND LOWER(p.unidad)='oz'  THEN 16
-                            WHEN LOWER(ri.unidad)='g'   AND LOWER(p.unidad)='kg'  THEN 1.0/1000
-                            WHEN LOWER(ri.unidad)='kg'  AND LOWER(p.unidad)='g'   THEN 1000
-                            WHEN LOWER(ri.unidad)='g'   AND LOWER(p.unidad)='lb'  THEN 1.0/453.592
-                            WHEN LOWER(ri.unidad)='lb'  AND LOWER(p.unidad)='g'   THEN 453.592
-                            WHEN LOWER(ri.unidad)='ml'  AND LOWER(p.unidad) IN ('l','lt','lts') THEN 1.0/1000
-                            WHEN LOWER(ri.unidad) IN ('l','lt','lts') AND LOWER(p.unidad)='ml'  THEN 1000
-                            ELSE 1
-                          END
-                    ) AS costo_ingredientes
-                FROM recetas r
-                JOIN receta_ingredientes ri ON ri.receta_id = r.id
-                JOIN productos p ON p.id = ri.producto_id
-                WHERE r.codigo_origen IN ({$placeholders})
-                  AND r.activa = true
-                  AND ri.producto_id IS NOT NULL
-                GROUP BY r.id, r.codigo_origen, r.precio
-            ", array_values($codigos));
+                SELECT codigo_origen, precio_lista, SUM(linea_costo) AS costo_ingredientes
+                FROM (
+                    -- Ingredientes directos
+                    SELECT r.codigo_origen, r.precio AS precio_lista,
+                        ri.cantidad_por_plato * COALESCE(p.costo,0) * ({$convCase}) AS linea_costo
+                    FROM recetas r
+                    JOIN receta_ingredientes ri ON ri.receta_id = r.id AND ri.producto_id IS NOT NULL
+                    JOIN productos p ON p.id = ri.producto_id
+                    WHERE r.codigo_origen IN ({$ph}) AND r.activa = true
+                    UNION ALL
+                    -- Ingredientes de sub-recetas (nivel 1)
+                    SELECT r.codigo_origen, r.precio AS precio_lista,
+                        ri.cantidad_por_plato * ri2.cantidad_por_plato * COALESCE(p.costo,0) * ({$convCase}) AS linea_costo
+                    FROM recetas r
+                    JOIN receta_ingredientes ri  ON ri.receta_id  = r.id  AND ri.sub_receta_id IS NOT NULL
+                    JOIN recetas sr              ON sr.id         = ri.sub_receta_id AND sr.activa = true
+                    JOIN receta_ingredientes ri2 ON ri2.receta_id = sr.id AND ri2.producto_id IS NOT NULL
+                    JOIN productos p ON p.id = ri2.producto_id
+                    WHERE r.codigo_origen IN ({$ph}) AND r.activa = true
+                ) x
+                GROUP BY codigo_origen, precio_lista
+            ", array_merge($cod, $cod));
 
             $costos = collect($costos)->keyBy('codigo_origen');
 
@@ -280,11 +286,9 @@ class VentasController extends Controller
                     $precioBase = (float) ($costo->precio_lista ?: $p['precio_unitario']);
                     $p['costo_receta']  = $costoIng;
                     $p['pct_food_cost'] = $precioBase > 0 ? round(($costoIng / $precioBase) * 100, 1) : null;
-                    $p['solo_directos'] = true; // sub-recetas no incluidas
                 } else {
                     $p['costo_receta']  = null;
                     $p['pct_food_cost'] = null;
-                    $p['solo_directos'] = false;
                 }
                 return $p;
             }, $platos);
@@ -317,36 +321,76 @@ class VentasController extends Controller
         $hasta        = $request->hasta ?? '2099-12-31';
         $categoriaKey = $request->categoria_key;
 
-        $bindings = [$sucursalId, $desde, $hasta];
-        $catWhere = '';
-        if ($categoriaKey) {
-            $catWhere = 'AND vsd.categoria_key = ?';
-            $bindings[] = $categoriaKey;
-        }
+        $catWhere = $categoriaKey ? 'AND vsd.categoria_key = ?' : '';
+        // Parámetros base: [sucursal, desde, hasta, (categoria?)]
+        $base = $categoriaKey
+            ? [$sucursalId, $desde, $hasta, $categoriaKey]
+            : [$sucursalId, $desde, $hasta];
+        // La query usa UNION ALL, por lo que los parámetros se repiten dos veces
+        $bindings = array_merge($base, $base);
+
+        $convCase = "CASE
+            WHEN LOWER(l.unidad_receta) = LOWER(p.unidad) THEN 1
+            WHEN p.factor_conversion IS NOT NULL AND p.unidad_base IS NOT NULL
+             AND LOWER(l.unidad_receta) = LOWER(p.unidad_base) THEN 1.0/p.factor_conversion
+            WHEN LOWER(l.unidad_receta)='oz'  AND LOWER(p.unidad)='lb'               THEN 1.0/16
+            WHEN LOWER(l.unidad_receta)='lb'  AND LOWER(p.unidad)='oz'               THEN 16
+            WHEN LOWER(l.unidad_receta)='g'   AND LOWER(p.unidad)='kg'               THEN 1.0/1000
+            WHEN LOWER(l.unidad_receta)='kg'  AND LOWER(p.unidad)='g'                THEN 1000
+            WHEN LOWER(l.unidad_receta)='g'   AND LOWER(p.unidad)='lb'               THEN 1.0/453.592
+            WHEN LOWER(l.unidad_receta)='lb'  AND LOWER(p.unidad)='g'                THEN 453.592
+            WHEN LOWER(l.unidad_receta)='ml'  AND LOWER(p.unidad) IN ('l','lt','lts') THEN 1.0/1000
+            WHEN LOWER(l.unidad_receta) IN ('l','lt','lts') AND LOWER(p.unidad)='ml' THEN 1000
+            ELSE 1 END";
 
         $rows = DB::connection('compras')->select("
             SELECT
-                p.nombre              AS ingrediente,
-                p.codigo              AS ingrediente_codigo,
-                ri.unidad             AS unidad_receta,
-                p.unidad              AS unidad_compra,
+                p.nombre             AS ingrediente,
+                p.codigo             AS ingrediente_codigo,
+                l.unidad_receta,
+                p.unidad             AS unidad_compra,
                 p.unidad_base,
                 p.factor_conversion,
-                COALESCE(p.costo, 0)  AS costo_unitario,
-                ROUND(SUM(ri.cantidad_por_plato * vsd.cantidad_vendida)::numeric, 3)                          AS total_consumido,
-                ROUND((SUM(ri.cantidad_por_plato * vsd.cantidad_vendida * COALESCE(p.costo, 0)))::numeric, 2) AS costo_total,
-                COUNT(DISTINCT r.codigo_origen)  AS en_platos,
-                STRING_AGG(DISTINCT r.nombre, ', ' ORDER BY r.nombre) AS platos_que_lo_usan
-            FROM ventas_semanales vs
-            JOIN ventas_semanales_detalle vsd ON vsd.venta_semanal_id = vs.id
-            JOIN recetas r  ON r.codigo_origen = vsd.producto_codigo AND r.activa = true
-            JOIN receta_ingredientes ri ON ri.receta_id = r.id
-            JOIN productos p ON p.id = ri.producto_id
-            WHERE vs.sucursal_id = ?
-              AND vs.semana_inicio >= ?
-              AND vs.semana_inicio <= ?
-              {$catWhere}
-            GROUP BY p.id, p.nombre, p.codigo, ri.unidad, p.unidad, p.unidad_base, p.factor_conversion, p.costo
+                COALESCE(p.costo,0)  AS costo_unitario,
+                ROUND(SUM(l.cantidad_usada)::numeric, 3) AS total_consumido,
+                ROUND(SUM(l.cantidad_usada * COALESCE(p.costo,0) * ({$convCase}))::numeric, 2) AS costo_total,
+                COUNT(DISTINCT l.plato_codigo) AS en_platos,
+                STRING_AGG(DISTINCT l.plato_nombre, ', ' ORDER BY l.plato_nombre) AS platos_que_lo_usan
+            FROM (
+                -- Ingredientes directos del plato
+                SELECT
+                    ri.producto_id,
+                    ri.unidad                                       AS unidad_receta,
+                    ri.cantidad_por_plato * vsd.cantidad_vendida    AS cantidad_usada,
+                    r.codigo_origen                                  AS plato_codigo,
+                    r.nombre                                         AS plato_nombre
+                FROM ventas_semanales vs
+                JOIN ventas_semanales_detalle vsd ON vsd.venta_semanal_id = vs.id
+                JOIN recetas r   ON r.codigo_origen = vsd.producto_codigo AND r.activa = true
+                JOIN receta_ingredientes ri ON ri.receta_id = r.id AND ri.producto_id IS NOT NULL
+                WHERE vs.sucursal_id = ? AND vs.semana_inicio >= ? AND vs.semana_inicio <= ?
+                {$catWhere}
+
+                UNION ALL
+
+                -- Ingredientes de sub-recetas (nivel 1)
+                SELECT
+                    ri2.producto_id,
+                    ri2.unidad                                                       AS unidad_receta,
+                    ri.cantidad_por_plato * ri2.cantidad_por_plato * vsd.cantidad_vendida AS cantidad_usada,
+                    r.codigo_origen                                                   AS plato_codigo,
+                    r.nombre                                                          AS plato_nombre
+                FROM ventas_semanales vs
+                JOIN ventas_semanales_detalle vsd ON vsd.venta_semanal_id = vs.id
+                JOIN recetas r    ON r.codigo_origen  = vsd.producto_codigo AND r.activa = true
+                JOIN receta_ingredientes ri  ON ri.receta_id   = r.id   AND ri.sub_receta_id IS NOT NULL
+                JOIN recetas sr              ON sr.id           = ri.sub_receta_id AND sr.activa = true
+                JOIN receta_ingredientes ri2 ON ri2.receta_id  = sr.id  AND ri2.producto_id IS NOT NULL
+                WHERE vs.sucursal_id = ? AND vs.semana_inicio >= ? AND vs.semana_inicio <= ?
+                {$catWhere}
+            ) l
+            JOIN productos p ON p.id = l.producto_id
+            GROUP BY p.id, p.nombre, p.codigo, l.unidad_receta, p.unidad, p.unidad_base, p.factor_conversion, p.costo
             ORDER BY costo_total DESC
         ", $bindings);
 
