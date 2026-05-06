@@ -241,6 +241,69 @@ class VentasController extends Controller
         ]);
     }
 
+    /**
+     * GET /api/compras/ventas/consumo-receta
+     * Ingredientes de una receta multiplicados por la cantidad vendida.
+     *
+     * Params: codigo (codigo_origen), cantidad (unidades vendidas)
+     */
+    public function consumoReceta(Request $request): JsonResponse
+    {
+        $request->validate([
+            'codigo'   => 'required|string',
+            'cantidad' => 'required|numeric|min:0',
+        ]);
+
+        $codigo   = trim($request->codigo);
+        $cantidad = (float) $request->cantidad;
+
+        $receta = DB::connection('compras')
+            ->table('recetas')
+            ->where('codigo_origen', $codigo)
+            ->where('activa', true)
+            ->first();
+
+        if (!$receta) {
+            return response()->json([
+                'success'   => false,
+                'encontrada'=> false,
+                'message'   => 'No hay receta registrada para este plato.',
+            ]);
+        }
+
+        $ingredientes = DB::connection('compras')
+            ->table('receta_ingredientes as ri')
+            ->leftJoin('productos as p',  'p.id',  '=', 'ri.producto_id')
+            ->leftJoin('recetas as sr',   'sr.id', '=', 'ri.sub_receta_id')
+            ->where('ri.receta_id', $receta->id)
+            ->select(
+                'ri.cantidad_por_plato',
+                'ri.unidad',
+                'p.nombre  as ingrediente_nombre',
+                'sr.nombre as sub_receta_nombre'
+            )
+            ->get()
+            ->map(fn($i) => [
+                'nombre'          => $i->ingrediente_nombre ?? $i->sub_receta_nombre ?? '—',
+                'tipo'            => $i->sub_receta_nombre ? 'sub_receta' : 'ingrediente',
+                'cantidad_plato'  => round((float) $i->cantidad_por_plato, 4),
+                'unidad'          => $i->unidad,
+                'total_consumido' => round((float) $i->cantidad_por_plato * $cantidad, 3),
+            ]);
+
+        return response()->json([
+            'success'    => true,
+            'encontrada' => true,
+            'receta'     => [
+                'id'             => $receta->id,
+                'nombre'         => $receta->nombre,
+                'codigo_origen'  => $receta->codigo_origen,
+            ],
+            'cantidad_vendida' => $cantidad,
+            'ingredientes'     => $ingredientes,
+        ]);
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     /**
