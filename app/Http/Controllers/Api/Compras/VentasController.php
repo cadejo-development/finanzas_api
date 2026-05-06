@@ -3,15 +3,17 @@
 namespace App\Http\Controllers\Api\Compras;
 
 use App\Http\Controllers\Controller;
+use App\Models\Receta;
 use App\Models\VentaSemanal;
 use App\Models\VentaSemanalDetalle;
+use App\Traits\RecetaCostoTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-// use PhpOffice\PhpSpreadsheet\IOFactory; // TODO: habilitar cuando se necesite importar xlsx
 
 class VentasController extends Controller
 {
+    use RecetaCostoTrait;
     /**
      * GET /api/compras/ventas
      * Lista de cabeceras de ventas semanales (paginado).
@@ -234,62 +236,44 @@ class VentasController extends Controller
             return $p;
         }, array_values($platos));
 
-        // ── Food cost: costo de ingredientes directos + sub-recetas ──────────
+        // ── Food cost: usa la misma lógica que la página de Recetas ─────────
         $codigos = array_filter(array_column($platos, 'codigo'));
         if (!empty($codigos)) {
-            $ph  = implode(',', array_fill(0, count($codigos), '?'));
-            $cod = array_values($codigos);
-            $convCase = "CASE
-                WHEN LOWER(ri.unidad) = LOWER(p.unidad) THEN 1
-                WHEN p.factor_conversion IS NOT NULL AND p.unidad_base IS NOT NULL
-                 AND LOWER(ri.unidad) = LOWER(p.unidad_base) THEN 1.0/p.factor_conversion
-                WHEN LOWER(ri.unidad)='oz'  AND LOWER(p.unidad)='lb'               THEN 1.0/16
-                WHEN LOWER(ri.unidad)='lb'  AND LOWER(p.unidad)='oz'               THEN 16
-                WHEN LOWER(ri.unidad)='g'   AND LOWER(p.unidad)='kg'               THEN 1.0/1000
-                WHEN LOWER(ri.unidad)='kg'  AND LOWER(p.unidad)='g'                THEN 1000
-                WHEN LOWER(ri.unidad)='g'   AND LOWER(p.unidad)='lb'               THEN 1.0/453.592
-                WHEN LOWER(ri.unidad)='lb'  AND LOWER(p.unidad)='g'                THEN 453.592
-                WHEN LOWER(ri.unidad)='ml'  AND LOWER(p.unidad) IN ('l','lt','lts') THEN 1.0/1000
-                WHEN LOWER(ri.unidad) IN ('l','lt','lts') AND LOWER(p.unidad)='ml' THEN 1000
-                ELSE 1 END";
+            $recetas = Receta::on('compras')
+                ->whereIn('codigo_origen', $codigos)
+                ->where('activa', true)
+                ->with([
+                    'ingredientes.producto',
+                    'ingredientes.subReceta.productoAsociado',
+                    'ingredientes.subReceta.ingredientes.producto',
+                ])
+                ->get()
+                ->keyBy('codigo_origen');
 
-            $costos = DB::connection('compras')->select("
-                SELECT codigo_origen, precio_lista, SUM(linea_costo) AS costo_ingredientes
-                FROM (
-                    -- Ingredientes directos
-                    SELECT r.codigo_origen, r.precio AS precio_lista,
-                        ri.cantidad_por_plato * COALESCE(p.costo,0) * ({$convCase}) AS linea_costo
-                    FROM recetas r
-                    JOIN receta_ingredientes ri ON ri.receta_id = r.id AND ri.producto_id IS NOT NULL
-                    JOIN productos p ON p.id = ri.producto_id
-                    WHERE r.codigo_origen IN ({$ph}) AND r.activa = true
-                    UNION ALL
-                    -- Ingredientes de sub-recetas (nivel 1)
-                    SELECT r.codigo_origen, r.precio AS precio_lista,
-                        ri.cantidad_por_plato * ri2.cantidad_por_plato * COALESCE(p.costo,0) * ({$convCase}) AS linea_costo
-                    FROM recetas r
-                    JOIN receta_ingredientes ri  ON ri.receta_id  = r.id  AND ri.sub_receta_id IS NOT NULL
-                    JOIN recetas sr              ON sr.id         = ri.sub_receta_id AND sr.activa = true
-                    JOIN receta_ingredientes ri2 ON ri2.receta_id = sr.id AND ri2.producto_id IS NOT NULL
-                    JOIN productos p ON p.id = ri2.producto_id
-                    WHERE r.codigo_origen IN ({$ph}) AND r.activa = true
-                ) x
-                GROUP BY codigo_origen, precio_lista
-            ", array_merge($cod, $cod));
-
-            $costos = collect($costos)->keyBy('codigo_origen');
-
-            $platos = array_map(function ($p) use ($costos) {
-                $costo = $costos[$p['codigo']] ?? null;
-                if ($costo) {
-                    $costoIng   = round((float) $costo->costo_ingredientes, 4);
-                    $precioBase = (float) ($costo->precio_lista ?: $p['precio_unitario']);
-                    $p['costo_receta']  = $costoIng;
-                    $p['pct_food_cost'] = $precioBase > 0 ? round(($costoIng / $precioBase) * 100, 1) : null;
-                } else {
+            $platos = array_map(function ($p) use ($recetas) {
+                $receta = $recetas[$p['codigo']] ?? null;
+                if (!$receta) {
                     $p['costo_receta']  = null;
                     $p['pct_food_cost'] = null;
+                    return $p;
                 }
+
+                // Costo por 1 plato (idéntico a RecetasController::costos)
+                $costoPlato = (float) $receta->ingredientes->sum(function ($ing) {
+                    if ($ing->sub_receta_id && $ing->subReceta) {
+                        return (float) $ing->cantidad_por_plato
+                            * $this->calcularCostoSubReceta($ing->subReceta, $ing->unidad);
+                    }
+                    if ($ing->producto) {
+                        return (float) $ing->cantidad_por_plato
+                            * $this->costoPorUnidadReceta($ing->producto, strtolower(trim($ing->unidad ?? '')));
+                    }
+                    return 0.0;
+                });
+
+                $precioVenta = (float) ($receta->precio ?: $p['precio_unitario']);
+                $p['costo_receta']  = round($costoPlato, 4);
+                $p['pct_food_cost'] = $precioVenta > 0 ? round(($costoPlato / $precioVenta) * 100, 1) : null;
                 return $p;
             }, $platos);
         }
