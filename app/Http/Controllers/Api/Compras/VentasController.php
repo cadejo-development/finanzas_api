@@ -149,6 +149,98 @@ class VentasController extends Controller
         ]);
     }
 
+    /**
+     * GET /api/compras/ventas/pivot
+     * Vista de ventas agrupada por plato x día.
+     *
+     * Params: sucursal_id (req), desde (Y-m-d), hasta (Y-m-d), categoria_key (opt)
+     * Devuelve: fechas[], platos[{codigo, nombre, precio_unitario, por_fecha{}, total_qty, total_venta}]
+     */
+    public function pivot(Request $request): JsonResponse
+    {
+        $request->validate([
+            'sucursal_id'  => 'required|integer|min:1',
+            'desde'        => 'nullable|date',
+            'hasta'        => 'nullable|date',
+            'categoria_key'=> 'nullable|string',
+        ]);
+
+        $sucursalId   = (int) $request->sucursal_id;
+        $desde        = $request->desde;
+        $hasta        = $request->hasta;
+        $categoriaKey = $request->categoria_key;
+
+        // IDs de ventas_semanales para esta sucursal en el rango
+        $query = VentaSemanal::where('sucursal_id', $sucursalId)
+            ->orderBy('semana_inicio');
+
+        if ($desde) $query->where('semana_inicio', '>=', $desde);
+        if ($hasta) $query->where('semana_inicio', '<=', $hasta);
+
+        $ventas = $query->get();
+
+        if ($ventas->isEmpty()) {
+            return response()->json(['success' => true, 'fechas' => [], 'platos' => []]);
+        }
+
+        $ventaIds = $ventas->pluck('id');
+        // Mapeo id → fecha
+        $fechaPorId = $ventas->pluck('semana_inicio', 'id')->map(fn($d) => $d instanceof \Carbon\Carbon ? $d->format('Y-m-d') : substr($d, 0, 10));
+        $fechas     = $fechaPorId->values()->unique()->sort()->values()->toArray();
+
+        // Detalles
+        $detallesQuery = VentaSemanalDetalle::whereIn('venta_semanal_id', $ventaIds);
+        if ($categoriaKey) {
+            $detallesQuery->where('categoria_key', $categoriaKey);
+        }
+        $detalles = $detallesQuery->get();
+
+        // Agrupar por producto → día
+        $platos = [];
+        foreach ($detalles as $d) {
+            $fecha = $fechaPorId[$d->venta_semanal_id] ?? null;
+            if (!$fecha) continue;
+            $key = $d->producto_codigo ?: $d->producto_nombre;
+
+            if (!isset($platos[$key])) {
+                $platos[$key] = [
+                    'codigo'          => $d->producto_codigo,
+                    'nombre'          => $d->producto_nombre,
+                    'categoria_key'   => $d->categoria_key,
+                    'precio_unitario' => round((float) $d->precio_unitario, 2),
+                    'por_fecha'       => [],
+                    'total_qty'       => 0,
+                    'total_venta'     => 0,
+                ];
+            }
+
+            $qty   = (float) $d->cantidad_vendida;
+            $total = (float) $d->total;
+
+            $platos[$key]['por_fecha'][$fecha]  = ($platos[$key]['por_fecha'][$fecha] ?? 0) + $qty;
+            $platos[$key]['total_qty']          += $qty;
+            $platos[$key]['total_venta']        += $total;
+            // Actualizar precio_unitario al promedio ponderado simple
+            $platos[$key]['precio_unitario'] = round(
+                $platos[$key]['total_qty'] > 0 ? $platos[$key]['total_venta'] / $platos[$key]['total_qty'] : 0, 2
+            );
+        }
+
+        // Ordenar por total_venta desc y redondear
+        usort($platos, fn($a, $b) => $b['total_venta'] <=> $a['total_venta']);
+        $platos = array_map(function ($p) {
+            $p['total_qty']   = round($p['total_qty'], 2);
+            $p['total_venta'] = round($p['total_venta'], 2);
+            return $p;
+        }, array_values($platos));
+
+        return response()->json([
+            'success' => true,
+            'fechas'  => $fechas,
+            'platos'  => $platos,
+        ]);
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     /**

@@ -204,6 +204,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     // Ventas semanales
     Route::get('ventas',              [VentasController::class, 'index']);
     Route::get('ventas/sugerencia',   [VentasController::class, 'sugerencia']);
+    Route::get('ventas/pivot',        [VentasController::class, 'pivot']);
     Route::get('ventas/{id}',         [VentasController::class, 'show']);
     Route::post('ventas/import',      [VentasController::class, 'import']);
 
