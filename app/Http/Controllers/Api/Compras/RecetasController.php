@@ -17,10 +17,6 @@ use Illuminate\Support\Facades\Storage;
 class RecetasController extends Controller
 {
     use \App\Traits\RecetaCostoTrait;
-
-    // Nota: los métodos costoPorUnidadReceta, convertirCosto y calcularCostoSubReceta
-    // provienen del trait RecetaCostoTrait. Los métodos privados al final de esta clase
-    // se mantienen como override ya que usan la misma lógica del trait.
     public function index(Request $request): JsonResponse
     {
         $perPage    = min((int) $request->query('per_page', 20), 100);
@@ -910,76 +906,6 @@ class RecetasController extends Controller
         return $data;
     }
 
-    private function calcularCostoSubReceta(?Receta $sub, ?string $unidadReceta = null, int $depth = 0): float
-    {
-        if (!$sub || $depth > 5) return 0.0;
-
-        // Resolver productoAsociado (se necesita más abajo como fallback de unidad).
-        $prod = $sub->productoAsociado ?? null;
-        if (!$prod && $sub->codigo_origen) {
-            $prod = \App\Models\Producto::where('codigo', $sub->codigo_origen)->first();
-        }
-
-        // Shortcut: solo usar el costo pre-almacenado del producto asociado cuando su unidad
-        // es física (lb, oz, g, kg, lt, ml, oz fl, galon). Si la unidad es 'tanda', 'u',
-        // 'porcion', etc., la conversión a la unidad de la receta padre es imposible y
-        // el costo del batch (ingredientes ÷ rendimiento) es la única fuente fiable.
-        $unidadesFisicas = ['lb', 'oz', 'g', 'kg', 'lt', 'ml', 'oz fl', 'galon'];
-        $prodUnit = strtolower(trim($prod?->unidad ?? ''));
-        if ($prod && (float) $prod->costo > 0 && in_array($prodUnit, $unidadesFisicas, true)) {
-            return $this->costoPorUnidadReceta($prod, strtolower(trim($unidadReceta ?? '')));
-        }
-
-        // Cargar ingredientes incluyendo sub-sub-recetas si no est├ín cargados.
-        if (!$sub->relationLoaded('ingredientes')) {
-            $sub->load([
-                'ingredientes.producto',
-                'ingredientes.subReceta.productoAsociado',
-                'ingredientes.subReceta.ingredientes.producto',
-            ]);
-        }
-
-        $batchCosto = (float) $sub->ingredientes->sum(function ($si) use ($depth) {
-            // Ingrediente es a su vez una sub-receta ÔåÆ calcular recursivamente.
-            if ($si->sub_receta_id && $si->subReceta) {
-                return (float) $si->cantidad_por_plato
-                    * $this->calcularCostoSubReceta($si->subReceta, $si->unidad, $depth + 1);
-            }
-            $costo    = (float) ($si->producto?->costo ?? 0);
-            $ingrUnit = strtolower(trim($si->unidad ?? ''));
-            $costoUnit = $si->producto
-                ? $this->costoPorUnidadReceta($si->producto, $ingrUnit)
-                : 0.0;
-            return (float) $si->cantidad_por_plato * $costoUnit;
-        });
-
-        // Si la sub-receta tiene rendimiento definido: es el denominador expl├¡cito del batch.
-        // Ej: rinde 10 porciones ÔåÆ costo/porcion = batch/10; padre usa 1 porcion ÔåÆ $batch/10.
-        $rendimiento = (float) ($sub->rendimiento ?? 0);
-        $rendUnidad  = strtolower(trim($sub->rendimiento_unidad ?? ''));
-        if ($rendimiento > 0 && $rendUnidad) {
-            $costePorUnidad = $batchCosto / $rendimiento;
-            $targetUnit     = strtolower(trim($unidadReceta ?? ''));
-            if (!$targetUnit || $targetUnit === $rendUnidad) {
-                return $costePorUnidad;
-            }
-            return $this->convertirCosto($costePorUnidad, $rendUnidad, $targetUnit);
-        }
-
-        // Sin rendimiento expl├¡cito ÔåÆ batch = 1 unidad del producto (ej: 1 lb).
-        // Para unidades desconocidas ('tanda', 'u', 'porcion', etc.) se trata como 'lb',
-        // ya que SS usa mxprCantidad en libras internamente y el batch impl├¡citamente
-        // representa el costo por 1 lb de producci├│n.
-        $subUnit = strtolower(trim($prod?->unidad ?? ''));
-        if ($subUnit && $unidadReceta) {
-            $knownUnits = ['lb', 'oz', 'g', 'kg', 'lt', 'ml', 'oz fl', 'galon'];
-            $effectiveUnit = in_array($subUnit, $knownUnits, true) ? $subUnit : 'lb';
-            $batchCosto = $this->convertirCosto($batchCosto, $effectiveUnit, strtolower(trim($unidadReceta)));
-        }
-
-        return $batchCosto;
-    }
-
     /**
      * Normaliza una URL de foto antes de guardar en DB.
      * Si el frontend devuelve una presigned URL (con query params de firma),
@@ -1031,57 +957,4 @@ class RecetasController extends Controller
         }
     }
 
-    /**
-     * Calcula el costo por unidad de receta para un producto.
-     * Si el producto tiene factor_conversion + unidad_base, primero normaliza
-     * el costo a la unidad_base y luego convierte a la unidad destino.
-     * Ej: 1 caja (costo $85) con 4500g ÔåÆ $0.01889/g ÔåÆ receta en oz ÔåÆ utilizarConversion(gÔåÆoz)
-     */
-    private function costoPorUnidadReceta(\App\Models\Producto $prod, string $haciaUnidad): float
-    {
-        $costo = (float) $prod->costo;
-        if ($costo === 0.0) return 0.0;
-
-        $factor   = $prod->factor_conversion ? (float) $prod->factor_conversion : null;
-        $unidBase = $factor ? strtolower(trim($prod->unidad_base ?? '')) : null;
-
-        if ($factor && $factor > 0 && $unidBase) {
-            // Normalizar: costo por unidad_base
-            $costoPorBase = $costo / $factor;
-            if (!$haciaUnidad || $haciaUnidad === $unidBase) return $costoPorBase;
-            return $this->convertirCosto($costoPorBase, $unidBase, $haciaUnidad);
-        }
-
-        // Sin factor: conversi├│n directa entre unidades f├¡sicas
-        $prodUnit = strtolower(trim($prod->unidad ?? ''));
-        if (!$haciaUnidad || $haciaUnidad === $prodUnit) return $costo;
-        return $this->convertirCosto($costo, $prodUnit, $haciaUnidad);
-    }
-
-    /**
-     * Convierte el costo almacenado (por unidad de compra) a la unidad usada en la receta.
-     * Ej: costo en $/lb ÔåÆ $/oz multiplica por (1/16).
-     */
-    private function convertirCosto(float $costo, string $desdePorUnidad, string $haciaUnidad): float
-    {
-        if ($costo === 0.0 || $desdePorUnidad === $haciaUnidad) return $costo;
-
-        // Tabla de conversi├│n: factor[FROM][TO] = # de unidades FROM que caben en 1 unidad TO
-        // costo_TO = costo_FROM ├ù factor
-        $conv = [
-            // Masa / peso
-            'lb'    => ['oz' => 1/16,       'g'    => 1/453.592,  'kg'    => 1/0.453592, 'lb'    => 1],
-            'kg'    => ['g'  => 1/1000,     'oz'   => 1/35.274,   'lb'    => 1/2.20462,  'kg'    => 1],
-            'oz'    => ['lb' => 16,         'g'    => 28.3495,    'oz'    => 1],
-            'g'     => ['lb' => 453.592,    'kg'   => 1000,       'oz'    => 28.3495,     'g'     => 1],
-            // Volumen
-            'lt'    => ['ml' => 1/1000,     'oz fl'=> 1/33.814,   'galon' => 3.78541,    'lt'    => 1],
-            'galon' => ['oz fl' => 1/128,   'lt'   => 1/3.78541,  'ml'    => 1/3785.41,  'galon' => 1],
-            'oz fl' => ['galon' => 128,     'lt'   => 33.814,     'ml'    => 33.814/1000, 'oz fl' => 1],
-            'ml'    => ['lt' => 1000,       'oz fl'=> 1000/33.814,'galon' => 3785.41,    'ml'    => 1],
-        ];
-
-        $factor = $conv[$desdePorUnidad][$haciaUnidad] ?? null;
-        return $factor !== null ? $costo * $factor : $costo;
-    }
 }

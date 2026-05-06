@@ -23,12 +23,17 @@ trait RecetaCostoTrait
     {
         if (!$sub || $depth > 5) return 0.0;
 
-        // Si el producto asociado tiene costo pre-almacenado, usarlo directamente (fast-path).
         $prod = $sub->productoAsociado ?? null;
         if (!$prod && $sub->codigo_origen) {
             $prod = \App\Models\Producto::where('codigo', $sub->codigo_origen)->first();
         }
-        if ($prod && (float) $prod->costo > 0) {
+
+        // Fast-path: usar costo pre-almacenado solo cuando la unidad del producto es física.
+        // Para unidades no físicas (u, porcion, tanda, etc.) la conversión es imposible
+        // y hay que calcular desde los ingredientes del batch.
+        $unidadesFisicas = ['lb', 'oz', 'g', 'kg', 'lt', 'ml', 'oz fl', 'galon'];
+        $prodUnit = strtolower(trim($prod?->unidad ?? ''));
+        if ($prod && (float) $prod->costo > 0 && in_array($prodUnit, $unidadesFisicas, true)) {
             return $this->costoPorUnidadReceta($prod, strtolower(trim($unidadReceta ?? '')));
         }
 
