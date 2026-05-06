@@ -246,6 +246,7 @@ class VentasController extends Controller
                     'ingredientes.producto',
                     'ingredientes.subReceta.productoAsociado',
                     'ingredientes.subReceta.ingredientes.producto',
+                    'modificadores.producto',
                 ])
                 ->get()
                 ->keyBy('codigo_origen');
@@ -258,8 +259,8 @@ class VentasController extends Controller
                     return $p;
                 }
 
-                // Costo por 1 plato (idéntico a RecetasController::costos)
-                $costoPlato = (float) $receta->ingredientes->sum(function ($ing) {
+                // Ingredientes (igual que RecetasController::costos)
+                $costoIngredientes = (float) $receta->ingredientes->sum(function ($ing) {
                     if ($ing->sub_receta_id && $ing->subReceta) {
                         return (float) $ing->cantidad_por_plato
                             * $this->calcularCostoSubReceta($ing->subReceta, $ing->unidad);
@@ -271,6 +272,14 @@ class VentasController extends Controller
                     return 0.0;
                 });
 
+                // Modificadores (igual que RecetasController::formatReceta)
+                $costoModificadores = (float) $receta->modificadores->sum(function ($mod) {
+                    if (!$mod->producto) return 0.0;
+                    $costoUnit = $this->costoPorUnidadReceta($mod->producto, strtolower(trim($mod->unidad ?? '')));
+                    return $costoUnit * (float) ($mod->cantidad ?? 0);
+                });
+
+                $costoPlato  = $costoIngredientes + $costoModificadores;
                 $precioVenta = (float) ($receta->precio ?: $p['precio_unitario']);
                 $p['costo_receta']  = round($costoPlato, 4);
                 $p['pct_food_cost'] = $precioVenta > 0 ? round(($costoPlato / $precioVenta) * 100, 1) : null;
