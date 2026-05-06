@@ -237,21 +237,41 @@ class VentasController extends Controller
         // ── Food cost: costo de ingredientes directos por receta ──────────────
         $codigos = array_filter(array_column($platos, 'codigo'));
         if (!empty($codigos)) {
-            $costos = DB::connection('compras')
-                ->table('recetas as r')
-                ->join('receta_ingredientes as ri', 'ri.receta_id', '=', 'r.id')
-                ->join('productos as p', 'p.id', '=', 'ri.producto_id')
-                ->whereIn('r.codigo_origen', $codigos)
-                ->where('r.activa', true)
-                ->whereNotNull('ri.producto_id')
-                ->select(
-                    'r.codigo_origen',
-                    'r.precio as precio_lista',
-                    DB::raw('SUM(ri.cantidad_por_plato * COALESCE(p.costo, 0)) as costo_ingredientes')
-                )
-                ->groupBy('r.id', 'r.codigo_origen', 'r.precio')
-                ->get()
-                ->keyBy('codigo_origen');
+            $placeholders = implode(',', array_fill(0, count($codigos), '?'));
+            $costos = DB::connection('compras')->select("
+                SELECT
+                    r.codigo_origen,
+                    r.precio AS precio_lista,
+                    SUM(
+                        ri.cantidad_por_plato
+                        * COALESCE(p.costo, 0)
+                        * CASE
+                            WHEN LOWER(ri.unidad) = LOWER(p.unidad) THEN 1
+                            WHEN p.factor_conversion IS NOT NULL
+                             AND p.unidad_base IS NOT NULL
+                             AND LOWER(ri.unidad) = LOWER(p.unidad_base)
+                                THEN 1.0 / p.factor_conversion
+                            WHEN LOWER(ri.unidad)='oz'  AND LOWER(p.unidad)='lb'  THEN 1.0/16
+                            WHEN LOWER(ri.unidad)='lb'  AND LOWER(p.unidad)='oz'  THEN 16
+                            WHEN LOWER(ri.unidad)='g'   AND LOWER(p.unidad)='kg'  THEN 1.0/1000
+                            WHEN LOWER(ri.unidad)='kg'  AND LOWER(p.unidad)='g'   THEN 1000
+                            WHEN LOWER(ri.unidad)='g'   AND LOWER(p.unidad)='lb'  THEN 1.0/453.592
+                            WHEN LOWER(ri.unidad)='lb'  AND LOWER(p.unidad)='g'   THEN 453.592
+                            WHEN LOWER(ri.unidad)='ml'  AND LOWER(p.unidad) IN ('l','lt','lts') THEN 1.0/1000
+                            WHEN LOWER(ri.unidad) IN ('l','lt','lts') AND LOWER(p.unidad)='ml'  THEN 1000
+                            ELSE 1
+                          END
+                    ) AS costo_ingredientes
+                FROM recetas r
+                JOIN receta_ingredientes ri ON ri.receta_id = r.id
+                JOIN productos p ON p.id = ri.producto_id
+                WHERE r.codigo_origen IN ({$placeholders})
+                  AND r.activa = true
+                  AND ri.producto_id IS NOT NULL
+                GROUP BY r.id, r.codigo_origen, r.precio
+            ", array_values($codigos));
+
+            $costos = collect($costos)->keyBy('codigo_origen');
 
             $platos = array_map(function ($p) use ($costos) {
                 $costo = $costos[$p['codigo']] ?? null;
