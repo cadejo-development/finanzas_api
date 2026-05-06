@@ -205,8 +205,9 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('ventas',              [VentasController::class, 'index']);
     Route::get('ventas/sugerencia',   [VentasController::class, 'sugerencia']);
     Route::get('ventas/pivot',          [VentasController::class, 'pivot']);
-    Route::get('ventas/consumo-receta', [VentasController::class, 'consumoReceta']);
-    Route::get('ventas/{id}',         [VentasController::class, 'show']);
+    Route::get('ventas/consumo-receta',        [VentasController::class, 'consumoReceta']);
+    Route::get('ventas/consumo-ingredientes',  [VentasController::class, 'consumoIngredientes']);
+    Route::get('ventas/{id}',                  [VentasController::class, 'show']);
     Route::post('ventas/import',      [VentasController::class, 'import']);
 
     // Exportación BRILO (solo admin_compras / admin_recetas)

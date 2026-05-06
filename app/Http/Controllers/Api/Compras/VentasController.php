@@ -234,10 +234,111 @@ class VentasController extends Controller
             return $p;
         }, array_values($platos));
 
+        // ── Food cost: costo de ingredientes directos por receta ──────────────
+        $codigos = array_filter(array_column($platos, 'codigo'));
+        if (!empty($codigos)) {
+            $costos = DB::connection('compras')
+                ->table('recetas as r')
+                ->join('receta_ingredientes as ri', 'ri.receta_id', '=', 'r.id')
+                ->join('productos as p', 'p.id', '=', 'ri.producto_id')
+                ->whereIn('r.codigo_origen', $codigos)
+                ->where('r.activa', true)
+                ->whereNotNull('ri.producto_id')
+                ->select(
+                    'r.codigo_origen',
+                    'r.precio as precio_lista',
+                    DB::raw('SUM(ri.cantidad_por_plato * COALESCE(p.costo, 0)) as costo_ingredientes')
+                )
+                ->groupBy('r.id', 'r.codigo_origen', 'r.precio')
+                ->get()
+                ->keyBy('codigo_origen');
+
+            $platos = array_map(function ($p) use ($costos) {
+                $costo = $costos[$p['codigo']] ?? null;
+                if ($costo) {
+                    $costoIng   = round((float) $costo->costo_ingredientes, 4);
+                    $precioBase = (float) ($costo->precio_lista ?: $p['precio_unitario']);
+                    $p['costo_receta']  = $costoIng;
+                    $p['pct_food_cost'] = $precioBase > 0 ? round(($costoIng / $precioBase) * 100, 1) : null;
+                    $p['solo_directos'] = true; // sub-recetas no incluidas
+                } else {
+                    $p['costo_receta']  = null;
+                    $p['pct_food_cost'] = null;
+                    $p['solo_directos'] = false;
+                }
+                return $p;
+            }, $platos);
+        }
+
         return response()->json([
             'success' => true,
             'fechas'  => $fechas,
             'platos'  => $platos,
+        ]);
+    }
+
+    /**
+     * GET /api/compras/ventas/consumo-ingredientes
+     * Agrega consumo total de ingredientes directos de todos los platos vendidos en el período.
+     *
+     * Params: sucursal_id, desde, hasta, categoria_key (opt)
+     */
+    public function consumoIngredientes(Request $request): JsonResponse
+    {
+        $request->validate([
+            'sucursal_id'   => 'required|integer|min:1',
+            'desde'         => 'nullable|date',
+            'hasta'         => 'nullable|date',
+            'categoria_key' => 'nullable|string',
+        ]);
+
+        $sucursalId   = (int) $request->sucursal_id;
+        $desde        = $request->desde ?? '2000-01-01';
+        $hasta        = $request->hasta ?? '2099-12-31';
+        $categoriaKey = $request->categoria_key;
+
+        $bindings = [$sucursalId, $desde, $hasta];
+        $catWhere = '';
+        if ($categoriaKey) {
+            $catWhere = 'AND vsd.categoria_key = ?';
+            $bindings[] = $categoriaKey;
+        }
+
+        $rows = DB::connection('compras')->select("
+            SELECT
+                p.nombre       AS ingrediente,
+                p.codigo       AS ingrediente_codigo,
+                ri.unidad,
+                COALESCE(p.costo, 0)   AS costo_unitario,
+                ROUND(SUM(ri.cantidad_por_plato * vsd.cantidad_vendida)::numeric, 3)                          AS total_consumido,
+                ROUND((SUM(ri.cantidad_por_plato * vsd.cantidad_vendida * COALESCE(p.costo, 0)))::numeric, 2) AS costo_total,
+                COUNT(DISTINCT r.codigo_origen)  AS en_platos,
+                STRING_AGG(DISTINCT r.nombre, ', ' ORDER BY r.nombre) AS platos_que_lo_usan
+            FROM ventas_semanales vs
+            JOIN ventas_semanales_detalle vsd ON vsd.venta_semanal_id = vs.id
+            JOIN recetas r  ON r.codigo_origen = vsd.producto_codigo AND r.activa = true
+            JOIN receta_ingredientes ri ON ri.receta_id = r.id
+            JOIN productos p ON p.id = ri.producto_id
+            WHERE vs.sucursal_id = ?
+              AND vs.semana_inicio >= ?
+              AND vs.semana_inicio <= ?
+              {$catWhere}
+            GROUP BY p.id, p.nombre, p.codigo, ri.unidad, p.costo
+            ORDER BY costo_total DESC
+        ", $bindings);
+
+        return response()->json([
+            'success'      => true,
+            'ingredientes' => array_map(fn($r) => [
+                'ingrediente'      => $r->ingrediente,
+                'codigo'           => $r->ingrediente_codigo,
+                'unidad'           => $r->unidad,
+                'costo_unitario'   => round((float) $r->costo_unitario, 4),
+                'total_consumido'  => (float) $r->total_consumido,
+                'costo_total'      => (float) $r->costo_total,
+                'en_platos'        => (int) $r->en_platos,
+                'platos_que_lo_usan' => $r->platos_que_lo_usan,
+            ], $rows),
         ]);
     }
 
