@@ -306,10 +306,13 @@ class VentasController extends Controller
 
         $rows = DB::connection('compras')->select("
             SELECT
-                p.nombre       AS ingrediente,
-                p.codigo       AS ingrediente_codigo,
-                ri.unidad,
-                COALESCE(p.costo, 0)   AS costo_unitario,
+                p.nombre              AS ingrediente,
+                p.codigo              AS ingrediente_codigo,
+                ri.unidad             AS unidad_receta,
+                p.unidad              AS unidad_compra,
+                p.unidad_base,
+                p.factor_conversion,
+                COALESCE(p.costo, 0)  AS costo_unitario,
                 ROUND(SUM(ri.cantidad_por_plato * vsd.cantidad_vendida)::numeric, 3)                          AS total_consumido,
                 ROUND((SUM(ri.cantidad_por_plato * vsd.cantidad_vendida * COALESCE(p.costo, 0)))::numeric, 2) AS costo_total,
                 COUNT(DISTINCT r.codigo_origen)  AS en_platos,
@@ -323,22 +326,62 @@ class VentasController extends Controller
               AND vs.semana_inicio >= ?
               AND vs.semana_inicio <= ?
               {$catWhere}
-            GROUP BY p.id, p.nombre, p.codigo, ri.unidad, p.costo
+            GROUP BY p.id, p.nombre, p.codigo, ri.unidad, p.unidad, p.unidad_base, p.factor_conversion, p.costo
             ORDER BY costo_total DESC
         ", $bindings);
 
+        // Tabla de conversiones estándar: 'unidad_receta:unidad_compra' => factor multiplicador
+        $conversiones = [
+            'oz:lb'  => 1 / 16,        'lb:oz'  => 16,
+            'oz:kg'  => 1 / 35.274,    'kg:oz'  => 35.274,
+            'g:kg'   => 1 / 1000,      'kg:g'   => 1000,
+            'g:lb'   => 1 / 453.592,   'lb:g'   => 453.592,
+            'ml:l'   => 1 / 1000,      'l:ml'   => 1000,
+            'ml:lt'  => 1 / 1000,      'lt:ml'  => 1000,
+            'ml:lts' => 1 / 1000,      'lts:ml' => 1000,
+        ];
+
+        $ingredientes = array_map(function ($r) use ($conversiones) {
+            $totalConsumido = (float) $r->total_consumido;
+            $uRec  = strtolower(trim($r->unidad_receta  ?? ''));
+            $uComp = strtolower(trim($r->unidad_compra  ?? ''));
+            $uBase = strtolower(trim($r->unidad_base    ?? ''));
+            $factor = $r->factor_conversion ? (float) $r->factor_conversion : null;
+
+            $totalEnCompra    = null;
+            $unidadesDifieren = $uRec !== $uComp;
+
+            if ($unidadesDifieren) {
+                // Prioridad 1: factor_conversion del producto (unidad_base → unidad_compra)
+                if ($factor && $uBase && $uRec === $uBase) {
+                    $totalEnCompra = round($totalConsumido / $factor, 4);
+                } else {
+                    // Prioridad 2: conversión estándar
+                    $key = "{$uRec}:{$uComp}";
+                    if (isset($conversiones[$key])) {
+                        $totalEnCompra = round($totalConsumido * $conversiones[$key], 4);
+                    }
+                }
+            }
+
+            return [
+                'ingrediente'         => $r->ingrediente,
+                'codigo'              => $r->ingrediente_codigo,
+                'unidad_receta'       => $r->unidad_receta,
+                'unidad_compra'       => $r->unidad_compra,
+                'unidades_difieren'   => $unidadesDifieren,
+                'total_consumido'     => $totalConsumido,
+                'total_en_compra'     => $totalEnCompra,
+                'costo_unitario'      => round((float) $r->costo_unitario, 4),
+                'costo_total'         => (float) $r->costo_total,
+                'en_platos'           => (int) $r->en_platos,
+                'platos_que_lo_usan'  => $r->platos_que_lo_usan,
+            ];
+        }, $rows);
+
         return response()->json([
             'success'      => true,
-            'ingredientes' => array_map(fn($r) => [
-                'ingrediente'      => $r->ingrediente,
-                'codigo'           => $r->ingrediente_codigo,
-                'unidad'           => $r->unidad,
-                'costo_unitario'   => round((float) $r->costo_unitario, 4),
-                'total_consumido'  => (float) $r->total_consumido,
-                'costo_total'      => (float) $r->costo_total,
-                'en_platos'        => (int) $r->en_platos,
-                'platos_que_lo_usan' => $r->platos_que_lo_usan,
-            ], $rows),
+            'ingredientes' => $ingredientes,
         ]);
     }
 
