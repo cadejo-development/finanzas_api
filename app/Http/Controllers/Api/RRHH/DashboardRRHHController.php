@@ -95,6 +95,220 @@ class DashboardRRHHController extends RRHHBaseController
     }
 
     /**
+     * GET /api/rrhh/dashboard/charts
+     * Datos de gráficos de tendencia, ausencias de la semana,
+     * aniversarios/cumpleaños e ingresos pendientes.
+     * Disponible para jefatura (su equipo) y rrhh_admin (todos).
+     */
+    public function charts(): JsonResponse
+    {
+        $ids  = $this->getSubordinadosIds();
+        $hoy  = Carbon::today();
+        $mesLabels = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+        // ── 1. Tendencia mensual (últimos 6 meses) ────────────────────────────
+        $meses       = [];
+        $totales     = [];
+        $ausenciasPct = [];
+        $rotacionPct  = [];
+        $totalIds     = max(1, count($ids));
+
+        for ($i = 5; $i >= 0; $i--) {
+            $fm     = $hoy->copy()->startOfMonth()->subMonths($i);
+            $finMes = $fm->copy()->endOfMonth()->toDateString();
+
+            $meses[] = $mesLabels[$fm->month - 1];
+
+            $totales[] = $ids
+                ? DB::connection('pgsql')->table('empleados')
+                    ->where('activo', true)->whereIn('id', $ids)
+                    ->where('fecha_ingreso', '<=', $finMes)->count()
+                : 0;
+
+            $perm = $ids
+                ? DB::connection('rrhh')->table('permisos')
+                    ->whereIn('empleado_id', $ids)->where('estado', 'aprobado')
+                    ->whereYear('fecha', $fm->year)->whereMonth('fecha', $fm->month)->count()
+                : 0;
+
+            $incap = $ids
+                ? DB::connection('rrhh')->table('incapacidades')
+                    ->whereIn('empleado_id', $ids)
+                    ->whereYear('fecha_inicio', $fm->year)->whereMonth('fecha_inicio', $fm->month)->count()
+                : 0;
+
+            $ausenciasPct[] = round(($perm + $incap) / $totalIds * 100, 2);
+
+            $desvinc = $ids
+                ? DB::connection('rrhh')->table('desvinculaciones')
+                    ->whereIn('empleado_id', $ids)
+                    ->whereYear('fecha_efectiva', $fm->year)->whereMonth('fecha_efectiva', $fm->month)->count()
+                : 0;
+
+            $rotacionPct[] = round($desvinc / $totalIds * 100, 2);
+        }
+
+        // ── 2. Distribución actual por departamento (solo admin) ───────────────
+        $porDepartamento = [];
+        if ($this->esAdminRrhh() && $ids) {
+            $depts = DB::connection('pgsql')
+                ->table('departamentos as d')
+                ->join('empleados as e', 'e.departamento_id', '=', 'd.id')
+                ->where('e.activo', true)->whereIn('e.id', $ids)->where('d.activo', true)
+                ->groupBy('d.id', 'd.nombre')
+                ->orderByRaw('COUNT(e.id) DESC')
+                ->limit(7)
+                ->selectRaw('d.nombre, COUNT(e.id) as total')
+                ->get();
+
+            foreach ($depts as $d) {
+                $porDepartamento[] = ['nombre' => $d->nombre, 'total' => (int) $d->total];
+            }
+        }
+
+        // ── 3. Ausencias esta semana ──────────────────────────────────────────
+        $lunes   = $hoy->copy()->startOfWeek(Carbon::MONDAY)->toDateString();
+        $domingo = $hoy->copy()->endOfWeek(Carbon::SUNDAY)->toDateString();
+
+        $ausenciasSemana = [];
+
+        if ($ids) {
+            $permSemana = DB::connection('rrhh')
+                ->table('permisos as p')
+                ->leftJoin('tipos_permiso as tp', 'tp.id', '=', 'p.tipo_permiso_id')
+                ->whereIn('p.empleado_id', $ids)->where('p.estado', 'aprobado')
+                ->whereBetween('p.fecha', [$lunes, $domingo])
+                ->selectRaw("p.empleado_id, p.fecha as desde, p.fecha as hasta, p.dias, COALESCE(tp.nombre, 'Permiso') as tipo")
+                ->get();
+
+            $vacSemana = DB::connection('rrhh')
+                ->table('vacaciones')
+                ->whereIn('empleado_id', $ids)->where('estado', 'aprobado')
+                ->where('fecha_inicio', '<=', $domingo)->where('fecha_fin', '>=', $lunes)
+                ->selectRaw("empleado_id, fecha_inicio as desde, fecha_fin as hasta, dias, 'Vacación' as tipo")
+                ->get();
+
+            $incapSemana = DB::connection('rrhh')
+                ->table('incapacidades')
+                ->whereIn('empleado_id', $ids)
+                ->where('fecha_inicio', '<=', $domingo)
+                ->where(fn($q) => $q->where('fecha_fin', '>=', $lunes)->orWhereNull('fecha_fin'))
+                ->selectRaw("empleado_id, fecha_inicio as desde, fecha_fin as hasta, dias, 'Incapacidad' as tipo")
+                ->get();
+
+            $todasAus = $permSemana->merge($vacSemana)->merge($incapSemana);
+            $empIds   = $todasAus->pluck('empleado_id')->unique()->filter()->all();
+
+            if ($empIds) {
+                $empsMap = DB::connection('pgsql')->table('empleados')
+                    ->whereIn('id', $empIds)
+                    ->selectRaw("id, TRIM(nombres || ' ' || apellidos) as nombre")
+                    ->get()->keyBy('id');
+
+                foreach ($todasAus as $row) {
+                    $ausenciasSemana[] = [
+                        'empleado_id' => $row->empleado_id,
+                        'nombre'      => $empsMap[$row->empleado_id]->nombre ?? "Empleado #{$row->empleado_id}",
+                        'tipo'        => $row->tipo,
+                        'desde'       => $row->desde,
+                        'hasta'       => $row->hasta,
+                        'dias'        => (float) ($row->dias ?? 1),
+                    ];
+                }
+            }
+        }
+
+        // ── 4. Aniversarios y cumpleaños (próximos 14 días + últimos 3) ────────
+        $hace3 = $hoy->copy()->subDays(3);
+        $en14  = $hoy->copy()->addDays(14);
+        $eventos = [];
+
+        $empleados = $ids
+            ? DB::connection('pgsql')->table('empleados')
+                ->whereIn('id', $ids)->where('activo', true)->whereNotNull('fecha_ingreso')
+                ->selectRaw("id, TRIM(nombres || ' ' || apellidos) as nombre, fecha_ingreso")
+                ->get()
+            : collect();
+
+        foreach ($empleados as $emp) {
+            $fi  = Carbon::parse($emp->fecha_ingreso);
+            $anv = $fi->copy()->year($hoy->year);
+            if ($anv->between($hace3, $en14)) {
+                $eventos[] = [
+                    'empleado_id' => $emp->id,
+                    'nombre'      => $emp->nombre,
+                    'tipo'        => 'Aniversario',
+                    'fecha'       => $anv->toDateString(),
+                    'anios'       => $hoy->year - $fi->year,
+                    'pasado'      => $anv->lt($hoy),
+                ];
+            }
+        }
+
+        if ($ids) {
+            $cumples = DB::connection('rrhh')
+                ->table('expediente_datos_personales')
+                ->whereIn('empleado_id', $ids)->whereNotNull('fecha_nacimiento')
+                ->select('empleado_id', 'fecha_nacimiento')->get();
+
+            $empMap = $empleados->keyBy('id');
+            foreach ($cumples as $c) {
+                $fn  = Carbon::parse($c->fecha_nacimiento);
+                $cum = $fn->copy()->year($hoy->year);
+                if ($cum->between($hace3, $en14)) {
+                    $emp = $empMap[$c->empleado_id] ?? null;
+                    $eventos[] = [
+                        'empleado_id' => $c->empleado_id,
+                        'nombre'      => $emp?->nombre ?? "Empleado #{$c->empleado_id}",
+                        'tipo'        => 'Cumpleaños',
+                        'fecha'       => $cum->toDateString(),
+                        'anios'       => null,
+                        'pasado'      => $cum->lt($hoy),
+                    ];
+                }
+            }
+        }
+
+        usort($eventos, fn($a, $b) => strcmp($a['fecha'], $b['fecha']));
+
+        // ── 5. Ingresos pendientes (últimos 90 días sin expediente) ───────────
+        $hace90    = $hoy->copy()->subDays(90)->toDateString();
+        $recientes = $ids
+            ? DB::connection('pgsql')->table('empleados')
+                ->whereIn('id', $ids)->where('activo', true)->where('fecha_ingreso', '>=', $hace90)
+                ->selectRaw("id, TRIM(nombres || ' ' || apellidos) as nombre, fecha_ingreso")
+                ->get()
+            : collect();
+
+        $conExpediente = [];
+        if ($recientes->isNotEmpty()) {
+            $conExpediente = DB::connection('rrhh')
+                ->table('expediente_datos_personales')
+                ->whereIn('empleado_id', $recientes->pluck('id')->all())
+                ->pluck('empleado_id')->map(fn($x) => (int) $x)->all();
+        }
+
+        $ingresosPendientes = $recientes
+            ->filter(fn($e) => !in_array((int) $e->id, $conExpediente))
+            ->map(fn($e) => [
+                'empleado_id'   => $e->id,
+                'nombre'        => $e->nombre,
+                'estado'        => 'Incompleto',
+                'fecha_ingreso' => $e->fecha_ingreso,
+            ])->values()->all();
+
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'tendencia'           => compact('meses', 'totales', 'ausenciasPct', 'rotacionPct', 'porDepartamento'),
+                'ausencias_semana'    => $ausenciasSemana,
+                'eventos'             => $eventos,
+                'ingresos_pendientes' => $ingresosPendientes,
+            ],
+        ]);
+    }
+
+    /**
      * GET /api/rrhh/dashboard/demograficos
      * Estadísticas demográficas del personal — solo rrhh_admin.
      */
