@@ -19,7 +19,7 @@ class RecetasController extends Controller
     use \App\Traits\RecetaCostoTrait;
     public function index(Request $request): JsonResponse
     {
-        $perPage    = min((int) $request->query('per_page', 20), 100);
+        $perPage    = min((int) $request->query('per_page', 20), 500);
         $sucursalId  = $request->query('sucursal_id')  ? (int) $request->query('sucursal_id') : null;
         // sucursal_ids: array de IDs para gerentes multi-sucursal (e.g. ?sucursal_ids[]=1&sucursal_ids[]=5)
         $sucursalIds = $request->query('sucursal_ids') ? array_map('intval', (array) $request->query('sucursal_ids')) : null;
