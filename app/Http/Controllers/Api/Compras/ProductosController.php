@@ -8,6 +8,7 @@ use App\Models\Producto;
 use App\Models\Sucursal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProductosController extends Controller
 {
@@ -95,8 +96,41 @@ class ProductosController extends Controller
 
         $paginado = $query->paginate($perPage);
 
+        // Datos de inventario por producto (stock actual + sugerido) para el pedido semanal
+        $invData = [];
+        $activeSucursalId = (int) $request->query('sucursal_id', 0);
+        if ($activeSucursalId && $request->boolean('con_inventario')) {
+            $productIds = $paginado->getCollection()->pluck('id')->toArray();
+            if (!empty($productIds)) {
+                $inventarios = DB::connection('compras')
+                    ->table('inventarios')
+                    ->where('sucursal_id', $activeSucursalId)
+                    ->whereIn('producto_id', $productIds)
+                    ->select('producto_id', 'cantidad_inicial_base', 'stock_minimo')
+                    ->get()
+                    ->keyBy('producto_id');
+
+                if ($inventarios->isNotEmpty()) {
+                    $movs = DB::connection('compras')
+                        ->table('movimientos_inventario')
+                        ->where('sucursal_id', $activeSucursalId)
+                        ->whereIn('producto_id', $inventarios->keys()->toArray())
+                        ->selectRaw('producto_id, SUM(cantidad_base) as total')
+                        ->groupBy('producto_id')
+                        ->pluck('total', 'producto_id');
+
+                    foreach ($inventarios as $pId => $inv) {
+                        $invData[$pId] = [
+                            'stock_base'   => (float) $inv->cantidad_inicial_base + (float) ($movs[$pId] ?? 0),
+                            'stock_minimo' => $inv->stock_minimo !== null ? (float) $inv->stock_minimo : null,
+                        ];
+                    }
+                }
+            }
+        }
+
         // Transformar para el frontend (campo categoria_key aplanado)
-        $items = $paginado->getCollection()->map(function ($p) {
+        $items = $paginado->getCollection()->map(function ($p) use ($invData) {
             $costo = (float) $p->costo;
 
             // Para productos con costo=0 que son sub-recetas, calcular desde ingredientes
@@ -114,29 +148,47 @@ class ProductosController extends Controller
                     $batchCosto  = $this->calcularBatchCostoDirecto($receta);
                     $rendimiento = (float) ($receta->rendimiento ?? 0);
                     $costo       = $rendimiento > 0 ? $batchCosto / $rendimiento : $batchCosto;
-                    // Guardar para evitar recalcular en futuros listados
                     if ($costo > 0) {
                         $p->update(['costo' => round($costo, 4), 'aud_usuario' => 'sistema-sync']);
                     }
                 }
             }
 
-            return [
-            'id'           => $p->id,
-            'codigo'       => $p->codigo,
-            'nombre'       => $p->nombre,
-            'unidad'             => $p->unidad,
-            'unidad_base'        => $p->unidad_base,
-            'factor_conversion'  => $p->factor_conversion ? (float) $p->factor_conversion : null,
-            'precio'          => (float) $p->precio,
-            'costo'           => $costo,
-            'precio_unitario' => $costo,  // costo para cálculos de recetas
-            'activo'          => $p->activo,
-            'categoria_id'    => $p->categoria_id,
-            'categoria_key'    => $p->categoria?->key,
-            'categoria_nombre' => $p->categoria?->nombre,
-            'origen'           => $p->origen ?? 'restaurante',
+            $row = [
+                'id'               => $p->id,
+                'codigo'           => $p->codigo,
+                'nombre'           => $p->nombre,
+                'unidad'           => $p->unidad,
+                'unidad_base'      => $p->unidad_base,
+                'factor_conversion'=> $p->factor_conversion ? (float) $p->factor_conversion : null,
+                'precio'           => (float) $p->precio,
+                'costo'            => $costo,
+                'precio_unitario'  => $costo,
+                'activo'           => $p->activo,
+                'categoria_id'     => $p->categoria_id,
+                'categoria_key'    => $p->categoria?->key,
+                'categoria_nombre' => $p->categoria?->nombre,
+                'origen'           => $p->origen ?? 'restaurante',
+                // Inventario — null si no se solicitó con_inventario
+                'saldo_actual'      => null,
+                'stock_minimo_inv'  => null,
+                'alerta_stock'      => null,
+                'cantidad_sugerida' => null,
             ];
+
+            if (isset($invData[$p->id])) {
+                $inv    = $invData[$p->id];
+                $factor = max((float) ($p->factor_conversion ?? 1), 0.0001);
+                $saldo  = $inv['stock_base'] / $factor;
+                $min    = $inv['stock_minimo'];
+                $alerta = $saldo <= 0 ? 'agotado' : ($min !== null && $saldo < $min ? 'bajo' : null);
+                $row['saldo_actual']      = round($saldo, 4);
+                $row['stock_minimo_inv']  = $min;
+                $row['alerta_stock']      = $alerta;
+                $row['cantidad_sugerida'] = $min !== null ? max(round($min - $saldo, 4), 0) : 0;
+            }
+
+            return $row;
         });
 
         return response()->json([
