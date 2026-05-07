@@ -148,9 +148,24 @@ class DashboardRRHHController extends RRHHBaseController
             $rotacionPct[] = round($desvinc / $totalIds * 100, 2);
         }
 
-        // ── 2. Distribución actual por departamento (solo admin) ───────────────
-        $porDepartamento = [];
+        // ── 2. Distribución actual por sucursal (solo admin) ─────────────────
+        $porSucursal     = [];
+        $porDepartamento = []; // mantenido por compatibilidad
         if ($this->esAdminRrhh() && $ids) {
+            $sucs = DB::connection('pgsql')
+                ->table('sucursales as s')
+                ->join('empleados as e', 'e.sucursal_id', '=', 's.id')
+                ->where('e.activo', true)->whereIn('e.id', $ids)->where('s.activo', true)
+                ->groupBy('s.id', 's.nombre')
+                ->orderByRaw('COUNT(e.id) DESC')
+                ->limit(10)
+                ->selectRaw('s.nombre, COUNT(e.id) as total')
+                ->get();
+
+            foreach ($sucs as $s) {
+                $porSucursal[] = ['nombre' => $s->nombre, 'total' => (int) $s->total];
+            }
+
             $depts = DB::connection('pgsql')
                 ->table('departamentos as d')
                 ->join('empleados as e', 'e.departamento_id', '=', 'd.id')
@@ -300,7 +315,7 @@ class DashboardRRHHController extends RRHHBaseController
         return response()->json([
             'success' => true,
             'data'    => [
-                'tendencia'           => compact('meses', 'totales', 'ausenciasPct', 'rotacionPct', 'porDepartamento'),
+                'tendencia'           => compact('meses', 'totales', 'ausenciasPct', 'rotacionPct', 'porSucursal', 'porDepartamento'),
                 'ausencias_semana'    => $ausenciasSemana,
                 'eventos'             => $eventos,
                 'ingresos_pendientes' => $ingresosPendientes,

@@ -54,7 +54,7 @@ class IncapacidadesController extends RRHHBaseController
                 'fecha_fin'          => 'required|date|after_or_equal:fecha_inicio',
                 'dias'               => 'nullable|integer|min:1',  // auto-calculado si no se envía
                 'observaciones'      => 'nullable|string|max:500',
-                'archivo'            => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+                'archivo'            => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:20480',
             ]);
 
             $jefe = $this->getJefeEmpleado();
