@@ -155,7 +155,7 @@ class DashboardRRHHController extends RRHHBaseController
             $sucs = DB::connection('pgsql')
                 ->table('sucursales as s')
                 ->join('empleados as e', 'e.sucursal_id', '=', 's.id')
-                ->where('e.activo', true)->whereIn('e.id', $ids)->where('s.activo', true)
+                ->where('e.activo', true)->whereIn('e.id', $ids)
                 ->groupBy('s.id', 's.nombre')
                 ->orderByRaw('COUNT(e.id) DESC')
                 ->limit(10)
