@@ -148,17 +148,20 @@ class DashboardRRHHController extends RRHHBaseController
             $rotacionPct[] = round($desvinc / $totalIds * 100, 2);
         }
 
-        // ── 2. Distribución actual por sucursal (solo admin) ─────────────────
+        // ── 2. Distribución actual por sucursal (solo admin, excluye Casa Matriz) y
+        //      por departamento solo para empleados de Casa Matriz ──────────────
         $porSucursal     = [];
-        $porDepartamento = []; // mantenido por compatibilidad
+        $porDepartamento = [];
         if ($this->esAdminRrhh() && $ids) {
+            // Sucursales: excluir Casa Matriz (se muestra aparte por departamento)
             $sucs = DB::connection('pgsql')
                 ->table('sucursales as s')
                 ->join('empleados as e', 'e.sucursal_id', '=', 's.id')
                 ->where('e.activo', true)->whereIn('e.id', $ids)
+                ->whereRaw("s.nombre NOT ILIKE '%casa matriz%'")
                 ->groupBy('s.id', 's.nombre')
                 ->orderByRaw('COUNT(e.id) DESC')
-                ->limit(10)
+                ->limit(12)
                 ->selectRaw('s.nombre, COUNT(e.id) as total')
                 ->get();
 
@@ -166,13 +169,15 @@ class DashboardRRHHController extends RRHHBaseController
                 $porSucursal[] = ['nombre' => $s->nombre, 'total' => (int) $s->total];
             }
 
+            // Departamentos: solo empleados de Casa Matriz
             $depts = DB::connection('pgsql')
                 ->table('departamentos as d')
                 ->join('empleados as e', 'e.departamento_id', '=', 'd.id')
-                ->where('e.activo', true)->whereIn('e.id', $ids)->where('d.activo', true)
+                ->join('sucursales as s', 's.id', '=', 'e.sucursal_id')
+                ->where('e.activo', true)->whereIn('e.id', $ids)
+                ->whereRaw("s.nombre ILIKE '%casa matriz%'")
                 ->groupBy('d.id', 'd.nombre')
                 ->orderByRaw('COUNT(e.id) DESC')
-                ->limit(7)
                 ->selectRaw('d.nombre, COUNT(e.id) as total')
                 ->get();
 
