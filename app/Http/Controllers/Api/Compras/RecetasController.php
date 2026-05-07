@@ -419,7 +419,7 @@ class RecetasController extends Controller
             }
         });
 
-        $receta->load(['ingredientes.producto', 'ingredientes.subReceta.productoAsociado', 'ingredientes.subReceta.ingredientes.producto', 'modificadores', 'sucursalConfig']);
+        $receta->load(['ingredientes.producto', 'ingredientes.subReceta.productoAsociado', 'ingredientes.subReceta.ingredientes.producto', 'modificadores.producto', 'sucursalConfig']);
         $this->upsertProductoSubReceta($receta);
         $this->sincronizarCostoProducto($receta);
         return response()->json(['data' => $this->formatReceta($receta, null, true)]);
@@ -887,12 +887,13 @@ class RecetasController extends Controller
                     : 0.0;
                 $costoOp = $costoUnit * (float) ($mod->cantidad ?? 0);
                 $grupos[$key]['opciones'][] = [
-                    'nombre'      => $mod->opcion_nombre,
-                    'producto_id' => $mod->producto_id,
-                    'cantidad'    => $mod->cantidad,
-                    'unidad'      => $mod->unidad,
-                    'costo'       => $costoUnit,
-                    'costo_total' => round($costoOp, 6),
+                    'nombre'          => $mod->opcion_nombre,
+                    'producto_id'     => $mod->producto_id,
+                    'producto_nombre' => $mod->producto?->nombre,
+                    'cantidad'        => $mod->cantidad,
+                    'unidad'          => $mod->unidad,
+                    'costo'           => $costoUnit,
+                    'costo_total'     => round($costoOp, 6),
                 ];
                 $grupos[$key]['costo_grupo'] += $costoOp;
             }

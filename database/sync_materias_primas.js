@@ -80,9 +80,11 @@ function buildBatch(table, columns, rows, conflictSql, returningSql = '') {
   return { text, values: params };
 }
 
-// ── Query: todas las materias primas que son ingredientes en MXP ─────────────
-// Incluye cualquier producto que aparezca como proIdMaterial en alguna receta activa.
-// Esto cubre exactamente lo que es "materia prima" en el contexto del sistema.
+// ── Query: todas las materias primas activas de categorías usadas en MXP ─────
+// Incluye TODO producto activo de una categoría que sea materia prima,
+// independientemente de si ya está asignado a alguna receta (MXP).
+// Esto permite que productos nuevos (ej: "Mermelada de Uva") aparezcan
+// en el catálogo aunque todavía no estén en ninguna receta.
 const Q_MATERIAS_PRIMAS = `
 SELECT DISTINCT
   PROM.proId       AS id_origen,
@@ -94,16 +96,24 @@ SELECT DISTINCT
   ISNULL(PROM.proCosto, 0)  AS costo,
   ISNULL(PROM.proPrecio, 0) AS precio,
   PROM.proActivo   AS activo
-FROM olComun.dbo.MaterialesXProducto MXP WITH(NOLOCK)
-INNER JOIN olComun.dbo.Productos PROM WITH(NOLOCK)
-  ON MXP.proIdMaterial = PROM.proId
+FROM olComun.dbo.Productos PROM WITH(NOLOCK)
 LEFT JOIN olComun.dbo.CategoriasProductos CPR WITH(NOLOCK)
   ON PROM.cprId = CPR.cprId
 LEFT JOIN olComun.dbo.Unidades UNI WITH(NOLOCK)
   ON UNI.uniId = PROM.uniId
-WHERE MXP.mxprEliminado = 0
-  AND MXP.mxprCantUnidad > 0
+WHERE PROM.proActivo = 1
   AND PROM.proEliminado = 0
+  AND CPR.cprCodigo IN (
+    SELECT DISTINCT CPR2.cprCodigo
+    FROM olComun.dbo.MaterialesXProducto MXP2 WITH(NOLOCK)
+    INNER JOIN olComun.dbo.Productos PROM2 WITH(NOLOCK)
+      ON MXP2.proIdMaterial = PROM2.proId AND PROM2.proEliminado = 0
+    INNER JOIN olComun.dbo.CategoriasProductos CPR2 WITH(NOLOCK)
+      ON PROM2.cprId = CPR2.cprId
+    WHERE MXP2.mxprEliminado = 0
+      AND MXP2.mxprCantUnidad > 0
+      AND CPR2.cprCodigo IS NOT NULL
+  )
 ORDER BY CPR.cprCodigo, PROM.proCodigo
 `;
 
