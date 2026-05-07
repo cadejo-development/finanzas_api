@@ -697,39 +697,83 @@ class RecetasController extends Controller
     public function calcular(Request $request): JsonResponse
     {
         $items = $request->validate([
-            '*'                => 'array',
-            '*.receta_id'      => 'required|integer',
-            '*.platos'         => 'required|integer|min:0',
+            '*'           => 'array',
+            '*.receta_id' => 'required|integer',
+            '*.platos'    => 'required|integer|min:0',
         ]);
 
         $acumulado = [];
 
         foreach ($items as $item) {
-            $receta = Receta::with(['ingredientes.producto', 'ingredientes.subReceta'])->find($item['receta_id']);
+            $receta = Receta::with([
+                'ingredientes.producto',
+                'ingredientes.subReceta',
+            ])->find($item['receta_id']);
             if (!$receta) continue;
 
-            foreach ($receta->ingredientes as $ing) {
-                $total = (float) $ing->cantidad_por_plato * (int) $item['platos'];
-
-                if ($ing->producto_id && $ing->producto) {
-                    $prod = $ing->producto;
-                    $key  = $prod->codigo;
-                    if (!isset($acumulado[$key])) {
-                        $acumulado[$key] = [
-                            'producto_id'     => $prod->id,
-                            'producto_codigo' => $prod->codigo,
-                            'producto_nombre' => $prod->nombre,
-                            'unidad'          => $ing->unidad,
-                            'precio_unitario' => (float) $prod->costo,
-                            'cantidad_total'  => 0,
-                        ];
-                    }
-                    $acumulado[$key]['cantidad_total'] += $total;
-                }
-            }
+            $this->acumularIngredientes($receta, (float) $item['platos'], $acumulado);
         }
 
         return response()->json(['data' => array_values($acumulado)]);
+    }
+
+    /**
+     * Expande recursivamente los ingredientes de una receta (incluyendo sub-recetas).
+     *
+     * @param  Receta  $receta       La receta a expandir
+     * @param  float   $batches      Cuántos "lotes" de esta receta se necesitan
+     *                               (para la receta raíz = número de platos;
+     *                                para sub-recetas = unidades_necesarias / rendimiento)
+     * @param  array   &$acumulado   Mapa acumulador [codigo => {...}]
+     * @param  int     $depth        Protección contra ciclos (máx 10 niveles)
+     */
+    private function acumularIngredientes(Receta $receta, float $batches, array &$acumulado, int $depth = 0): void
+    {
+        if ($depth > 10 || $batches <= 0) return;
+
+        // Cargar ingredientes si no están cargados aún (para sub-recetas cargadas lazy)
+        if (!$receta->relationLoaded('ingredientes')) {
+            $receta->load(['ingredientes.producto', 'ingredientes.subReceta']);
+        }
+
+        foreach ($receta->ingredientes as $ing) {
+            $cantidadNecesaria = (float) $ing->cantidad_por_plato * $batches;
+
+            if ($ing->producto_id && $ing->producto) {
+                // Ingrediente directo: materia prima o CP
+                $prod = $ing->producto;
+                $key  = $prod->codigo ?? "id_{$prod->id}";
+
+                if (!isset($acumulado[$key])) {
+                    $acumulado[$key] = [
+                        'producto_id'     => $prod->id,
+                        'producto_codigo' => $prod->codigo,
+                        'producto_nombre' => $prod->nombre,
+                        'unidad'          => $ing->unidad,
+                        'precio_unitario' => (float) $prod->costo,
+                        'cantidad_total'  => 0.0,
+                    ];
+                }
+                $acumulado[$key]['cantidad_total'] += $cantidadNecesaria;
+
+            } elseif ($ing->sub_receta_id) {
+                // Sub-receta: cargar si no está disponible y expandir recursivamente
+                $sub = $ing->relationLoaded('subReceta') ? $ing->subReceta : null;
+                if (!$sub) {
+                    $sub = Receta::with(['ingredientes.producto', 'ingredientes.subReceta'])
+                        ->find($ing->sub_receta_id);
+                }
+                if (!$sub) continue;
+
+                // cantidadNecesaria = unidades de output de la sub-receta requeridas
+                // rendimiento       = unidades de output que produce UN batch de la sub-receta
+                // batches_sub       = cantidadNecesaria / rendimiento
+                $rendimiento = max((float) ($sub->rendimiento ?? 1), 0.0001);
+                $batchesSub  = $cantidadNecesaria / $rendimiento;
+
+                $this->acumularIngredientes($sub, $batchesSub, $acumulado, $depth + 1);
+            }
+        }
     }
 
     // ----------------------------------------------------------------------
