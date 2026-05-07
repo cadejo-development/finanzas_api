@@ -169,20 +169,42 @@ class DashboardRRHHController extends RRHHBaseController
                 $porSucursal[] = ['nombre' => $s->nombre, 'total' => (int) $s->total];
             }
 
-            // Departamentos: solo empleados de Casa Matriz
-            $depts = DB::connection('pgsql')
-                ->table('departamentos as d')
-                ->join('empleados as e', 'e.departamento_id', '=', 'd.id')
-                ->join('sucursales as s', 's.id', '=', 'e.sucursal_id')
-                ->where('e.activo', true)->whereIn('e.id', $ids)
-                ->whereRaw("s.nombre ILIKE '%casa matriz%'")
-                ->groupBy('d.id', 'd.nombre')
-                ->orderByRaw('COUNT(e.id) DESC')
-                ->selectRaw('d.nombre, COUNT(e.id) as total')
-                ->get();
+            // Departamentos: empleados de Casa Matriz (por sucursal_id)
+            // Se incluye también el jefe de cada departamento aunque su sucursal_id
+            // sea diferente (algunos gerentes están registrados en otra sucursal).
+            $cmSucursalIds = DB::connection('pgsql')
+                ->table('sucursales')
+                ->whereRaw("nombre ILIKE '%casa matriz%'")
+                ->pluck('id')->all();
 
-            foreach ($depts as $d) {
-                $porDepartamento[] = ['nombre' => $d->nombre, 'total' => (int) $d->total];
+            // Depts que tienen al menos un empleado regular de Casa Matriz
+            $cmDeptIds = $cmSucursalIds ? DB::connection('pgsql')
+                ->table('empleados')
+                ->where('activo', true)
+                ->whereIn('sucursal_id', $cmSucursalIds)
+                ->whereNotNull('departamento_id')
+                ->distinct()->pluck('departamento_id')->all() : [];
+
+            if ($cmDeptIds) {
+                $depts = DB::connection('pgsql')
+                    ->table('departamentos as d')
+                    ->join('empleados as e', function ($join) {
+                        // Contar tanto miembros regulares como el jefe del departamento
+                        $join->on('e.departamento_id', '=', 'd.id')
+                             ->orOn('d.jefe_empleado_id', '=', 'e.id');
+                    })
+                    ->where('e.activo', true)
+                    ->whereIn('e.id', $ids)
+                    ->whereIn('d.id', $cmDeptIds)
+                    ->groupBy('d.id', 'd.nombre')
+                    ->havingRaw('COUNT(DISTINCT e.id) > 0')
+                    ->orderByRaw('COUNT(DISTINCT e.id) DESC')
+                    ->selectRaw('d.nombre, COUNT(DISTINCT e.id) as total')
+                    ->get();
+
+                foreach ($depts as $d) {
+                    $porDepartamento[] = ['nombre' => $d->nombre, 'total' => (int) $d->total];
+                }
             }
         }
 
