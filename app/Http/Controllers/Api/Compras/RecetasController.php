@@ -741,20 +741,40 @@ class RecetasController extends Controller
 
             if ($ing->producto_id && $ing->producto) {
                 // Ingrediente directo: materia prima o CP
-                $prod = $ing->producto;
-                $key  = $prod->codigo ?? "id_{$prod->id}";
+                $prod       = $ing->producto;
+                $key        = $prod->codigo ?? "id_{$prod->id}";
+                $recipeUnit = strtolower(trim($ing->unidad ?? ''));
+                $prodUnit   = strtolower(trim($prod->unidad ?? ''));
+
+                // Convertir cantidad de la unidad de la receta a la unidad de compra del producto.
+                // Primero intentamos vía factor_conversion del producto (unidad → unidad_base).
+                // Si no aplica, usamos la tabla de conversión de unidades físicas.
+                $cantidadEnProdUnit = $cantidadNecesaria;
+                if ($recipeUnit && $prodUnit && $recipeUnit !== $prodUnit) {
+                    $factor   = $prod->factor_conversion ? (float) $prod->factor_conversion : null;
+                    $unidBase = $factor ? strtolower(trim($prod->unidad_base ?? '')) : null;
+
+                    if ($factor && $factor > 0 && $unidBase && $recipeUnit === $unidBase) {
+                        // La receta usa la unidad base del producto → dividir por factor
+                        // Ej: receta en "oz fl", producto en "lt", factor=33.814 → qty / 33.814
+                        $cantidadEnProdUnit = $cantidadNecesaria / $factor;
+                    } else {
+                        // Conversión estándar entre unidades físicas (oz↔lb, ml↔lt, etc.)
+                        $cantidadEnProdUnit = $this->convertirCantidad($cantidadNecesaria, $recipeUnit, $prodUnit);
+                    }
+                }
 
                 if (!isset($acumulado[$key])) {
                     $acumulado[$key] = [
                         'producto_id'     => $prod->id,
                         'producto_codigo' => $prod->codigo,
                         'producto_nombre' => $prod->nombre,
-                        'unidad'          => $ing->unidad,
+                        'unidad'          => $prodUnit ?: $recipeUnit,
                         'precio_unitario' => (float) $prod->costo,
                         'cantidad_total'  => 0.0,
                     ];
                 }
-                $acumulado[$key]['cantidad_total'] += $cantidadNecesaria;
+                $acumulado[$key]['cantidad_total'] += $cantidadEnProdUnit;
 
             } elseif ($ing->sub_receta_id) {
                 // Sub-receta: cargar si no está disponible y expandir recursivamente

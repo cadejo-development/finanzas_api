@@ -197,18 +197,39 @@ trait RecetaCostoTrait
     {
         if ($costo === 0.0 || $desdePorUnidad === $haciaUnidad) return $costo;
 
-        $conv = [
-            'lb'    => ['oz' => 1/16,       'g'    => 1/453.592,  'kg'    => 1/0.453592, 'lb'    => 1],
-            'kg'    => ['g'  => 1/1000,     'oz'   => 1/35.274,   'lb'    => 1/2.20462,  'kg'    => 1],
-            'oz'    => ['lb' => 16,         'g'    => 28.3495,    'oz'    => 1],
-            'g'     => ['lb' => 453.592,    'kg'   => 1000,       'oz'    => 28.3495,     'g'     => 1],
-            'lt'    => ['ml' => 1/1000,     'oz fl'=> 1/33.814,   'galon' => 3.78541,    'lt'    => 1],
-            'galon' => ['oz fl' => 1/128,   'lt'   => 1/3.78541,  'ml'    => 1/3785.41,  'galon' => 1],
-            'oz fl' => ['galon' => 128,     'lt'   => 33.814,     'ml'    => 33.814/1000, 'oz fl' => 1],
-            'ml'    => ['lt' => 1000,       'oz fl'=> 1000/33.814,'galon' => 3785.41,    'ml'    => 1],
-        ];
-
+        $conv = self::TABLA_CONVERSION;
         $factor = $conv[$desdePorUnidad][$haciaUnidad] ?? null;
         return $factor !== null ? $costo * $factor : $costo;
     }
+
+    /**
+     * Convierte una CANTIDAD física de una unidad a otra.
+     *
+     * La relación con costos es inversa:
+     *   qty A→B factor = cost B→A factor  (ej: 1 oz = 1/16 lb → qty_factor['oz']['lb'] = 1/16)
+     *
+     * Si no hay factor en la tabla (unidades incompatibles o no físicas), devuelve la
+     * cantidad original sin tocar — el llamador debe elegir qué unidad mostrar.
+     */
+    protected function convertirCantidad(float $cantidad, string $desdeUnidad, string $haciaUnidad): float
+    {
+        if ($cantidad === 0.0 || $desdeUnidad === $haciaUnidad) return $cantidad;
+
+        // qty A→B = cost B→A (tabla invertida)
+        $conv   = self::TABLA_CONVERSION;
+        $factor = $conv[$haciaUnidad][$desdeUnidad] ?? null;
+        return $factor !== null ? $cantidad * $factor : $cantidad;
+    }
+
+    // Tabla compartida entre convertirCosto y convertirCantidad
+    private const TABLA_CONVERSION = [
+        'lb'    => ['oz' => 1/16,       'g'    => 1/453.592,  'kg'    => 1/0.453592, 'lb'    => 1],
+        'kg'    => ['g'  => 1/1000,     'oz'   => 1/35.274,   'lb'    => 1/2.20462,  'kg'    => 1],
+        'oz'    => ['lb' => 16,         'g'    => 28.3495,    'oz'    => 1],
+        'g'     => ['lb' => 453.592,    'kg'   => 1000,       'oz'    => 28.3495,     'g'     => 1],
+        'lt'    => ['ml' => 1/1000,     'oz fl'=> 1/33.814,   'galon' => 3.78541,    'lt'    => 1],
+        'galon' => ['oz fl' => 1/128,   'lt'   => 1/3.78541,  'ml'    => 1/3785.41,  'galon' => 1],
+        'oz fl' => ['galon' => 128,     'lt'   => 33.814,     'ml'    => 33.814/1000, 'oz fl' => 1],
+        'ml'    => ['lt' => 1000,       'oz fl'=> 1000/33.814,'galon' => 3785.41,    'ml'    => 1],
+    ];
 }
