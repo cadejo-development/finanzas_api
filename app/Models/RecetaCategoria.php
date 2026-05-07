@@ -9,7 +9,7 @@ class RecetaCategoria extends Model
     protected $connection = 'compras';
     protected $table      = 'receta_categorias';
 
-    protected $fillable = ['nombre', 'activa'];
+    protected $fillable = ['nombre', 'key', 'activa'];
 
     protected $casts = ['activa' => 'boolean'];
 

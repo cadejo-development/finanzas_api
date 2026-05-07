@@ -302,6 +302,14 @@ class RecetasController extends Controller
             return $receta;
         });
 
+        // Generar codigo_origen para platos nuevos sin código (sub-recetas ya tienen su lógica propia)
+        if ($tipoReceta !== 'sub_receta' && empty($receta->codigo_origen) && !empty($validated['categoria_id'])) {
+            $codigo = $this->generarCodigoReceta((int) $validated['categoria_id']);
+            if ($codigo) {
+                $receta->update(['codigo_origen' => $codigo]);
+            }
+        }
+
         $receta->load(['ingredientes.producto', 'ingredientes.subReceta.productoAsociado', 'ingredientes.subReceta.ingredientes.producto', 'sucursalConfig']);
         $this->upsertProductoSubReceta($receta);
         $this->sincronizarCostoProducto($receta);
@@ -888,6 +896,38 @@ class RecetasController extends Controller
     // ----------------------------------------------------------------------
     // Helpers
     // ----------------------------------------------------------------------
+
+    /**
+     * Genera el siguiente codigo_origen para una receta según su categoría.
+     * Formato: CCCC + YY + MM + NN  (igual al de productos)
+     *   CCCC = key de categoría sin guión  (PL-01 → PL01)
+     *   YY   = año 2 dígitos
+     *   MM   = mes 2 dígitos
+     *   NN   = correlativo mensual 2 dígitos
+     *
+     * Devuelve null si la categoría no tiene key asignado.
+     */
+    private function generarCodigoReceta(int $categoriaId, ?\DateTimeInterface $fecha = null): ?string
+    {
+        $cat = \App\Models\RecetaCategoria::find($categoriaId);
+        if (!$cat || !$cat->key) return null;
+
+        $cccc = str_replace('-', '', $cat->key);   // PL-01 → PL01
+        $fecha = $fecha ?? now();
+        $yy   = $fecha->format('y');
+        $mm   = $fecha->format('m');
+
+        $prefijo  = $cccc . $yy . $mm;
+        $pattern  = '/^' . preg_quote($prefijo, '/') . '(\d{2})$/';
+
+        $maxNum = Receta::where('codigo_origen', 'ilike', $prefijo . '%')
+            ->pluck('codigo_origen')
+            ->map(fn ($c) => preg_match($pattern, $c, $m) ? (int) $m[1] : 0)
+            ->max() ?? 0;
+
+        return $prefijo . str_pad($maxNum + 1, 2, '0', STR_PAD_LEFT);
+    }
+
     private function formatReceta(Receta $r, ?int $sucursalId = null, bool $withModificadores = false): array
     {
         $data = [
