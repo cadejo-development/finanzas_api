@@ -785,12 +785,22 @@ class RecetasController extends Controller
                 }
                 if (!$sub) continue;
 
-                // cantidadNecesaria = unidades de output de la sub-receta requeridas
-                // rendimiento       = unidades de output que produce UN batch de la sub-receta
-                // batches_sub       = cantidadNecesaria / rendimiento
+                // Para calcular cuántos batches se necesitan:
+                //   batches = cantidad_necesaria / rendimiento
+                // Pero cantidad_necesaria está en la unidad del ingrediente (ing->unidad, ej: "oz")
+                // y rendimiento está en la unidad del output de la sub-receta (rendimiento_unidad, ej: "kg").
+                // Si difieren, hay que convertir primero o el resultado es absurdo (oz ÷ kg = ×35).
                 $rendimiento = max((float) ($sub->rendimiento ?? 1), 0.0001);
-                $batchesSub  = $cantidadNecesaria / $rendimiento;
+                $rendUnit    = strtolower(trim($sub->rendimiento_unidad ?? ''));
+                $ingUnit     = strtolower(trim($ing->unidad ?? ''));
 
+                // Si los factores son incompatibles (ej: "u" vs "kg"), convertirCantidad
+                // devuelve el valor original sin modificar — fallback seguro.
+                $cantidadParaDividir = ($rendUnit && $ingUnit && $ingUnit !== $rendUnit)
+                    ? $this->convertirCantidad($cantidadNecesaria, $ingUnit, $rendUnit)
+                    : $cantidadNecesaria;
+
+                $batchesSub = $cantidadParaDividir / $rendimiento;
                 $this->acumularIngredientes($sub, $batchesSub, $acumulado, $depth + 1);
             }
         }
