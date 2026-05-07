@@ -122,7 +122,10 @@ class DashboardRRHHController extends RRHHBaseController
             $totales[] = $ids
                 ? DB::connection('pgsql')->table('empleados')
                     ->where('activo', true)->whereIn('id', $ids)
-                    ->where('fecha_ingreso', '<=', $finMes)->count()
+                    ->where(function ($q) use ($finMes) {
+                        // Incluir empleados sin fecha_ingreso (no excluirlos del historial)
+                        $q->where('fecha_ingreso', '<=', $finMes)->orWhereNull('fecha_ingreso');
+                    })->count()
                 : 0;
 
             $perm = $ids
