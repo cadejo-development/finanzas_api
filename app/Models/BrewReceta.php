@@ -12,6 +12,8 @@ class BrewReceta extends Model
     protected $fillable = [
         'nombre', 'estilo', 'codigo', 'vol_preboil', 'vol_postboil', 'vol_bbt',
         'og', 'fg', 'abv', 'ibu', 'srm', 'eficiencia_macerado', 'dias_ferm',
+        'cajas_objetivo', 'barriles_objetivo',
+        'temp_maduracion', 'dias_maduracion', 'dias_seguimiento',
         'notas', 'activa',
     ];
 

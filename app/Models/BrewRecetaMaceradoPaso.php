@@ -8,5 +8,5 @@ class BrewRecetaMaceradoPaso extends Model
 {
     protected $connection = 'compras';
     protected $table = 'brew_receta_macerado_pasos';
-    protected $fillable = ['brew_receta_id', 'orden', 'nombre', 'temp_objetivo', 'tiempo_min'];
+    protected $fillable = ['brew_receta_id', 'orden', 'nombre', 'temp_objetivo', 'tiempo_min', 'adicion_agua_l', 'ph_objetivo'];
 }
