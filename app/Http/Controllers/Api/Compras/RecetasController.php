@@ -1009,7 +1009,8 @@ class RecetasController extends Controller
                     'costo'           => $costoUnit,
                     'costo_total'     => round($costoOp, 6),
                 ];
-                $grupos[$key]['costo_grupo'] += $costoOp;
+                // El costo del grupo es el máximo entre las opciones — el cliente elige UNA.
+                $grupos[$key]['costo_grupo'] = max($grupos[$key]['costo_grupo'], $costoOp);
             }
             // Round costo_grupo
             foreach ($grupos as &$g) {
