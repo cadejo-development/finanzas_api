@@ -19,6 +19,8 @@ use App\Http\Controllers\Api\Compras\RecetaCategoriasController;
 use App\Http\Controllers\Api\Compras\AuditoriaRecetasController;
 use App\Http\Controllers\Api\Compras\InventarioController;
 use App\Http\Controllers\Api\Compras\ExportBriloController;
+use App\Http\Controllers\Api\Compras\BrewRecetasController;
+use App\Http\Controllers\Api\Compras\BrewLotesController;
 use App\Http\Controllers\Api\PortalController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\RRHH\CatalogosRRHHController;
@@ -225,6 +227,29 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::post('inventario/aplicar-consumo',   [InventarioController::class, 'aplicarConsumo']);
     Route::post('inventario/agregar-al-pedido', [InventarioController::class, 'agregarAlPedido']);
     Route::put('inventario/{id}/stock-minimo',  [InventarioController::class, 'actualizarStockMinimo']);
+
+    // ─── Producción Cervecera ────────────────────────────────────────────────
+    Route::prefix('brew')->group(function () {
+        // Recetas de producción
+        Route::get('recetas',          [BrewRecetasController::class, 'index']);
+        Route::get('recetas/{id}',     [BrewRecetasController::class, 'show']);
+        Route::post('recetas',         [BrewRecetasController::class, 'store']);
+        Route::put('recetas/{id}',     [BrewRecetasController::class, 'update']);
+        Route::delete('recetas/{id}',  [BrewRecetasController::class, 'destroy']);
+
+        // Lotes
+        Route::get('lotes',            [BrewLotesController::class, 'index']);
+        Route::get('lotes/{id}',       [BrewLotesController::class, 'show']);
+        Route::post('lotes',           [BrewLotesController::class, 'store']);
+        Route::get('lotes/{id}/reporte', [BrewLotesController::class, 'reporte']);
+
+        // Etapas del wizard
+        Route::put('lotes/{id}/coccion',       [BrewLotesController::class, 'guardarCoccion']);
+        Route::put('lotes/{id}/filtracion',    [BrewLotesController::class, 'guardarFiltracion']);
+        Route::put('lotes/{id}/fermentacion',  [BrewLotesController::class, 'guardarFermentacion']);
+        Route::put('lotes/{id}/seguimiento',   [BrewLotesController::class, 'guardarSeguimiento']);
+        Route::put('lotes/{id}/llenado',       [BrewLotesController::class, 'guardarLlenado']);
+    });
 });
 
 // ─── Admin Portal (protegido con Sanctum + portal_admin) ────────────────
