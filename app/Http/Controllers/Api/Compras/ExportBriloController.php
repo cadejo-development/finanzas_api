@@ -438,7 +438,7 @@ class ExportBriloController extends Controller
         $this->requireAdminRol();
 
         $soloConCodigo   = (bool) $request->query('solo_con_codigo', 1);
-        $soloModificados = (bool) $request->query('solo_modificados', 1);
+        $soloNuevos      = (bool) $request->query('solo_nuevos', 1);  // default: solo los no sincronizados con BRILO
         $estadoId        = $request->query('estado_id') ? (int) $request->query('estado_id') : null;
 
         $query = DB::connection('compras')
@@ -457,8 +457,9 @@ class ExportBriloController extends Controller
                 'r.activa',
             ]);
 
-        if ($soloModificados) {
-            $query->where('r.modificado_localmente', true);
+        if ($soloNuevos) {
+            // Solo platos que NO existen todavía en BRILO
+            $query->where('r.sincronizado_brilo', false);
         }
 
         if ($soloConCodigo) {
