@@ -272,12 +272,16 @@ class VentasController extends Controller
                     return 0.0;
                 });
 
-                // Modificadores (igual que RecetasController::formatReceta)
-                $costoModificadores = (float) $receta->modificadores->sum(function ($mod) {
-                    if (!$mod->producto) return 0.0;
+                // Modificadores: max por grupo (cliente elige UNO por grupo)
+                $gruposMax = [];
+                foreach ($receta->modificadores as $mod) {
+                    if (!$mod->producto) continue;
                     $costoUnit = $this->costoPorUnidadReceta($mod->producto, strtolower(trim($mod->unidad ?? '')));
-                    return $costoUnit * (float) ($mod->cantidad ?? 0);
-                });
+                    $costoOp   = $costoUnit * (float) ($mod->cantidad ?? 0);
+                    $gKey      = $mod->grupo_codigo ?: ($mod->grupo_nombre ?: 'default');
+                    $gruposMax[$gKey] = max($gruposMax[$gKey] ?? 0.0, $costoOp);
+                }
+                $costoModificadores = (float) array_sum($gruposMax);
 
                 $costoPlato    = $costoIngredientes + $costoModificadores;
                 $precioVenta   = (float) ($receta->precio ?: $p['precio_unitario']);
