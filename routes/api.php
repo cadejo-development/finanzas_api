@@ -213,9 +213,11 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::post('ventas/import',      [VentasController::class, 'import']);
 
     // Exportación BRILO (solo admin_compras / admin_recetas)
-    Route::get('export/brilo/materiales-x-producto', [ExportBriloController::class, 'materialesXProducto']);
-    Route::get('export/brilo/productos',              [ExportBriloController::class, 'productos']);
-    Route::get('export/brilo/sub-recetas-ven',        [ExportBriloController::class, 'subRecetasVen']);
+    Route::get('export/brilo/materiales-x-producto',  [ExportBriloController::class, 'materialesXProducto']);
+    Route::get('export/brilo/productos',               [ExportBriloController::class, 'productos']);
+    Route::get('export/brilo/sub-recetas-ven',         [ExportBriloController::class, 'subRecetasVen']);
+    Route::get('export/brilo/platos-ven',              [ExportBriloController::class, 'platosVen']);
+    Route::post('export/brilo/resetear-modificados',   [ExportBriloController::class, 'resetearModificados']);
 
     // Inventario
     Route::get('inventario/pedido-sugerido',    [InventarioController::class, 'pedidoSugerido']);

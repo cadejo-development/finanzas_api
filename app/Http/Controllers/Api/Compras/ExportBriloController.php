@@ -423,6 +423,176 @@ class ExportBriloController extends Controller
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    // GET /api/compras/export/brilo/platos-ven
+    //
+    // Exporta platos al formato VEN de BRILO. Los platos deben existir como
+    // productos en BRILO antes de poder importar sus ingredientes via INV.
+    //
+    // Parámetros query opcionales:
+    //   solo_con_codigo  = 1 (default) → solo platos con codigo_origen
+    //   solo_modificados = 1 (default) → solo con modificado_localmente = true
+    //   estado_id        = ID del estado de receta para filtrar
+    // ──────────────────────────────────────────────────────────────────────────
+    public function platosVen(Request $request): StreamedResponse
+    {
+        $this->requireAdminRol();
+
+        $soloConCodigo   = (bool) $request->query('solo_con_codigo', 1);
+        $soloModificados = (bool) $request->query('solo_modificados', 1);
+        $estadoId        = $request->query('estado_id') ? (int) $request->query('estado_id') : null;
+
+        $query = DB::connection('compras')
+            ->table('recetas as r')
+            ->where('r.activa', true)
+            ->where(function ($q) {
+                $q->where('r.tipo_receta', 'plato')
+                  ->orWhereNull('r.tipo_receta');
+            })
+            ->whereRaw("lower(coalesce(r.tipo_receta,'')) NOT LIKE '%sub%receta%'")
+            ->select([
+                'r.id',
+                'r.codigo_origen',
+                'r.nombre',
+                'r.precio',
+                'r.activa',
+            ]);
+
+        if ($soloModificados) {
+            $query->where('r.modificado_localmente', true);
+        }
+
+        if ($soloConCodigo) {
+            $query->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '');
+        }
+
+        if ($estadoId) {
+            $query->where('r.estado_id', $estadoId);
+        }
+
+        $filas = $query->orderBy('r.codigo_origen')->get();
+
+        $filename = 'VEN_Platos_' . now()->format('Ymd_His') . '.csv';
+        $cabecera = $this->venCabecera();
+
+        return response()->streamDownload(function () use ($filas, $cabecera) {
+            $handle = fopen('php://output', 'w');
+            fwrite($handle, "\xEF\xBB\xBF");
+            fputcsv($handle, $cabecera);
+
+            foreach ($filas as $fila) {
+                $precioLista = (float) ($fila->precio ?? 0) > 0
+                    ? $this->formatNum($fila->precio)
+                    : '';
+
+                $fila46 = [
+                    $fila->codigo_origen ?? '',             // A - Código Único
+                    $fila->nombre,                          // B - Descripción
+                    'S',                                    // C - Tipo: Servicio (platos = no inventariados)
+                    '',                                     // D - Modelo
+                    $precioLista,                           // E - Precio de Lista
+                    'NO',                                   // F - Exento
+                    '',                                     // G - Cat Padre
+                    '',                                     // H - Cat Hija
+                    'UNIDAD',                               // I - Presentación Base
+                    '', '', '', '',                         // J-M - Precios venta 2-5
+                    '', '', '',                             // N-P - Cuentas contables (completar manualmente)
+                    '', '',                                 // Q-R - CodBarra1-2
+                    '',                                     // S - Marca
+                    'NO',                                   // T - Avería
+                    'NO',                                   // U - No Comisionable
+                    '',                                     // V - % Variación Costo
+                    '', '', '',                             // W-Y - Estilo, Talla, Color
+                    'SI',                                   // Z - MostrarEnVentas
+                    'NO',                                   // AA - MostrarEnCompras
+                    '', '',                                 // AB-AC - CC Variación
+                    '',                                     // AD - Precio Sugerido
+                    '', '',                                 // AE-AF - Meta Inv / Cadena
+                    '',                                     // AG - Código Ubicación Default
+                    'NO',                                   // AH - Requiere Lote
+                    $fila->activa ? 'SI' : 'NO',            // AI - Activo
+                    'NO',                                   // AJ - Requiere Serie
+                    '',                                     // AK - Factor Ganancia
+                    'NO', 'NO',                             // AL-AM - Viñeta
+                    'NO',                                   // AN - Agrupar por Cat.
+                    '',                                     // AO - Descripción Extendida
+                    '', '',                                 // AP-AQ - Centro de Costos
+                    '',                                     // AR - #Días Abastecerse
+                    '',                                     // AS - Código Partida Arancelaria
+                    '',                                     // AT - Cuenta Inventario en Proceso
+                ];
+
+                fputcsv($handle, $fila46);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // POST /api/compras/export/brilo/resetear-modificados
+    //
+    // Marca registros como "ya sincronizados con BRILO" poniendo
+    // modificado_localmente = false para que no aparezcan en futuros exports.
+    //
+    // Body JSON:
+    //   tipo  = 'platos' | 'sub_recetas' | 'productos'
+    //   nivel = 1 | 2  (solo aplica a sub_recetas)
+    // ──────────────────────────────────────────────────────────────────────────
+    public function resetearModificados(Request $request)
+    {
+        $this->requireAdminRol();
+
+        $tipo  = $request->input('tipo');
+        $nivel = $request->input('nivel') ? (int) $request->input('nivel') : null;
+
+        $count = 0;
+
+        if ($tipo === 'productos') {
+            $count = DB::connection('compras')
+                ->table('productos')
+                ->where('modificado_localmente', true)
+                ->update(['modificado_localmente' => false, 'updated_at' => now()]);
+
+        } elseif ($tipo === 'platos') {
+            $count = DB::connection('compras')
+                ->table('recetas')
+                ->where('activa', true)
+                ->where('modificado_localmente', true)
+                ->where(function ($q) {
+                    $q->where('tipo_receta', 'plato')->orWhereNull('tipo_receta');
+                })
+                ->whereRaw("lower(coalesce(tipo_receta,'')) NOT LIKE '%sub%receta%'")
+                ->update(['modificado_localmente' => false, 'updated_at' => now()]);
+
+        } elseif ($tipo === 'sub_recetas') {
+            $query = DB::connection('compras')
+                ->table('recetas')
+                ->where('activa', true)
+                ->where('tipo_receta', 'sub_receta')
+                ->where('modificado_localmente', true);
+
+            if ($nivel === 1) {
+                $query->whereNotIn('id', function ($sub) {
+                    $sub->select('receta_id')->from('receta_ingredientes')->whereNotNull('sub_receta_id');
+                });
+            } elseif ($nivel === 2) {
+                $query->whereIn('id', function ($sub) {
+                    $sub->select('receta_id')->from('receta_ingredientes')->whereNotNull('sub_receta_id');
+                });
+            }
+
+            $count = $query->update(['modificado_localmente' => false, 'updated_at' => now()]);
+        } else {
+            return response()->json(['error' => 'Tipo inválido.'], 422);
+        }
+
+        return response()->json(['ok' => true, 'actualizados' => $count]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // Helpers
     // ──────────────────────────────────────────────────────────────────────────
 
