@@ -39,7 +39,9 @@ class BrewRecetasController extends Controller
         $data = $request->validate([
             'nombre'              => 'required|string|max:200',
             'estilo'              => 'nullable|string|max:100',
-            'codigo'              => 'nullable|string|max:30|unique:compras.brew_recetas,codigo',
+            'brewer'              => 'nullable|string|max:100',
+            'version'             => 'nullable|string|max:20',
+            'fecha_receta'        => 'nullable|date',
             'vol_preboil'         => 'nullable|numeric|min:0',
             'vol_postboil'        => 'nullable|numeric|min:0',
             'vol_bbt'             => 'nullable|numeric|min:0',
@@ -83,7 +85,9 @@ class BrewRecetasController extends Controller
         $data = $request->validate([
             'nombre'              => 'sometimes|required|string|max:200',
             'estilo'              => 'nullable|string|max:100',
-            'codigo'              => 'nullable|string|max:30|unique:compras.brew_recetas,codigo,' . $id,
+            'brewer'              => 'nullable|string|max:100',
+            'version'             => 'nullable|string|max:20',
+            'fecha_receta'        => 'nullable|date',
             'vol_preboil'         => 'nullable|numeric|min:0',
             'vol_postboil'        => 'nullable|numeric|min:0',
             'vol_bbt'             => 'nullable|numeric|min:0',
