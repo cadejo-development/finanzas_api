@@ -273,9 +273,10 @@ class RecetasController extends Controller
                 'rendimiento_unidad' => $validated['rendimiento_unidad'] ?? null,
                 'foto_plato'         => $this->normalizarUrlFoto($validated['foto_plato'] ?? null),
                 'foto_plateria'      => $this->normalizarUrlFoto($validated['foto_plateria'] ?? null),
-                'activa'        => true,
-                'estado_id'     => $estadoBorrador,
-                'aud_usuario'   => $usuario,
+                'activa'             => true,
+                'estado_id'          => $estadoBorrador,
+                'aud_usuario'        => $usuario,
+                'modificado_localmente' => true,
             ]);
 
             foreach ($validated['ingredientes'] ?? [] as $ing) {

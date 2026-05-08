@@ -458,8 +458,9 @@ class ExportBriloController extends Controller
             ]);
 
         if ($soloNuevos) {
-            // Solo platos que NO existen todavía en BRILO
-            $query->where('r.sincronizado_brilo', false);
+            // Solo platos nuevos: no existen en BRILO Y fueron creados/modificados en nuestro sistema
+            $query->where('r.sincronizado_brilo', false)
+                  ->where('r.modificado_localmente', true);
         }
 
         if ($soloConCodigo) {
