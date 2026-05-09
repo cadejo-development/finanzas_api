@@ -105,7 +105,8 @@ class VacacionesController extends RRHHBaseController
             $this->notificarSolicitud($validated['empleado_id'], 'Vacaciones', $detalles, 'vacaciones', $vacacion->id, 'vacacion');
         }
 
-        return response()->json(['success' => true, 'data' => $vacacion], 201);
+        $arr = $this->enrichWithEmpleadoData([$vacacion->toArray()]);
+        return response()->json(['success' => true, 'data' => $arr[0]], 201);
     }
 
     /**

@@ -121,7 +121,8 @@ class DesvinculacionesController extends RRHHBaseController
             rutaFrontend: 'desvinculaciones',
         );
 
-        return response()->json(['success' => true, 'data' => $desvinculacion], 201);
+        $arr = $this->enrichWithEmpleadoData([$desvinculacion->toArray()]);
+        return response()->json(['success' => true, 'data' => $arr[0]], 201);
     }
 
     /**

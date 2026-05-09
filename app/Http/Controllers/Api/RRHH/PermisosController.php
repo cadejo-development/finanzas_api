@@ -150,7 +150,8 @@ class PermisosController extends RRHHBaseController
             $this->notificarSolicitud($validated['empleado_id'], 'Permiso', $detalles, 'permisos', $permiso->id, 'permiso');
         }
 
-        return response()->json(['success' => true, 'data' => $permiso], 201);
+        $arr = $this->enrichWithEmpleadoData([$permiso->toArray()]);
+        return response()->json(['success' => true, 'data' => $arr[0]], 201);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([

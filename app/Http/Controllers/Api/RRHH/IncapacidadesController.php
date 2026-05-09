@@ -128,7 +128,8 @@ class IncapacidadesController extends RRHHBaseController
                 $this->notificarAccion($validated['empleado_id'], 'Incapacidad', $detalles, 'incapacidades');
             }
 
-            return response()->json(['success' => true, 'data' => $incapacidad], 201);
+            $arr = $this->enrichWithEmpleadoData([$incapacidad->toArray()]);
+            return response()->json(['success' => true, 'data' => $arr[0]], 201);
         });
     }
 

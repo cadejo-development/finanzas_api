@@ -125,7 +125,8 @@ class AmonestacionesController extends RRHHBaseController
             rutaFrontend: 'mi-expediente',
         );
 
-        return response()->json(['success' => true, 'data' => $amonestacion], 201);
+        $arr = $this->enrichWithEmpleadoData([$amonestacion->toArray()]);
+        return response()->json(['success' => true, 'data' => $arr[0]], 201);
     }
 
     /**

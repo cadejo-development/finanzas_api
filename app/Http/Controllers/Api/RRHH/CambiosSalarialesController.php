@@ -82,7 +82,8 @@ class CambiosSalarialesController extends RRHHBaseController
 
         $cambio->load('tipoAumento');
 
-        return response()->json(['success' => true, 'data' => $cambio], 201);
+        $arr = $this->enrichWithEmpleadoData([$cambio->toArray()]);
+        return response()->json(['success' => true, 'data' => $arr[0]], 201);
     }
 
     /**

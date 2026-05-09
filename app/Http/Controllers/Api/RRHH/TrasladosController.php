@@ -133,7 +133,8 @@ class TrasladosController extends RRHHBaseController
             $this->notificarGerenteDestino($traslado);
         }
 
-        return response()->json(['success' => true, 'data' => $traslado], 201);
+        $arr = $this->enrichWithEmpleadoData([$traslado->toArray()]);
+        return response()->json(['success' => true, 'data' => $arr[0]], 201);
     }
 
     /**
