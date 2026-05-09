@@ -250,6 +250,14 @@ class RecetasController extends Controller
             'ingredientes.*.sub_receta_id'     => 'nullable|integer',
             'ingredientes.*.cantidad_por_plato'=> 'required|numeric|min:0',
             'ingredientes.*.unidad'            => 'required|string|max:20',
+            'modificadores'                              => 'nullable|array',
+            'modificadores.*.grupo_nombre'               => 'required_with:modificadores|string|max:100',
+            'modificadores.*.grupo_codigo'               => 'nullable|string|max:50',
+            'modificadores.*.opciones'                   => 'array',
+            'modificadores.*.opciones.*.opcion_nombre'   => 'required|string|max:100',
+            'modificadores.*.opciones.*.producto_id'     => 'nullable|integer',
+            'modificadores.*.opciones.*.cantidad'        => 'nullable|numeric',
+            'modificadores.*.opciones.*.unidad'          => 'nullable|string|max:20',
         ]);
 
         $tipoReceta = $validated['tipo_receta'] ?? 'plato';
@@ -300,6 +308,26 @@ class RecetasController extends Controller
                 ]);
             }
 
+            $grupoId = DB::connection('compras')->table('receta_modificadores')->max('grupo_id_origen') ?? 0;
+            foreach ($validated['modificadores'] ?? [] as $grupo) {
+                if (empty($grupo['grupo_nombre'])) continue;
+                $grupoId++;
+                foreach ($grupo['opciones'] ?? [] as $opcion) {
+                    if (empty($opcion['opcion_nombre'])) continue;
+                    RecetaModificador::create([
+                        'receta_id'       => $receta->id,
+                        'grupo_id_origen' => $grupoId,
+                        'grupo_codigo'    => $grupo['grupo_codigo'] ?? strtoupper(str_replace(' ', '_', $grupo['grupo_nombre'])),
+                        'grupo_nombre'    => $grupo['grupo_nombre'],
+                        'opcion_nombre'   => $opcion['opcion_nombre'],
+                        'producto_id'     => $opcion['producto_id'] ?? null,
+                        'cantidad'        => $opcion['cantidad'] ?? 0,
+                        'unidad'          => $opcion['unidad'] ?? '',
+                        'aud_usuario'     => $usuario,
+                    ]);
+                }
+            }
+
             return $receta;
         });
 
@@ -311,10 +339,10 @@ class RecetasController extends Controller
             }
         }
 
-        $receta->load(['ingredientes.producto', 'ingredientes.subReceta.productoAsociado', 'ingredientes.subReceta.ingredientes.producto', 'sucursalConfig']);
+        $receta->load(['ingredientes.producto', 'ingredientes.subReceta.productoAsociado', 'ingredientes.subReceta.ingredientes.producto', 'modificadores.producto', 'sucursalConfig']);
         $this->upsertProductoSubReceta($receta);
         $this->sincronizarCostoProducto($receta);
-        return response()->json(['data' => $this->formatReceta($receta)], 201);
+        return response()->json(['data' => $this->formatReceta($receta, null, true)], 201);
     }
 
     // ----------------------------------------------------------------------
