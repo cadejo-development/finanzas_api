@@ -35,7 +35,7 @@ class TrasladosController extends RRHHBaseController
             'empleado_id'              => 'required|integer',
             'sucursal_destino_id'      => 'required|integer',
             'cargo_destino_id'         => 'nullable|integer',
-            'departamento_destino_id'  => 'required|integer',
+            'departamento_destino_id'  => 'nullable|integer',
             'fecha_efectiva'           => 'required|date',
             'motivo'                   => 'nullable|string|max:500',
         ]);
@@ -85,7 +85,22 @@ class TrasladosController extends RRHHBaseController
                 ->value('nombre');
         }
 
-        $estado = $this->estadoParaEmpleado($validated['empleado_id']);
+        // rrhh_admin: aprobado directo. Jefatura: pendiente, espera aprobación del gerente destino.
+        $estado = $this->esAdminRrhh() ? 'aprobado' : 'pendiente';
+
+        // Si no se especificó departamento destino, auto-asignar el del restaurante destino
+        $deptoDestinoId   = $validated['departamento_destino_id'] ?? null;
+        $deptoDestinoNombre = $deptDestino;
+        if (!$deptoDestinoId) {
+            $deptoDestino = DB::connection('pgsql')
+                ->table('departamentos')
+                ->where('sucursal_id', $validated['sucursal_destino_id'])
+                ->where('activo', true)
+                ->select('id', 'nombre')
+                ->first();
+            $deptoDestinoId     = $deptoDestino?->id;
+            $deptoDestinoNombre = $deptoDestino?->nombre;
+        }
 
         $traslado = Traslado::create([
             'empleado_id'                => $validated['empleado_id'],
@@ -100,22 +115,22 @@ class TrasladosController extends RRHHBaseController
             'sucursal_destino_nombre'    => $sucursalDestino,
             'cargo_destino_id'           => $validated['cargo_destino_id']    ?? null,
             'cargo_destino_nombre'       => $cargoDestino,
-            'departamento_destino_id'    => $validated['departamento_destino_id'] ?? null,
-            'departamento_destino_nombre'=> $deptDestino,
+            'departamento_destino_id'    => $deptoDestinoId,
+            'departamento_destino_nombre'=> $deptoDestinoNombre,
             'fecha_efectiva'             => $validated['fecha_efectiva'],
             'motivo'                     => $validated['motivo'] ?? null,
             'estado'                     => $estado,
             'aud_usuario'                => Auth::user()->email,
         ]);
 
-        // Si ya fue aprobado y la fecha efectiva ya llegó → ejecutar traslado
-        if ($estado === 'aprobado' && $traslado->fecha_efectiva->lte(now()->startOfDay())) {
-            $this->ejecutarTraslado($traslado);
-        }
-
-        // Notificar a Informática si el traslado quedó aprobado desde la creación
         if ($estado === 'aprobado') {
+            if ($traslado->fecha_efectiva->lte(now()->startOfDay())) {
+                $this->ejecutarTraslado($traslado);
+            }
             $this->notificarTrasladoInformatica($traslado);
+        } else {
+            // Notificar al gerente de la sucursal destino para que apruebe
+            $this->notificarGerenteDestino($traslado);
         }
 
         return response()->json(['success' => true, 'data' => $traslado], 201);
@@ -198,6 +213,53 @@ class TrasladosController extends RRHHBaseController
     }
 
     /**
+     * Notifica al gerente de la sucursal destino que hay un traslado pendiente de aprobar.
+     */
+    private function notificarGerenteDestino(Traslado $traslado): void
+    {
+        // Buscar el jefe del departamento destino en la sucursal destino
+        $gerenteId = DB::connection('pgsql')
+            ->table('departamentos')
+            ->where('sucursal_id', $traslado->sucursal_destino_id)
+            ->where('activo', true)
+            ->value('jefe_empleado_id');
+
+        if (!$gerenteId) return;
+
+        $gerente = DB::connection('pgsql')
+            ->table('empleados as e')
+            ->join('users as u', 'u.id', '=', 'e.user_id')
+            ->where('e.id', $gerenteId)
+            ->select('u.email', 'e.nombres', 'e.apellidos')
+            ->first();
+
+        if (!$gerente || !$gerente->email) return;
+
+        $enriched   = $this->enrichWithEmpleadoData([$traslado->toArray()]);
+        $empNombre  = $enriched[0]['empleado_nombre'] ?? "Empleado #{$traslado->empleado_id}";
+        $gerenteNombre = trim($gerente->nombres . ' ' . $gerente->apellidos);
+        $baseUrl    = rtrim(config('app.frontend_rrhh_url', 'https://rrhh.cervezacadejo.com'), '/');
+
+        \Illuminate\Support\Facades\Mail::to($gerente->email)->send(
+            new \App\Mail\RRHH\SolicitudAprobacion(
+                tipo:              'Traslado de Personal',
+                empleadoNombre:    $empNombre,
+                supervisorNombre:  $gerenteNombre,
+                detalles: array_filter([
+                    'Colaborador'        => $empNombre,
+                    'Sucursal de origen' => $traslado->sucursal_origen_nombre ?? '—',
+                    'Sucursal de destino'=> $traslado->sucursal_destino_nombre ?? '—',
+                    'Fecha efectiva'     => $traslado->fecha_efectiva?->toDateString() ?? '—',
+                    'Motivo'             => $traslado->motivo ?? '—',
+                ]),
+                linkUrl:    "{$baseUrl}/traslados",
+                aprobarUrl: null,
+                rechazarUrl: null,
+            )
+        );
+    }
+
+    /**
      * Notifica al departamento de Informática (GEN_INF) de un traslado aprobado.
      */
     private function notificarTrasladoInformatica(Traslado $traslado): void
@@ -235,6 +297,14 @@ class TrasladosController extends RRHHBaseController
 
         if ($traslado->departamento_destino_id) {
             $updates['departamento_id'] = $traslado->departamento_destino_id;
+        } else {
+            // Fallback: auto-asignar el único departamento del restaurante destino
+            $deptoId = DB::connection('pgsql')
+                ->table('departamentos')
+                ->where('sucursal_id', $traslado->sucursal_destino_id)
+                ->where('activo', true)
+                ->value('id');
+            if ($deptoId) $updates['departamento_id'] = $deptoId;
         }
 
         DB::connection('pgsql')
