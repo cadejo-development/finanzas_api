@@ -209,8 +209,23 @@ async function run() {
     // ── 4. Empleados ──────────────────────────────────────────────────────────
     log('\nConsultando empleados en SQL Server...');
     const empResult = await pool.request().query(Q_EMPLEADOS);
-    const empRows   = empResult.recordset;
+    let empRows     = empResult.recordset;
     log(`  → ${empRows.length} empleados encontrados`);
+
+    // Deduplicar por nombre completo: conservar el de código más alto
+    const porNombre = new Map();
+    for (const r of empRows) {
+      const key = `${(r.nombres ?? '').trim().toUpperCase()}|${(r.apellidos ?? '').trim().toUpperCase()}`;
+      const existing = porNombre.get(key);
+      if (!existing || String(r.codigo) > String(existing.codigo)) {
+        porNombre.set(key, r);
+      }
+    }
+    const dupCount = empRows.length - porNombre.size;
+    if (dupCount > 0) {
+      log(`  → ${dupCount} duplicado(s) por nombre eliminado(s) (se conserva código mayor)`);
+      empRows = Array.from(porNombre.values());
+    }
 
     let sinCargo = 0, sinSucursal = 0, sinDepMap = 0;
     const empData = empRows.map(r => {
@@ -250,27 +265,120 @@ async function run() {
            'activo', 'aud_usuario', 'created_at', 'updated_at'],
           batch,
           `ON CONFLICT (codigo) DO UPDATE SET
-            nombres      = EXCLUDED.nombres,
-            apellidos    = EXCLUDED.apellidos,
-            email        = EXCLUDED.email,
-            cargo_id     = EXCLUDED.cargo_id,
-            sucursal_id  = EXCLUDED.sucursal_id,
-            updated_at   = EXCLUDED.updated_at`,
+            nombres    = EXCLUDED.nombres,
+            apellidos  = EXCLUDED.apellidos,
+            email      = EXCLUDED.email,
+            updated_at = EXCLUDED.updated_at`,
         );
         log(`  → empleados: lote ${i + 1}–${Math.min(i + BATCH, empData.length)} insertado/actualizado`);
       }
     }
     log(`\nEmpleados sincronizados: ${empData.length}`);
 
+    // ── Desactivar empleados que ya no están activos en SQL Server ────────────
+    // Usar todos los códigos de SQL Server (antes de dedup) para no marcar
+    // como inactivos a quienes sí existen con empActivo=1 en origen.
+    const codigosActivosSS = empResult.recordset.map(r => clean(r.codigo, 50)).filter(Boolean);
+    if (!DRY_RUN && codigosActivosSS.length > 0) {
+      const placeholders = codigosActivosSS.map((_, i) => `$${i + 1}`).join(',');
+      const deactivateRes = await pg.query(
+        `UPDATE empleados SET activo = false, updated_at = NOW()
+         WHERE activo = true AND codigo NOT IN (${placeholders})`,
+        codigosActivosSS,
+      );
+      const desactivados = deactivateRes.rowCount ?? 0;
+      if (desactivados > 0) {
+        log(`  → ${desactivados} empleado(s) desactivado(s) (ya no están activos en SQL Server)`);
+
+        // Mostrar quiénes fueron desactivados
+        const deactivatedRows = await pg.query(
+          `SELECT codigo, nombres, apellidos FROM empleados
+           WHERE activo = false AND codigo NOT IN (${placeholders})
+           ORDER BY codigo`,
+          codigosActivosSS,
+        );
+        deactivatedRows.rows.forEach(e =>
+          log(`    ✗ ${e.codigo} | ${e.nombres} ${e.apellidos}`),
+        );
+      } else {
+        log('  → Sin empleados para desactivar');
+      }
+    } else if (DRY_RUN) {
+      const placeholders = codigosActivosSS.map((_, i) => `$${i + 1}`).join(',');
+      const toDeactivate = await pg.query(
+        `SELECT codigo, nombres, apellidos FROM empleados
+         WHERE activo = true AND codigo NOT IN (${placeholders})
+         ORDER BY codigo`,
+        codigosActivosSS,
+      );
+      if (toDeactivate.rows.length > 0) {
+        log(`  [dry-run] ${toDeactivate.rows.length} empleado(s) se desactivarían:`);
+        toDeactivate.rows.forEach(e =>
+          log(`    ✗ ${e.codigo} | ${e.nombres} ${e.apellidos}`),
+        );
+      }
+    }
+
+    // ── Re-aplicar desvinculaciones vigentes (protección ante reactivación) ────
+    // Si un empleado tiene desvinculación con fecha_efectiva <= hoy en rrhh_db,
+    // debe quedar activo=false aunque SQL Server lo tenga como empActivo=1.
+    log('\nVerificando desvinculaciones vigentes en rrhh_db...');
+    const pgRrhh = new Pool({
+      host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+      port: 5432, database: 'rrhh_db', user: 'cadejo_admin',
+      password: 'Holamundo#3..',
+      ssl: { rejectUnauthorized: false },
+    });
+    try {
+      const hoy = new Date().toISOString().slice(0, 10);
+      const dvRes = await pgRrhh.query(
+        `SELECT DISTINCT empleado_id, empleado_nombre FROM desvinculaciones WHERE fecha_efectiva <= $1`,
+        [hoy],
+      );
+      if (dvRes.rows.length === 0) {
+        log('  → Sin desvinculaciones vigentes');
+      } else {
+        const dvIds = dvRes.rows.map(r => r.empleado_id);
+        if (!DRY_RUN) {
+          const reprotect = await pg.query(
+            `UPDATE empleados SET activo = false, updated_at = NOW()
+             WHERE id = ANY($1) AND activo = true`,
+            [dvIds],
+          );
+          if (reprotect.rowCount > 0) {
+            log(`  → ${reprotect.rowCount} empleado(s) mantenidos inactivos (tenían desvinculación vigente y el sync los había reactivado):`);
+            dvRes.rows.forEach(r => log(`    ✗ id=${r.empleado_id} | ${r.empleado_nombre ?? '?'}`));
+          } else {
+            log(`  → ${dvRes.rows.length} desvinculación(es) vigente(s), todos ya estaban inactivos ✓`);
+          }
+        } else {
+          const wouldReactivate = await pg.query(
+            `SELECT id, codigo, nombres, apellidos FROM empleados WHERE id = ANY($1) AND activo = true`,
+            [dvIds],
+          );
+          if (wouldReactivate.rows.length > 0) {
+            log(`  [dry-run] ${wouldReactivate.rows.length} empleado(s) serían mantenidos inactivos:`);
+            wouldReactivate.rows.forEach(e => log(`    ✗ ${e.codigo} | ${e.nombres} ${e.apellidos}`));
+          } else {
+            log(`  [dry-run] ${dvRes.rows.length} desvinculación(es) vigente(s), todos ya inactivos ✓`);
+          }
+        }
+      }
+    } finally {
+      await pgRrhh.end().catch(() => {});
+    }
+
     // ── Resumen ───────────────────────────────────────────────────────────────
     if (!DRY_RUN) {
-      const [cRes, eRes] = await Promise.all([
+      const [cRes, eRes, actRes] = await Promise.all([
         pg.query('SELECT COUNT(*) FROM cargos'),
         pg.query('SELECT COUNT(*) FROM empleados'),
+        pg.query('SELECT COUNT(*) FROM empleados WHERE activo = true'),
       ]);
       log(`\nResumen final:`);
-      log(`  cargos:    ${cRes.rows[0].count}`);
-      log(`  empleados: ${eRes.rows[0].count}`);
+      log(`  cargos:              ${cRes.rows[0].count}`);
+      log(`  empleados (total):   ${eRes.rows[0].count}`);
+      log(`  empleados (activos): ${actRes.rows[0].count}`);
     }
 
   } finally {

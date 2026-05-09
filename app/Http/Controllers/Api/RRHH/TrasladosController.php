@@ -35,7 +35,7 @@ class TrasladosController extends RRHHBaseController
             'empleado_id'              => 'required|integer',
             'sucursal_destino_id'      => 'required|integer',
             'cargo_destino_id'         => 'nullable|integer',
-            'departamento_destino_id'  => 'nullable|integer',
+            'departamento_destino_id'  => 'required|integer',
             'fecha_efectiva'           => 'required|date',
             'motivo'                   => 'nullable|string|max:500',
         ]);
@@ -235,10 +235,6 @@ class TrasladosController extends RRHHBaseController
 
         if ($traslado->departamento_destino_id) {
             $updates['departamento_id'] = $traslado->departamento_destino_id;
-        } elseif ($traslado->sucursal_destino_id !== $traslado->sucursal_origen_id) {
-            // Al cambiar de sucursal sin especificar departamento destino,
-            // limpiar el departamento (puede no aplica en destino)
-            $updates['departamento_id'] = null;
         }
 
         DB::connection('pgsql')

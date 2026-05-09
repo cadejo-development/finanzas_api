@@ -95,6 +95,15 @@ class DesvinculacionesController extends RRHHBaseController
             'aud_usuario'       => Auth::user()->email,
         ]));
 
+        // Si la fecha efectiva ya llegó, inactivar de inmediato.
+        // Casos futuros los cubre el cron rrhh:inactivar-desvinculados.
+        if ($validated['fecha_efectiva'] <= now()->toDateString()) {
+            DB::connection('pgsql')
+                ->table('empleados')
+                ->where('id', $validated['empleado_id'])
+                ->update(['activo' => false, 'aud_usuario' => 'sistema:desvinculacion', 'updated_at' => now()]);
+        }
+
         $desvinculacion->load('motivo');
 
         // Notificar a los administradores de RRHH
