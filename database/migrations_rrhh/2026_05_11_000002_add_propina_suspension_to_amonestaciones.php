@@ -1,0 +1,25 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function getConnection(): string { return 'rrhh'; }
+
+    public function up(): void
+    {
+        Schema::connection('rrhh')->table('amonestaciones', function (Blueprint $table) {
+            $table->boolean('aplica_suspension_propina')->default(false)->after('aplica_suspension');
+            $table->jsonb('dias_suspension_propina')->nullable()->after('aplica_suspension_propina');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::connection('rrhh')->table('amonestaciones', function (Blueprint $table) {
+            $table->dropColumn(['aplica_suspension_propina', 'dias_suspension_propina']);
+        });
+    }
+};

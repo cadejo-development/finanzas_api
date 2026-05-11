@@ -12,13 +12,16 @@ class Amonestacion extends Model
     protected $fillable = [
         'empleado_id', 'jefe_id', 'tipo_falta_id',
         'fecha_amonestacion', 'descripcion', 'observacion', 'accion_tomada',
-        'aplica_suspension', 'archivo_nombre', 'archivo_ruta',
+        'aplica_suspension', 'aplica_suspension_propina', 'dias_suspension_propina',
+        'archivo_nombre', 'archivo_ruta',
         'aud_usuario',
     ];
 
     protected $casts = [
-        'fecha_amonestacion' => 'date',
-        'aplica_suspension'  => 'boolean',
+        'fecha_amonestacion'        => 'date',
+        'aplica_suspension'         => 'boolean',
+        'aplica_suspension_propina' => 'boolean',
+        'dias_suspension_propina'   => 'array',
     ];
 
     public function tipoFalta()
