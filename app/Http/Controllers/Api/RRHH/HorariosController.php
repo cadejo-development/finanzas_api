@@ -106,6 +106,58 @@ class HorariosController extends RRHHBaseController
     }
 
     /**
+     * GET /rrhh/horarios/mi-horario
+     * Devuelve el horario semanal del empleado autenticado (solo lectura).
+     */
+    public function miHorario(Request $request): JsonResponse
+    {
+        $semanaInicio = $request->query('semana_inicio');
+        $inicio = $semanaInicio
+            ? Carbon::parse($semanaInicio)->startOfWeek(Carbon::MONDAY)
+            : Carbon::now()->startOfWeek(Carbon::MONDAY);
+        $fin = $inicio->copy()->endOfWeek(Carbon::SUNDAY);
+
+        // Buscar el empleado_id del usuario autenticado
+        $user = Auth::user();
+        $empleado = DB::connection('pgsql')
+            ->table('empleados as e')
+            ->leftJoin('cargos as c', 'e.cargo_id', '=', 'c.id')
+            ->where('e.user_id', $user->id)
+            ->where('e.activo', true)
+            ->select('e.id', 'e.nombres', 'e.apellidos', 'c.nombre as cargo')
+            ->first();
+
+        if (!$empleado) {
+            return response()->json(['dias' => [], 'semana_inicio' => $inicio->toDateString(), 'semana_fin' => $fin->toDateString()]);
+        }
+
+        $horarios = HorarioEmpleado::where('empleado_id', $empleado->id)
+            ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
+            ->get();
+
+        $dias = [];
+        foreach ($horarios as $h) {
+            $fecha = $h->fecha instanceof \Carbon\Carbon ? $h->fecha->toDateString() : substr($h->fecha, 0, 10);
+            $dias[$fecha] = [
+                'hora_inicio' => $h->hora_inicio ? substr($h->hora_inicio, 0, 5) : null,
+                'hora_fin'    => $h->hora_fin    ? substr($h->hora_fin,    0, 5) : null,
+                'tipo'        => $h->tipo,
+                'notas'       => $h->notas,
+            ];
+        }
+
+        return response()->json([
+            'semana_inicio' => $inicio->toDateString(),
+            'semana_fin'    => $fin->toDateString(),
+            'empleado'      => [
+                'nombre' => trim($empleado->nombres . ' ' . $empleado->apellidos),
+                'cargo'  => $empleado->cargo ?? '',
+            ],
+            'dias' => $dias,
+        ]);
+    }
+
+    /**
      * POST /rrhh/horarios/bulk
      *
      * Body: { registros: [{empleado_id, fecha, hora_inicio, hora_fin, tipo, notas?}] }

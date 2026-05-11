@@ -374,6 +374,7 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::get('reportes/unidades',  [ReportesRRHHController::class, 'unidades']);
 
     // Horarios semanales
+    Route::get('horarios/mi-horario',             [HorariosController::class, 'miHorario']);
     Route::get('horarios',                        [HorariosController::class, 'index']);
     Route::post('horarios/bulk',                  [HorariosController::class, 'bulk']);
     Route::delete('horarios/{empleadoId}/{fecha}', [HorariosController::class, 'destroy']);
