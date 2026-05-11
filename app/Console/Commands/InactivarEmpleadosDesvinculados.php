@@ -39,13 +39,18 @@ class InactivarEmpleadosDesvinculados extends Command
             return 0;
         }
 
-        // Desvinculaciones cuya fecha efectiva ya llegó y el empleado aún está activo
+        // Desvinculaciones cuya fecha efectiva ya llegó y el empleado aún está activo.
+        // Excluir las que están pendientes de aprobación (pendiente_gerencia_ops).
         $pendientes = DB::connection('rrhh')
             ->table('desvinculaciones as dv')
             ->select('dv.id', 'dv.empleado_id', 'dv.tipo', 'dv.fecha_efectiva',
                      'dv.empleado_nombre')
             ->where('dv.fecha_efectiva', '<=', $hoy)
             ->whereIn('dv.empleado_id', $activosIds)
+            ->where(function ($q) {
+                $q->whereNull('dv.estado')
+                  ->orWhere('dv.estado', '!=', 'pendiente_gerencia_ops');
+            })
             ->get();
 
         if ($pendientes->isEmpty()) {

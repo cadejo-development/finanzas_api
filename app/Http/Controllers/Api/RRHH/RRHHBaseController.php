@@ -818,6 +818,68 @@ abstract class RRHHBaseController extends Controller
     }
 
     /**
+     * Envía a gerencia_ops un correo de SOLICITUD DE APROBACIÓN (con links aprobar/rechazar).
+     * Usado para: amonestaciones con suspensión de propina y despidos de restaurantes.
+     */
+    protected function notificarGerenciaOpsSolicitud(
+        string $tipo,
+        string $empleadoNombre,
+        array  $detalles,
+        string $rutaFrontend,
+        int    $solicitudId,
+        string $tipoModelo,
+    ): void {
+        try {
+            $destinatarios = DB::connection('pgsql')
+                ->table('model_has_roles as mhr')
+                ->join('roles as r', 'r.id', '=', 'mhr.role_id')
+                ->join('users as u', 'u.id', '=', 'mhr.model_id')
+                ->where('r.codigo', 'gerencia_ops')
+                ->where('r.system_id', self::RRHH_SYSTEM_ID)
+                ->where('mhr.model_type', 'App\\Models\\User')
+                ->whereNotNull('u.email')
+                ->select('u.id', 'u.name', 'u.email')
+                ->get();
+
+            if ($destinatarios->isEmpty()) return;
+
+            $baseUrl     = rtrim(config('app.frontend_rrhh_url', 'https://rrhh.cervezacadejo.com'), '/');
+            $linkUrl     = "{$baseUrl}/{$rutaFrontend}";
+            $aprobarUrl  = URL::temporarySignedRoute('rrhh.email.aprobar',  now()->addDays(7), ['tipo' => $tipoModelo, 'id' => $solicitudId]);
+            $rechazarUrl = URL::temporarySignedRoute('rrhh.email.rechazar', now()->addDays(7), ['tipo' => $tipoModelo, 'id' => $solicitudId]);
+
+            foreach ($destinatarios as $dest) {
+                $mailable = new SolicitudAprobacion(
+                    $tipo,
+                    $empleadoNombre,
+                    $dest->name,
+                    $detalles,
+                    $linkUrl,
+                    $aprobarUrl,
+                    $rechazarUrl,
+                );
+
+                Mail::to($dest->email)->send($mailable);
+
+                $this->registrarEmailLog([
+                    'tipo'            => 'solicitud_aprobacion_gerencia_ops',
+                    'destinatario'    => $dest->email,
+                    'asunto'          => $mailable->envelope()->subject,
+                    'estado'          => 'enviado',
+                    'enviado_por'     => Auth::user()->email,
+                    'referencia_id'   => $solicitudId,
+                    'referencia_tipo' => $tipoModelo,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('RRHH: Error enviando solicitud aprobación a gerencia_ops', [
+                'tipo'  => $tipo,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
      * Envía un correo a todos los usuarios con rol gerencia_ops.
      * Usado para: amonestaciones y desvinculaciones de empleados de sucursales operativas.
      */

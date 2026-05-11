@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\RRHH;
 
 use App\Http\Controllers\Controller;
+use App\Mail\RRHH\AccionPersonalNotificacion;
 use App\Mail\RRHH\VeredictoSolicitud;
+use App\Models\RRHH\Amonestacion;
+use App\Models\RRHH\Desvinculacion;
 use App\Models\RRHH\Permiso;
 use App\Models\RRHH\Vacacion;
 use Illuminate\Http\Request;
@@ -14,8 +17,10 @@ use Illuminate\Support\Facades\Mail;
 class SolicitudEmailController extends Controller
 {
     private const MODELOS = [
-        'permiso'  => Permiso::class,
-        'vacacion' => Vacacion::class,
+        'permiso'     => Permiso::class,
+        'vacacion'    => Vacacion::class,
+        'amonestacion'=> Amonestacion::class,
+        'despido'     => Desvinculacion::class,
     ];
 
     public function aprobar(Request $request, string $tipo, int $id)
@@ -61,7 +66,8 @@ class SolicitudEmailController extends Controller
             ]);
         }
 
-        if ($solicitud->estado !== 'pendiente') {
+        $estadosPendientes = ['pendiente', 'pendiente_gerencia_ops'];
+        if (! in_array($solicitud->estado, $estadosPendientes)) {
             return view('rrhh.resultado-solicitud', [
                 'exito'   => false,
                 'accion'  => $solicitud->estado,
@@ -70,9 +76,17 @@ class SolicitudEmailController extends Controller
             ]);
         }
 
-        $solicitud->update(['estado' => $nuevoEstado]);
+        $solicitud->update([
+            'estado'       => $nuevoEstado,
+            'aprobado_en'  => now(),
+        ]);
 
-        // Notificar al empleado solicitante
+        // Para despidos aprobados: inactivar al empleado si la fecha efectiva ya llegó
+        if ($tipo === 'despido' && $nuevoEstado === 'aprobado') {
+            $this->procesarDespidoAprobado($solicitud);
+        }
+
+        // Notificar resultado
         $this->notificarEmpleado($solicitud, $tipo, $nuevoEstado);
 
         return view('rrhh.resultado-solicitud', [
@@ -85,10 +99,36 @@ class SolicitudEmailController extends Controller
         ]);
     }
 
-    private function notificarEmpleado($solicitud, string $tipo, string $estado): void
+    private function procesarDespidoAprobado(Desvinculacion $desvinculacion): void
     {
         try {
-            // Empleado solicitante
+            if ($desvinculacion->fecha_efectiva <= now()->toDateString()) {
+                DB::connection('pgsql')
+                    ->table('empleados')
+                    ->where('id', $desvinculacion->empleado_id)
+                    ->update(['activo' => false, 'aud_usuario' => 'sistema:desvinculacion:aprobado', 'updated_at' => now()]);
+            }
+            // Casos futuros los cubre el cron rrhh:inactivar-desvinculados (ya maneja estado='aprobado').
+        } catch (\Throwable $e) {
+            Log::warning('RRHH: Error inactivando empleado al aprobar despido', [
+                'desvinculacion_id' => $desvinculacion->id,
+                'error'             => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function notificarEmpleado($solicitud, string $tipo, string $estado): void
+    {
+        // Para acciones de jefatura sobre subordinados (amonestacion, despido):
+        // - Si aprobado: notificar al empleado afectado
+        // - Si rechazado: notificar al jefe que creó el registro (procesado_por_id / jefe_id)
+        if (in_array($tipo, ['amonestacion', 'despido'])) {
+            $this->notificarVeredictoAccion($solicitud, $tipo, $estado);
+            return;
+        }
+
+        try {
+            // Empleado solicitante (permisos/vacaciones)
             $empleado = DB::connection('pgsql')
                 ->table('empleados')
                 ->where('id', $solicitud->empleado_id)
@@ -103,7 +143,6 @@ class SolicitudEmailController extends Controller
 
             if (! $empleadoEmail) return;
 
-            // Supervisor que procesó
             $supervisor = DB::connection('pgsql')
                 ->table('empleados')
                 ->where('id', $solicitud->jefe_id)
@@ -121,14 +160,12 @@ class SolicitudEmailController extends Controller
 
             $tipoLabel = ucfirst($tipo === 'vacacion' ? 'Vacaciones' : $tipo);
 
-            $detalles = $this->buildDetalles($solicitud, $tipo);
-
             $mailable = new VeredictoSolicitud(
                 tipo:             $tipoLabel,
                 empleadoNombre:   $empleadoNombre,
                 supervisorNombre: $supervisorNombre,
                 estado:           $estado,
-                detalles:         $detalles,
+                detalles:         $this->buildDetalles($solicitud, $tipo),
                 linkUrl:          $linkUrl,
             );
 
@@ -136,9 +173,88 @@ class SolicitudEmailController extends Controller
 
         } catch (\Throwable $e) {
             Log::warning('RRHH: Error enviando correo veredicto al empleado', [
-                'error'       => $e->getMessage(),
+                'error'        => $e->getMessage(),
                 'solicitud_id' => $solicitud->id,
-                'tipo'        => $tipo,
+                'tipo'         => $tipo,
+            ]);
+        }
+    }
+
+    private function notificarVeredictoAccion($solicitud, string $tipo, string $estado): void
+    {
+        try {
+            $baseUrl = rtrim(config('app.frontend_rrhh_url', 'https://rrhh.cervezacadejo.com'), '/');
+            $rutaMap = ['amonestacion' => 'amonestaciones', 'despido' => 'desvinculaciones'];
+            $linkUrl = $baseUrl . '/' . ($rutaMap[$tipo] ?? $tipo);
+            $detalles = $this->buildDetalles($solicitud, $tipo);
+
+            if ($estado === 'aprobado') {
+                // Notificar al empleado afectado
+                $empleado = DB::connection('pgsql')
+                    ->table('empleados')
+                    ->where('id', $solicitud->empleado_id)
+                    ->first();
+
+                $empleadoEmail = $empleado
+                    ? DB::connection('pgsql')->table('users')->where('id', $empleado->user_id)->value('email')
+                    : null;
+
+                if ($empleadoEmail) {
+                    $empleadoNombre = trim($empleado->nombres . ' ' . $empleado->apellidos);
+                    $tipoLabel      = $tipo === 'amonestacion' ? 'Amonestación' : 'Despido';
+                    $mensaje        = $tipo === 'amonestacion'
+                        ? 'Se ha registrado una amonestacion aprobada en tu expediente.'
+                        : 'Tu desvinculacion ha sido procesada. Contacta a RRHH para los pasos a seguir.';
+
+                    $mailable = new \App\Mail\RRHH\NotificacionAlEmpleado(
+                        tipo:               $tipoLabel,
+                        empleadoNombre:     $empleadoNombre,
+                        mensaje:            $mensaje,
+                        detalles:           $detalles,
+                        linkUrl:            $linkUrl . '/mi-expediente',
+                        destinatarioNombre: $empleadoNombre,
+                    );
+
+                    Mail::to($empleadoEmail)->send($mailable);
+                }
+            } else {
+                // Rechazado: notificar al jefe que creó el registro
+                $jefeId = $tipo === 'amonestacion' ? $solicitud->jefe_id : $solicitud->procesado_por_id;
+
+                $jefe = DB::connection('pgsql')
+                    ->table('empleados')
+                    ->where('id', $jefeId)
+                    ->first();
+
+                $jefeEmail = $jefe
+                    ? DB::connection('pgsql')->table('users')->where('id', $jefe->user_id)->value('email')
+                    : null;
+
+                if ($jefeEmail) {
+                    $empleado = DB::connection('pgsql')
+                        ->table('empleados')
+                        ->where('id', $solicitud->empleado_id)
+                        ->first();
+
+                    $empNombre  = $empleado ? trim($empleado->nombres . ' ' . $empleado->apellidos) : "Empleado #{$solicitud->empleado_id}";
+                    $jefeNombre = trim($jefe->nombres . ' ' . $jefe->apellidos);
+                    $tipoLabel  = $tipo === 'amonestacion' ? 'Amonestación' : 'Despido';
+
+                    $mailable = new AccionPersonalNotificacion(
+                        tipo:             "{$tipoLabel} — Rechazado por Gerencia de Operaciones",
+                        empleadoNombre:   $empNombre,
+                        supervisorNombre: $jefeNombre,
+                        detalles:         $detalles,
+                        linkUrl:          $linkUrl,
+                    );
+
+                    Mail::to($jefeEmail)->send($mailable);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('RRHH: Error notificando veredicto de acción', [
+                'tipo'  => $tipo,
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -153,6 +269,27 @@ class SolicitudEmailController extends Controller
                 'Días'            => $solicitud->dias ? $solicitud->dias . ' día(s)' : null,
                 'Horas'           => $solicitud->horas_solicitadas ? $solicitud->horas_solicitadas . ' hrs' : null,
                 'Motivo'          => $solicitud->motivo,
+            ]);
+        }
+
+        if ($tipo === 'amonestacion') {
+            $solicitud->load('tipoFalta');
+            return array_filter([
+                'Tipo de falta'      => $solicitud->tipoFalta?->nombre,
+                'Fecha'              => $solicitud->fecha_amonestacion,
+                'Descripción'        => $solicitud->descripcion,
+                'Suspensión propina' => $solicitud->aplica_suspension_propina ? 'Sí' : null,
+            ]);
+        }
+
+        if ($tipo === 'despido') {
+            $solicitud->load('motivo');
+            return array_filter([
+                'Tipo'           => 'Despido',
+                'Fecha efectiva' => $solicitud->fecha_efectiva,
+                'Motivo'         => $solicitud->motivo?->nombre,
+                'Cargo'          => $solicitud->cargo_nombre,
+                'Sucursal'       => $solicitud->sucursal_nombre,
             ]);
         }
 

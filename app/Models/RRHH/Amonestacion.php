@@ -13,6 +13,7 @@ class Amonestacion extends Model
         'empleado_id', 'jefe_id', 'tipo_falta_id',
         'fecha_amonestacion', 'descripcion', 'observacion', 'accion_tomada',
         'aplica_suspension', 'aplica_suspension_propina', 'dias_suspension_propina',
+        'estado', 'aprobado_por_id', 'aprobado_en', 'rechazo_motivo',
         'archivo_nombre', 'archivo_ruta',
         'aud_usuario',
     ];

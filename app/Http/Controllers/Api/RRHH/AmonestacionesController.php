@@ -82,6 +82,11 @@ class AmonestacionesController extends RRHHBaseController
             $archivoRuta   = $file->store('rrhh/amonestaciones', 's3');
         }
 
+        // Amonestaciones con suspensión de propina para empleados de restaurante
+        // requieren aprobación previa de gerencia_ops.
+        $esDeRestaurante        = $this->esEmpleadoDeRestaurante($validated['empleado_id']);
+        $requiereAprobacion     = $aplicaPropina && $esDeRestaurante && !$this->esAdminRrhh() && !$this->esGerenciaOps();
+
         $amonestacion = Amonestacion::create([
             'empleado_id'               => $validated['empleado_id'],
             'jefe_id'                   => $jefe->id,
@@ -93,6 +98,7 @@ class AmonestacionesController extends RRHHBaseController
             'aplica_suspension'         => $aplica,
             'aplica_suspension_propina' => $aplicaPropina,
             'dias_suspension_propina'   => $diasPropina,
+            'estado'                    => $requiereAprobacion ? 'pendiente_gerencia_ops' : 'aprobado',
             'archivo_nombre'            => $archivoNombre,
             'archivo_ruta'              => $archivoRuta,
             'aud_usuario'               => Auth::user()->email,
@@ -127,23 +133,35 @@ class AmonestacionesController extends RRHHBaseController
             $detallesEmail['Suspensión de propina'] = implode(', ', $diasPropina);
         }
 
-        // Notificar al empleado amonestado
-        $this->notificarAlEmpleado(
-            empleadoId:   $validated['empleado_id'],
-            tipo:         'Amonestación',
-            mensaje:      "Tu jefe inmediato ha registrado una amonestacion en tu expediente. A continuacion encontraras los detalles del registro.",
-            detalles:     $detallesEmail,
-            rutaFrontend: 'mi-expediente',
-        );
-
-        // Notificar a gerencia de operaciones si el empleado es de una sucursal restaurante
-        if ($this->esEmpleadoDeRestaurante($validated['empleado_id'])) {
-            $this->notificarGerenciaOps(
-                tipo:           'Amonestación',
+        if ($requiereAprobacion) {
+            // Solicitar aprobación a gerencia_ops (no notificar al empleado todavía)
+            $this->notificarGerenciaOpsSolicitud(
+                tipo:          'Amonestación con Suspensión de Propina',
                 empleadoNombre: $empNombre,
                 detalles:       $detallesEmail,
                 rutaFrontend:   'amonestaciones',
+                solicitudId:    $amonestacion->id,
+                tipoModelo:     'amonestacion',
             );
+        } else {
+            // Notificar al empleado amonestado
+            $this->notificarAlEmpleado(
+                empleadoId:   $validated['empleado_id'],
+                tipo:         'Amonestación',
+                mensaje:      "Tu jefe inmediato ha registrado una amonestacion en tu expediente. A continuacion encontraras los detalles del registro.",
+                detalles:     $detallesEmail,
+                rutaFrontend: 'mi-expediente',
+            );
+
+            // Notificar (informativo) a gerencia_ops si es empleado de restaurante
+            if ($esDeRestaurante) {
+                $this->notificarGerenciaOps(
+                    tipo:           'Amonestación',
+                    empleadoNombre: $empNombre,
+                    detalles:       $detallesEmail,
+                    rutaFrontend:   'amonestaciones',
+                );
+            }
         }
 
         $arr = $this->enrichWithEmpleadoData([$amonestacion->toArray()]);

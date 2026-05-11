@@ -85,19 +85,24 @@ class DesvinculacionesController extends RRHHBaseController
             $archivoRuta   = $file->store('rrhh/desvinculaciones', 's3');
         }
 
+        // Despidos de empleados de restaurante requieren aprobación de gerencia_ops.
+        $esDespido          = $validated['tipo'] === 'despido';
+        $esDeRestaurante    = $this->esEmpleadoDeRestaurante($validated['empleado_id']);
+        $requiereAprobacion = $esDespido && $esDeRestaurante && !$this->esAdminRrhh() && !$this->esGerenciaOps();
+
         $desvinculacion = Desvinculacion::create(array_merge($validated, [
             'procesado_por_id'  => $jefe->id,
             'empleado_nombre'   => $empData ? trim($empData->nombres . ' ' . $empData->apellidos) : null,
             'cargo_nombre'      => $empData?->cargo,
             'sucursal_nombre'   => $empData?->sucursal,
+            'estado'            => $requiereAprobacion ? 'pendiente_gerencia_ops' : 'aprobado',
             'archivo_nombre'    => $archivoNombre,
             'archivo_ruta'      => $archivoRuta,
             'aud_usuario'       => Auth::user()->email,
         ]));
 
-        // Si la fecha efectiva ya llegó, inactivar de inmediato.
-        // Casos futuros los cubre el cron rrhh:inactivar-desvinculados.
-        if ($validated['fecha_efectiva'] <= now()->toDateString()) {
+        // Solo inactivar si no requiere aprobación previa
+        if (!$requiereAprobacion && $validated['fecha_efectiva'] <= now()->toDateString()) {
             DB::connection('pgsql')
                 ->table('empleados')
                 ->where('id', $validated['empleado_id'])
@@ -106,8 +111,7 @@ class DesvinculacionesController extends RRHHBaseController
 
         $desvinculacion->load('motivo');
 
-        // Notificar a los administradores de RRHH
-        $tipoLabel     = $validated['tipo'] === 'despido' ? 'Despido' : 'Renuncia';
+        $tipoLabel          = $esDespido ? 'Despido' : 'Renuncia';
         $empNombreDesvincul = $desvinculacion->empleado_nombre ?? "Empleado #{$validated['empleado_id']}";
         $detallesDesvincul  = [
             'Tipo'           => $tipoLabel,
@@ -117,21 +121,34 @@ class DesvinculacionesController extends RRHHBaseController
             'Sucursal'       => $desvinculacion->sucursal_nombre ?? '—',
         ];
 
-        $this->notificarAdminsRrhh(
-            tipo:           "Desvinculación — {$tipoLabel}",
-            empleadoNombre: $empNombreDesvincul,
-            detalles:       $detallesDesvincul,
-            rutaFrontend:   'desvinculaciones',
-        );
-
-        // También notificar a gerencia de operaciones si es empleado de restaurante
-        if ($this->esEmpleadoDeRestaurante($validated['empleado_id'])) {
-            $this->notificarGerenciaOps(
+        if ($requiereAprobacion) {
+            // Solicitar aprobación a gerencia_ops antes de procesar
+            $this->notificarGerenciaOpsSolicitud(
+                tipo:           'Despido',
+                empleadoNombre: $empNombreDesvincul,
+                detalles:       $detallesDesvincul,
+                rutaFrontend:   'desvinculaciones',
+                solicitudId:    $desvinculacion->id,
+                tipoModelo:     'despido',
+            );
+        } else {
+            // Notificar a admins RRHH
+            $this->notificarAdminsRrhh(
                 tipo:           "Desvinculación — {$tipoLabel}",
                 empleadoNombre: $empNombreDesvincul,
                 detalles:       $detallesDesvincul,
                 rutaFrontend:   'desvinculaciones',
             );
+
+            // Notificar (informativo) a gerencia_ops si es empleado de restaurante
+            if ($esDeRestaurante) {
+                $this->notificarGerenciaOps(
+                    tipo:           "Desvinculación — {$tipoLabel}",
+                    empleadoNombre: $empNombreDesvincul,
+                    detalles:       $detallesDesvincul,
+                    rutaFrontend:   'desvinculaciones',
+                );
+            }
         }
 
         $arr = $this->enrichWithEmpleadoData([$desvinculacion->toArray()]);
