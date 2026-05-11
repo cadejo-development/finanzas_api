@@ -178,7 +178,9 @@ class HorariosController extends RRHHBaseController
      */
     private function resolverEmpleadosIds(Request $request): array
     {
-        if ($this->esAdminRrhh()) {
+        $esAdminOGerencia = $this->esAdminRrhh() || $this->esGerenciaOps();
+
+        if ($esAdminOGerencia) {
             $sucursalId = $request->query('sucursal_id');
             if ($sucursalId) {
                 return DB::connection('pgsql')
@@ -189,19 +191,21 @@ class HorariosController extends RRHHBaseController
                     ->map(fn($id) => (int)$id)
                     ->all();
             }
-            return $this->todosEmpleadosActivos();
+            if ($this->esAdminRrhh()) return $this->todosEmpleadosActivos();
+            // gerencia_ops sin filtro: todos los empleados bajo su árbol
+            return array_map('intval', $this->getSubordinadosIds());
         }
 
         return array_map('intval', $this->getSubordinadosIds());
     }
 
     /**
-     * Lista de sucursales: solo para rrhh_admin (para el selector del frontend).
+     * Lista de sucursales: para rrhh_admin y gerencia_ops (para el selector del frontend).
      * Jefatura recibe null.
      */
     private function getSucursalesParaSelector(): ?array
     {
-        if (!$this->esAdminRrhh()) return null;
+        if (!$this->esAdminRrhh() && !$this->esGerenciaOps()) return null;
 
         return DB::connection('pgsql')
             ->table('sucursales as s')

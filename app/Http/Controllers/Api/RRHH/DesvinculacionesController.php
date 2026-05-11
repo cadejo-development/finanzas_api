@@ -107,19 +107,32 @@ class DesvinculacionesController extends RRHHBaseController
         $desvinculacion->load('motivo');
 
         // Notificar a los administradores de RRHH
-        $tipoLabel = $validated['tipo'] === 'despido' ? 'Despido' : 'Renuncia';
+        $tipoLabel     = $validated['tipo'] === 'despido' ? 'Despido' : 'Renuncia';
+        $empNombreDesvincul = $desvinculacion->empleado_nombre ?? "Empleado #{$validated['empleado_id']}";
+        $detallesDesvincul  = [
+            'Tipo'           => $tipoLabel,
+            'Fecha efectiva' => $validated['fecha_efectiva'],
+            'Motivo'         => $desvinculacion->motivo?->nombre ?? '—',
+            'Cargo'          => $desvinculacion->cargo_nombre   ?? '—',
+            'Sucursal'       => $desvinculacion->sucursal_nombre ?? '—',
+        ];
+
         $this->notificarAdminsRrhh(
             tipo:           "Desvinculación — {$tipoLabel}",
-            empleadoNombre: $desvinculacion->empleado_nombre ?? "Empleado #{$validated['empleado_id']}",
-            detalles: [
-                'Tipo'           => $tipoLabel,
-                'Fecha efectiva' => $validated['fecha_efectiva'],
-                'Motivo'         => $desvinculacion->motivo?->nombre ?? '—',
-                'Cargo'          => $desvinculacion->cargo_nombre  ?? '—',
-                'Sucursal'       => $desvinculacion->sucursal_nombre ?? '—',
-            ],
-            rutaFrontend: 'desvinculaciones',
+            empleadoNombre: $empNombreDesvincul,
+            detalles:       $detallesDesvincul,
+            rutaFrontend:   'desvinculaciones',
         );
+
+        // También notificar a gerencia de operaciones si es empleado de restaurante
+        if ($this->esEmpleadoDeRestaurante($validated['empleado_id'])) {
+            $this->notificarGerenciaOps(
+                tipo:           "Desvinculación — {$tipoLabel}",
+                empleadoNombre: $empNombreDesvincul,
+                detalles:       $detallesDesvincul,
+                rutaFrontend:   'desvinculaciones',
+            );
+        }
 
         $arr = $this->enrichWithEmpleadoData([$desvinculacion->toArray()]);
         return response()->json(['success' => true, 'data' => $arr[0]], 201);

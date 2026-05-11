@@ -32,7 +32,7 @@ class CatalogosRRHHController extends RRHHBaseController
             ->leftJoin('cargos as c', 'e.cargo_id', '=', 'c.id')
             ->leftJoin('sucursales as s', 'e.sucursal_id', '=', 's.id')
             ->where('e.activo', true)
-            ->select('e.id', 'e.codigo', 'e.nombres', 'e.apellidos', 'e.fecha_ingreso', 'e.sucursal_id', 'e.departamento_id', 'c.nombre as cargo', 's.nombre as sucursal')
+            ->select('e.id', 'e.codigo', 'e.nombres', 'e.apellidos', 'e.fecha_ingreso', 'e.sucursal_id', 'e.departamento_id', 'c.nombre as cargo', 's.nombre as sucursal', 's.tipo as sucursal_tipo')
             ->selectRaw('EXISTS(SELECT 1 FROM departamentos d WHERE d.jefe_empleado_id = e.id AND d.activo = true) AS es_jefe');
 
         if ($esAdmin) {
@@ -124,6 +124,7 @@ class CatalogosRRHHController extends RRHHBaseController
                 'cargos'                 => $cargos,
                 'departamentos'          => $departamentos,
                 'es_admin'               => $esAdmin,
+                'es_gerencia_ops'        => $this->esGerenciaOps(),
                 'es_empleado'            => $this->esEmpleado(),
                 'empleado_id_propio'     => $jefeEmpleadoId,
             ],

@@ -38,6 +38,15 @@ abstract class RRHHBaseController extends Controller
     }
 
     /**
+     * Indica si el usuario autenticado tiene rol gerencia_ops (scoped al sistema RRHH).
+     * Acceso de visibilidad completa sobre sucursales operativas bajo su departamento.
+     */
+    protected function esGerenciaOps(): bool
+    {
+        return Auth::user()->hasRole('gerencia_ops', self::RRHH_SYSTEM_ID);
+    }
+
+    /**
      * Indica si el usuario autenticado es empleado-solo en el sistema RRHH.
      * Solo chequea roles del sistema RRHH — roles de otros sistemas (portal_admin, etc.) son irrelevantes.
      */
@@ -46,7 +55,8 @@ abstract class RRHHBaseController extends Controller
         $user = Auth::user();
         return $user->hasRole('empleado', self::RRHH_SYSTEM_ID)
             && ! $user->hasRole('rrhh_admin', self::RRHH_SYSTEM_ID)
-            && ! $user->hasRole('jefatura', self::RRHH_SYSTEM_ID);
+            && ! $user->hasRole('jefatura', self::RRHH_SYSTEM_ID)
+            && ! $user->hasRole('gerencia_ops', self::RRHH_SYSTEM_ID);
     }
 
     /**
@@ -76,6 +86,12 @@ abstract class RRHHBaseController extends Controller
     {
         if ($this->esAdminRrhh()) {
             return $this->getTodosEmpleadosIds();
+        }
+
+        // Gerencia de Operaciones: ve TODOS los empleados de los departamentos
+        // descendientes (restaurantes + sus sub-áreas), no solo los jefes directos.
+        if ($this->esGerenciaOps()) {
+            return $this->getSubordinadosGerenciaOps();
         }
 
         // Empleado con rol básico: solo ve sus propios registros
@@ -193,6 +209,54 @@ abstract class RRHHBaseController extends Controller
         }
 
         return [];
+    }
+
+    /**
+     * Retorna TODOS los empleados activos de los departamentos descendientes
+     * del árbol jerárquico de la persona con rol gerencia_ops.
+     * Usa CTE recursiva para bajar todo el árbol de departamentos.
+     */
+    protected function getSubordinadosGerenciaOps(): array
+    {
+        $user = Auth::user();
+
+        $jefeEmpleadoId = DB::connection('pgsql')
+            ->table('empleados')
+            ->where('user_id', $user->id)
+            ->value('id');
+
+        if (!$jefeEmpleadoId) return [];
+
+        $deptIds = DB::connection('pgsql')
+            ->table('departamentos')
+            ->where('jefe_empleado_id', $jefeEmpleadoId)
+            ->where('activo', true)
+            ->pluck('id')
+            ->all();
+
+        if (empty($deptIds)) return [];
+
+        $inPlaceholders = implode(',', array_fill(0, count($deptIds), '?'));
+        $rows = DB::connection('pgsql')->select(<<<SQL
+            WITH RECURSIVE all_sub_depts AS (
+                SELECT id FROM departamentos
+                WHERE id IN ({$inPlaceholders}) AND activo = true
+                UNION ALL
+                SELECT d.id FROM departamentos d
+                INNER JOIN all_sub_depts s ON d.parent_id = s.id
+                WHERE d.activo = true
+            )
+            SELECT DISTINCT e.id
+            FROM empleados e
+            WHERE e.activo = true
+              AND e.departamento_id IN (SELECT id FROM all_sub_depts)
+              AND e.id != ?
+        SQL, array_merge($deptIds, [$jefeEmpleadoId]));
+
+        return collect($rows)
+            ->pluck('id')
+            ->map(fn($id) => (int) $id)
+            ->all();
     }
 
     /**
@@ -749,6 +813,75 @@ abstract class RRHHBaseController extends Controller
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Envía un correo a todos los usuarios con rol gerencia_ops.
+     * Usado para: amonestaciones y desvinculaciones de empleados de sucursales operativas.
+     */
+    protected function notificarGerenciaOps(
+        string $tipo,
+        string $empleadoNombre,
+        array  $detalles,
+        string $rutaFrontend,
+    ): void {
+        try {
+            $destinatarios = DB::connection('pgsql')
+                ->table('model_has_roles as mhr')
+                ->join('roles as r', 'r.id', '=', 'mhr.role_id')
+                ->join('users as u', 'u.id', '=', 'mhr.model_id')
+                ->where('r.codigo', 'gerencia_ops')
+                ->where('r.system_id', self::RRHH_SYSTEM_ID)
+                ->where('mhr.model_type', 'App\\Models\\User')
+                ->whereNotNull('u.email')
+                ->select('u.id', 'u.name', 'u.email')
+                ->get();
+
+            if ($destinatarios->isEmpty()) return;
+
+            $baseUrl = rtrim(config('app.frontend_rrhh_url', 'https://rrhh.cervezacadejo.com'), '/');
+            $linkUrl = "{$baseUrl}/{$rutaFrontend}";
+
+            foreach ($destinatarios as $dest) {
+                $mailable = new \App\Mail\RRHH\NotificacionAlEmpleado(
+                    tipo:               $tipo,
+                    empleadoNombre:     $empleadoNombre,
+                    mensaje:            "Se ha registrado una {$tipo} para el siguiente colaborador en tu área de operaciones.",
+                    detalles:           $detalles,
+                    linkUrl:            $linkUrl,
+                    destinatarioNombre: $dest->name,
+                );
+
+                \Illuminate\Support\Facades\Mail::to($dest->email)->send($mailable);
+
+                $this->registrarEmailLog([
+                    'tipo'            => 'notificacion_gerencia_ops',
+                    'destinatario'    => $dest->email,
+                    'asunto'          => $mailable->envelope()->subject,
+                    'estado'          => 'enviado',
+                    'enviado_por'     => Auth::user()->email,
+                    'referencia_tipo' => 'empleado',
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('RRHH: Error notificando a gerencia_ops', [
+                'tipo'  => $tipo,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Retorna true si el empleado pertenece a una sucursal de tipo operativa (restaurante).
+     */
+    protected function esEmpleadoDeRestaurante(int $empleadoId): bool
+    {
+        return DB::connection('pgsql')
+            ->table('empleados as e')
+            ->join('sucursales as s', 's.id', '=', 'e.sucursal_id')
+            ->where('e.id', $empleadoId)
+            ->where('s.tipo', 'operativa')
+            ->exists();
     }
 
     private function registrarEmailLog(array $data): void

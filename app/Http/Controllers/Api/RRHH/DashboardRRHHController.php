@@ -83,7 +83,7 @@ class DashboardRRHHController extends RRHHBaseController
         return response()->json([
             'success' => true,
             'data'    => [
-                'es_admin'               => $this->esAdminRrhh(),
+                'es_admin'               => $this->esAdminRrhh() || $this->esGerenciaOps(),
                 'total_empleados'        => $totalEmpleados,
                 'permisos_pendientes'    => $permisosPendientes,
                 'vacaciones_pendientes'  => $vacacionesPendientes,
@@ -155,7 +155,7 @@ class DashboardRRHHController extends RRHHBaseController
         //      por departamento solo para empleados de Casa Matriz ──────────────
         $porSucursal     = [];
         $porDepartamento = [];
-        if ($this->esAdminRrhh() && $ids) {
+        if (($this->esAdminRrhh() || $this->esGerenciaOps()) && $ids) {
             // Sucursales: excluir Casa Matriz (se muestra aparte por departamento)
             $sucs = DB::connection('pgsql')
                 ->table('sucursales as s')
@@ -359,7 +359,7 @@ class DashboardRRHHController extends RRHHBaseController
      */
     public function demograficos(): JsonResponse
     {
-        if (!$this->esAdminRrhh()) {
+        if (!$this->esAdminRrhh() && !$this->esGerenciaOps()) {
             return response()->json(['success' => false, 'message' => 'No autorizado.'], 403);
         }
 

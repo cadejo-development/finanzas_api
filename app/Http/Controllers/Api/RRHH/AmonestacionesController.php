@@ -35,16 +35,19 @@ class AmonestacionesController extends RRHHBaseController
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'empleado_id'        => 'required|integer',
-            'tipo_falta_id'      => 'required|exists:rrhh.tipos_falta,id',
-            'fecha_amonestacion' => 'required|date',
-            'descripcion'        => 'required|string|max:1000',
-            'observacion'        => 'nullable|string|max:1000',
-            'accion_tomada'      => 'nullable|string|max:500',
-            'aplica_suspension'  => 'boolean',
-            'dias_suspension'    => 'nullable|array|required_if:aplica_suspension,true',
-            'dias_suspension.*'  => 'date',
-            'archivo'            => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
+            'empleado_id'               => 'required|integer',
+            'tipo_falta_id'             => 'required|exists:rrhh.tipos_falta,id',
+            'fecha_amonestacion'        => 'required|date',
+            'descripcion'               => 'required|string|max:1000',
+            'observacion'               => 'nullable|string|max:1000',
+            'accion_tomada'             => 'nullable|string|max:500',
+            'aplica_suspension'         => 'boolean',
+            'dias_suspension'           => 'nullable|array|required_if:aplica_suspension,true',
+            'dias_suspension.*'         => 'date',
+            'aplica_suspension_propina' => 'boolean',
+            'dias_suspension_propina'   => 'nullable|array|required_if:aplica_suspension_propina,true',
+            'dias_suspension_propina.*' => 'date',
+            'archivo'                   => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
         ]);
 
         $jefe = $this->getJefeEmpleado();
@@ -63,9 +66,12 @@ class AmonestacionesController extends RRHHBaseController
         if ($aplica && $tipoFalta?->gravedad === 'leve') {
             return response()->json([
                 'success' => false,
-                'message' => 'Las faltas leves no pueden incluir días de suspensión. Solo las faltas graves permiten suspensión.',
+                'message' => 'Las faltas leves no pueden incluir días de suspensión.',
             ], 422);
         }
+
+        $aplicaPropina  = $validated['aplica_suspension_propina'] ?? false;
+        $diasPropina    = $aplicaPropina ? array_values(array_unique($validated['dias_suspension_propina'] ?? [])) : null;
 
         $archivoNombre = null;
         $archivoRuta   = null;
@@ -77,17 +83,19 @@ class AmonestacionesController extends RRHHBaseController
         }
 
         $amonestacion = Amonestacion::create([
-            'empleado_id'        => $validated['empleado_id'],
-            'jefe_id'            => $jefe->id,
-            'tipo_falta_id'      => $validated['tipo_falta_id'],
-            'fecha_amonestacion' => $validated['fecha_amonestacion'],
-            'descripcion'        => $validated['descripcion'],
-            'observacion'        => $validated['observacion'] ?? null,
-            'accion_tomada'      => $validated['accion_tomada'] ?? null,
-            'aplica_suspension'  => $aplica,
-            'archivo_nombre'     => $archivoNombre,
-            'archivo_ruta'       => $archivoRuta,
-            'aud_usuario'        => Auth::user()->email,
+            'empleado_id'               => $validated['empleado_id'],
+            'jefe_id'                   => $jefe->id,
+            'tipo_falta_id'             => $validated['tipo_falta_id'],
+            'fecha_amonestacion'        => $validated['fecha_amonestacion'],
+            'descripcion'               => $validated['descripcion'],
+            'observacion'               => $validated['observacion'] ?? null,
+            'accion_tomada'             => $validated['accion_tomada'] ?? null,
+            'aplica_suspension'         => $aplica,
+            'aplica_suspension_propina' => $aplicaPropina,
+            'dias_suspension_propina'   => $diasPropina,
+            'archivo_nombre'            => $archivoNombre,
+            'archivo_ruta'              => $archivoRuta,
+            'aud_usuario'               => Auth::user()->email,
         ]);
 
         // Guardar días de suspensión si aplica
@@ -103,20 +111,23 @@ class AmonestacionesController extends RRHHBaseController
 
         $amonestacion->load(['tipoFalta', 'diasSuspension']);
 
-        // Notificar al empleado amonestado
-        $enriched = $this->enrichWithEmpleadoData([$amonestacion->toArray()]);
+        $enriched  = $this->enrichWithEmpleadoData([$amonestacion->toArray()]);
         $empNombre = $enriched[0]['empleado_nombre'] ?? "Empleado #{$validated['empleado_id']}";
 
         $detallesEmail = [
-            'Tipo de falta'      => $amonestacion->tipoFalta?->nombre ?? '—',
-            'Fecha'              => $validated['fecha_amonestacion'],
-            'Descripción'        => $validated['descripcion'],
-            'Aplica suspensión'  => $aplica ? 'Sí' : 'No',
+            'Tipo de falta'     => $amonestacion->tipoFalta?->nombre ?? '—',
+            'Fecha'             => $validated['fecha_amonestacion'],
+            'Descripción'       => $validated['descripcion'],
+            'Aplica suspensión' => $aplica ? 'Sí' : 'No',
         ];
         if ($aplica && ! empty($validated['dias_suspension'])) {
             $detallesEmail['Días de suspensión'] = implode(', ', $validated['dias_suspension']);
         }
+        if ($aplicaPropina && ! empty($diasPropina)) {
+            $detallesEmail['Suspensión de propina'] = implode(', ', $diasPropina);
+        }
 
+        // Notificar al empleado amonestado
         $this->notificarAlEmpleado(
             empleadoId:   $validated['empleado_id'],
             tipo:         'Amonestación',
@@ -124,6 +135,16 @@ class AmonestacionesController extends RRHHBaseController
             detalles:     $detallesEmail,
             rutaFrontend: 'mi-expediente',
         );
+
+        // Notificar a gerencia de operaciones si el empleado es de una sucursal restaurante
+        if ($this->esEmpleadoDeRestaurante($validated['empleado_id'])) {
+            $this->notificarGerenciaOps(
+                tipo:           'Amonestación',
+                empleadoNombre: $empNombre,
+                detalles:       $detallesEmail,
+                rutaFrontend:   'amonestaciones',
+            );
+        }
 
         $arr = $this->enrichWithEmpleadoData([$amonestacion->toArray()]);
         return response()->json(['success' => true, 'data' => $arr[0]], 201);
