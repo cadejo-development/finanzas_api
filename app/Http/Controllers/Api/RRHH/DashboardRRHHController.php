@@ -363,17 +363,28 @@ class DashboardRRHHController extends RRHHBaseController
             return response()->json(['success' => false, 'message' => 'No autorizado.'], 403);
         }
 
+        // gerencia_ops ve solo sus subordinados (personal de restaurantes)
+        $esGerenciaOps = $this->esGerenciaOps();
+        $subordinadosIds = $esGerenciaOps ? $this->getSubordinadosIds() : null;
+
         // ── Género ────────────────────────────────────────────────────────────
         // Contar TODOS los empleados activos; los que no tienen expediente
         // o tienen género null/vacío van a "sin_definir".
         // Los que pusieron explícitamente "otro" van a su propia categoría.
-        $totalActivos = DB::connection('pgsql')
+        $totalActivosQuery = DB::connection('pgsql')
             ->table('empleados')
-            ->where('activo', true)
-            ->count();
+            ->where('activo', true);
+        if ($subordinadosIds !== null) {
+            $totalActivosQuery->whereIn('id', $subordinadosIds);
+        }
+        $totalActivos = $totalActivosQuery->count();
 
-        $generoExpediente = DB::connection('rrhh')
-            ->table('expediente_datos_personales')
+        $generoQuery = DB::connection('rrhh')
+            ->table('expediente_datos_personales');
+        if ($subordinadosIds !== null) {
+            $generoQuery->whereIn('empleado_id', $subordinadosIds);
+        }
+        $generoExpediente = $generoQuery
             ->selectRaw("LOWER(TRIM(genero)) as genero, COUNT(*) as total")
             ->groupByRaw("LOWER(TRIM(genero))")
             ->get();
@@ -408,10 +419,13 @@ class DashboardRRHHController extends RRHHBaseController
         $edadesOrden = ['<20', '20-29', '30-39', '40-49', '50-59', '60-69', '+70'];
         $edades = array_fill_keys($edadesOrden, 0);
 
-        $nacimientos = DB::connection('rrhh')
+        $nacimientosQuery = DB::connection('rrhh')
             ->table('expediente_datos_personales')
-            ->whereNotNull('fecha_nacimiento')
-            ->pluck('fecha_nacimiento');
+            ->whereNotNull('fecha_nacimiento');
+        if ($subordinadosIds !== null) {
+            $nacimientosQuery->whereIn('empleado_id', $subordinadosIds);
+        }
+        $nacimientos = $nacimientosQuery->pluck('fecha_nacimiento');
 
         foreach ($nacimientos as $fn) {
             $edad = (int) Carbon::parse($fn)->age;
@@ -434,11 +448,13 @@ class DashboardRRHHController extends RRHHBaseController
         // otro      = cualquier otro
         $jerarquia = ['maestria_plus' => 5, 'grado' => 3, 'bachillerato' => 2, 'otro' => 1];
 
-        $estudiosRaw = DB::connection('rrhh')
+        $estudiosQuery = DB::connection('rrhh')
             ->table('expediente_estudios')
-            ->whereNotNull('nivel')
-            ->select('empleado_id', 'nivel')
-            ->get();
+            ->whereNotNull('nivel');
+        if ($subordinadosIds !== null) {
+            $estudiosQuery->whereIn('empleado_id', $subordinadosIds);
+        }
+        $estudiosRaw = $estudiosQuery->select('empleado_id', 'nivel')->get();
 
         // Un empleado puede tener múltiples entradas; conservar el nivel más alto
         $nivelPorEmpleado = [];
@@ -472,11 +488,14 @@ class DashboardRRHHController extends RRHHBaseController
         $antiguedadOrden = ['<1', '1-3', '3-5', '5-10', '+10'];
         $antiguedad = array_fill_keys($antiguedadOrden, 0);
 
-        $ingresos = DB::connection('pgsql')
+        $ingresosQuery = DB::connection('pgsql')
             ->table('empleados')
             ->where('activo', true)
-            ->whereNotNull('fecha_ingreso')
-            ->pluck('fecha_ingreso');
+            ->whereNotNull('fecha_ingreso');
+        if ($subordinadosIds !== null) {
+            $ingresosQuery->whereIn('id', $subordinadosIds);
+        }
+        $ingresos = $ingresosQuery->pluck('fecha_ingreso');
 
         foreach ($ingresos as $fi) {
             $anios = (int) Carbon::parse($fi)->diffInYears(now());

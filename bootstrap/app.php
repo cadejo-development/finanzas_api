@@ -33,4 +33,40 @@ return Application::configure(basePath: dirname(__DIR__))
             $response->headers->set('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept, X-Requested-With, X-View-As');
             return $response;
         });
+
+        // Capturar excepciones HTTP 500 y escribirlas en error_logs (Monitor de Errores)
+        $exceptions->report(function (\Throwable $e) {
+            try {
+                $request = request();
+                // Solo rutas API de RRHH; ignorar errores de consola (artisan)
+                if (! $request->is('api/*')) return false;
+
+                $user  = \Illuminate\Support\Facades\Auth::user();
+                $code  = method_exists($e, 'getStatusCode') ? $e->getStatusCode() : 500;
+                if ($code < 500) return false; // solo 5xx
+
+                \Illuminate\Support\Facades\DB::connection('rrhh')->table('error_logs')->insert([
+                    'sistema'         => 'rrhh',
+                    'controlador'     => get_class($e),
+                    'funcion'         => $e->getFile() . ':' . $e->getLine(),
+                    'metodo_http'     => $request->method(),
+                    'url'             => $request->fullUrl(),
+                    'tipo_excepcion'  => get_class($e),
+                    'codigo_http'     => $code,
+                    'mensaje'         => $e->getMessage(),
+                    'trace'           => substr($e->getTraceAsString(), 0, 5000),
+                    'request_data'    => json_encode($request->except(['password', 'token'])),
+                    'ip'              => $request->ip(),
+                    'user_agent'      => $request->userAgent(),
+                    'usuario_email'   => $user?->email,
+                    'usuario_id'      => $user?->id,
+                    'severidad'       => 'error',
+                    'resuelto'        => false,
+                    'created_at'      => now(),
+                ]);
+            } catch (\Throwable) {
+                // No fallar al fallar el log
+            }
+            return false; // deja que Laravel también lo loguee normalmente
+        });
     })->create();

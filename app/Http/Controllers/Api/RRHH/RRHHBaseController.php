@@ -174,10 +174,11 @@ abstract class RRHHBaseController extends Controller
         if (!empty($jefaturaSucursalIds)) {
             // Solo sucursales operativas (no áreas corporativas)
             $operativaIds = DB::connection('pgsql')
-                ->table('sucursales')
-                ->whereIn('id', $jefaturaSucursalIds)
-                ->where('tipo', 'operativa')
-                ->pluck('id')
+                ->table('sucursales as s')
+                ->join('tipos_sucursal as ts', 'ts.id', '=', 's.tipo_sucursal_id')
+                ->whereIn('s.id', $jefaturaSucursalIds)
+                ->where('ts.codigo', 'operativa')
+                ->pluck('s.id')
                 ->all();
 
             if (!empty($operativaIds)) {
@@ -193,9 +194,10 @@ abstract class RRHHBaseController extends Controller
 
         // ── 3. Fallback legacy: sucursal propia del usuario ───────────────────
         $sucursalTipo = DB::connection('pgsql')
-            ->table('sucursales')
-            ->where('id', $user->sucursal_id)
-            ->value('tipo');
+            ->table('sucursales as s')
+            ->join('tipos_sucursal as ts', 'ts.id', '=', 's.tipo_sucursal_id')
+            ->where('s.id', $user->sucursal_id)
+            ->value('ts.codigo');
 
         if ($sucursalTipo === 'operativa') {
             return DB::connection('pgsql')
@@ -879,8 +881,9 @@ abstract class RRHHBaseController extends Controller
         return DB::connection('pgsql')
             ->table('empleados as e')
             ->join('sucursales as s', 's.id', '=', 'e.sucursal_id')
+            ->join('tipos_sucursal as ts', 'ts.id', '=', 's.tipo_sucursal_id')
             ->where('e.id', $empleadoId)
-            ->where('s.tipo', 'operativa')
+            ->where('ts.codigo', 'operativa')
             ->exists();
     }
 
