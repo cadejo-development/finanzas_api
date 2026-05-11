@@ -700,11 +700,11 @@ abstract class RRHHBaseController extends Controller
     ): void {
         try {
             $admins = DB::connection('pgsql')
-                ->table('model_has_roles as mhr')
-                ->join('roles as r',  'r.id',  '=', 'mhr.role_id')
-                ->join('users as u',  'u.id',  '=', 'mhr.model_id')
-                ->where('r.name', 'rrhh_admin')
-                ->where('mhr.model_type', 'App\\Models\\User')
+                ->table('role_user as ru')
+                ->join('roles as r', 'r.id', '=', 'ru.role_id')
+                ->join('users as u', 'u.id', '=', 'ru.user_id')
+                ->where('r.codigo', 'rrhh_admin')
+                ->where('r.system_id', self::RRHH_SYSTEM_ID)
                 ->whereNotNull('u.email')
                 ->select('u.id', 'u.name', 'u.email')
                 ->get();
@@ -831,12 +831,11 @@ abstract class RRHHBaseController extends Controller
     ): void {
         try {
             $destinatarios = DB::connection('pgsql')
-                ->table('model_has_roles as mhr')
-                ->join('roles as r', 'r.id', '=', 'mhr.role_id')
-                ->join('users as u', 'u.id', '=', 'mhr.model_id')
+                ->table('role_user as ru')
+                ->join('roles as r', 'r.id', '=', 'ru.role_id')
+                ->join('users as u', 'u.id', '=', 'ru.user_id')
                 ->where('r.codigo', 'gerencia_ops')
                 ->where('r.system_id', self::RRHH_SYSTEM_ID)
-                ->where('mhr.model_type', 'App\\Models\\User')
                 ->whereNotNull('u.email')
                 ->select('u.id', 'u.name', 'u.email')
                 ->get();
@@ -891,12 +890,11 @@ abstract class RRHHBaseController extends Controller
     ): void {
         try {
             $destinatarios = DB::connection('pgsql')
-                ->table('model_has_roles as mhr')
-                ->join('roles as r', 'r.id', '=', 'mhr.role_id')
-                ->join('users as u', 'u.id', '=', 'mhr.model_id')
+                ->table('role_user as ru')
+                ->join('roles as r', 'r.id', '=', 'ru.role_id')
+                ->join('users as u', 'u.id', '=', 'ru.user_id')
                 ->where('r.codigo', 'gerencia_ops')
                 ->where('r.system_id', self::RRHH_SYSTEM_ID)
-                ->where('mhr.model_type', 'App\\Models\\User')
                 ->whereNotNull('u.email')
                 ->select('u.id', 'u.name', 'u.email')
                 ->get();

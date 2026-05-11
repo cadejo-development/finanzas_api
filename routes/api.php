@@ -287,8 +287,8 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::patch('sistemas/{id}',       [AdminController::class, 'updateSistema']);
 });
 
-// ─── RRHH (protegido con Sanctum + rol jefatura o admin o empleado) ─────────
-Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,rrhh_admin,empleado', 'view-as'])->group(function () {
+// ─── RRHH (protegido con Sanctum + rol jefatura o admin o empleado o gerencia_ops) ─────────
+Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,rrhh_admin,empleado,gerencia_ops', 'view-as'])->group(function () {
 
     // Catálogos + equipo a cargo
     Route::get('catalogos', [CatalogosRRHHController::class, 'index']);
@@ -382,7 +382,7 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
 
 // ─── RRHH Expediente Digital ────────────────────────────────────────────────
 // Empleados solo pueden leer su propio expediente (GET); el resto requiere jefatura+
-Route::prefix('rrhh/expediente')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,rrhh_admin,empleado', 'view-as'])->group(function () {
+Route::prefix('rrhh/expediente')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,rrhh_admin,empleado,gerencia_ops', 'view-as'])->group(function () {
     // Cabecera + secciones (empleado puede ver solo el suyo — validado en autorizarAcceso)
     Route::get('{empleadoId}',                           [ExpedienteController::class, 'show']);
     Route::get('{empleadoId}/acciones',                  [ExpedienteController::class, 'acciones']);
