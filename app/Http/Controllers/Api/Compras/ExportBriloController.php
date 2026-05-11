@@ -8,35 +8,193 @@ use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Exporta datos del sistema al formato CSV de importación BRILO ERP.
+ * Exporta datos al formato CSV de importación BRILO ERP.
+ *
+ * Flujo de importación (orden obligatorio):
+ *   Paso 1 — VEN Materias Primas   → crea materias primas nuevas en BRILO
+ *   Paso 2 — VEN Recetas           → crea platos + sub-recetas en BRILO
+ *   Paso 3 — INV Nivel 1           → ingredientes de sub-recetas simples
+ *   Paso 4 — INV Nivel 2           → ingredientes de sub-recetas compuestas
+ *   Paso 5 — INV Nivel 3           → ingredientes de platos
  *
  * Rutas:
- *   GET /api/compras/export/brilo/materiales-x-producto  → INV_Formato Importacion Materiales X Producto
- *   GET /api/compras/export/brilo/productos               → VEN_Formato Importacion Productos y Servicios
- *
- * Acceso restringido a roles: admin_compras, admin_recetas
+ *   GET  /api/compras/export/brilo/productos              → VEN materias primas
+ *   GET  /api/compras/export/brilo/recetas-ven            → VEN platos + sub-recetas
+ *   GET  /api/compras/export/brilo/materiales-x-producto  → INV ingredientes
+ *   POST /api/compras/export/brilo/resetear-modificados   → marcar como sincronizados
  */
 class ExportBriloController extends Controller
 {
     // ──────────────────────────────────────────────────────────────────────────
+    // GET /api/compras/export/brilo/productos
+    //
+    // Exporta materias primas al formato VEN de BRILO.
+    // Tipo PNI · Exento SI · Categoría padre MR · Mostrar en Compras SI
+    // ──────────────────────────────────────────────────────────────────────────
+    public function productos(Request $request): StreamedResponse
+    {
+        $this->requireAdminRol();
+
+        $soloActivos     = (bool) $request->query('solo_activos', 1);
+        $soloModificados = (bool) $request->query('solo_modificados', 1);
+
+        $query = DB::connection('compras')
+            ->table('productos as p')
+            ->leftJoin('categorias as c', 'p.categoria_id', '=', 'c.id')
+            ->select(['p.codigo', 'p.nombre', 'p.unidad', 'p.activo', 'c.nombre as categoria_nombre']);
+
+        if ($soloModificados) $query->where('p.modificado_localmente', true);
+        if ($soloActivos)     $query->where('p.activo', true);
+
+        $filas = $query->orderBy('p.codigo')->get();
+
+        $filename = 'VEN_Materias_Primas_' . now()->format('Ymd_His') . '.csv';
+
+        return response()->streamDownload(function () use ($filas) {
+            $handle = fopen('php://output', 'w');
+            fwrite($handle, "\xEF\xBB\xBF");
+            fputcsv($handle, $this->venCabecera());
+
+            foreach ($filas as $fila) {
+                fputcsv($handle, [
+                    $fila->codigo,                          // A  Código
+                    $fila->nombre,                          // B  Descripción
+                    'PNI',                                  // C  Tipo
+                    '',                                     // D  Modelo
+                    '',                                     // E  Precio (sin precio para MP)
+                    'SI',                                   // F  Exento
+                    'MR',                                   // G  Categoría Padre (Materia Prima Restaurante)
+                    '',                                     // H  Categoría Hija
+                    $this->unidadACodigoBrilo($fila->unidad ?? ''), // I  Presentación Base
+                    '', '', '', '',                         // J-M Precios venta 2-5
+                    '', '', '',                             // N-P Cuentas contables (manual)
+                    '', '',                                 // Q-R CodBarra
+                    '',                                     // S  Marca
+                    '',                                     // T  Avería (vacío)
+                    '',                                     // U  No Comisionable (vacío)
+                    '',                                     // V  % Variación Costo
+                    '', '', '',                             // W-Y Estilo, Talla, Color
+                    'NO',                                   // Z  MostrarEnVentas
+                    'SI',                                   // AA MostrarEnCompras
+                    '', '',                                 // AB-AC CC Variación
+                    '',                                     // AD Precio Sugerido
+                    '', '',                                 // AE-AF Meta
+                    '',                                     // AG Ubicación
+                    '',                                     // AH Requiere Lote (vacío)
+                    'SI',                                   // AI Activo
+                    '', '', '', '', '',                     // AJ-AN (vacío)
+                    '',                                     // AO Descripción Extendida
+                    '', '',                                 // AP-AQ Centro de Costos
+                    '', '', '',                             // AR-AT
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // GET /api/compras/export/brilo/recetas-ven
+    //
+    // Exporta platos + sub-recetas (todos los niveles) al formato VEN de BRILO.
+    // Deben existir en BRILO ANTES de importar los archivos INV.
+    // Sub-recetas van primero (nivel 1 → nivel 2), luego los platos.
+    //
+    // Parámetros query:
+    //   solo_con_codigo  = 1 (default) → solo recetas con codigo_origen
+    //   solo_modificados = 1 (default) → solo con modificado_localmente = true
+    // ──────────────────────────────────────────────────────────────────────────
+    public function recetasVen(Request $request): StreamedResponse
+    {
+        $this->requireAdminRol();
+
+        $soloConCodigo   = (bool) $request->query('solo_con_codigo', 1);
+        $soloModificados = (bool) $request->query('solo_modificados', 1);
+
+        $base = DB::connection('compras')
+            ->table('recetas as r')
+            ->where('r.activa', true)
+            ->select(['r.id', 'r.codigo_origen', 'r.nombre', 'r.tipo_receta', 'r.rendimiento_unidad', 'r.precio']);
+
+        if ($soloModificados) $base->where('r.modificado_localmente', true);
+        if ($soloConCodigo)   $base->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '');
+
+        $filas = $base->orderByRaw("
+            CASE WHEN r.tipo_receta = 'sub_receta' THEN 0 ELSE 1 END,
+            r.codigo_origen
+        ")->get();
+
+        // Ids de sub-recetas compuestas (contienen otras sub-recetas)
+        $idsCompuestas = DB::connection('compras')
+            ->table('receta_ingredientes')
+            ->whereNotNull('sub_receta_id')
+            ->pluck('receta_id')
+            ->flip();
+
+        $filename = 'VEN_Recetas_' . now()->format('Ymd_His') . '.csv';
+
+        return response()->streamDownload(function () use ($filas, $idsCompuestas) {
+            $handle = fopen('php://output', 'w');
+            fwrite($handle, "\xEF\xBB\xBF");
+            fputcsv($handle, $this->venCabecera());
+
+            foreach ($filas as $fila) {
+                $unidadBrilo = $this->unidadACodigoBrilo($fila->rendimiento_unidad ?? 'u');
+                $precio      = (float) ($fila->precio ?? 0) > 0 ? $this->formatNum($fila->precio) : '';
+
+                fputcsv($handle, [
+                    $fila->codigo_origen ?? '',             // A  Código
+                    $fila->nombre,                          // B  Descripción
+                    'PNI',                                  // C  Tipo
+                    '',                                     // D  Modelo
+                    $precio,                                // E  Precio de Lista
+                    'SI',                                   // F  Exento
+                    '',                                     // G  Categoría Padre (completar manualmente)
+                    '',                                     // H  Categoría Hija
+                    $unidadBrilo,                           // I  Presentación Base
+                    '', '', '', '',                         // J-M Precios venta 2-5
+                    '', '', '',                             // N-P Cuentas contables (completar manualmente)
+                    '', '',                                 // Q-R CodBarra
+                    '',                                     // S  Marca
+                    '',                                     // T  Avería (vacío)
+                    '',                                     // U  No Comisionable (vacío)
+                    '',                                     // V  % Variación Costo
+                    '', '', '',                             // W-Y Estilo, Talla, Color
+                    'NO',                                   // Z  MostrarEnVentas
+                    'NO',                                   // AA MostrarEnCompras
+                    '', '',                                 // AB-AC CC Variación
+                    '',                                     // AD Precio Sugerido
+                    '', '',                                 // AE-AF Meta
+                    '',                                     // AG Ubicación
+                    '',                                     // AH Requiere Lote (vacío)
+                    'SI',                                   // AI Activo
+                    '', '', '', '', '',                     // AJ-AN (vacío)
+                    '',                                     // AO Descripción Extendida
+                    '', '',                                 // AP-AQ Centro de Costos
+                    '', '', '',                             // AR-AT
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // GET /api/compras/export/brilo/materiales-x-producto
     //
     // Exporta ingredientes de recetas al formato INV de BRILO.
-    // Columnas: A=Cód.Producto Padre, B=Cód.Producto MP, C=Cantidad MP,
-    //           D=Activo?, E=Detiene Explotación?, F=Cód.Ubicación,
-    //           G=Cód.Presentación, H=Cantidad Presentación
     //
-    // Parámetros query opcionales:
-    //   nivel              = 1 | 2 | 3 (ver detalle abajo)
-    //   tipo_receta        = plato | sub_receta | (vacío = todos)
-    //   solo_con_codigo    = 1  → solo recetas que tienen codigo_origen
-    //   estado_id          = ID del estado de receta para filtrar
-    //   solo_modificados   = 1 (default) → solo recetas con modificado_localmente = true
+    // nivel=1 → sub-recetas simples (solo materias primas como ingredientes)
+    // nivel=2 → sub-recetas compuestas (incluyen otras sub-recetas)
+    // nivel=3 → platos
     //
-    // Niveles de importación (orden obligatorio en BRILO):
-    //   nivel=1 → Sub-recetas cuyos ingredientes son SOLO materias primas (importar primero)
-    //   nivel=2 → Sub-recetas que llevan otras sub-recetas como ingredientes (importar segundo)
-    //   nivel=3 → Platos (importar último)
+    // Regla: si el código de ingrediente empieza con CP → Detiene Explotación = SI
     // ──────────────────────────────────────────────────────────────────────────
     public function materialesXProducto(Request $request): StreamedResponse
     {
@@ -48,69 +206,46 @@ class ExportBriloController extends Controller
         $estadoId         = $request->query('estado_id') ? (int) $request->query('estado_id') : null;
         $soloModificados  = (bool) $request->query('solo_modificados', 1);
 
-        // ── Consulta principal ──────────────────────────────────────────────
-        // Recetas activas + sus ingredientes (productos y sub-recetas)
         $query = DB::connection('compras')
             ->table('receta_ingredientes as ri')
             ->join('recetas as r', 'ri.receta_id', '=', 'r.id')
             ->leftJoin('productos as p',  'ri.producto_id',  '=', 'p.id')
-            ->leftJoin('recetas as sr',   'ri.sub_receta_id','=', 'sr.id')   // sub-receta como ingrediente
+            ->leftJoin('recetas as sr',   'ri.sub_receta_id', '=', 'sr.id')
             ->where('r.activa', true)
             ->select([
-                'r.codigo_origen        as receta_codigo',
-                'r.nombre               as receta_nombre',
+                'r.codigo_origen as receta_codigo',
                 'r.tipo_receta',
-                'p.codigo               as prod_codigo',
-                'sr.codigo_origen       as sub_codigo',
+                'p.codigo as prod_codigo',
+                'sr.codigo_origen as sub_codigo',
                 'ri.cantidad_por_plato',
                 'ri.unidad',
             ]);
 
-        if ($soloModificados) {
-            $query->where('r.modificado_localmente', true);
-        }
+        if ($soloModificados) $query->where('r.modificado_localmente', true);
+        if ($soloConCodigo)   $query->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '');
 
-        if ($soloConCodigo) {
-            $query->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '');
-        }
-
-        // ── Filtro por nivel de importación ────────────────────────────────
         if ($nivel === 1) {
-            // Sub-recetas cuyos ingredientes son SOLO materias primas
             $query->where('r.tipo_receta', 'sub_receta')
-                  ->whereNotIn('r.id', function ($sub) {
-                      $sub->select('receta_id')
-                          ->from('receta_ingredientes')
-                          ->whereNotNull('sub_receta_id');
-                  });
+                  ->whereNotIn('r.id', fn ($s) =>
+                      $s->select('receta_id')->from('receta_ingredientes')->whereNotNull('sub_receta_id')
+                  );
         } elseif ($nivel === 2) {
-            // Sub-recetas que llevan otras sub-recetas como ingredientes
             $query->where('r.tipo_receta', 'sub_receta')
-                  ->whereIn('r.id', function ($sub) {
-                      $sub->select('receta_id')
-                          ->from('receta_ingredientes')
-                          ->whereNotNull('sub_receta_id');
-                  });
+                  ->whereIn('r.id', fn ($s) =>
+                      $s->select('receta_id')->from('receta_ingredientes')->whereNotNull('sub_receta_id')
+                  );
         } elseif ($nivel === 3) {
-            // Platos
             $query->where(fn ($q) => $q->where('r.tipo_receta', 'plato')->orWhereNull('r.tipo_receta'))
                   ->whereRaw("lower(coalesce(r.tipo_receta,'')) NOT LIKE '%sub%receta%'");
-        } elseif ($tipoReceta === 'plato') {
-            $query->where(fn ($q) => $q->where('r.tipo_receta', 'plato')->orWhereNull('r.tipo_receta'))
-                  ->whereRaw("lower(coalesce(r.tipo,'')) NOT LIKE '%sub%receta%'");
-        } elseif ($tipoReceta === 'sub_receta') {
-            $query->where(fn ($q) => $q->where('r.tipo_receta', 'sub_receta')
-                ->orWhereRaw("lower(coalesce(r.tipo,'')) LIKE '%sub%receta%'"));
+        } elseif ($tipoReceta) {
+            $query->where('r.tipo_receta', $tipoReceta);
         }
 
-        if ($estadoId) {
-            $query->where('r.estado_id', $estadoId);
-        }
+        if ($estadoId) $query->where('r.estado_id', $estadoId);
 
         $filas = $query->orderBy('r.codigo_origen')->orderBy('ri.id')->get();
 
-        // ── Nombre de archivo según nivel ──────────────────────────────────
-        $nivelSufijo = match($nivel) {
+        $nivelSufijo = match ($nivel) {
             1 => '_Nivel1_SubRecetas_Simples_',
             2 => '_Nivel2_SubRecetas_Compuestas_',
             3 => '_Nivel3_Platos_',
@@ -120,11 +255,8 @@ class ExportBriloController extends Controller
 
         return response()->streamDownload(function () use ($filas) {
             $handle = fopen('php://output', 'w');
-
-            // BOM UTF-8 para compatibilidad con Excel
             fwrite($handle, "\xEF\xBB\xBF");
 
-            // Cabecera según formato INV de BRILO
             fputcsv($handle, [
                 'Código Producto Padre',   // A
                 'Código Producto MP',      // B
@@ -137,40 +269,35 @@ class ExportBriloController extends Controller
             ]);
 
             foreach ($filas as $fila) {
-                // Col B: código del ingrediente. Si es sub-receta usa su codigo_origen, si no, el código del producto.
-                $esSub = !is_null($fila->sub_codigo);
+                $esSub          = !is_null($fila->sub_codigo);
                 $codIngrediente = $fila->sub_codigo ?? $fila->prod_codigo ?? '';
-                if (!$codIngrediente) continue; // ingrediente sin código → omitir
+                if (!$codIngrediente) continue;
 
-                /*
-                 * Regla de columnas C vs G/H:
-                 *   - Materia prima (MR*): cantidad en C, BRILO conoce su presentación internamente.
-                 *   - Sub-receta (PL*):    C vacío, G = código presentación local, H = cantidad.
-                 *     Razón: BRILO usa la unidad base del ingrediente-PL (LB, TDA, etc.) al leer C,
-                 *     pero al leer G+H usa el código de presentación para convertir automáticamente.
-                 */
+                // Detiene Explotación = SI si el código empieza con CP
+                $detieneExp = str_starts_with(strtoupper(trim($codIngrediente)), 'CP') ? 'SI' : '';
+
                 if ($esSub) {
                     $codPres = $this->unidadACodigoBrilo($fila->unidad ?? '');
                     fputcsv($handle, [
-                        $fila->receta_codigo ?? '',               // A
-                        $codIngrediente,                          // B
-                        '',                                       // C - vacío para sub-recetas
-                        'SI',                                     // D
-                        '',                                       // E
-                        '',                                       // F
-                        $codPres,                                 // G - Código Presentación
-                        $this->formatNum($fila->cantidad_por_plato), // H - Cantidad Presentación
+                        $fila->receta_codigo ?? '',                   // A
+                        $codIngrediente,                              // B
+                        '',                                           // C (vacío para sub-recetas)
+                        'SI',                                         // D
+                        $detieneExp,                                  // E
+                        '',                                           // F
+                        $codPres,                                     // G
+                        $this->formatNum($fila->cantidad_por_plato),  // H
                     ]);
                 } else {
                     fputcsv($handle, [
-                        $fila->receta_codigo ?? '',               // A
-                        $codIngrediente,                          // B
-                        $this->formatNum($fila->cantidad_por_plato), // C
-                        'SI',                                     // D
-                        '',                                       // E
-                        '',                                       // F
-                        '',                                       // G
-                        '',                                       // H
+                        $fila->receta_codigo ?? '',                   // A
+                        $codIngrediente,                              // B
+                        $this->formatNum($fila->cantidad_por_plato),  // C
+                        'SI',                                         // D
+                        $detieneExp,                                  // E
+                        '',                                           // F
+                        '',                                           // G
+                        '',                                           // H
                     ]);
                 }
             }
@@ -183,365 +310,7 @@ class ExportBriloController extends Controller
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // GET /api/compras/export/brilo/sub-recetas-ven
-    //
-    // Exporta sub-recetas al formato VEN de BRILO, para poder crearlas como
-    // productos en BRILO ANTES de importar los archivos INV de materiales.
-    // 46 columnas según el formato oficial.
-    //
-    // Parámetros query opcionales:
-    //   nivel            = 1 | 2  → mismo criterio que en materialesXProducto
-    //   solo_con_codigo  = 1 (default) → solo sub-recetas con codigo_origen
-    //   solo_modificados = 1 (default) → solo con modificado_localmente = true
-    // ──────────────────────────────────────────────────────────────────────────
-    public function subRecetasVen(Request $request): StreamedResponse
-    {
-        $this->requireAdminRol();
-
-        $nivel           = $request->query('nivel') ? (int) $request->query('nivel') : null;
-        $soloConCodigo   = (bool) $request->query('solo_con_codigo', 1);
-        $soloModificados = (bool) $request->query('solo_modificados', 1);
-
-        $query = DB::connection('compras')
-            ->table('recetas as r')
-            ->where('r.tipo_receta', 'sub_receta')
-            ->where('r.activa', true)
-            ->select([
-                'r.id',
-                'r.codigo_origen',
-                'r.nombre',
-                'r.rendimiento',
-                'r.rendimiento_unidad',
-                'r.precio',
-                'r.activa',
-            ]);
-
-        if ($soloModificados) {
-            $query->where('r.modificado_localmente', true);
-        }
-
-        if ($soloConCodigo) {
-            $query->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '');
-        }
-
-        if ($nivel === 1) {
-            // Sub-recetas simples: sus ingredientes son SOLO materias primas
-            $query->whereNotIn('r.id', function ($sub) {
-                $sub->select('receta_id')
-                    ->from('receta_ingredientes')
-                    ->whereNotNull('sub_receta_id');
-            });
-        } elseif ($nivel === 2) {
-            // Sub-recetas compuestas: llevan otras sub-recetas como ingredientes
-            $query->whereIn('r.id', function ($sub) {
-                $sub->select('receta_id')
-                    ->from('receta_ingredientes')
-                    ->whereNotNull('sub_receta_id');
-            });
-        }
-
-        $filas = $query->orderBy('r.codigo_origen')->get();
-
-        $nivelSufijo = match($nivel) {
-            1 => '_Nivel1_',
-            2 => '_Nivel2_',
-            default => '_',
-        };
-        $filename = 'VEN_SubRecetas' . $nivelSufijo . now()->format('Ymd_His') . '.csv';
-
-        $cabecera = $this->venCabecera();
-
-        return response()->streamDownload(function () use ($filas, $cabecera) {
-            $handle = fopen('php://output', 'w');
-            fwrite($handle, "\xEF\xBB\xBF");
-            fputcsv($handle, $cabecera);
-
-            foreach ($filas as $fila) {
-                $precioLista = (float) ($fila->precio ?? 0) > 0
-                    ? $this->formatNum($fila->precio)
-                    : '';
-
-                $fila46 = [
-                    $fila->codigo_origen,                   // A - Código Único
-                    $fila->nombre,                          // B - Descripción
-                    'P',                                    // C - Tipo: Inventariado
-                    '',                                     // D - Modelo
-                    $precioLista,                           // E - Precio de Lista
-                    'NO',                                   // F - Exento
-                    '',                                     // G - Cat Padre
-                    '',                                     // H - Cat Hija
-                    $fila->rendimiento_unidad ?? '',        // I - Presentación Base
-                    '', '', '', '',                         // J-M - Precios venta 2-5
-                    '', '', '',                             // N-P - Cuentas contables (completar manualmente)
-                    '', '',                                 // Q-R - CodBarra1-2
-                    '',                                     // S - Marca
-                    'NO',                                   // T - Avería
-                    'NO',                                   // U - No Comisionable
-                    '',                                     // V - % Variación Costo
-                    '', '', '',                             // W-Y - Estilo, Talla, Color
-                    'SI',                                   // Z - MostrarEnVentas
-                    'SI',                                   // AA - MostrarEnCompras
-                    '', '',                                 // AB-AC - CC Variación
-                    '',                                     // AD - Precio Sugerido
-                    '', '',                                 // AE-AF - Meta Inv / Cadena
-                    '',                                     // AG - Código Ubicación Default
-                    'NO',                                   // AH - Requiere Lote
-                    $fila->activa ? 'SI' : 'NO',           // AI - Activo
-                    'NO',                                   // AJ - Requiere Serie
-                    '',                                     // AK - Factor Ganancia
-                    'NO', 'NO',                             // AL-AM - Viñeta
-                    'NO',                                   // AN - Agrupar por Cat.
-                    '',                                     // AO - Descripción Extendida
-                    '', '',                                 // AP-AQ - Centro de Costos
-                    '',                                     // AR - #Días Abastecerse
-                    '',                                     // AS - Código Partida Arancelaria
-                    '',                                     // AT - Cuenta Inventario en Proceso
-                ];
-
-                fputcsv($handle, $fila46);
-            }
-
-            fclose($handle);
-        }, $filename, [
-            'Content-Type'        => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
-        ]);
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // GET /api/compras/export/brilo/productos
-    //
-    // Exporta materias primas al formato VEN de BRILO.
-    // 46 columnas según el formato oficial.
-    //
-    // Parámetros query opcionales:
-    //   solo_activos     = 1 (default) | 0
-    //   solo_modificados = 1 (default) → solo productos con modificado_localmente = true
-    // ──────────────────────────────────────────────────────────────────────────
-    public function productos(Request $request): StreamedResponse
-    {
-        $this->requireAdminRol();
-
-        $soloActivos     = (bool) $request->query('solo_activos', 1);
-        $soloModificados = (bool) $request->query('solo_modificados', 1);
-
-        $query = DB::connection('compras')
-            ->table('productos as p')
-            ->leftJoin('categorias as c', 'p.categoria_id', '=', 'c.id')
-            ->select([
-                'p.codigo',
-                'p.nombre',
-                'p.unidad',
-                'p.precio',
-                'p.costo',
-                'p.activo',
-                'c.nombre as categoria_nombre',
-            ]);
-
-        if ($soloModificados) {
-            $query->where('p.modificado_localmente', true);
-        }
-
-        if ($soloActivos) {
-            $query->where('p.activo', true);
-        }
-
-        $filas = $query->orderBy('p.codigo')->get();
-
-        $filename = 'VEN_Productos_Servicios_' . now()->format('Ymd_His') . '.csv';
-
-        $cabecera = $this->venCabecera();
-
-        return response()->streamDownload(function () use ($filas, $cabecera) {
-            $handle = fopen('php://output', 'w');
-            fwrite($handle, "\xEF\xBB\xBF");
-            fputcsv($handle, $cabecera);
-
-            foreach ($filas as $fila) {
-                // Precio de lista: usamos precio si existe; si no, el costo
-                $precioLista = (float) $fila->precio > 0
-                    ? $this->formatNum($fila->precio)
-                    : $this->formatNum($fila->costo);
-
-                $fila46 = [
-                    $fila->codigo,           // A
-                    $fila->nombre,           // B
-                    'P',                     // C  - Producto Inventariado (ajustar si aplica S/AC/etc.)
-                    '',                      // D  - Modelo
-                    $precioLista,            // E
-                    'NO',                    // F  - Exento
-                    '',                      // G  - Cat Padre (completar manualmente)
-                    '',                      // H  - Cat Hija
-                    $fila->unidad ?? '',     // I  - Presentación Base
-                    '',                      // J  - NomPrecioVenta2
-                    '',                      // K
-                    '',                      // L
-                    '',                      // M
-                    '',                      // N  - CC Ingresos (OBLIGATORIO - completar)
-                    '',                      // O  - CC Gastos/Inventario (OBLIGATORIO - completar)
-                    '',                      // P  - CC Costo de Venta (OBLIGATORIO - completar)
-                    '',                      // Q  - CodBarra1
-                    '',                      // R  - CodBarra2
-                    '',                      // S  - Marca
-                    'NO',                    // T  - Avería
-                    'NO',                    // U  - No Comisionable
-                    '',                      // V  - % Variación Costo
-                    '',                      // W  - Estilo
-                    '',                      // X  - Talla
-                    '',                      // Y  - Color
-                    'SI',                    // Z  - MostrarEnVentas
-                    'SI',                    // AA - MostrarEnCompras
-                    '',                      // AB - CC Variación Costo
-                    '',                      // AC - CC Variación Consumo
-                    '',                      // AD - Precio Sugerido
-                    '',                      // AE - Meta Inventario
-                    '',                      // AF - Meta Cadena Producción
-                    '',                      // AG - Código Ubicación Default
-                    'NO',                    // AH - Requiere Lote
-                    $fila->activo ? 'SI' : 'NO', // AI - Activo (OBLIGATORIO)
-                    'NO',                    // AJ - Requiere Serie
-                    '',                      // AK - Factor Ganancia
-                    'NO',                    // AL - Permite Viñeta
-                    'NO',                    // AM - Genera Viñeta
-                    'NO',                    // AN - Agrupar por Cat.
-                    '',                      // AO - Descripción Extendida
-                    '',                      // AP - Centro de Costos
-                    '',                      // AQ - Sub Centro de Costos
-                    '',                      // AR - #Días Abastecerse
-                    '',                      // AS - Código Partida Arancelaria
-                    '',                      // AT - Cuenta Inventario en Proceso
-                ];
-
-                fputcsv($handle, $fila46);
-            }
-
-            fclose($handle);
-        }, $filename, [
-            'Content-Type'        => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
-        ]);
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // GET /api/compras/export/brilo/platos-ven
-    //
-    // Exporta platos al formato VEN de BRILO. Los platos deben existir como
-    // productos en BRILO antes de poder importar sus ingredientes via INV.
-    //
-    // Parámetros query opcionales:
-    //   solo_con_codigo  = 1 (default) → solo platos con codigo_origen
-    //   solo_modificados = 1 (default) → solo con modificado_localmente = true
-    //   estado_id        = ID del estado de receta para filtrar
-    // ──────────────────────────────────────────────────────────────────────────
-    public function platosVen(Request $request): StreamedResponse
-    {
-        $this->requireAdminRol();
-
-        $soloConCodigo   = (bool) $request->query('solo_con_codigo', 1);
-        $soloNuevos      = (bool) $request->query('solo_nuevos', 1);  // default: solo los no sincronizados con BRILO
-        $estadoId        = $request->query('estado_id') ? (int) $request->query('estado_id') : null;
-
-        $query = DB::connection('compras')
-            ->table('recetas as r')
-            ->where('r.activa', true)
-            ->where(function ($q) {
-                $q->where('r.tipo_receta', 'plato')
-                  ->orWhereNull('r.tipo_receta');
-            })
-            ->whereRaw("lower(coalesce(r.tipo_receta,'')) NOT LIKE '%sub%receta%'")
-            ->select([
-                'r.id',
-                'r.codigo_origen',
-                'r.nombre',
-                'r.precio',
-                'r.activa',
-            ]);
-
-        if ($soloNuevos) {
-            // Solo platos nuevos: no existen en BRILO Y fueron creados/modificados en nuestro sistema
-            $query->where('r.sincronizado_brilo', false)
-                  ->where('r.modificado_localmente', true);
-        }
-
-        if ($soloConCodigo) {
-            $query->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '');
-        }
-
-        if ($estadoId) {
-            $query->where('r.estado_id', $estadoId);
-        }
-
-        $filas = $query->orderBy('r.codigo_origen')->get();
-
-        $filename = 'VEN_Platos_' . now()->format('Ymd_His') . '.csv';
-        $cabecera = $this->venCabecera();
-
-        return response()->streamDownload(function () use ($filas, $cabecera) {
-            $handle = fopen('php://output', 'w');
-            fwrite($handle, "\xEF\xBB\xBF");
-            fputcsv($handle, $cabecera);
-
-            foreach ($filas as $fila) {
-                $precioLista = (float) ($fila->precio ?? 0) > 0
-                    ? $this->formatNum($fila->precio)
-                    : '';
-
-                $fila46 = [
-                    $fila->codigo_origen ?? '',             // A - Código Único
-                    $fila->nombre,                          // B - Descripción
-                    'S',                                    // C - Tipo: Servicio (platos = no inventariados)
-                    '',                                     // D - Modelo
-                    $precioLista,                           // E - Precio de Lista
-                    'NO',                                   // F - Exento
-                    '',                                     // G - Cat Padre
-                    '',                                     // H - Cat Hija
-                    'UNIDAD',                               // I - Presentación Base
-                    '', '', '', '',                         // J-M - Precios venta 2-5
-                    '', '', '',                             // N-P - Cuentas contables (completar manualmente)
-                    '', '',                                 // Q-R - CodBarra1-2
-                    '',                                     // S - Marca
-                    'NO',                                   // T - Avería
-                    'NO',                                   // U - No Comisionable
-                    '',                                     // V - % Variación Costo
-                    '', '', '',                             // W-Y - Estilo, Talla, Color
-                    'SI',                                   // Z - MostrarEnVentas
-                    'NO',                                   // AA - MostrarEnCompras
-                    '', '',                                 // AB-AC - CC Variación
-                    '',                                     // AD - Precio Sugerido
-                    '', '',                                 // AE-AF - Meta Inv / Cadena
-                    '',                                     // AG - Código Ubicación Default
-                    'NO',                                   // AH - Requiere Lote
-                    $fila->activa ? 'SI' : 'NO',            // AI - Activo
-                    'NO',                                   // AJ - Requiere Serie
-                    '',                                     // AK - Factor Ganancia
-                    'NO', 'NO',                             // AL-AM - Viñeta
-                    'NO',                                   // AN - Agrupar por Cat.
-                    '',                                     // AO - Descripción Extendida
-                    '', '',                                 // AP-AQ - Centro de Costos
-                    '',                                     // AR - #Días Abastecerse
-                    '',                                     // AS - Código Partida Arancelaria
-                    '',                                     // AT - Cuenta Inventario en Proceso
-                ];
-
-                fputcsv($handle, $fila46);
-            }
-
-            fclose($handle);
-        }, $filename, [
-            'Content-Type'        => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
-        ]);
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
     // POST /api/compras/export/brilo/resetear-modificados
-    //
-    // Marca registros como "ya sincronizados con BRILO" poniendo
-    // modificado_localmente = false para que no aparezcan en futuros exports.
-    //
-    // Body JSON:
-    //   tipo  = 'platos' | 'sub_recetas' | 'productos'
-    //   nivel = 1 | 2  (solo aplica a sub_recetas)
     // ──────────────────────────────────────────────────────────────────────────
     public function resetearModificados(Request $request)
     {
@@ -553,40 +322,53 @@ class ExportBriloController extends Controller
         $count = 0;
 
         if ($tipo === 'productos') {
-            $count = DB::connection('compras')
-                ->table('productos')
+            $count = DB::connection('compras')->table('productos')
                 ->where('modificado_localmente', true)
                 ->update(['modificado_localmente' => false, 'updated_at' => now()]);
 
-        } elseif ($tipo === 'platos') {
-            $count = DB::connection('compras')
-                ->table('recetas')
+        } elseif ($tipo === 'recetas') {
+            $query = DB::connection('compras')->table('recetas')
                 ->where('activa', true)
-                ->where('modificado_localmente', true)
-                ->where(function ($q) {
-                    $q->where('tipo_receta', 'plato')->orWhereNull('tipo_receta');
-                })
+                ->where('modificado_localmente', true);
+
+            if ($nivel === 1) {
+                $query->where('tipo_receta', 'sub_receta')
+                      ->whereNotIn('id', fn ($s) =>
+                          $s->select('receta_id')->from('receta_ingredientes')->whereNotNull('sub_receta_id')
+                      );
+            } elseif ($nivel === 2) {
+                $query->where('tipo_receta', 'sub_receta')
+                      ->whereIn('id', fn ($s) =>
+                          $s->select('receta_id')->from('receta_ingredientes')->whereNotNull('sub_receta_id')
+                      );
+            } elseif ($nivel === 3) {
+                $query->where(fn ($q) => $q->where('tipo_receta', 'plato')->orWhereNull('tipo_receta'));
+            }
+
+            $count = $query->update(['modificado_localmente' => false, 'updated_at' => now()]);
+
+        // Legacy: mantener compatibilidad con llamadas antiguas
+        } elseif ($tipo === 'platos') {
+            $count = DB::connection('compras')->table('recetas')
+                ->where('activa', true)->where('modificado_localmente', true)
+                ->where(fn ($q) => $q->where('tipo_receta', 'plato')->orWhereNull('tipo_receta'))
                 ->whereRaw("lower(coalesce(tipo_receta,'')) NOT LIKE '%sub%receta%'")
                 ->update(['modificado_localmente' => false, 'updated_at' => now()]);
 
         } elseif ($tipo === 'sub_recetas') {
-            $query = DB::connection('compras')
-                ->table('recetas')
-                ->where('activa', true)
-                ->where('tipo_receta', 'sub_receta')
-                ->where('modificado_localmente', true);
-
+            $query = DB::connection('compras')->table('recetas')
+                ->where('activa', true)->where('tipo_receta', 'sub_receta')->where('modificado_localmente', true);
             if ($nivel === 1) {
-                $query->whereNotIn('id', function ($sub) {
-                    $sub->select('receta_id')->from('receta_ingredientes')->whereNotNull('sub_receta_id');
-                });
+                $query->whereNotIn('id', fn ($s) =>
+                    $s->select('receta_id')->from('receta_ingredientes')->whereNotNull('sub_receta_id')
+                );
             } elseif ($nivel === 2) {
-                $query->whereIn('id', function ($sub) {
-                    $sub->select('receta_id')->from('receta_ingredientes')->whereNotNull('sub_receta_id');
-                });
+                $query->whereIn('id', fn ($s) =>
+                    $s->select('receta_id')->from('receta_ingredientes')->whereNotNull('sub_receta_id')
+                );
             }
-
             $count = $query->update(['modificado_localmente' => false, 'updated_at' => now()]);
+
         } else {
             return response()->json(['error' => 'Tipo inválido.'], 422);
         }
@@ -602,9 +384,9 @@ class ExportBriloController extends Controller
     private function venCabecera(): array
     {
         return [
-            'Codigo Unico/De Barras',           // A  - obligatorio
-            'Descripcion',                       // B  - obligatorio
-            'Tipo',                              // C  - obligatorio  P=Inventariado
+            'Codigo Unico/De Barras',           // A
+            'Descripcion',                       // B
+            'Tipo',                              // C
             'Modelo',                            // D
             'Precio de Lista (SIN IVA)',         // E
             'Exento',                            // F
@@ -617,7 +399,7 @@ class ExportBriloController extends Controller
             'NomPrecioVenta5',                   // M
             'Cuenta Contable Ingresos',          // N
             'Cuenta Contable Gastos/Inventario', // O
-            'Cuenta Contable Costo de Venta',   // P
+            'Cuenta Contable Costo de Venta',    // P
             'CodBarra1',                         // Q
             'CodBarra2',                         // R
             'Marca',                             // S
@@ -636,7 +418,7 @@ class ExportBriloController extends Controller
             'Meta Cadena Produccion',            // AF
             'Codigo Ubicacion Default',          // AG
             'Requiere Lote',                     // AH
-            'Activo',                            // AI - obligatorio
+            'Activo',                            // AI
             'Requiere Serie',                    // AJ
             'Factor Ganancia',                   // AK
             'Permite Gen Viñeta Incentivo',      // AL
@@ -653,7 +435,7 @@ class ExportBriloController extends Controller
 
     private function requireAdminRol(): void
     {
-        $user  = auth()->user();
+        $user  = \Illuminate\Support\Facades\Auth::user();
         $roles = $user ? $user->roles()->pluck('codigo')->toArray() : [];
         if (!array_intersect(['admin_compras', 'admin_recetas'], $roles)) {
             abort(403, 'No autorizado.');
@@ -665,30 +447,33 @@ class ExportBriloController extends Controller
     {
         $n = (float) $val;
         if ($n == 0) return '';
-        // Hasta 4 decimales, sin trailing zeros
         return rtrim(rtrim(number_format($n, 4, '.', ''), '0'), '.');
     }
 
     /**
-     * Convierte la unidad local (campo ri.unidad) al código de presentación de BRILO.
-     * Los códigos de presentación deben coincidir exactamente con los configurados en BRILO.
+     * Convierte unidad local al código exacto de Unidades en BRILO (tabla olComun.dbo.Unidades).
      */
     private function unidadACodigoBrilo(string $unidad): string
     {
         return match (strtolower(trim($unidad))) {
-            'oz', 'onza', 'onzas'                          => 'OZ001',
-            'oz fl', 'fl oz', 'ozf',
-                'onza fluida', 'onzas fluidas'             => 'OZF',    // ONZAS FLUIDAS — código distinto en BRILO
-            'lb', 'libra', 'libras'                        => 'LB001',
-            'kg', 'kilogramo', 'kilogramos'                => 'KG001',
-            'lt', 'litro', 'litros'                        => 'LT001',
-            'g', 'gr', 'gramo', 'gramos'                   => 'GR001',
-            'porcion', 'porción'                           => 'UNIDAD', // PORCION no existe en BRILO → usar UNIDAD
-            'u', 'und', 'unidad', 'unidades'               => 'UNIDAD',
-            'galon', 'galón', 'gal'                        => 'GAL001',
-            'botella'                                       => 'BOTELLA',
-            'rebanada'                                      => 'REBANADA',
-            default                                        => strtoupper($unidad),
+            'oz', 'onza', 'onzas'                                       => 'OZ001',
+            'oz fl', 'fl oz', 'ozf', 'onza fluida', 'onzas fluidas'    => 'OZF',
+            'lb', 'libra', 'libras'                                     => 'C_LIBRA',
+            'kg', 'kilogramo', 'kilogramos'                             => 'KG',
+            'lt', 'litro', 'litros'                                     => 'C_LITRO',
+            'ml', 'mililitros', 'mililitro'                             => 'C_LITRO', // convertir en BRILO
+            'u', 'und', 'unidad', 'unidades'                           => 'UNID0005',
+            'porcion', 'porción'                                        => 'UNID0013',
+            'caja'                                                      => 'CAJ001',
+            'paquete'                                                   => 'PAQU010',
+            'galon', 'galón', 'gal'                                     => 'C_GALON',
+            'botella', 'botella 1.75lt'                                 => 'BOTE001',
+            'barril'                                                    => 'UNID0016',
+            'bolsa 2kg', 'bolsa 1kg'                                   => 'UNID0009',
+            'bolsa 5lb'                                                 => 'C_BOLSA',
+            'bolsa 20lb'                                                => 'B-04',
+            'rebanada', 'g', 'gr', 'gramo', 'gramos'                   => 'UNID0005',
+            default                                                     => strtoupper(trim($unidad)),
         };
     }
 }
