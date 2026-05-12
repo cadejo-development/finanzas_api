@@ -83,25 +83,27 @@ const QUERIES = {
     ORDER BY proNombre
   `,
   cerveza: `
-    SELECT LTRIM(RTRIM(proCodigo)) AS codigo,
-           LTRIM(RTRIM(proNombre)) AS nombre
-    FROM   olComun.dbo.Productos WITH (NOLOCK)
-    WHERE  proActivo = 1
+    SELECT LTRIM(RTRIM(p.proCodigo)) AS codigo,
+           LTRIM(RTRIM(p.proNombre)) AS nombre,
+           LTRIM(RTRIM(ISNULL(cp.cprNombre, ''))) AS estilo
+    FROM   Productos p WITH (NOLOCK)
+    LEFT JOIN CategoriasProductos cp WITH (NOLOCK) ON cp.cprId = p.cprId
+    WHERE  p.proActivo = 1
       AND (
-            LOWER(proNombre) LIKE '%cadejo%'
-         OR LOWER(proNombre) LIKE '%cerveza%'
-         OR LOWER(proNombre) LIKE '%lager%'
-         OR LOWER(proNombre) LIKE '%ale%'
-         OR LOWER(proNombre) LIKE '%stout%'
-         OR LOWER(proNombre) LIKE '%porter%'
-         OR LOWER(proNombre) LIKE '%ipa%'
-         OR LOWER(proNombre) LIKE '%pilsner%'
-         OR LOWER(proNombre) LIKE '%tripel%'
-         OR LOWER(proNombre) LIKE '%dubbel%'
-         OR LOWER(proNombre) LIKE '%saison%'
-         OR LOWER(proNombre) LIKE '%sour%'
+            LOWER(p.proNombre) LIKE '%cadejo%'
+         OR LOWER(p.proNombre) LIKE '%cerveza%'
+         OR LOWER(p.proNombre) LIKE '%lager%'
+         OR LOWER(p.proNombre) LIKE '%ale%'
+         OR LOWER(p.proNombre) LIKE '%stout%'
+         OR LOWER(p.proNombre) LIKE '%porter%'
+         OR LOWER(p.proNombre) LIKE '%ipa%'
+         OR LOWER(p.proNombre) LIKE '%pilsner%'
+         OR LOWER(p.proNombre) LIKE '%tripel%'
+         OR LOWER(p.proNombre) LIKE '%dubbel%'
+         OR LOWER(p.proNombre) LIKE '%saison%'
+         OR LOWER(p.proNombre) LIKE '%sour%'
       )
-    ORDER BY proNombre
+    ORDER BY p.proNombre
   `,
 };
 
@@ -134,11 +136,11 @@ async function main() {
       const values = [];
       const placeholders = chunk.map(r => {
         const o = values.length;
-        values.push(tipo, r.codigo || '', r.nombre || '', true, now);
-        return `($${o+1}, $${o+2}, $${o+3}, $${o+4}, $${o+5})`;
+        values.push(tipo, r.codigo || '', r.nombre || '', r.estilo || null, true, now);
+        return `($${o+1}, $${o+2}, $${o+3}, $${o+4}, $${o+5}, $${o+6})`;
       });
       await pg.query(
-        `INSERT INTO brew_ingredientes (tipo, codigo, nombre, activo, created_at) VALUES ${placeholders.join(',')}`,
+        `INSERT INTO brew_ingredientes (tipo, codigo, nombre, estilo, activo, created_at) VALUES ${placeholders.join(',')}`,
         values
       );
       inserted += chunk.length;

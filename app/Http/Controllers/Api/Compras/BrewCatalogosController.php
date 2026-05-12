@@ -28,7 +28,27 @@ class BrewCatalogosController extends Controller
     // GET /api/compras/brew/catalogos/cervezas
     public function cervezas()
     {
-        return response()->json($this->porTipo('cerveza'));
+        try {
+            $data = DB::connection('compras')
+                ->table('brew_ingredientes')
+                ->where('tipo', 'cerveza')
+                ->orderBy('nombre')
+                ->select('codigo', 'nombre', 'estilo')
+                ->get()
+                ->map(fn($r) => [
+                    'codigo' => $r->codigo ?? '',
+                    'nombre' => $r->nombre ?? '',
+                    'estilo' => $r->estilo ?? '',
+                ])
+                ->filter(fn($r) => $r['nombre'] !== '')
+                ->values()
+                ->all();
+
+            return response()->json($data);
+        } catch (\Exception $e) {
+            \Log::error('brew_catalogo[cerveza]: ' . $e->getMessage());
+            return response()->json([]);
+        }
     }
 
     // GET /api/compras/brew/catalogos/materias-primas
