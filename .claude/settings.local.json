@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(*)"
+      "Bash(*)",
+      "PowerShell(Set-Location \"c:\\\\Users\\\\administrator\\\\finanzas_api\"; $env:PATH = \"C:\\\\Users\\\\administrator\\\\.config\\\\herd\\\\bin;\" + $env:PATH; php artisan tinker --execute=\"DB::connection\\('rrhh'\\)->statement\\(\\\\\"UPDATE permisos SET created_at = created_at - INTERVAL '6 hours', updated_at = updated_at - INTERVAL '6 hours'\\\\\"\\); echo 'UPDATE_OK';\" 2>&1)",
+      "PowerShell(php -r \"print_r\\(PDO::getAvailableDrivers\\(\\)\\);\")",
+      "PowerShell(Start-ScheduledTask -TaskName \"LaravelScheduler-FinanzasAPI\")",
+      "PowerShell(Get-ScheduledTaskInfo -TaskName \"LaravelScheduler-FinanzasAPI\")",
+      "PowerShell(Get-ScheduledTask -TaskName \"LaravelScheduler-FinanzasAPI\")",
+      "PowerShell(schtasks /query /tn \"LaravelScheduler-FinanzasAPI\" /fo LIST)",
+      "PowerShell(& \"C:\\\\Users\\\\administrator\\\\.config\\\\herd\\\\bin\\\\php83.bat\" \"C:\\\\Users\\\\administrator\\\\check_receta_44871.php\" 2>&1)"
     ]
   }
 }

@@ -10,7 +10,8 @@ class BrewLote extends Model
     protected $table = 'brew_lotes';
 
     protected $fillable = [
-        'brew_receta_id', 'codigo_lote', 'fecha_coccion', 'estado', 'cervecero', 'notas',
+        'brew_receta_id', 'codigo_lote', 'fecha_coccion', 'estado',
+        'planta', 'num_cocciones', 'cervecero', 'notas',
     ];
 
     public function receta()         { return $this->belongsTo(BrewReceta::class, 'brew_receta_id'); }

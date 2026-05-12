@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\Compras\InventarioController;
 use App\Http\Controllers\Api\Compras\ExportBriloController;
 use App\Http\Controllers\Api\Compras\BrewRecetasController;
 use App\Http\Controllers\Api\Compras\BrewLotesController;
+use App\Http\Controllers\Api\Compras\BrewCatalogosController;
 use App\Http\Controllers\Api\PortalController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\RRHH\CatalogosRRHHController;
@@ -250,6 +251,19 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
         Route::put('lotes/{id}/fermentacion',  [BrewLotesController::class, 'guardarFermentacion']);
         Route::put('lotes/{id}/seguimiento',   [BrewLotesController::class, 'guardarSeguimiento']);
         Route::put('lotes/{id}/llenado',       [BrewLotesController::class, 'guardarLlenado']);
+
+        // Utilidades
+        Route::get('lotes/siguiente-codigo',   [BrewLotesController::class, 'siguienteCodigo']);
+        Route::get('empleados-planta',         [BrewLotesController::class, 'empleadosPlanta']);
+        Route::get('estadisticas',             [BrewLotesController::class, 'estadisticas']);
+
+        // Catálogos (Brilo + local)
+        Route::prefix('catalogos')->group(function () {
+            Route::get('maltas',         [BrewCatalogosController::class, 'maltas']);
+            Route::get('lupulos',        [BrewCatalogosController::class, 'lupulos']);
+            Route::get('cervezas',       [BrewCatalogosController::class, 'cervezas']);
+            Route::get('materias-primas', [BrewCatalogosController::class, 'materiasPrimas']);
+        });
     });
 });
 

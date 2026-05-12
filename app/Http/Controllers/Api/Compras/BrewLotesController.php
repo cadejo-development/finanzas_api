@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\Compras;
 use App\Http\Controllers\Controller;
 use App\Models\BrewLote;
 use App\Models\BrewReceta;
+use App\Models\Empleado;
+use App\Models\Departamento;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -49,6 +51,8 @@ class BrewLotesController extends Controller
             'codigo_lote'    => 'required|string|max:30|unique:compras.brew_lotes,codigo_lote',
             'fecha_coccion'  => 'required|date',
             'cervecero'      => 'nullable|string|max:100',
+            'planta'         => 'nullable|string|max:20',
+            'num_cocciones'  => 'nullable|integer|min:1|max:10',
             'notas'          => 'nullable|string',
         ]);
 
@@ -114,7 +118,7 @@ class BrewLotesController extends Controller
             }
 
             if ($lote->estado === 'coccion') {
-                $lote->update(['estado' => 'filtracion']);
+                $lote->update(['estado' => 'fermentacion']);
             }
         });
 
@@ -147,7 +151,7 @@ class BrewLotesController extends Controller
             }
 
             if ($lote->estado === 'filtracion') {
-                $lote->update(['estado' => 'fermentacion']);
+                $lote->update(['estado' => 'seguimiento']);
             }
         });
 
@@ -170,7 +174,7 @@ class BrewLotesController extends Controller
         $lote->fermentacion()->updateOrCreate(['brew_lote_id' => $lote->id], $data);
 
         if ($lote->estado === 'fermentacion') {
-            $lote->update(['estado' => 'seguimiento']);
+            $lote->update(['estado' => 'filtracion']);
         }
 
         return response()->json(['ok' => true]);
@@ -316,5 +320,135 @@ class BrewLotesController extends Controller
             'og_real'         => $og ?: null,
             'fg_real'         => $fg ?: null,
         ];
+    }
+
+    // ─── Siguiente código de lote automático ─────────────────────────────────
+
+    public function siguienteCodigo(Request $request)
+    {
+        $recetaId = $request->query('receta_id');
+        $planta   = $request->query('planta', 'sivar');
+
+        $plantaCod = $planta === 'zr' ? 'ZR' : 'SV';
+        $yymm      = now()->setTimezone('America/El_Salvador')->format('ym');
+
+        $prefijo = null;
+        if ($recetaId) {
+            $receta = BrewReceta::find($recetaId);
+            if ($receta) {
+                // Generar abreviatura de 4 letras del nombre de cerveza
+                $palabras = preg_split('/\s+/', strtoupper(preg_replace('/[^a-zA-Z\s]/', '', $receta->nombre)));
+                if (count($palabras) === 1) {
+                    $prefijo = substr($palabras[0], 0, 4);
+                } else {
+                    $prefijo = collect($palabras)->map(fn($p) => substr($p, 0, 2))->implode('');
+                    $prefijo = substr($prefijo, 0, 4);
+                }
+            }
+        }
+        $prefijo = $prefijo ?? 'BREW';
+
+        // Buscar el último número correlativo del mes actual para esta cerveza+planta
+        $patron = "CAD-{$prefijo}-{$yymm}-";
+        $ultimo = DB::connection('compras')
+            ->table('brew_lotes')
+            ->where('codigo_lote', 'like', $patron . '%')
+            ->orderBy('codigo_lote', 'desc')
+            ->value('codigo_lote');
+
+        $seq = 1;
+        if ($ultimo) {
+            $partes = explode('-', $ultimo);
+            $seq = (int) end($partes) + 1;
+        }
+
+        return response()->json([
+            'codigo' => sprintf('CAD-%s-%s-%02d', $prefijo, $yymm, $seq),
+        ]);
+    }
+
+    // ─── Empleados activos de una planta ─────────────────────────────────────
+
+    public function empleadosPlanta(Request $request)
+    {
+        $planta = $request->query('planta', 'sivar');
+        // Los codigos de departamento: PROD_SV = Planta Sivar, PROD_ZR = Planta ZR
+        $codigoDpto = $planta === 'zr' ? 'PROD_ZR' : 'PROD_SV';
+
+        try {
+            $dpto = DB::connection('pgsql')
+                ->table('departamentos')
+                ->where('codigo', $codigoDpto)
+                ->where('activo', true)
+                ->first();
+
+            if (!$dpto) {
+                return response()->json([]);
+            }
+
+            $empleados = DB::connection('pgsql')
+                ->table('empleados')
+                ->where('departamento_id', $dpto->id)
+                ->where('activo', true)
+                ->select('id', 'nombres', 'apellidos', 'cargo_id')
+                ->orderBy('nombres')
+                ->get()
+                ->map(fn($e) => [
+                    'id'     => $e->id,
+                    'nombre' => trim($e->nombres . ' ' . $e->apellidos),
+                ]);
+
+            return response()->json($empleados);
+        } catch (\Exception $e) {
+            return response()->json([]);
+        }
+    }
+
+    // ─── Estadísticas de producción ──────────────────────────────────────────
+
+    public function estadisticas()
+    {
+        $lotes = BrewLote::with(['receta:id,nombre,estilo', 'llenadoBotellas', 'llenadoBarriles'])
+            ->orderBy('fecha_coccion', 'desc')
+            ->get();
+
+        // Por cerveza
+        $porCerveza = $lotes->groupBy('receta.nombre')->map(function ($grupo, $nombre) {
+            $totalLotes = $grupo->count();
+            $completados = $grupo->where('estado', 'completo')->count();
+            $volTotal = $grupo->sum(function ($l) {
+                $vb = ($l->llenadoBotellas->botellas_buenas ?? 0) * 0.330;
+                $vr = (($l->llenadoBarriles->barriles_6th ?? 0) * 19.8)
+                     + (($l->llenadoBarriles->barriles_half ?? 0) * 58.7);
+                return $vb + $vr;
+            });
+            return compact('totalLotes', 'completados', 'volTotal');
+        })->sortByDesc('totalLotes')->values();
+
+        // Por mes
+        $porMes = $lotes->groupBy(fn($l) => substr($l->fecha_coccion, 0, 7))
+            ->map(fn($g, $mes) => ['mes' => $mes, 'lotes' => $g->count()])
+            ->sortBy('mes')
+            ->values();
+
+        // Estados actuales
+        $estados = $lotes->groupBy('estado')
+            ->map(fn($g, $k) => ['estado' => $k, 'count' => $g->count()])
+            ->values();
+
+        // Por planta
+        $porPlanta = $lotes->groupBy(fn($l) => $l->planta ?? 'sivar')
+            ->map(fn($g, $k) => ['planta' => $k, 'count' => $g->count()])
+            ->values();
+
+        return response()->json([
+            'total_lotes'      => $lotes->count(),
+            'en_proceso'       => $lotes->where('estado', '!=', 'completo')->count(),
+            'completados'      => $lotes->where('estado', 'completo')->count(),
+            'por_cerveza'      => $porCerveza,
+            'por_mes'          => $porMes,
+            'estados'          => $estados,
+            'por_planta'       => $porPlanta,
+        ]);
     }
 }
