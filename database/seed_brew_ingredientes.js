@@ -111,25 +111,103 @@ async function main() {
       continue;
     }
 
-    // Para cervezas: strip presentaciones (12 OZ, 16 OZ, etc.) y deduplicar
+    // Para cervezas: strip presentaciones y excluir promos/combos/servicios
     let finalRows = rows;
     if (tipo === 'cerveza') {
-      const stripPresentation = (name) =>
-        name
-          .replace(/\s+\d+(\,\d+)?\s*(OZ|ONZ|ML|CL|CC|LT?|LITROS?|ONZAS?)\b.*/i, '')
-          .replace(/\s+(LATA|BOTELLA|BARRIL|GROWLER|DRAFT|KEGG?|EXPORT[A-Z]*)\b.*/i, '')
-          .replace(/\s+\d+\s*PACK\b.*/i, '')
-          .trim();
+      // 1. Limpiar sufijos de envase/canal/formato del nombre
+      const clean = (name) => name
+        .toUpperCase()
+        .replace(/\s+/g, ' ')
+        // corregir typos conocidos de Brilo
+        .replace(/^CERVEZACALABAZA\b/, 'CERVEZA CALABAZA')
+        .replace(/^CERVEZA\s+LABURRO\b/, 'CERVEZA LA BURRO')
+        // canales / promo-labels
+        .replace(/\s*-\s*(VENECIA|VN|VO|OP|AE)\b.*/i, '')
+        .replace(/\s*-\s*(LA\s+HORA|AO)\b.*/i, '')
+        .replace(/\s+\d+X\d+\b.*/i, '')           // 3X2, 2X1, etc.
+        // tipo de servicio / contenedor
+        .replace(/\s+DRAFT.*/i, '')
+        .replace(/\s+(BARRIL|GROWLER|KEGG?).*/i, '')
+        .replace(/\s+LITRO.*/i, '')
+        .replace(/\s+REFILL?.*/i, '')
+        // formatos de envase
+        .replace(/\s+BOT\.?(\s+\d+\s*(ML|OZ|ONZ))?.*/i, '')
+        .replace(/\s+BOX(\s+\d+)?.*/i, '')
+        .replace(/\s+CAJA\s+\d+.*/i, '')
+        .replace(/\s+SIX[\s-]?PACK.*/i, '')
+        .replace(/\s+(FOUR|FOR)[\s-]?PACK.*/i, '')
+        .replace(/\s+\d+[\s-]?PACK.*/i, '')
+        .replace(/\s+SIX\s+\d+\s*U\..*/i, '')
+        // volúmenes — sin requerir espacio antes (NACIONAL12 ONZ, PEACH CHULA14 OZ)
+        .replace(/\d+([\.,]\d+)?\s*(OZ|ONZ|ML|CL|CC|LT?|LITROS?|ONZAS?)\b.*/i, '')
+        .replace(/\s+\d+\s*U\..*/i, '')
+        // tags al final — VR=retornable, VN=venta nacional, etc.
+        .replace(/\s+(VR|VN|OP|AE)\s*$/i, '')
+        .replace(/\s+BONIFICACI[OÓÒ]N.*/i, '')
+        .replace(/\s+PRECIO.*/i, '')
+        .replace(/\s+DE\s*$/, '')
+        .replace(/[.\s-]+$/, '')
+        .trim();
+
+      // 2. Patrones que indican que NO es una receta base de cerveza
+      const EXCLUDE = [
+        /^\d/,                                    // empieza con número: 2 SIX PACKS, 2DA CERV
+        /^AGRANDADO\b/,
+        /^BALDE\b/,
+        /^BARRA\s/,
+        /^BARRIL\s/,
+        /^BEER\s+OF\b/,
+        /^BIRRIA\b/,
+        /^CAJA\b/,
+        /^CATA\b/,
+        /^CERV(EZA)?\s+(DE\s+)?LINEA\b/,
+        /^CERVEZA\s+DE\b/,
+        /^CERVEZA\s+EXTERNA\b/,
+        /^CERVEZA\s+PREMIO\b/,
+        /^CERVEZA\s*$/,
+        /^CERVEZA\s+1\s/,
+        /^CERVEZA\s+DE\s*$/,
+        /^DIA\s+DE\b/,
+        /^DRAFT\b/,
+        /^EXTRA\s+POR\b/,
+        /^(FOR|FOUR)\s+PACK\b/,
+        /^GROWLER\b/,
+        /^LITRO\b/,
+        /^MINUTA\b/,
+        /^NACIONAL\s+O\b/,
+        /^PAQ\s+\d/,
+        /^PROMO/,
+        /^PROM\b/,
+        /^REFIL/,
+        /^REST(AURANTE)?\.?\b/,            // REST. REFILL / RESTAURANTE REFILL
+        /^SAMPLER\b/,
+        /^SIX\b/,
+        /^SIXPACK\b/,
+        /^RUBIA\b/,                               // solo presentaciones, no receta base
+      ];
+
+      const isExcluded = (n) => EXCLUDE.some(r => r.test(n));
+
+      // 3. Normalizar clave para deduplicar (quitar prefijos CERVEZA LA / CERVEZA / LA)
+      const keyOf = (n) => n
+        .replace(/^CERVEZA\s+LA\s+/, '')
+        .replace(/^CERVEZA\s+/, '')
+        .replace(/^LA\s+/, '')
+        .trim();
+
       const seen = new Set();
       finalRows = [];
       for (const row of rows) {
-        const cleanName = stripPresentation(row.nombre);
-        if (!seen.has(cleanName)) {
-          seen.add(cleanName);
-          finalRows.push({ ...row, nombre: cleanName });
+        const cleaned = clean(row.nombre);
+        if (isExcluded(cleaned)) continue;
+        const key = keyOf(cleaned);
+        if (key.length < 3) continue;
+        if (!seen.has(key)) {
+          seen.add(key);
+          finalRows.push({ ...row, nombre: cleaned });
         }
       }
-      console.log(`  → ${rows.length} registros Brilo → ${finalRows.length} cervezas únicas (sin presentaciones)`);
+      console.log(`  → ${rows.length} registros Brilo → ${finalRows.length} cervezas únicas (sin promos/presentaciones)`);
     }
 
     // Limpiar los existentes del mismo tipo
