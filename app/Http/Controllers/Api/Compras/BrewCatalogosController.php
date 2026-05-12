@@ -48,15 +48,20 @@ class BrewCatalogosController extends Controller
     // ── Helper ────────────────────────────────────────────────────────────────
     private function porTipo(string $tipo): array
     {
-        return DB::connection('compras')
-            ->table('brew_ingredientes')
-            ->where('tipo', $tipo)
-            ->where('activo', true)
-            ->orderBy('nombre')
-            ->select('codigo', 'nombre')
-            ->get()
-            ->map(fn($r) => ['codigo' => $r->codigo, 'nombre' => $r->nombre])
-            ->values()
-            ->all();
+        try {
+            return DB::connection('compras')
+                ->table('brew_ingredientes')
+                ->where('tipo', $tipo)
+                ->orderBy('nombre')
+                ->select('codigo', 'nombre')
+                ->get()
+                ->map(fn($r) => ['codigo' => $r->codigo ?? '', 'nombre' => $r->nombre ?? ''])
+                ->filter(fn($r) => $r['nombre'] !== '')
+                ->values()
+                ->all();
+        } catch (\Exception $e) {
+            \Log::error("brew_catalogo[$tipo]: " . $e->getMessage());
+            return [];
+        }
     }
 }
