@@ -5,8 +5,8 @@
  * desde Brilo SQL Server (olRestaurante) hacia PostgreSQL (compras_db).
  *
  * - Borra los registros actuales en ventas_semanales / detalle
- * - Inserta un registro por sucursal × día (= cabecera + platos únicos)
- * - Solo Platos Fuertes (categoría LIKE '%latos%uertes%')
+ * - Inserta un registro por sucursal × día (= cabecera + ítems únicos)
+ * - Incluye todas las categorías de venta (platos, bebidas, cerveza, postres, desayunos, etc.)
  *
  * Uso:
  *   node database/import_ventas_mayo.js           → dry-run (solo imprime)
@@ -20,6 +20,28 @@ const DRY_RUN  = !process.argv.includes('--apply');
 const DESDE    = '2026-05-01';
 const HASTA    = '2026-05-11';
 const IMPORTADO_POR = 'script_sqlserver_mayo2026';
+
+// ── Mapeo Brilo sucIdOrigenSync → compras_db sucursal_id ─────────────────────
+// Basado en diagnóstico: olComun.Sucursales ↔ core_db.sucursales
+// ── Mapeo categorías Brilo → categoria_key del frontend ─────────────────────
+const CATEGORIA_MAP = {
+  'Platos Fuertes':             'platos_fuertes',
+  'Platos Entradas':            'entradas',
+  'Platos Postres':             'postres',
+  'Platos Desayunos':           'desayunos',
+  'Platos Empleados':           'platos_fuertes',
+  'Platos Extras Clientes':     'platos_fuertes',
+  'Platos Malcriadas AE2':      'platos_fuertes',
+  'Bebidas sin Alcohol':        'bebidas_sin_alcohol',
+  'Soda Artesanal':             'bebidas_sin_alcohol',
+  'Agua Dura':                  'bebidas_sin_alcohol',
+  'Bebidas Malcriadas AE2 s/a': 'bebidas_sin_alcohol',
+  'Bebidas con Alcohol':        'bebidas_alcohol',
+  'Cerveza Draft':              'cerveza',
+  'Cerveza Botella':            'cerveza',
+  'Cerveza Growler':            'cerveza',
+  'Cervezas VR Malcriadas AE2': 'cerveza',
+};
 
 // ── Mapeo Brilo sucIdOrigenSync → compras_db sucursal_id ─────────────────────
 // Basado en diagnóstico: olComun.Sucursales ↔ core_db.sucursales
@@ -62,6 +84,7 @@ async function getAllVentas(pool) {
            AT TIME ZONE 'Central America Standard Time' AS DATE) AS fecha,
       LTRIM(RTRIM(PRO.proCodigo))                        AS producto_codigo,
       LTRIM(RTRIM(PRO.proNombre))                        AS producto_nombre,
+      LTRIM(RTRIM(CPR.cprNombre))                        AS categoria_brilo,
       SUM(DET.dctrstCantidad)                            AS cantidad_vendida,
       AVG(DET.dctrstPrecio)                              AS precio_unitario,
       SUM(DET.dctrstCantidad * DET.dctrstPrecio)         AS total
@@ -76,11 +99,17 @@ async function getAllVentas(pool) {
       AND CAST(MCT.mctrstFecHoraCerrada AT TIME ZONE 'UTC'
                AT TIME ZONE 'Central America Standard Time' AS DATE)
           BETWEEN '${DESDE}' AND '${HASTA}'
-      AND CPR.cprNombre LIKE '%latos%uertes%'
+      AND CPR.cprNombre IN (
+        'Platos Fuertes','Platos Entradas','Platos Postres','Platos Desayunos',
+        'Platos Empleados','Platos Extras Clientes','Platos Malcriadas AE2',
+        'Bebidas sin Alcohol','Soda Artesanal','Agua Dura','Bebidas Malcriadas AE2 s/a',
+        'Bebidas con Alcohol',
+        'Cerveza Draft','Cerveza Botella','Cerveza Growler','Cervezas VR Malcriadas AE2'
+      )
     GROUP BY MCT.sucIdOrigenSync,
              CAST(MCT.mctrstFecHoraCerrada AT TIME ZONE 'UTC'
                   AT TIME ZONE 'Central America Standard Time' AS DATE),
-             PRO.proCodigo, PRO.proNombre
+             PRO.proCodigo, PRO.proNombre, CPR.cprNombre
     ORDER BY MCT.sucIdOrigenSync, fecha, SUM(DET.dctrstCantidad * DET.dctrstPrecio) DESC
   `);
 
@@ -94,7 +123,7 @@ async function getAllVentas(pool) {
     data[sid][fd].push({
       producto_codigo:  (row.producto_codigo ?? '').trim().slice(0, 50),
       producto_nombre:  (row.producto_nombre ?? '').trim().slice(0, 200),
-      categoria_key:    'platos_fuertes',
+      categoria_key:    CATEGORIA_MAP[row.categoria_brilo] ?? 'otros',
       cantidad_vendida: Number(row.cantidad_vendida) || 0,
       precio_unitario:  Number(row.precio_unitario)  || 0,
       total:            Number(row.total)            || 0,
@@ -150,7 +179,7 @@ async function insertarDia(pg, sucPgId, sucNombre, fecha, filas) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
   hr('═');
-  log(`IMPORTACIÓN VENTAS MAYO 2026 — Platos Fuertes — ${DESDE} a ${HASTA}`);
+  log(`IMPORTACIÓN VENTAS MAYO 2026 — Todas las categorías — ${DESDE} a ${HASTA}`);
   log(DRY_RUN ? '⚠  MODO DRY-RUN (sin cambios en BD)' : '🚀 MODO APPLY — insertando en PostgreSQL');
   hr('═');
 
@@ -182,7 +211,7 @@ async function main() {
       sucTotal  += filas.reduce((s, f) => s + f.total, 0);
       totalFilas += filas.length;
     }
-    log(`  ${suc.nombre}: ${sucFilas} platos, $${sucTotal.toFixed(2)}`);
+    log(`  ${suc.nombre}: ${sucFilas} ítems, $${sucTotal.toFixed(2)}`);
   }
 
   hr();
