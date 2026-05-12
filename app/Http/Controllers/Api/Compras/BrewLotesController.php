@@ -406,11 +406,26 @@ class BrewLotesController extends Controller
 
     // ─── Estadísticas de producción ──────────────────────────────────────────
 
-    public function estadisticas()
+    public function estadisticas(Request $request)
     {
-        $lotes = BrewLote::with(['receta:id,nombre,estilo', 'llenadoBotellas', 'llenadoBarriles'])
-            ->orderBy('fecha_coccion', 'desc')
-            ->get();
+        $query = BrewLote::with(['receta:id,nombre,estilo', 'llenadoBotellas', 'llenadoBarriles'])
+            ->orderBy('fecha_coccion', 'desc');
+
+        // ── Filtros ────────────────────────────────────────────────────────
+        if ($request->filled('desde')) {
+            $query->whereDate('fecha_coccion', '>=', $request->desde);
+        }
+        if ($request->filled('hasta')) {
+            $query->whereDate('fecha_coccion', '<=', $request->hasta);
+        }
+        if ($request->filled('estado')) {
+            $query->where('estado', $request->estado);
+        }
+        if ($request->filled('planta')) {
+            $query->where('planta', $request->planta);
+        }
+
+        $lotes = $query->get();
 
         // Por cerveza
         $porCerveza = $lotes->groupBy('receta.nombre')->map(function ($grupo, $nombre) {
