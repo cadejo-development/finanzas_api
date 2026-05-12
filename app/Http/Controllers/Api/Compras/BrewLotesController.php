@@ -414,7 +414,7 @@ class BrewLotesController extends Controller
 
         // Por cerveza
         $porCerveza = $lotes->groupBy('receta.nombre')->map(function ($grupo, $nombre) {
-            $totalLotes = $grupo->count();
+            $totalLotes  = $grupo->count();
             $completados = $grupo->where('estado', 'completo')->count();
             $volTotal = $grupo->sum(function ($l) {
                 $vb = ($l->llenadoBotellas->botellas_buenas ?? 0) * 0.330;
@@ -422,7 +422,7 @@ class BrewLotesController extends Controller
                      + (($l->llenadoBarriles->barriles_half ?? 0) * 58.7);
                 return $vb + $vr;
             });
-            return compact('totalLotes', 'completados', 'volTotal');
+            return ['nombre' => $nombre ?? '—', 'totalLotes' => $totalLotes, 'completados' => $completados, 'volTotal' => round($volTotal, 2)];
         })->sortByDesc('totalLotes')->values();
 
         // Por mes
