@@ -92,6 +92,27 @@ const QUERIES = {
       AND  cp.cprNombre LIKE 'Cerveza%'
     ORDER BY p.proNombre
   `,
+  levadura: `
+    SELECT LTRIM(RTRIM(proCodigo)) AS codigo,
+           LTRIM(RTRIM(proNombre)) AS nombre
+    FROM   olComun.dbo.Productos WITH (NOLOCK)
+    WHERE  proActivo = 1
+      AND  (
+              LOWER(proNombre) LIKE '%levadura%'
+           OR LOWER(proNombre) LIKE '%yeast%'
+           OR LOWER(proNombre) LIKE '%safale%'
+           OR LOWER(proNombre) LIKE '%saflager%'
+           OR LOWER(proNombre) LIKE '%safbrew%'
+           OR LOWER(proNombre) LIKE '%lallemand%'
+           OR LOWER(proNombre) LIKE '%wyeast%'
+           OR LOWER(proNombre) LIKE '%white labs%'
+           OR LOWER(proNombre) LIKE '%fermentis%'
+           OR LOWER(proNombre) LIKE '%windsor%'
+      )
+      AND  LOWER(proNombre) NOT LIKE '%nevada%'   -- levadura de pan, no cerveza
+      AND  LOWER(proNombre) NOT LIKE '%booster%'  -- aditivo, no levadura
+    ORDER BY proNombre
+  `,
 };
 
 async function main() {
@@ -208,6 +229,29 @@ async function main() {
         }
       }
       console.log(`  → ${rows.length} registros Brilo → ${finalRows.length} cervezas únicas (sin promos/presentaciones)`);
+    }
+
+    // Para levaduras: strip gramaje (500 gr, 11.5 gr, sachet) y deduplicar
+    if (tipo === 'levadura') {
+      const cleanLev = (name) => name
+        .toUpperCase()
+        .replace(/\s+/g, ' ')
+        .replace(/\s+PRUEBA\b.*/i, '')                          // "prueba Fermentis 500gr" → quitar todo
+        .replace(/\s+\d+([.,]\d+)?\s*(GR|G|KG|ML|SACHET)\b.*/i, '')
+        .replace(/\s+SACHET\b.*/i, '')
+        .replace(/[.\s-]+$/, '')
+        .trim();
+      const seen2 = new Set();
+      finalRows = [];
+      for (const row of rows) {
+        const cleaned = cleanLev(row.nombre);
+        if (cleaned.length < 3) continue;
+        if (!seen2.has(cleaned)) {
+          seen2.add(cleaned);
+          finalRows.push({ ...row, nombre: cleaned });
+        }
+      }
+      console.log(`  → ${rows.length} registros Brilo → ${finalRows.length} levaduras únicas`);
     }
 
     // Limpiar los existentes del mismo tipo

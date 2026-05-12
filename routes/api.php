@@ -262,6 +262,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
             Route::get('maltas',         [BrewCatalogosController::class, 'maltas']);
             Route::get('lupulos',        [BrewCatalogosController::class, 'lupulos']);
             Route::get('cervezas',       [BrewCatalogosController::class, 'cervezas']);
+            Route::get('levaduras',       [BrewCatalogosController::class, 'levaduras']);
             Route::get('materias-primas', [BrewCatalogosController::class, 'materiasPrimas']);
         });
     });

@@ -51,6 +51,12 @@ class BrewCatalogosController extends Controller
         }
     }
 
+    // GET /api/compras/brew/catalogos/levaduras
+    public function levaduras()
+    {
+        return response()->json($this->porTipo('levadura'));
+    }
+
     // GET /api/compras/brew/catalogos/materias-primas
     public function materiasPrimas()
     {
