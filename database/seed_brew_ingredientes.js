@@ -87,22 +87,9 @@ const QUERIES = {
            LTRIM(RTRIM(p.proNombre)) AS nombre,
            LTRIM(RTRIM(ISNULL(cp.cprNombre, ''))) AS estilo
     FROM   Productos p WITH (NOLOCK)
-    LEFT JOIN CategoriasProductos cp WITH (NOLOCK) ON cp.cprId = p.cprId
+    INNER JOIN CategoriasProductos cp WITH (NOLOCK) ON cp.cprId = p.cprId
     WHERE  p.proActivo = 1
-      AND (
-            LOWER(p.proNombre) LIKE '%cadejo%'
-         OR LOWER(p.proNombre) LIKE '%cerveza%'
-         OR LOWER(p.proNombre) LIKE '%lager%'
-         OR LOWER(p.proNombre) LIKE '%ale%'
-         OR LOWER(p.proNombre) LIKE '%stout%'
-         OR LOWER(p.proNombre) LIKE '%porter%'
-         OR LOWER(p.proNombre) LIKE '%ipa%'
-         OR LOWER(p.proNombre) LIKE '%pilsner%'
-         OR LOWER(p.proNombre) LIKE '%tripel%'
-         OR LOWER(p.proNombre) LIKE '%dubbel%'
-         OR LOWER(p.proNombre) LIKE '%saison%'
-         OR LOWER(p.proNombre) LIKE '%sour%'
-      )
+      AND  cp.cprNombre LIKE 'Cerveza%'
     ORDER BY p.proNombre
   `,
 };
@@ -124,6 +111,27 @@ async function main() {
       continue;
     }
 
+    // Para cervezas: strip presentaciones (12 OZ, 16 OZ, etc.) y deduplicar
+    let finalRows = rows;
+    if (tipo === 'cerveza') {
+      const stripPresentation = (name) =>
+        name
+          .replace(/\s+\d+(\,\d+)?\s*(OZ|ONZ|ML|CL|CC|LT?|LITROS?|ONZAS?)\b.*/i, '')
+          .replace(/\s+(LATA|BOTELLA|BARRIL|GROWLER|DRAFT|KEGG?|EXPORT[A-Z]*)\b.*/i, '')
+          .replace(/\s+\d+\s*PACK\b.*/i, '')
+          .trim();
+      const seen = new Set();
+      finalRows = [];
+      for (const row of rows) {
+        const cleanName = stripPresentation(row.nombre);
+        if (!seen.has(cleanName)) {
+          seen.add(cleanName);
+          finalRows.push({ ...row, nombre: cleanName });
+        }
+      }
+      console.log(`  → ${rows.length} registros Brilo → ${finalRows.length} cervezas únicas (sin presentaciones)`);
+    }
+
     // Limpiar los existentes del mismo tipo
     await pg.query('DELETE FROM brew_ingredientes WHERE tipo = $1', [tipo]);
 
@@ -131,8 +139,8 @@ async function main() {
     const now = new Date().toISOString();
     let inserted = 0;
     const CHUNK = 200;
-    for (let i = 0; i < rows.length; i += CHUNK) {
-      const chunk = rows.slice(i, i + CHUNK);
+    for (let i = 0; i < finalRows.length; i += CHUNK) {
+      const chunk = finalRows.slice(i, i + CHUNK);
       const values = [];
       const placeholders = chunk.map(r => {
         const o = values.length;
