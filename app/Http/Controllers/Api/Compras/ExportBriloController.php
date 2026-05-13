@@ -230,6 +230,7 @@ class ExportBriloController extends Controller
                 'r.codigo_origen as receta_codigo',
                 'r.tipo_receta',
                 'p.codigo as prod_codigo',
+                'p.unidad as prod_unidad',
                 'sr.codigo_origen as sub_codigo',
                 'ri.cantidad_por_plato',
                 'ri.unidad',
@@ -315,15 +316,23 @@ class ExportBriloController extends Controller
                         $this->formatNum($fila->cantidad_por_plato),  // H
                     ]);
                 } else {
+                    // Comparar unidad de la receta vs unidad base del producto (por código Brilo)
+                    // Si difieren, la cantidad va en Presentación (col G+H), no en Cantidad MP (col C)
+                    $briloReceta = $this->unidadACodigoBrilo($fila->unidad ?? '');
+                    $briloProd   = $fila->prod_unidad
+                        ? $this->unidadACodigoBrilo($fila->prod_unidad)
+                        : $briloReceta; // sin unidad base, asumir que coincide
+                    $mismaUnidad = ($briloReceta === $briloProd);
+
                     fputcsv($handle, [
-                        $fila->receta_codigo ?? '',                   // A
-                        $codIngrediente,                              // B
-                        $this->formatNum($fila->cantidad_por_plato),  // C
-                        'SI',                                         // D
-                        $detieneExp,                                  // E
-                        '',                                           // F
-                        '',                                           // G
-                        '',                                           // H
+                        $fila->receta_codigo ?? '',                                              // A
+                        $codIngrediente,                                                         // B
+                        $mismaUnidad ? $this->formatNum($fila->cantidad_por_plato) : '',         // C
+                        'SI',                                                                    // D
+                        $detieneExp,                                                             // E
+                        '',                                                                      // F
+                        $mismaUnidad ? '' : $briloReceta,                                        // G
+                        $mismaUnidad ? '' : $this->formatNum($fila->cantidad_por_plato),         // H
                     ]);
                 }
             }
