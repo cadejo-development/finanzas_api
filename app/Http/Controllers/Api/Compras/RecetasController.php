@@ -111,6 +111,8 @@ class RecetasController extends Controller
             });
         }
 
+        $pagina = $query->paginate($perPage);
+
         return response()->json([
             'data' => $pagina->getCollection()->map(fn ($r) => $this->formatReceta($r, $sucursalId)),
             'meta' => [
