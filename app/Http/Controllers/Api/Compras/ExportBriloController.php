@@ -46,6 +46,13 @@ class ExportBriloController extends Controller
         if ($soloModificados) $query->where('p.modificado_localmente', true);
         if ($soloActivos)     $query->where('p.activo', true);
 
+        // Excluir productos cuyo código ya existe como receta en el sistema
+        // (ej: PL... o SUBR... que se guardaron en la tabla productos por error)
+        $query->whereNotIn('p.codigo', fn ($s) =>
+            $s->select('codigo_origen')->from('recetas')
+              ->whereNotNull('codigo_origen')->where('codigo_origen', '!=', '')
+        );
+
         $filas = $query->orderBy('p.codigo')->get();
 
         $filename = 'VEN_Materias_Primas_' . now()->format('Ymd_His') . '.csv';
@@ -122,6 +129,10 @@ class ExportBriloController extends Controller
         if ($soloModificados) $base->where('r.modificado_localmente', true);
         if ($soloConCodigo)   $base->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '');
 
+        // Excluir CP y MR — son materias primas, no recetas/sub-recetas
+        $base->where('r.codigo_origen', 'not like', 'CP%')
+             ->where('r.codigo_origen', 'not like', 'MR%');
+
         $filas = $base->orderByRaw("
             CASE WHEN r.tipo_receta = 'sub_receta' THEN 0 ELSE 1 END,
             r.codigo_origen
@@ -142,7 +153,10 @@ class ExportBriloController extends Controller
             fputcsv($handle, $this->venCabecera());
 
             foreach ($filas as $fila) {
-                $unidadBrilo = $this->unidadACodigoBrilo($fila->rendimiento_unidad ?? 'u');
+                // Sub-recetas siempre usan TANDA como Presentación Base en Brilo
+                $unidadBrilo = $fila->tipo_receta === 'sub_receta'
+                    ? 'TANDA'
+                    : $this->unidadACodigoBrilo($fila->rendimiento_unidad ?? 'u');
                 $precio      = (float) ($fila->precio ?? 0) > 0 ? $this->formatNum($fila->precio) : '';
 
                 fputcsv($handle, [
@@ -226,8 +240,20 @@ class ExportBriloController extends Controller
 
         if ($nivel === 1) {
             $query->where('r.tipo_receta', 'sub_receta')
+                  // Excluir sub-recetas que tienen otras sub-recetas via sub_receta_id
                   ->whereNotIn('r.id', fn ($s) =>
                       $s->select('receta_id')->from('receta_ingredientes')->whereNotNull('sub_receta_id')
+                  )
+                  // Excluir sub-recetas que tienen ingredientes PL/SUBR guardados como producto_id
+                  // (ingrediente es una receta aunque esté referenciado como producto)
+                  ->whereNotIn('r.id', fn ($s) =>
+                      $s->select('ri2.receta_id')
+                        ->from('receta_ingredientes as ri2')
+                        ->join('productos as p2', 'ri2.producto_id', '=', 'p2.id')
+                        ->whereIn('p2.codigo', fn ($sq) =>
+                            $sq->select('codigo_origen')->from('recetas')
+                              ->whereNotNull('codigo_origen')->where('codigo_origen', '!=', '')
+                        )
                   );
         } elseif ($nivel === 2) {
             $query->where('r.tipo_receta', 'sub_receta')
@@ -473,6 +499,7 @@ class ExportBriloController extends Controller
             'bolsa 5lb'                                                 => 'C_BOLSA',
             'bolsa 20lb'                                                => 'B-04',
             'rebanada', 'g', 'gr', 'gramo', 'gramos'                   => 'UNID0005',
+            'tanda'                                                     => 'TANDA',
             default                                                     => strtoupper(trim($unidad)),
         };
     }
