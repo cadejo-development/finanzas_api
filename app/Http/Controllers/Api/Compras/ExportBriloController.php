@@ -153,9 +153,9 @@ class ExportBriloController extends Controller
             fputcsv($handle, $this->venCabecera());
 
             foreach ($filas as $fila) {
-                // Sub-recetas siempre usan TANDA como Presentación Base en Brilo
+                // Sub-recetas siempre usan TANDA (UNID0029) como Presentación Base en Brilo
                 $unidadBrilo = $fila->tipo_receta === 'sub_receta'
-                    ? 'TANDA'
+                    ? 'UNID0029'
                     : $this->unidadACodigoBrilo($fila->rendimiento_unidad ?? 'u');
                 $precio      = (float) ($fila->precio ?? 0) > 0 ? $this->formatNum($fila->precio) : '';
 
@@ -499,7 +499,7 @@ class ExportBriloController extends Controller
             'bolsa 5lb'                                                 => 'C_BOLSA',
             'bolsa 20lb'                                                => 'B-04',
             'rebanada', 'g', 'gr', 'gramo', 'gramos'                   => 'UNID0005',
-            'tanda'                                                     => 'TANDA',
+            'tanda'                                                     => 'UNID0029',
             default                                                     => strtoupper(trim($unidad)),
         };
     }
