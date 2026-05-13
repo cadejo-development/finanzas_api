@@ -106,12 +106,10 @@ class RecetasController extends Controller
 
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
-                $q->where('nombre', 'ilike', "%{$search}%")
+                $q->whereRaw('unaccent(lower(nombre)) ilike unaccent(lower(?))', ["%{$search}%"])
                   ->orWhere('codigo_origen', 'ilike', "%{$search}%");
             });
         }
-
-        $pagina = $query->paginate($perPage);
 
         return response()->json([
             'data' => $pagina->getCollection()->map(fn ($r) => $this->formatReceta($r, $sucursalId)),
@@ -664,7 +662,7 @@ class RecetasController extends Controller
                     $sq->where('sucursal_id', $sucursalId)->where('activa', true)
                 ))
                 ->when($search, fn ($q) => $q->where(function ($sq) use ($search) {
-                    $sq->where('nombre', 'ilike', "%{$search}%")
+                    $sq->whereRaw('unaccent(lower(nombre)) ilike unaccent(lower(?))', ["%{$search}%"])
                        ->orWhere('codigo_origen', 'ilike', "%{$search}%");
                 }))
                 ->when($categoriaId, fn ($q) => $q->where('categoria_id', $categoriaId))
