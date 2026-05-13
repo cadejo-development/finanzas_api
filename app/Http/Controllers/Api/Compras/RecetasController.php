@@ -42,22 +42,18 @@ class RecetasController extends Controller
             ->where('activa', true)
             ->orderBy('nombre');
 
-        // Filtrar por sucursal solo para platos/recetas de menú.
-        // Las sub-recetas son ingredientes globales (no items de menú por sucursal),
-        // así que se muestran sin filtro de sucursal.
-        if ($tipoRecetaParam !== 'sub_receta') {
-            if ($sucursalId !== null) {
-                $query->whereHas('sucursalConfig', fn ($q) =>
-                    $q->where('sucursal_id', $sucursalId)->where('activa', true)
-                );
-                $query->with(['sucursalConfig' => fn ($q) => $q->where('sucursal_id', $sucursalId)]);
-            } elseif (!empty($sucursalIds)) {
-                // Gerente multi-sucursal: mostrar recetas activas en CUALQUIERA de sus sucursales
-                $query->whereHas('sucursalConfig', fn ($q) =>
-                    $q->whereIn('sucursal_id', $sucursalIds)->where('activa', true)
-                );
-                $query->with(['sucursalConfig' => fn ($q) => $q->whereIn('sucursal_id', $sucursalIds)]);
-            }
+        // Filtrar por sucursal — aplica tanto a platos como a sub-recetas.
+        if ($sucursalId !== null) {
+            $query->whereHas('sucursalConfig', fn ($q) =>
+                $q->where('sucursal_id', $sucursalId)->where('activa', true)
+            );
+            $query->with(['sucursalConfig' => fn ($q) => $q->where('sucursal_id', $sucursalId)]);
+        } elseif (!empty($sucursalIds)) {
+            // Gerente multi-sucursal: mostrar recetas activas en CUALQUIERA de sus sucursales
+            $query->whereHas('sucursalConfig', fn ($q) =>
+                $q->whereIn('sucursal_id', $sucursalIds)->where('activa', true)
+            );
+            $query->with(['sucursalConfig' => fn ($q) => $q->whereIn('sucursal_id', $sucursalIds)]);
         }
 
         // Filtro por categoria_id (nuevo) o tipo texto (legado)
