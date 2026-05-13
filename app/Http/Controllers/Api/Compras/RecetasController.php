@@ -995,7 +995,7 @@ class RecetasController extends Controller
                 'id'                 => $ing->id,
                 'producto_id'        => $ing->producto_id,
                 'sub_receta_id'      => $ing->sub_receta_id,
-                'producto_codigo'    => $ing->producto?->codigo,
+                'producto_codigo'    => $ing->producto?->codigo ?? $ing->subReceta?->codigo_origen,
                 'producto_nombre'    => $ing->producto?->nombre ?? $ing->subReceta?->nombre,
                 'es_sub_receta'      => !is_null($ing->sub_receta_id),
                 'cantidad_por_plato' => (float) $ing->cantidad_por_plato,
