@@ -40,7 +40,7 @@ class ProductosController extends Controller
                 $query->whereHas('categoria', fn ($q) => $q->where('key', 'ilike', $prefijo . '%'));
             }
             if ($search = $request->query('search')) {
-                $query->where(fn ($q) => $q->where('nombre', 'ilike', "%{$search}%")->orWhere('codigo', 'ilike', "%{$search}%"));
+                $query->where(fn ($q) => $q->whereRaw('unaccent(lower(nombre)) ilike unaccent(lower(?))', ["%{$search}%"])->orWhere('codigo', 'ilike', "%{$search}%"));
             }
 
             $items = $query->get()->map(fn ($p) => [
@@ -92,10 +92,10 @@ class ProductosController extends Controller
                   ->where('codigo', 'not ilike', 'SUBR%');
         }
 
-        // Búsqueda por nombre o código
+        // Búsqueda por nombre o código (con unaccent para ignorar tildes)
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
-                $q->where('nombre', 'ilike', "%{$search}%")
+                $q->whereRaw('unaccent(lower(nombre)) ilike unaccent(lower(?))', ["%{$search}%"])
                   ->orWhere('codigo', 'ilike', "%{$search}%");
             });
         }
