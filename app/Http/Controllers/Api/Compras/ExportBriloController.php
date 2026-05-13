@@ -494,7 +494,7 @@ class ExportBriloController extends Controller
             'oz', 'onza', 'onzas'                                       => 'OZ001',
             'oz fl', 'fl oz', 'ozf', 'onza fluida', 'onzas fluidas'    => 'OZF',
             'lb', 'libra', 'libras'                                     => 'C_LIBRA',
-            'kg', 'kilogramo', 'kilogramos'                             => 'KG',
+            'kg', 'kilogramo', 'kilogramos'                             => 'C_KG',
             'lt', 'litro', 'litros'                                     => 'C_LITRO',
             'ml', 'mililitros', 'mililitro'                             => 'C_LITRO', // convertir en BRILO
             'u', 'und', 'unidad', 'unidades'                           => 'UNID0005',
@@ -507,7 +507,8 @@ class ExportBriloController extends Controller
             'bolsa 2kg', 'bolsa 1kg'                                   => 'UNID0009',
             'bolsa 5lb'                                                 => 'C_BOLSA',
             'bolsa 20lb'                                                => 'B-04',
-            'rebanada', 'g', 'gr', 'gramo', 'gramos'                   => 'UNID0005',
+            'rebanada'                                                  => 'UNID0021',
+            'g', 'gr', 'gramo', 'gramos'                                => 'UNID0005',
             'tanda'                                                     => 'UNID0029',
             default                                                     => strtoupper(trim($unidad)),
         };
