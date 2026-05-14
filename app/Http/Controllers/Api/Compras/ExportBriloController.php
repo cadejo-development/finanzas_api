@@ -221,6 +221,16 @@ class ExportBriloController extends Controller
         $estadoId         = $request->query('estado_id') ? (int) $request->query('estado_id') : null;
         $soloModificados  = (bool) $request->query('solo_modificados', 1);
 
+        // Filtros opcionales de sub-selección
+        $categoriaIds = array_values(array_filter(
+            explode(',', $request->query('categoria_ids', '')),
+            fn ($v) => $v !== ''
+        ));
+        $recetaIds = array_values(array_filter(
+            explode(',', $request->query('receta_ids', '')),
+            fn ($v) => $v !== ''
+        ));
+
         $query = DB::connection('compras')
             ->table('receta_ingredientes as ri')
             ->join('recetas as r', 'ri.receta_id', '=', 'r.id')
@@ -269,7 +279,9 @@ class ExportBriloController extends Controller
             $query->where('r.tipo_receta', $tipoReceta);
         }
 
-        if ($estadoId) $query->where('r.estado_id', $estadoId);
+        if ($estadoId)              $query->where('r.estado_id', $estadoId);
+        if (count($categoriaIds))   $query->whereIn('r.categoria_id', $categoriaIds);
+        if (count($recetaIds))      $query->whereIn('r.id', $recetaIds);
 
         $filas = $query->orderBy('r.codigo_origen')->orderBy('ri.id')->get();
 

@@ -135,6 +135,37 @@ class RecetasController extends Controller
         return response()->json(['data' => $estados]);
     }
 
+    // GET /api/compras/recetas/para-filtro?tipo=plato|sub_receta&q=xxx
+    // Búsqueda ligera para el multi-select de filtros de exportación.
+    // ----------------------------------------------------------------------
+    public function paraFiltro(Request $request): JsonResponse
+    {
+        $tipo   = $request->query('tipo');   // 'plato' | 'sub_receta'
+        $search = trim($request->query('q', ''));
+
+        $query = Receta::where('activa', true)
+            ->whereNotNull('codigo_origen')->where('codigo_origen', '!=', '')
+            ->select(['id', 'nombre', 'tipo_receta', 'codigo_origen', 'categoria_id']);
+
+        if ($tipo === 'sub_receta') {
+            $query->where('tipo_receta', 'sub_receta');
+        } elseif ($tipo === 'plato') {
+            $query->where(fn ($q) => $q->where('tipo_receta', 'plato')->orWhereNull('tipo_receta'))
+                  ->whereRaw("lower(coalesce(tipo_receta,'')) NOT LIKE '%sub%receta%'");
+        }
+
+        if ($search !== '') {
+            $query->where(fn ($q) => $q
+                ->whereRaw('unaccent(lower(nombre)) ilike unaccent(lower(?))', ["%{$search}%"])
+                ->orWhere('codigo_origen', 'ilike', "%{$search}%")
+            );
+        }
+
+        $results = $query->orderBy('nombre')->limit(80)->get();
+
+        return response()->json(['data' => $results]);
+    }
+
     // ----------------------------------------------------------------------
     // GET /api/compras/recetas/{id}
     // ----------------------------------------------------------------------

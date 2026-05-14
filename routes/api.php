@@ -185,6 +185,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('recetas/costos',                       [RecetasController::class, 'costos']);
     Route::get('recetas/tipos',                        [RecetasController::class, 'tipos']);
     Route::get('recetas/estados',                      [RecetasController::class, 'estados']);
+    Route::get('recetas/para-filtro',                  [RecetasController::class, 'paraFiltro']);
     Route::post('recetas/{id}/pdf',                    [RecetasController::class, 'pdf']);
     Route::patch('recetas/{id}/platos-sucursal',       [RecetasController::class, 'setPlatosSucursal']);
     Route::get('upload/presign',                       [RecetasController::class, 'presignUpload']);
