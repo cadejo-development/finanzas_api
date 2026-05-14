@@ -225,7 +225,9 @@ async function run() {
           const batch = paraActualizar.slice(i, i + BATCH);
           for (const [activo, codigo] of batch) {
             await pg.query(
-              'UPDATE empleados SET activo = $1, updated_at = $2 WHERE codigo = $3',
+              // Never re-activate an employee that is currently inactive in RDS
+              // (could have been deactivated by inactivar-desvinculados or manually)
+              'UPDATE empleados SET activo = $1, updated_at = $2 WHERE codigo = $3 AND NOT (activo = false AND $1 = true)',
               [activo, NOW, codigo]
             );
             updOk++;
