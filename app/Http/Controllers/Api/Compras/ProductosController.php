@@ -294,9 +294,10 @@ class ProductosController extends Controller
             'origen'            => 'nullable|in:restaurante,centro_produccion',
         ]);
 
-        $data['activo']      = true;
-        $data['origen']      = $data['origen'] ?? 'restaurante';
-        $data['aud_usuario'] = $request->user()?->email;
+        $data['activo']               = true;
+        $data['origen']               = $data['origen'] ?? 'restaurante';
+        $data['aud_usuario']          = $request->user()?->email;
+        $data['modificado_localmente'] = true;
 
         $producto = Producto::create($data);
         $producto->load('categoria');
