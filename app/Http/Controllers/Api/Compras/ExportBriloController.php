@@ -123,8 +123,9 @@ class ExportBriloController extends Controller
 
         $base = DB::connection('compras')
             ->table('recetas as r')
+            ->leftJoin('receta_categorias as rc', 'r.categoria_id', '=', 'rc.id')
             ->where('r.activa', true)
-            ->select(['r.id', 'r.codigo_origen', 'r.nombre', 'r.tipo_receta', 'r.rendimiento_unidad', 'r.precio']);
+            ->select(['r.id', 'r.codigo_origen', 'r.nombre', 'r.tipo_receta', 'r.rendimiento_unidad', 'r.precio', 'rc.nombre as categoria_nombre']);
 
         if ($soloModificados) $base->where('r.modificado_localmente', true);
         if ($soloConCodigo)   $base->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '');
@@ -167,7 +168,7 @@ class ExportBriloController extends Controller
                     $precio,                                // E  Precio de Lista
                     'SI',                                   // F  Exento
                     '',                                     // G  Categoría Padre (completar manualmente)
-                    '',                                     // H  Categoría Hija
+                    $fila->categoria_nombre ?? '',          // H  Categoría Hija (categoría del plato)
                     $unidadBrilo,                           // I  Presentación Base
                     '', '', '', '',                         // J-M Precios venta 2-5
                     '', '', '',                             // N-P Cuentas contables (completar manualmente)
