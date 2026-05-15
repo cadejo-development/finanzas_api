@@ -272,6 +272,9 @@ class ExportBriloController extends Controller
                   ->whereIn('r.id', fn ($s) =>
                       $s->select('receta_id')->from('receta_ingredientes')->whereNotNull('sub_receta_id')
                   );
+        } elseif ($nivel === 12) {
+            // Nivel 1+2 combinado: todas las sub-recetas (simples y compuestas)
+            $query->where('r.tipo_receta', 'sub_receta');
         } elseif ($nivel === 3) {
             $query->where(fn ($q) => $q->where('r.tipo_receta', 'plato')->orWhereNull('r.tipo_receta'))
                   ->whereRaw("lower(coalesce(r.tipo_receta,'')) NOT LIKE '%sub%receta%'");
@@ -286,9 +289,10 @@ class ExportBriloController extends Controller
         $filas = $query->orderBy('r.codigo_origen')->orderBy('ri.id')->get();
 
         $nivelSufijo = match ($nivel) {
-            1 => '_Nivel1_SubRecetas_Simples_',
-            2 => '_Nivel2_SubRecetas_Compuestas_',
-            3 => '_Nivel3_Platos_',
+            1  => '_Nivel1_SubRecetas_Simples_',
+            2  => '_Nivel2_SubRecetas_Compuestas_',
+            12 => '_Nivel1y2_SubRecetas_',
+            3  => '_Nivel3_Platos_',
             default => '_',
         };
         $filename = 'INV_Materiales_X_Producto' . $nivelSufijo . now()->format('Ymd_His') . '.csv';
@@ -317,7 +321,7 @@ class ExportBriloController extends Controller
                 $detieneExp = str_starts_with(strtoupper(trim($codIngrediente)), 'CP') ? 'SI' : '';
 
                 if ($esSub) {
-                    $codPres = $this->unidadACodigoBrilo($fila->unidad ?? '');
+                    // Sub-recetas siempre se importan en Brilo como TANDA (UNID0029)
                     fputcsv($handle, [
                         $fila->receta_codigo ?? '',                   // A
                         $codIngrediente,                              // B
@@ -325,28 +329,51 @@ class ExportBriloController extends Controller
                         'SI',                                         // D
                         $detieneExp,                                  // E
                         '',                                           // F
-                        $codPres,                                     // G
+                        'UNID0029',                                   // G siempre TANDA
                         $this->formatNum($fila->cantidad_por_plato),  // H
                     ]);
                 } else {
                     // Comparar unidad de la receta vs unidad base del producto (por código Brilo)
-                    // Si difieren, la cantidad va en Presentación (col G+H), no en Cantidad MP (col C)
                     $briloReceta = $this->unidadACodigoBrilo($fila->unidad ?? '');
                     $briloProd   = $fila->prod_unidad
                         ? $this->unidadACodigoBrilo($fila->prod_unidad)
-                        : $briloReceta; // sin unidad base, asumir que coincide
+                        : $briloReceta;
                     $mismaUnidad = ($briloReceta === $briloProd);
 
-                    fputcsv($handle, [
-                        $fila->receta_codigo ?? '',                                              // A
-                        $codIngrediente,                                                         // B
-                        $mismaUnidad ? $this->formatNum($fila->cantidad_por_plato) : '',         // C
-                        'SI',                                                                    // D
-                        $detieneExp,                                                             // E
-                        '',                                                                      // F
-                        $mismaUnidad ? '' : $briloReceta,                                        // G
-                        $mismaUnidad ? '' : $this->formatNum($fila->cantidad_por_plato),         // H
-                    ]);
+                    if ($mismaUnidad) {
+                        // Misma unidad: cantidad directa en col C
+                        fputcsv($handle, [
+                            $fila->receta_codigo ?? '',
+                            $codIngrediente,
+                            $this->formatNum($fila->cantidad_por_plato), // C
+                            'SI', $detieneExp, '', '', '',
+                        ]);
+                    } else {
+                        // Unidades distintas: intentar conversión automática a la unidad base del producto
+                        $cantConvertida = $this->convertirUnidad(
+                            (float) $fila->cantidad_por_plato, $briloReceta, $briloProd
+                        );
+
+                        if ($cantConvertida !== null) {
+                            // Conversión exitosa: cantidad en unidad base del producto en col C
+                            fputcsv($handle, [
+                                $fila->receta_codigo ?? '',
+                                $codIngrediente,
+                                $this->formatNum($cantConvertida), // C (convertida)
+                                'SI', $detieneExp, '', '', '',
+                            ]);
+                        } else {
+                            // Sin conversión: cantidad en col G+H con la presentación de la receta
+                            fputcsv($handle, [
+                                $fila->receta_codigo ?? '',
+                                $codIngrediente,
+                                '',                                        // C vacío
+                                'SI', $detieneExp, '',
+                                $briloReceta,                              // G presentación
+                                $this->formatNum($fila->cantidad_por_plato), // H
+                            ]);
+                        }
+                    }
                 }
             }
 
@@ -488,6 +515,29 @@ class ExportBriloController extends Controller
         if (!array_intersect(['admin_compras', 'admin_recetas'], $roles)) {
             abort(403, 'No autorizado.');
         }
+    }
+
+    /**
+     * Convierte una cantidad entre dos códigos de unidad Brilo.
+     * Retorna null si no existe conversión directa (debe ir en col G+H).
+     */
+    private function convertirUnidad(float $cantidad, string $deBrilo, string $aBrilo): ?float
+    {
+        return match ("{$deBrilo}→{$aBrilo}") {
+            'OZ001→C_LIBRA'  => $cantidad / 16,
+            'C_LIBRA→OZ001'  => $cantidad * 16,
+            'OZ001→C_KG'     => $cantidad * 0.0283495,
+            'C_KG→OZ001'     => $cantidad * 35.274,
+            'C_KG→C_LIBRA'   => $cantidad * 2.20462,
+            'C_LIBRA→C_KG'   => $cantidad * 0.453592,
+            'OZF→C_LITRO'    => $cantidad * 0.0295735,
+            'C_LITRO→OZF'    => $cantidad / 0.0295735,
+            'OZF→C_GALON'    => $cantidad / 128,
+            'C_GALON→OZF'    => $cantidad * 128,
+            'C_LITRO→C_GALON'=> $cantidad * 0.264172,
+            'C_GALON→C_LITRO'=> $cantidad * 3.78541,
+            default          => null,
+        };
     }
 
     /** Formatea un número decimal sin ceros innecesarios. */
