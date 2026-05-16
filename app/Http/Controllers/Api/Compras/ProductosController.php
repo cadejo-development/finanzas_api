@@ -86,10 +86,11 @@ class ProductosController extends Controller
             $query->where('origen', $origen);
         }
 
-        // solo_mp=1: excluye productos cuyo código corresponde a sub-recetas (PL20xxx, SUBRxxx)
+        // solo_mp=1: excluye sub-recetas (PL20/SUBR) y productos de fábrica de cerveza (categoría MP-xx)
         if ($request->boolean('solo_mp')) {
             $query->where('codigo', 'not ilike', 'PL20%')
-                  ->where('codigo', 'not ilike', 'SUBR%');
+                  ->where('codigo', 'not ilike', 'SUBR%')
+                  ->whereDoesntHave('categoria', fn ($q) => $q->where('key', 'ilike', 'MP-%'));
         }
 
         // Búsqueda por nombre o código (con unaccent para ignorar tildes)

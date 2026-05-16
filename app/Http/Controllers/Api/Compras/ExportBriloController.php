@@ -396,6 +396,9 @@ class ExportBriloController extends Controller
 
         $count = 0;
 
+        // autorizada (id=3) → activa (id=4) cuando se confirma la carga en Brilo
+        $activarEstado = DB::raw('CASE WHEN estado_id = 3 THEN 4 ELSE estado_id END');
+
         if ($tipo === 'productos') {
             $count = DB::connection('compras')->table('productos')
                 ->where('modificado_localmente', true)
@@ -420,7 +423,11 @@ class ExportBriloController extends Controller
                 $query->where(fn ($q) => $q->where('tipo_receta', 'plato')->orWhereNull('tipo_receta'));
             }
 
-            $count = $query->update(['modificado_localmente' => false, 'updated_at' => now()]);
+            $count = $query->update([
+                'modificado_localmente' => false,
+                'estado_id'             => $activarEstado,
+                'updated_at'            => now(),
+            ]);
 
         // Legacy: mantener compatibilidad con llamadas antiguas
         } elseif ($tipo === 'platos') {
@@ -428,7 +435,11 @@ class ExportBriloController extends Controller
                 ->where('activa', true)->where('modificado_localmente', true)
                 ->where(fn ($q) => $q->where('tipo_receta', 'plato')->orWhereNull('tipo_receta'))
                 ->whereRaw("lower(coalesce(tipo_receta,'')) NOT LIKE '%sub%receta%'")
-                ->update(['modificado_localmente' => false, 'updated_at' => now()]);
+                ->update([
+                    'modificado_localmente' => false,
+                    'estado_id'             => $activarEstado,
+                    'updated_at'            => now(),
+                ]);
 
         } elseif ($tipo === 'sub_recetas') {
             $query = DB::connection('compras')->table('recetas')
@@ -442,7 +453,11 @@ class ExportBriloController extends Controller
                     $s->select('receta_id')->from('receta_ingredientes')->whereNotNull('sub_receta_id')
                 );
             }
-            $count = $query->update(['modificado_localmente' => false, 'updated_at' => now()]);
+            $count = $query->update([
+                'modificado_localmente' => false,
+                'estado_id'             => $activarEstado,
+                'updated_at'            => now(),
+            ]);
 
         } else {
             return response()->json(['error' => 'Tipo inválido.'], 422);
