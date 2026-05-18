@@ -1,25 +1,33 @@
 /**
- * import_ventas_mayo.js
+ * import_ventas_mayo.js  →  import_ventas_incremental.js
  *
- * Importa ventas 01-11 Mayo 2026 de TODAS las sucursales activas
- * desde Brilo SQL Server (olRestaurante) hacia PostgreSQL (compras_db).
+ * Importa ventas de TODAS las sucursales activas desde Brilo SQL Server
+ * hacia PostgreSQL de forma INCREMENTAL:
  *
- * - Borra los registros actuales en ventas_semanales / detalle
- * - Inserta un registro por sucursal × día (= cabecera + ítems únicos)
- * - Incluye todas las categorías de venta (platos, bebidas, cerveza, postres, desayunos, etc.)
+ * - Detecta automáticamente el último día ya importado en ventas_semanales
+ * - Importa desde ese día+1 hasta AYER (hoy-1 en hora El Salvador UTC-6)
+ * - No borra datos existentes; sólo inserta días nuevos
+ * - Si un día ya existe para esa sucursal, lo salta (evita duplicados)
  *
  * Uso:
  *   node database/import_ventas_mayo.js           → dry-run (solo imprime)
- *   node database/import_ventas_mayo.js --apply   → borra e inserta en PG
+ *   node database/import_ventas_mayo.js --apply   → inserta en PG
  */
 
 const sql      = require('mssql');
 const { Pool } = require('pg');
 
 const DRY_RUN  = !process.argv.includes('--apply');
-const DESDE    = '2026-05-01';
-const HASTA    = '2026-05-11';
-const IMPORTADO_POR = 'script_sqlserver_mayo2026';
+const IMPORTADO_POR = 'script_sqlserver_incremental';
+
+// Ayer en hora El Salvador (UTC-6)
+function ayer() {
+  const now = new Date();
+  // UTC-6
+  const sv = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+  sv.setUTCDate(sv.getUTCDate() - 1);
+  return sv.toISOString().slice(0, 10);
+}
 
 // ── Mapeo Brilo sucIdOrigenSync → compras_db sucursal_id ─────────────────────
 // Basado en diagnóstico: olComun.Sucursales ↔ core_db.sucursales
@@ -75,7 +83,7 @@ const log = s => console.log(`[${ts()}] ${s}`);
 const d2s = d => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
 
 // ── Obtener TODOS los platos del rango para TODAS las sucursales en una sola query ─
-async function getAllVentas(pool) {
+async function getAllVentas(pool, DESDE, HASTA) {
   const sucIds = Object.keys(SUCURSAL_MAP).join(',');
   const r = await pool.request().query(`
     SELECT
@@ -178,62 +186,68 @@ async function insertarDia(pg, sucPgId, sucNombre, fecha, filas) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
+  // Conectar PG primero para conocer la última fecha importada
+  const pool = new Pool(pgConfig);
+  const pg   = await pool.connect();
+
+  const ultimaRes = await pg.query(
+    `SELECT MAX(semana_inicio) AS ultima FROM ventas_semanales`
+  );
+  const ultimaFecha = ultimaRes.rows[0].ultima
+    ? d2s(new Date(ultimaRes.rows[0].ultima))
+    : '2026-04-30'; // fallback: si no hay nada, empieza desde 01 mayo
+
+  const HASTA = ayer();
+
+  // Siguiente día después del último ya importado
+  const desdeDate = new Date(ultimaFecha + 'T12:00:00Z');
+  desdeDate.setUTCDate(desdeDate.getUTCDate() + 1);
+  const DESDE = d2s(desdeDate);
+
   hr('═');
-  log(`IMPORTACIÓN VENTAS MAYO 2026 — Todas las categorías — ${DESDE} a ${HASTA}`);
+  log(`IMPORTACIÓN VENTAS INCREMENTAL — ${DESDE} a ${HASTA}`);
+  log(`Último día importado: ${ultimaFecha}`);
   log(DRY_RUN ? '⚠  MODO DRY-RUN (sin cambios en BD)' : '🚀 MODO APPLY — insertando en PostgreSQL');
   hr('═');
 
-  // Generar lista de fechas
+  if (DESDE > HASTA) {
+    log(`✅ Todo al día. Nada nuevo que importar (último: ${ultimaFecha}, ayer: ${HASTA}).`);
+    pg.release(); await pool.end();
+    return;
+  }
+
+  // Generar lista de fechas a importar
   const fechas = [];
   for (let d = new Date(DESDE + 'T12:00:00Z'); d2s(d) <= HASTA; d.setUTCDate(d.getUTCDate() + 1)) {
     fechas.push(d2s(d));
   }
-  log(`Fechas: ${fechas.join(', ')}\n`);
+  log(`Fechas a importar: ${fechas.join(', ')}\n`);
 
-  // Conectar Brilo y obtener TODO en una sola query
   log('Conectando Brilo SQL Server...');
   const poolRst = await sql.connect(cfgRst);
   log('   OK');
   log('Ejecutando query batch (todas las sucursales, todo el rango)...');
-  const dataPorSuc = await getAllVentas(poolRst);
+  const dataPorSuc = await getAllVentas(poolRst, DESDE, HASTA);
   await poolRst.close();
 
   // Mostrar resumen de lo jalado
   let totalFilas = 0;
-  for (const [briloIdStr, suc] of Object.entries(SUCURSAL_MAP)) {
-    const briloId = Number(briloIdStr);
-    const dias    = dataPorSuc[briloId] || {};
-    let sucFilas  = 0;
-    let sucTotal  = 0;
-    for (const fecha of fechas) {
-      const filas = dias[fecha] || [];
-      sucFilas  += filas.length;
-      sucTotal  += filas.reduce((s, f) => s + f.total, 0);
-      totalFilas += filas.length;
-    }
-    log(`  ${suc.nombre}: ${sucFilas} ítems, $${sucTotal.toFixed(2)}`);
-  }
-
-  hr();
-  log(`Total filas a insertar: ${totalFilas}`);
   hr();
 
   if (DRY_RUN) {
     log('DRY-RUN completado. Para aplicar: node database/import_ventas_mayo.js --apply');
+    pg.release(); await pool.end();
     return;
   }
 
-  // Conectar PG
-  log('Conectando PostgreSQL...');
-  const pool = new Pool(pgConfig);
-  const pg   = await pool.connect();
-  log('   OK\n');
-
-  // Borrar registros existentes (CASCADE borra detalle también)
-  hr();
-  log('Borrando registros actuales...');
-  const del = await pg.query('DELETE FROM ventas_semanales RETURNING id');
-  log(`   Borradas ${del.rowCount} cabeceras (detalle eliminado en cascade)\n`);
+  // Verificar qué días ya existen en PG para no duplicar
+  const existentesRes = await pg.query(
+    `SELECT sucursal_id, semana_inicio::text AS fecha FROM ventas_semanales`
+  );
+  const yaExisten = new Set(
+    existentesRes.rows.map(r => `${r.sucursal_id}|${d2s(new Date(r.fecha))}`)
+  );
+  log(`Días ya existentes en PG: ${existentesRes.rowCount}`);
 
   // Insertar
   hr();
@@ -248,6 +262,11 @@ async function main() {
 
     for (const fecha of fechas) {
       const filas = (dataPorSuc[briloId] || {})[fecha] || [];
+      const clave = `${suc.pg_id}|${fecha}`;
+      if (yaExisten.has(clave)) {
+        console.log(`     ${fecha} → ya existe, se salta`);
+        continue;
+      }
       if (filas.length === 0) {
         console.log(`     ${fecha} → sin ventas, se omite`);
         continue;
