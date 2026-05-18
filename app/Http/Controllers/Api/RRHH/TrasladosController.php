@@ -239,7 +239,7 @@ class TrasladosController extends RRHHBaseController
         $enriched   = $this->enrichWithEmpleadoData([$traslado->toArray()]);
         $empNombre  = $enriched[0]['empleado_nombre'] ?? "Empleado #{$traslado->empleado_id}";
         $gerenteNombre = trim($gerente->nombres . ' ' . $gerente->apellidos);
-        $baseUrl    = rtrim(config('app.frontend_rrhh_url', 'https://rrhh.cervezacadejo.com'), '/');
+        $baseUrl    = rtrim(config('app.frontend_rrhh_url', 'https://www.talentohumano.cervezacadejo.com'), '/');
 
         \Illuminate\Support\Facades\Mail::to($gerente->email)->send(
             new \App\Mail\RRHH\SolicitudAprobacion(

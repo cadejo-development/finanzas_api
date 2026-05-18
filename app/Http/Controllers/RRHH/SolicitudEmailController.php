@@ -183,7 +183,7 @@ class SolicitudEmailController extends Controller
     private function notificarVeredictoAccion($solicitud, string $tipo, string $estado): void
     {
         try {
-            $baseUrl = rtrim(config('app.frontend_rrhh_url', 'https://rrhh.cervezacadejo.com'), '/');
+            $baseUrl = rtrim(config('app.frontend_rrhh_url', 'https://www.talentohumano.cervezacadejo.com'), '/');
             $rutaMap = ['amonestacion' => 'amonestaciones', 'despido' => 'desvinculaciones'];
             $linkUrl = $baseUrl . '/' . ($rutaMap[$tipo] ?? $tipo);
             $detalles = $this->buildDetalles($solicitud, $tipo);

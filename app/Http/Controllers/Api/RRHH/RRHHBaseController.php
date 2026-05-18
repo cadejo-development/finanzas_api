@@ -556,7 +556,7 @@ abstract class RRHHBaseController extends Controller
                 : "Empleado #{$empleadoId}";
 
             $supervisorNombre = SupervisorChainService::nombreCompleto($supervisor);
-            $baseUrl          = rtrim(config('app.frontend_rrhh_url', 'https://rrhh.cervezacadejo.com'), '/');
+            $baseUrl          = rtrim(config('app.frontend_rrhh_url', 'https://www.talentohumano.cervezacadejo.com'), '/');
             $linkUrl          = "{$baseUrl}/{$rutaFrontend}";
 
             $aprobarUrl  = null;
@@ -641,7 +641,7 @@ abstract class RRHHBaseController extends Controller
 
             $destinatarioEmail  = $row->email;
             $empleadoNombre     = trim($row->nombres . ' ' . $row->apellidos);
-            $baseUrl            = rtrim(config('app.frontend_rrhh_url', 'https://rrhh.cervezacadejo.com'), '/');
+            $baseUrl            = rtrim(config('app.frontend_rrhh_url', 'https://www.talentohumano.cervezacadejo.com'), '/');
 
             $mailable = new NotificacionAlEmpleado(
                 tipo:               $tipo,
@@ -711,7 +711,7 @@ abstract class RRHHBaseController extends Controller
 
             if ($admins->isEmpty()) return;
 
-            $baseUrl = rtrim(config('app.frontend_rrhh_url', 'https://rrhh.cervezacadejo.com'), '/');
+            $baseUrl = rtrim(config('app.frontend_rrhh_url', 'https://www.talentohumano.cervezacadejo.com'), '/');
             $linkUrl = "{$baseUrl}/{$rutaFrontend}";
 
             foreach ($admins as $admin) {
@@ -784,7 +784,7 @@ abstract class RRHHBaseController extends Controller
 
             if ($miembros->isEmpty()) return;
 
-            $baseUrl = rtrim(config('app.frontend_rrhh_url', 'https://rrhh.cervezacadejo.com'), '/');
+            $baseUrl = rtrim(config('app.frontend_rrhh_url', 'https://www.talentohumano.cervezacadejo.com'), '/');
             $linkUrl = "{$baseUrl}/{$rutaFrontend}";
 
             foreach ($miembros as $miembro) {
@@ -842,7 +842,7 @@ abstract class RRHHBaseController extends Controller
 
             if ($destinatarios->isEmpty()) return;
 
-            $baseUrl     = rtrim(config('app.frontend_rrhh_url', 'https://rrhh.cervezacadejo.com'), '/');
+            $baseUrl     = rtrim(config('app.frontend_rrhh_url', 'https://www.talentohumano.cervezacadejo.com'), '/');
             $linkUrl     = "{$baseUrl}/{$rutaFrontend}";
             $aprobarUrl  = URL::temporarySignedRoute('rrhh.email.aprobar',  now()->addDays(7), ['tipo' => $tipoModelo, 'id' => $solicitudId]);
             $rechazarUrl = URL::temporarySignedRoute('rrhh.email.rechazar', now()->addDays(7), ['tipo' => $tipoModelo, 'id' => $solicitudId]);
@@ -901,7 +901,7 @@ abstract class RRHHBaseController extends Controller
 
             if ($destinatarios->isEmpty()) return;
 
-            $baseUrl = rtrim(config('app.frontend_rrhh_url', 'https://rrhh.cervezacadejo.com'), '/');
+            $baseUrl = rtrim(config('app.frontend_rrhh_url', 'https://www.talentohumano.cervezacadejo.com'), '/');
             $linkUrl = "{$baseUrl}/{$rutaFrontend}";
 
             foreach ($destinatarios as $dest) {

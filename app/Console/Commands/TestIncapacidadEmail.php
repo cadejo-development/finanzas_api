@@ -27,7 +27,7 @@ class TestIncapacidadEmail extends Command
                 'Días'          => '5 día(s)',
                 'Observaciones' => 'Este es un correo de prueba del sistema de notificaciones de incapacidades.',
             ],
-            linkUrl: rtrim(config('app.frontend_rrhh_url', 'https://rrhh.cervezacadejo.com'), '/') . '/incapacidades',
+            linkUrl: rtrim(config('app.frontend_rrhh_url', 'https://www.talentohumano.cervezacadejo.com'), '/') . '/incapacidades',
         );
 
         Mail::to($to)->send($mail);
