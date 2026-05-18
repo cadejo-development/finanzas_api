@@ -117,10 +117,12 @@ class AmonestacionesController extends RRHHBaseController
 
         $amonestacion->load(['tipoFalta', 'diasSuspension']);
 
-        $enriched  = $this->enrichWithEmpleadoData([$amonestacion->toArray()]);
-        $empNombre = $enriched[0]['empleado_nombre'] ?? "Empleado #{$validated['empleado_id']}";
+        $enriched       = $this->enrichWithEmpleadoData([$amonestacion->toArray()]);
+        $empNombre      = $enriched[0]['empleado_nombre']  ?? "Empleado #{$validated['empleado_id']}";
+        $sucursalNombre = $enriched[0]['sucursal_nombre']  ?? null;
 
         $detallesEmail = [
+            'Sucursal'          => $sucursalNombre,
             'Tipo de falta'     => $amonestacion->tipoFalta?->nombre ?? '—',
             'Fecha'             => $validated['fecha_amonestacion'],
             'Descripción'       => $validated['descripcion'],
