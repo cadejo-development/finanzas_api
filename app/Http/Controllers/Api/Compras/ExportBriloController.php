@@ -394,9 +394,10 @@ class ExportBriloController extends Controller
                     $briloReceta = $this->unidadACodigoBrilo($fila->unidad ?? '');
 
                     if ($esSub && $esCP) {
-                        // CP guardado como sub-receta: unidad base = rendimiento_unidad si está,
-                        // si no, buscar en productos por codigo_origen (join cp_p)
-                        $unidadBaseCP = $fila->sub_rendimiento_unidad ?? $fila->cp_prod_unidad;
+                        // CP guardado como sub-receta: la unidad base en BRILO es la del
+                        // catálogo de productos (cp_prod_unidad), no el rendimiento de la
+                        // sub-receta (que es el tamaño del batch, no la unidad de compra).
+                        $unidadBaseCP = $fila->cp_prod_unidad ?? $fila->sub_rendimiento_unidad;
                         $briloProd = $unidadBaseCP
                             ? $this->unidadACodigoBrilo($unidadBaseCP)
                             : $briloReceta;
