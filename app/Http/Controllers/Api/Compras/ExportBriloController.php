@@ -346,8 +346,11 @@ class ExportBriloController extends Controller
                 // Detiene Explotación = SI si el código empieza con CP
                 $detieneExp = str_starts_with(strtoupper(trim($codIngrediente)), 'CP') ? 'SI' : '';
 
-                if ($esSub) {
-                    // Sub-recetas siempre se importan en Brilo como TANDA (UNID0029).
+                // CPs son sub-recetas en BD pero en BRILO no son tanda — van con cantidad directa
+                $esCP = str_starts_with(strtoupper(trim($codIngrediente)), 'CP');
+
+                if ($esSub && !$esCP) {
+                    // Sub-recetas (SUBR) siempre se importan en Brilo como TANDA (UNID0029).
                     // Cantidad Presentación = tandas necesarias = cantidad_por_plato / rendimiento_sub,
                     // con conversión de unidades si la unidad del ingrediente ≠ unidad del rendimiento.
                     $briloIng  = $this->unidadACodigoBrilo($fila->unidad ?? 'u');
@@ -384,14 +387,22 @@ class ExportBriloController extends Controller
                         $this->formatNum($tandas),        // J tandas calculadas
                     ]);
                 } else {
-                    // Comparar unidad de la receta vs unidad base del producto (por código Brilo)
+                    // Productos (MR) y CPs: cantidad directa, sin conversión a tandas
                     $briloReceta = $this->unidadACodigoBrilo($fila->unidad ?? '');
-                    $briloProd   = $fila->prod_unidad
-                        ? $this->unidadACodigoBrilo($fila->prod_unidad)
-                        : $briloReceta;
-                    $mismaUnidad = ($briloReceta === $briloProd);
 
-                    $nombreIng = $fila->prod_nombre ?? '';
+                    if ($esCP) {
+                        // CP: la unidad base viene del rendimiento_unidad de la sub-receta
+                        $briloProd = $fila->sub_rendimiento_unidad
+                            ? $this->unidadACodigoBrilo($fila->sub_rendimiento_unidad)
+                            : $briloReceta;
+                        $nombreIng = $fila->sub_nombre ?? '';
+                    } else {
+                        $briloProd = $fila->prod_unidad
+                            ? $this->unidadACodigoBrilo($fila->prod_unidad)
+                            : $briloReceta;
+                        $nombreIng = $fila->prod_nombre ?? '';
+                    }
+                    $mismaUnidad = ($briloReceta === $briloProd);
                     if ($mismaUnidad) {
                         // Misma unidad: cantidad directa en col E
                         fputcsv($handle, [
