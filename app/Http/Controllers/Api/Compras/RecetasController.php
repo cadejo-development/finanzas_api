@@ -39,7 +39,7 @@ class RecetasController extends Controller
             ->withCount(['modificadores as grupos_modificadores' => fn ($q) =>
                 $q->select(DB::raw('COUNT(DISTINCT grupo_id_origen)'))
             ])
-            ->where('activa', true)
+            ->when(!$request->boolean('incluir_inactivas'), fn ($q) => $q->where('activa', true))
             ->orderBy('nombre');
 
         // Filtrar por sucursal — aplica tanto a platos como a sub-recetas.
@@ -270,6 +270,7 @@ class RecetasController extends Controller
             'foto_plato'          => 'nullable|string|max:2000',
             'foto_plateria'       => 'nullable|string|max:2000',
             'estado_id'           => 'nullable|integer|exists:compras.estados_receta,id',
+            'actualizada'         => 'nullable|boolean',
             'sucursal_ids'        => 'nullable|array',
             'sucursal_ids.*'      => 'integer|min:1',
             'ingredientes'        => 'array',
@@ -310,6 +311,7 @@ class RecetasController extends Controller
                 'foto_plateria'      => $this->normalizarUrlFoto($validated['foto_plateria'] ?? null),
                 'activa'             => true,
                 'estado_id'          => $estadoBorrador,
+                'actualizada'        => $validated['actualizada'] ?? false,
                 'aud_usuario'        => $usuario,
                 'modificado_localmente' => true,
             ]);
@@ -392,6 +394,7 @@ class RecetasController extends Controller
             'rendimiento_unidad'  => 'nullable|string|max:20',
             'activa'              => 'sometimes|boolean',
             'estado_id'           => 'sometimes|integer|exists:compras.estados_receta,id',
+            'actualizada'         => 'nullable|boolean',
             'foto_plato'          => 'nullable|string|max:2000',
             'foto_plateria'       => 'nullable|string|max:2000',
             'sucursal_ids'        => 'nullable|array',
@@ -419,7 +422,7 @@ class RecetasController extends Controller
             $campos = array_intersect_key($validated, array_flip([
                 'nombre', 'descripcion', 'instrucciones', 'tipo', 'categoria_id',
                 'tipo_receta', 'platos_semana', 'precio', 'rendimiento', 'rendimiento_unidad',
-                'activa', 'estado_id', 'foto_plato', 'foto_plateria',
+                'activa', 'estado_id', 'actualizada', 'foto_plato', 'foto_plateria',
             ]));
             // Normalizar URLs de foto: quitar query params de presigned URLs antes de guardar
             if (isset($campos['foto_plato']))    $campos['foto_plato']    = $this->normalizarUrlFoto($campos['foto_plato']);
@@ -1030,8 +1033,10 @@ class RecetasController extends Controller
                 'nombre' => $r->estado->nombre,
                 'color'  => $r->estado->color,
             ] : null,
-            'foto_plato'    => $this->presignS3Url($r->foto_plato),
-            'foto_plateria' => $this->presignS3Url($r->foto_plateria),
+            'foto_plato'           => $this->presignS3Url($r->foto_plato),
+            'foto_plateria'        => $this->presignS3Url($r->foto_plateria),
+            'modificado_localmente'=> (bool) $r->modificado_localmente,
+            'actualizada'          => (bool) $r->actualizada,
             'grupos_modificadores' => (int) ($r->grupos_modificadores ?? 0),
             'sucursales'    => $r->relationLoaded('sucursalConfig')
                 ? $r->sucursalConfig->map(fn ($s) => [

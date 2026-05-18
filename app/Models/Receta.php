@@ -28,12 +28,14 @@ class Receta extends Model
         'aud_usuario',
         'codigo_origen',
         'modificado_localmente',
+        'actualizada',
     ];
 
     protected $casts = [
         'platos_semana'        => 'integer',
         'activa'               => 'boolean',
         'modificado_localmente'=> 'boolean',
+        'actualizada'          => 'boolean',
     ];
 
     /**
