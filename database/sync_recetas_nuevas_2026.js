@@ -94,20 +94,76 @@ async function main() {
       AND cpr.cprNombre IN (${rcPh})
   `)).recordset;
 
-  const nuevas = allSS.filter(r => !existentes.has(clean(r.codigo, 50)));
-  log(`  Total 2026 con BOM en SS: ${allSS.length}`);
-  log(`  Ya en RDS:                ${allSS.length - nuevas.length}`);
-  log(`  Nuevas a importar:        ${nuevas.length}`);
+  const nuevas     = allSS.filter(r => !existentes.has(clean(r.codigo, 50)));
+  const existenBD  = allSS.filter(r =>  existentes.has(clean(r.codigo, 50)));
 
-  if (nuevas.length === 0) {
-    log('\nNada que importar.');
+  log(`  Total 2026 con BOM en SS: ${allSS.length}`);
+  log(`  Nuevas a insertar:        ${nuevas.length}`);
+  log(`  Ya en RDS (actualizar):   ${existenBD.length}`);
+
+  if (DRY_RUN) {
+    // Consultar estado actual de las que ya existen en RDS
+    const codigosExist = existenBD.map(r => clean(r.codigo, 50));
+    let estadoActual = [];
+    if (codigosExist.length > 0) {
+      const ph = codigosExist.map((_, i) => `$${i+1}`).join(',');
+      estadoActual = (await pg.query(
+        `SELECT r.codigo_origen, r.modificado_localmente, e.nombre as estado, r.nombre
+         FROM recetas r
+         LEFT JOIN estados_receta e ON e.id = r.estado_id
+         WHERE r.codigo_origen IN (${ph})
+         ORDER BY r.codigo_origen`, codigosExist
+      )).rows;
+    }
+
+    // modif_local=true → no se tocan (tienen cambios locales pendientes de exportar)
+    const noTocar      = estadoActual.filter(r => r.modificado_localmente === true);
+    // modif_local=false y ya activa → sin cambio real
+    const sinCambio    = estadoActual.filter(r => r.modificado_localmente === false && r.estado === 'Activa');
+    // modif_local=false y no activa → se actualizaría el estado
+    const seActualizan = estadoActual.filter(r => r.modificado_localmente === false && r.estado !== 'Activa');
+
+    log('\n─── SE ACTUALIZARÍAN (estado → Activa) ──────────────────────────────────────────');
+    if (seActualizan.length === 0) {
+      log('  (ninguna)');
+    } else {
+      seActualizan.forEach(r => log(`  ${r.codigo_origen}  estado=${r.estado ?? 'null'}  → Activa  ${r.nombre}`));
+    }
+
+    log('\n─── NO SE TOCAN (modif_local=true — cambios locales pendientes de exportar) ────');
+    if (noTocar.length === 0) {
+      log('  (ninguna)');
+    } else {
+      noTocar.forEach(r => log(`  ${r.codigo_origen}  estado=${r.estado ?? 'null'}  ${r.nombre}`));
+    }
+
+    log('\n─── YA ESTÁN ACTIVAS Y SINCRONIZADAS (sin cambio) ──────────────────────────────');
+    if (sinCambio.length === 0) {
+      log('  (ninguna)');
+    } else {
+      sinCambio.slice(0, 20).forEach(r => log(`  ${r.codigo_origen}  ${r.nombre}`));
+      if (sinCambio.length > 20) log(`  ... y ${sinCambio.length - 20} más`);
+    }
+
+    log('\n─── NUEVAS A INSERTAR (no existen en RDS) ───────────────────────────────────────');
+    if (nuevas.length === 0) {
+      log('  (ninguna)');
+    } else {
+      nuevas.forEach(r => log(`  ${r.codigo}  ${r.nombre}  (tipo: ${r.tipo})`));
+    }
+
+    log('\n─── RESUMEN ─────────────────────────────────────────────────────────────────────');
+    log(`  En Brilo (SS):        ${allSS.length}`);
+    log(`  Se insertarían:       ${nuevas.length}`);
+    log(`  Se actualizarían:     ${seActualizan.length}  (estado → Activa)`);
+    log(`  No se tocan:          ${noTocar.length}  (modif_local=true, pendientes de exportar)`);
+    log(`  Sin cambio:           ${sinCambio.length}  (ya activas y sincronizadas)`);
+    log('\nDRY-RUN OK. Corre sin --dry-run para aplicar.');
     pg.release(); await pool.end(); await sqlPool.close(); return;
   }
 
-  if (DRY_RUN) {
-    log('\nEjemplos:');
-    nuevas.slice(0, 15).forEach(r => log(`  ${r.codigo} - ${r.nombre} (${r.tipo})`));
-    log('\nDRY-RUN OK. Corre sin --dry-run para migrar.');
+  if (nuevas.length === 0 && existenBD.length === 0) {
+    log('\nNada que procesar.');
     pg.release(); await pool.end(); await sqlPool.close(); return;
   }
 
@@ -136,6 +192,7 @@ async function main() {
          estado_id             = 4,
          modificado_localmente = false,
          updated_at            = EXCLUDED.updated_at
+       WHERE recetas.modificado_localmente = false
        RETURNING id, codigo_origen`,
       params
     );
