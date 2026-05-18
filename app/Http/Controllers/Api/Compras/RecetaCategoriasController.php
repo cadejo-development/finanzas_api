@@ -13,6 +13,7 @@ class RecetaCategoriasController extends Controller
     public function index(): JsonResponse
     {
         $categorias = RecetaCategoria::where('activa', true)
+            ->orderBy('orden')
             ->orderBy('nombre')
             ->get(['id', 'nombre']);
 
