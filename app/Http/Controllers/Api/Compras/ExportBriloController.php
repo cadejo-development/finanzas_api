@@ -387,16 +387,17 @@ class ExportBriloController extends Controller
                         $this->formatNum($tandas),        // J tandas calculadas
                     ]);
                 } else {
-                    // Productos (MR) y CPs: cantidad directa, sin conversión a tandas
+                    // Productos (MR) y CPs: cantidad directa, con conversión de unidades si aplica
                     $briloReceta = $this->unidadACodigoBrilo($fila->unidad ?? '');
 
-                    if ($esCP) {
-                        // CP: la unidad base viene del rendimiento_unidad de la sub-receta
+                    if ($esSub && $esCP) {
+                        // CP guardado como sub-receta: unidad base = rendimiento_unidad del registro recetas
                         $briloProd = $fila->sub_rendimiento_unidad
                             ? $this->unidadACodigoBrilo($fila->sub_rendimiento_unidad)
                             : $briloReceta;
                         $nombreIng = $fila->sub_nombre ?? '';
                     } else {
+                        // MR o CP guardado como producto: unidad base = prod_unidad de la tabla productos
                         $briloProd = $fila->prod_unidad
                             ? $this->unidadACodigoBrilo($fila->prod_unidad)
                             : $briloReceta;
