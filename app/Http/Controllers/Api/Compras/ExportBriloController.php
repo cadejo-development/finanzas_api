@@ -242,10 +242,13 @@ class ExportBriloController extends Controller
             ->where('r.activa', true)
             ->select([
                 'r.codigo_origen as receta_codigo',
+                'r.nombre as receta_nombre',
                 'r.tipo_receta',
                 'p.codigo as prod_codigo',
+                'p.nombre as prod_nombre',
                 'p.unidad as prod_unidad',
                 'sr.codigo_origen as sub_codigo',
+                'sr.nombre as sub_nombre',
                 'sr.rendimiento as sub_rendimiento',
                 'sr.rendimiento_unidad as sub_rendimiento_unidad',
                 'ri.cantidad_por_plato',
@@ -308,13 +311,15 @@ class ExportBriloController extends Controller
 
             fputcsv($handle, [
                 'Código Producto Padre',   // A
-                'Código Producto MP',      // B
-                'Cantidad MP',             // C
-                'Activo?',                 // D
-                'Detiene Explotación?',    // E
-                'Código Ubicación',        // F
-                'Código Presentación',     // G
-                'Cantidad Presentación',   // H
+                'Nombre Producto Padre',   // B
+                'Código Producto MP',      // C
+                'Nombre Producto MP',      // D
+                'Cantidad MP',             // E
+                'Activo?',                 // F
+                'Detiene Explotación?',    // G
+                'Código Ubicación',        // H
+                'Código Presentación',     // I
+                'Cantidad Presentación',   // J
             ]);
 
             foreach ($filas as $fila) {
@@ -349,15 +354,18 @@ class ExportBriloController extends Controller
                         $tandas = (float) $fila->cantidad_por_plato;
                     }
 
+                    $nombreIng = $fila->sub_nombre ?? '';
                     fputcsv($handle, [
                         $fila->receta_codigo ?? '',       // A
-                        $codIngrediente,                  // B
-                        '',                               // C (vacío para sub-recetas)
-                        'SI',                             // D
-                        $detieneExp,                      // E
-                        '',                               // F
-                        'UNID0029',                       // G siempre TANDA
-                        $this->formatNum($tandas),        // H tandas calculadas
+                        $fila->receta_nombre  ?? '',      // B
+                        $codIngrediente,                  // C
+                        $nombreIng,                       // D
+                        '',                               // E (vacío para sub-recetas)
+                        'SI',                             // F
+                        $detieneExp,                      // G
+                        '',                               // H
+                        'UNID0029',                       // I siempre TANDA
+                        $this->formatNum($tandas),        // J tandas calculadas
                     ]);
                 } else {
                     // Comparar unidad de la receta vs unidad base del producto (por código Brilo)
@@ -367,12 +375,15 @@ class ExportBriloController extends Controller
                         : $briloReceta;
                     $mismaUnidad = ($briloReceta === $briloProd);
 
+                    $nombreIng = $fila->prod_nombre ?? '';
                     if ($mismaUnidad) {
-                        // Misma unidad: cantidad directa en col C
+                        // Misma unidad: cantidad directa en col E
                         fputcsv($handle, [
-                            $fila->receta_codigo ?? '',
-                            $codIngrediente,
-                            $this->formatNum($fila->cantidad_por_plato), // C
+                            $fila->receta_codigo ?? '',                    // A
+                            $fila->receta_nombre  ?? '',                   // B
+                            $codIngrediente,                               // C
+                            $nombreIng,                                    // D
+                            $this->formatNum($fila->cantidad_por_plato),   // E
                             'SI', $detieneExp, '', '', '',
                         ]);
                     } else {
@@ -382,22 +393,26 @@ class ExportBriloController extends Controller
                         );
 
                         if ($cantConvertida !== null) {
-                            // Conversión exitosa: cantidad en unidad base del producto en col C
+                            // Conversión exitosa: cantidad en unidad base del producto en col E
                             fputcsv($handle, [
-                                $fila->receta_codigo ?? '',
-                                $codIngrediente,
-                                $this->formatNum($cantConvertida), // C (convertida)
+                                $fila->receta_codigo ?? '',                // A
+                                $fila->receta_nombre  ?? '',               // B
+                                $codIngrediente,                           // C
+                                $nombreIng,                                // D
+                                $this->formatNum($cantConvertida),         // E (convertida)
                                 'SI', $detieneExp, '', '', '',
                             ]);
                         } else {
-                            // Sin conversión: cantidad en col G+H con la presentación de la receta
+                            // Sin conversión: cantidad en col I+J con la presentación de la receta
                             fputcsv($handle, [
-                                $fila->receta_codigo ?? '',
-                                $codIngrediente,
-                                '',                                        // C vacío
+                                $fila->receta_codigo ?? '',                // A
+                                $fila->receta_nombre  ?? '',               // B
+                                $codIngrediente,                           // C
+                                $nombreIng,                                // D
+                                '',                                        // E vacío
                                 'SI', $detieneExp, '',
-                                $briloReceta,                              // G presentación
-                                $this->formatNum($fila->cantidad_por_plato), // H
+                                $briloReceta,                              // I presentación
+                                $this->formatNum($fila->cantidad_por_plato), // J
                             ]);
                         }
                     }
