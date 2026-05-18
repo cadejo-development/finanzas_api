@@ -248,8 +248,10 @@ class ExportBriloController extends Controller
         $query = DB::connection('compras')
             ->table('receta_ingredientes as ri')
             ->join('recetas as r', 'ri.receta_id', '=', 'r.id')
-            ->leftJoin('productos as p',  'ri.producto_id',  '=', 'p.id')
-            ->leftJoin('recetas as sr',   'ri.sub_receta_id', '=', 'sr.id')
+            ->leftJoin('productos as p',    'ri.producto_id',    '=', 'p.id')
+            ->leftJoin('recetas as sr',     'ri.sub_receta_id',  '=', 'sr.id')
+            // Para CPs guardados como sub-receta: buscar su unidad base en productos por código
+            ->leftJoin('productos as cp_p', 'sr.codigo_origen',  '=', 'cp_p.codigo')
             ->where('r.activa', true)
             ->select([
                 'r.codigo_origen as receta_codigo',
@@ -262,6 +264,7 @@ class ExportBriloController extends Controller
                 'sr.nombre as sub_nombre',
                 'sr.rendimiento as sub_rendimiento',
                 'sr.rendimiento_unidad as sub_rendimiento_unidad',
+                'cp_p.unidad as cp_prod_unidad', // unidad base del CP en tabla productos
                 'ri.cantidad_por_plato',
                 'ri.unidad',
             ]);
@@ -391,9 +394,11 @@ class ExportBriloController extends Controller
                     $briloReceta = $this->unidadACodigoBrilo($fila->unidad ?? '');
 
                     if ($esSub && $esCP) {
-                        // CP guardado como sub-receta: unidad base = rendimiento_unidad del registro recetas
-                        $briloProd = $fila->sub_rendimiento_unidad
-                            ? $this->unidadACodigoBrilo($fila->sub_rendimiento_unidad)
+                        // CP guardado como sub-receta: unidad base = rendimiento_unidad si está,
+                        // si no, buscar en productos por codigo_origen (join cp_p)
+                        $unidadBaseCP = $fila->sub_rendimiento_unidad ?? $fila->cp_prod_unidad;
+                        $briloProd = $unidadBaseCP
+                            ? $this->unidadACodigoBrilo($unidadBaseCP)
                             : $briloReceta;
                         $nombreIng = $fila->sub_nombre ?? '';
                     } else {
