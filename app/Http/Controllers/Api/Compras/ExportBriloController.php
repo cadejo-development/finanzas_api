@@ -122,6 +122,13 @@ class ExportBriloController extends Controller
         $soloModificados = (bool) $request->query('solo_modificados', 1);
         $soloAprobados   = (bool) $request->query('solo_aprobados', 1);
 
+        // receta_ids: lista explícita de IDs (CSV). Cuando se proveen, bypasea solo_modificados/solo_con_codigo/solo_aprobados.
+        $recetaIds = array_values(array_filter(
+            explode(',', $request->query('receta_ids', '')),
+            fn ($v) => $v !== ''
+        ));
+        $tieneIdsExplicitos = count($recetaIds) > 0;
+
         $base = DB::connection('compras')
             ->table('recetas as r')
             ->leftJoin('receta_categorias as rc', 'r.categoria_id', '=', 'rc.id')
@@ -129,9 +136,13 @@ class ExportBriloController extends Controller
             ->where('r.activa', true)
             ->select(['r.id', 'r.codigo_origen', 'r.nombre', 'r.tipo_receta', 'r.rendimiento_unidad', 'r.precio', 'rc.nombre as categoria_nombre', 'cat.key as brilo_key']);
 
-        if ($soloModificados) $base->where('r.modificado_localmente', true);
-        if ($soloConCodigo)   $base->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '');
-        if ($soloAprobados)   $base->whereIn('r.estado_id', [3, 4]); // solo autorizada o activa
+        if ($tieneIdsExplicitos) {
+            $base->whereIn('r.id', $recetaIds);
+        } else {
+            if ($soloModificados) $base->where('r.modificado_localmente', true);
+            if ($soloConCodigo)   $base->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '');
+            if ($soloAprobados)   $base->whereIn('r.estado_id', [3, 4]);
+        }
 
         // Excluir CP y MR — son materias primas, no recetas/sub-recetas
         $base->where('r.codigo_origen', 'not like', 'CP%')
@@ -255,8 +266,13 @@ class ExportBriloController extends Controller
                 'ri.unidad',
             ]);
 
-        if ($soloModificados) $query->where('r.modificado_localmente', true);
-        if ($soloConCodigo)   $query->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '');
+        // Cuando se proveen receta_ids explícitos (desde solicitud), bypasear filtros de modificado/código
+        if (count($recetaIds)) {
+            $query->whereIn('r.id', $recetaIds);
+        } else {
+            if ($soloModificados) $query->where('r.modificado_localmente', true);
+            if ($soloConCodigo)   $query->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '');
+        }
 
         if ($nivel === 1) {
             $query->where('r.tipo_receta', 'sub_receta')

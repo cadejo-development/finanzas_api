@@ -81,9 +81,9 @@ class RecetasController extends Controller
                     $q->where('tipo_receta', $tipoReceta);
                 });
             }
-        } else {
-            // Sin filtro de tipo_receta: excluir los marcados como sub_receta,
-            // y tambi├®n los de categor├¡a "Platos Sub-Recetas" para que no se mezclen.
+        } elseif (!$request->boolean('incluir_todo_tipos')) {
+            // Sin filtro de tipo_receta: excluir sub-recetas por defecto.
+            // incluir_todo_tipos=1 bypasea esto (usado por dashboard de recetas pendientes).
             $query->where(function ($q) {
                 $q->where('tipo_receta', '!=', 'sub_receta')
                   ->orWhereNull('tipo_receta');

@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\Compras\RecetaCategoriasController;
 use App\Http\Controllers\Api\Compras\AuditoriaRecetasController;
 use App\Http\Controllers\Api\Compras\InventarioController;
 use App\Http\Controllers\Api\Compras\ExportBriloController;
+use App\Http\Controllers\Api\Compras\SolicitudCargaRecetasController;
 use App\Http\Controllers\Api\Compras\BrewRecetasController;
 use App\Http\Controllers\Api\Compras\BrewLotesController;
 use App\Http\Controllers\Api\Compras\BrewCatalogosController;
@@ -221,6 +222,11 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('export/brilo/productos',               [ExportBriloController::class, 'productos']);
     Route::get('export/brilo/recetas-ven',             [ExportBriloController::class, 'recetasVen']);
     Route::post('export/brilo/resetear-modificados',   [ExportBriloController::class, 'resetearModificados']);
+
+    // Solicitudes de carga a BRILO
+    Route::get('solicitudes-carga',        [SolicitudCargaRecetasController::class, 'index']);
+    Route::post('solicitudes-carga',       [SolicitudCargaRecetasController::class, 'store']);
+    Route::patch('solicitudes-carga/{id}', [SolicitudCargaRecetasController::class, 'update']);
 
     // Inventario
     Route::get('inventario/pedido-sugerido',    [InventarioController::class, 'pedidoSugerido']);
