@@ -124,14 +124,19 @@ async function main() {
       const catId = recatMap[tipo.trim().toLowerCase()] ?? null;
       const vals  = [
         clean(r.nombre, 150), clean(r.codigo, 50), tipo, catId,
-        parseFloat(r.precio) || 0, 0, true, 'sync_nuevas_2026', now, now,
+        parseFloat(r.precio) || 0, 0, true, 4, 'sync_nuevas_2026', now, now,
       ];
       const ph = vals.map(v => { params.push(v); return `$${params.length}`; });
       parts.push(`(${ph.join(',')})`);
     });
     const res = await pg.query(
-      `INSERT INTO recetas (nombre,codigo_origen,tipo,categoria_id,precio,platos_semana,activa,aud_usuario,created_at,updated_at)
-       VALUES ${parts.join(',')} ON CONFLICT (codigo_origen) DO NOTHING RETURNING id, codigo_origen`,
+      `INSERT INTO recetas (nombre,codigo_origen,tipo,categoria_id,precio,platos_semana,activa,estado_id,aud_usuario,created_at,updated_at)
+       VALUES ${parts.join(',')}
+       ON CONFLICT (codigo_origen) DO UPDATE SET
+         estado_id             = 4,
+         modificado_localmente = false,
+         updated_at            = EXCLUDED.updated_at
+       RETURNING id, codigo_origen`,
       params
     );
     res.rows.forEach(row => { nuevaRecetaMap[row.codigo_origen] = row.id; });

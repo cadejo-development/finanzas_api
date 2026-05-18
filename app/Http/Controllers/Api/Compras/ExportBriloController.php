@@ -124,8 +124,9 @@ class ExportBriloController extends Controller
         $base = DB::connection('compras')
             ->table('recetas as r')
             ->leftJoin('receta_categorias as rc', 'r.categoria_id', '=', 'rc.id')
+            ->leftJoin('categorias as cat', DB::raw('lower(cat.nombre)'), '=', DB::raw('lower(rc.nombre)'))
             ->where('r.activa', true)
-            ->select(['r.id', 'r.codigo_origen', 'r.nombre', 'r.tipo_receta', 'r.rendimiento_unidad', 'r.precio', 'rc.nombre as categoria_nombre']);
+            ->select(['r.id', 'r.codigo_origen', 'r.nombre', 'r.tipo_receta', 'r.rendimiento_unidad', 'r.precio', 'rc.nombre as categoria_nombre', 'cat.key as brilo_key']);
 
         if ($soloModificados) $base->where('r.modificado_localmente', true);
         if ($soloConCodigo)   $base->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '');
@@ -167,8 +168,8 @@ class ExportBriloController extends Controller
                     '',                                     // D  Modelo
                     $precio,                                // E  Precio de Lista
                     'SI',                                   // F  Exento
-                    '',                                     // G  Categoría Padre (completar manualmente)
-                    $fila->categoria_nombre ?? '',          // H  Categoría Hija (categoría del plato)
+                    $fila->brilo_key ?? '',                 // G  Categoría Padre (PL-01, PL-10, etc.)
+                    $fila->categoria_nombre ?? '',          // H  Categoría Hija (nombre de categoría)
                     $unidadBrilo,                           // I  Presentación Base
                     '', '', '', '',                         // J-M Precios venta 2-5
                     '', '', '',                             // N-P Cuentas contables (completar manualmente)
