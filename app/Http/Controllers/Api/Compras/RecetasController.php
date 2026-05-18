@@ -669,7 +669,7 @@ class RecetasController extends Controller
     public function costos(Request $request): JsonResponse
     {
         $roles = auth()->user()->roles()->pluck('codigo')->toArray();
-        if (!array_intersect(['admin_compras', 'admin_recetas'], $roles)) {
+        if (!array_intersect(['admin_compras', 'admin_recetas', 'dir_comercial'], $roles)) {
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
@@ -679,9 +679,12 @@ class RecetasController extends Controller
             $search      = $request->query('search');
             $sucursalId  = $request->query('sucursal_id')  ? (int) $request->query('sucursal_id')  : null;
             $categoriaId = $request->query('categoria_id') ? (int) $request->query('categoria_id') : null;
+            $estadoId    = $request->query('estado_id')    ? (int) $request->query('estado_id')    : null;
+            $tipoReceta  = $request->query('tipo_receta'); // 'plato' | 'sub_receta' | null = todos
 
             $query = Receta::with([
                     'categoria',
+                    'estado',
                     'ingredientes.producto',
                     'ingredientes.subReceta.productoAsociado',
                     'ingredientes.subReceta.ingredientes.producto',
@@ -689,8 +692,21 @@ class RecetasController extends Controller
                     'ingredientes.subReceta.ingredientes.subReceta.ingredientes.producto',
                 ])
                 ->where('activa', true)
-                ->where(fn ($q) => $q->where('tipo_receta', 'plato')->orWhereNull('tipo_receta'))
-                ->whereRaw("lower(coalesce(tipo,'')) NOT LIKE '%sub%receta%'")
+                ->when($tipoReceta === 'plato', fn ($q) => $q
+                    ->where(fn ($q2) => $q2->where('tipo_receta', 'plato')->orWhereNull('tipo_receta'))
+                    ->whereRaw("lower(coalesce(tipo,'')) NOT LIKE '%sub%receta%'")
+                )
+                ->when($tipoReceta === 'sub_receta', fn ($q) => $q->where('tipo_receta', 'sub_receta'))
+                ->when(!$tipoReceta, fn ($q) => $q
+                    ->where(fn ($q2) => $q2
+                        ->where('tipo_receta', 'sub_receta')
+                        ->orWhere(fn ($q3) => $q3
+                            ->where(fn ($q4) => $q4->where('tipo_receta', 'plato')->orWhereNull('tipo_receta'))
+                            ->whereRaw("lower(coalesce(tipo,'')) NOT LIKE '%sub%receta%'")
+                        )
+                    )
+                )
+                ->when($estadoId, fn ($q) => $q->where('estado_id', $estadoId))
                 ->when($sucursalId,  fn ($q) => $q->whereHas('sucursalConfig', fn ($sq) =>
                     $sq->where('sucursal_id', $sucursalId)->where('activa', true)
                 ))
@@ -699,6 +715,7 @@ class RecetasController extends Controller
                        ->orWhere('codigo_origen', 'ilike', "%{$search}%");
                 }))
                 ->when($categoriaId, fn ($q) => $q->where('categoria_id', $categoriaId))
+                ->orderByRaw("CASE WHEN tipo_receta = 'sub_receta' THEN 1 ELSE 0 END")
                 ->orderBy('nombre');
 
             $pagina = $query->paginate($perPage, ['*'], 'page', $page);
@@ -717,13 +734,18 @@ class RecetasController extends Controller
                 });
                 $precio = (float) ($r->precio ?? 0);
                 return [
-                    'id'          => $r->id,
-                    'nombre'      => $r->nombre,
-                    'tipo_receta' => $r->tipo_receta ?? 'plato',
-                    'categoria'   => $r->categoria?->nombre ?? $r->tipo ?? 'Sin categoria',
-                    'precio'      => round($precio, 4),
-                    'costo'       => round($costo, 4),
-                    'margen'      => round($precio - $costo, 4),
+                    'id'                 => $r->id,
+                    'nombre'             => $r->nombre,
+                    'tipo_receta'        => $r->tipo_receta ?? 'plato',
+                    'categoria'          => $r->categoria?->nombre ?? $r->tipo ?? 'Sin categoria',
+                    'estado_id'          => $r->estado_id,
+                    'estado'             => $r->estado?->nombre ?? null,
+                    'estado_color'       => $r->estado?->color ?? null,
+                    'rendimiento'        => (float) ($r->rendimiento ?? 0),
+                    'rendimiento_unidad' => $r->rendimiento_unidad,
+                    'precio'             => round($precio, 4),
+                    'costo'              => round($costo, 4),
+                    'margen'             => round($precio - $costo, 4),
                 ];
             });
 
@@ -1127,6 +1149,85 @@ class RecetasController extends Controller
         } catch (\Throwable $e) {
             return $url; // Si falla, devolver la URL original
         }
+    }
+
+    // ----------------------------------------------------------------------
+    // PATCH /api/compras/recetas/{id}/autorizar
+    // Autoriza una receta (borrador/finalizada → autorizada).
+    // Validaciones: sub_receta requiere rendimiento; plato requiere precio.
+    // ----------------------------------------------------------------------
+    public function autorizar(Request $request, int $id): JsonResponse
+    {
+        $roles = auth()->user()->roles()->pluck('codigo')->toArray();
+        if (!array_intersect(['admin_compras', 'dir_comercial'], $roles)) {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+
+        $receta = Receta::with('estado')->findOrFail($id);
+
+        if (!in_array($receta->estado_id, [1, 2])) {
+            return response()->json(['error' => 'Solo se pueden autorizar recetas en estado Borrador o Finalizada.'], 422);
+        }
+
+        if ($receta->tipo_receta === 'sub_receta' && (float) ($receta->rendimiento ?? 0) <= 0) {
+            return response()->json(['error' => "La sub-receta \"{$receta->nombre}\" no tiene rendimiento definido. Defínalo antes de autorizar."], 422);
+        }
+
+        if ($receta->tipo_receta !== 'sub_receta' && (float) ($receta->precio ?? 0) <= 0) {
+            return response()->json(['error' => "El plato \"{$receta->nombre}\" no tiene precio de venta. Defínalo antes de autorizar."], 422);
+        }
+
+        $receta->update([
+            'estado_id'             => 3,
+            'modificado_localmente' => true,
+            'aud_usuario'           => $request->user()?->email ?? 'sistema',
+        ]);
+
+        return response()->json(['data' => ['id' => $receta->id, 'estado_id' => 3, 'estado' => 'Autorizada']]);
+    }
+
+    // ----------------------------------------------------------------------
+    // POST /api/compras/recetas/autorizar-masivo
+    // Body: { ids: [1, 2, 3] }
+    // Retorna: { autorizadas: [ids], errores: [{id, nombre, razon}] }
+    // ----------------------------------------------------------------------
+    public function autorizarMasivo(Request $request): JsonResponse
+    {
+        $roles = auth()->user()->roles()->pluck('codigo')->toArray();
+        if (!array_intersect(['admin_compras', 'dir_comercial'], $roles)) {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+
+        $validated = $request->validate(['ids' => 'required|array|min:1', 'ids.*' => 'integer']);
+
+        $recetas     = Receta::whereIn('id', $validated['ids'])->get();
+        $autorizadas = [];
+        $errores     = [];
+        $usuario     = $request->user()?->email ?? 'sistema';
+
+        foreach ($recetas as $receta) {
+            if (!in_array($receta->estado_id, [1, 2])) {
+                $errores[] = ['id' => $receta->id, 'nombre' => $receta->nombre, 'razon' => 'Estado actual no permite autorización'];
+                continue;
+            }
+            if ($receta->tipo_receta === 'sub_receta' && (float) ($receta->rendimiento ?? 0) <= 0) {
+                $errores[] = ['id' => $receta->id, 'nombre' => $receta->nombre, 'razon' => 'Sin rendimiento definido'];
+                continue;
+            }
+            if ($receta->tipo_receta !== 'sub_receta' && (float) ($receta->precio ?? 0) <= 0) {
+                $errores[] = ['id' => $receta->id, 'nombre' => $receta->nombre, 'razon' => 'Sin precio de venta'];
+                continue;
+            }
+
+            $receta->update([
+                'estado_id'             => 3,
+                'modificado_localmente' => true,
+                'aud_usuario'           => $usuario,
+            ]);
+            $autorizadas[] = $receta->id;
+        }
+
+        return response()->json(['autorizadas' => $autorizadas, 'errores' => $errores]);
     }
 
 }

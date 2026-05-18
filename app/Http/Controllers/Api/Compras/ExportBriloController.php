@@ -120,6 +120,7 @@ class ExportBriloController extends Controller
 
         $soloConCodigo   = (bool) $request->query('solo_con_codigo', 1);
         $soloModificados = (bool) $request->query('solo_modificados', 1);
+        $soloAprobados   = (bool) $request->query('solo_aprobados', 1);
 
         $base = DB::connection('compras')
             ->table('recetas as r')
@@ -130,6 +131,7 @@ class ExportBriloController extends Controller
 
         if ($soloModificados) $base->where('r.modificado_localmente', true);
         if ($soloConCodigo)   $base->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '');
+        if ($soloAprobados)   $base->whereIn('r.estado_id', [3, 4]); // solo autorizada o activa
 
         // Excluir CP y MR — son materias primas, no recetas/sub-recetas
         $base->where('r.codigo_origen', 'not like', 'CP%')
