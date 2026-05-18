@@ -246,6 +246,8 @@ class ExportBriloController extends Controller
                 'p.codigo as prod_codigo',
                 'p.unidad as prod_unidad',
                 'sr.codigo_origen as sub_codigo',
+                'sr.rendimiento as sub_rendimiento',
+                'sr.rendimiento_unidad as sub_rendimiento_unidad',
                 'ri.cantidad_por_plato',
                 'ri.unidad',
             ]);
@@ -324,16 +326,38 @@ class ExportBriloController extends Controller
                 $detieneExp = str_starts_with(strtoupper(trim($codIngrediente)), 'CP') ? 'SI' : '';
 
                 if ($esSub) {
-                    // Sub-recetas siempre se importan en Brilo como TANDA (UNID0029)
+                    // Sub-recetas siempre se importan en Brilo como TANDA (UNID0029).
+                    // Cantidad Presentación = tandas necesarias = cantidad_por_plato / rendimiento_sub,
+                    // con conversión de unidades si la unidad del ingrediente ≠ unidad del rendimiento.
+                    $briloIng  = $this->unidadACodigoBrilo($fila->unidad ?? 'u');
+                    $rendim    = (float) ($fila->sub_rendimiento ?? 0);
+                    $briloRend = $this->unidadACodigoBrilo($fila->sub_rendimiento_unidad ?? 'u');
+
+                    if ($briloIng === 'UNID0029') {
+                        // La receta ya expresa la cantidad en tandas directamente
+                        $tandas = (float) $fila->cantidad_por_plato;
+                    } elseif ($rendim > 0) {
+                        // Convertir cantidad a la unidad del rendimiento si son distintas
+                        $cantBase = (float) $fila->cantidad_por_plato;
+                        if ($briloIng !== $briloRend) {
+                            $convertida = $this->convertirUnidad($cantBase, $briloIng, $briloRend);
+                            $cantBase   = $convertida ?? $cantBase;
+                        }
+                        $tandas = $cantBase / $rendim;
+                    } else {
+                        // Sin rendimiento definido: asumir 1:1 (fallback)
+                        $tandas = (float) $fila->cantidad_por_plato;
+                    }
+
                     fputcsv($handle, [
-                        $fila->receta_codigo ?? '',                   // A
-                        $codIngrediente,                              // B
-                        '',                                           // C (vacío para sub-recetas)
-                        'SI',                                         // D
-                        $detieneExp,                                  // E
-                        '',                                           // F
-                        'UNID0029',                                   // G siempre TANDA
-                        $this->formatNum($fila->cantidad_por_plato),  // H
+                        $fila->receta_codigo ?? '',       // A
+                        $codIngrediente,                  // B
+                        '',                               // C (vacío para sub-recetas)
+                        'SI',                             // D
+                        $detieneExp,                      // E
+                        '',                               // F
+                        'UNID0029',                       // G siempre TANDA
+                        $this->formatNum($tandas),        // H tandas calculadas
                     ]);
                 } else {
                     // Comparar unidad de la receta vs unidad base del producto (por código Brilo)
