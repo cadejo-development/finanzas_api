@@ -71,11 +71,13 @@ class RecetasController extends Controller
                 // productos también pueden tener ese valor pero NO son sub-recetas de cocina.
                 // Se requiere que tipo o categoría digan 'sub-receta', o que el código
                 // origen sea PL20xxx (categoría "Platos Sub-Recetas" en BRILO).
+                // Los CP (Componentes de Preparación, código_origen LIKE 'CP%') se excluyen
+                // del catálogo de sub-recetas — son semi-elaborados internos, no sub-recetas.
                 $query->where(function ($q) {
                     $q->whereRaw("lower(coalesce(tipo,'')) LIKE '%sub%receta%'")
                       ->orWhereHas('categoria', fn ($q3) => $q3->whereRaw("lower(nombre) LIKE '%sub%receta%'"))
                       ->orWhereRaw("lower(coalesce(codigo_origen,'')) LIKE 'pl20%'");
-                });
+                })->whereRaw("upper(coalesce(codigo_origen,'')) NOT LIKE 'CP%'");
             } else {
                 $query->where(function ($q) use ($tipoReceta) {
                     $q->where('tipo_receta', $tipoReceta);
