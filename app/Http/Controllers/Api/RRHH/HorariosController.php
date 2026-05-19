@@ -171,7 +171,7 @@ class HorariosController extends RRHHBaseController
             'registros.*.fecha'        => 'required|date_format:Y-m-d',
             'registros.*.hora_inicio'  => 'nullable|date_format:H:i',
             'registros.*.hora_fin'     => 'nullable|date_format:H:i',
-            'registros.*.tipo'         => 'required|in:normal,libre,vacacion,dia_cadejo,incapacidad',
+            'registros.*.tipo'         => 'required|in:normal,apertura,cierre,libre,vacacion,dia_cadejo,incapacidad',
             'registros.*.notas'        => 'nullable|string|max:200',
         ]);
 
