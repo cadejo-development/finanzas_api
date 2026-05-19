@@ -165,7 +165,7 @@ class HorariosController extends RRHHBaseController
     /**
      * POST /rrhh/horarios/bulk
      *
-     * Body: { registros: [{empleado_id, fecha, hora_inicio, hora_fin, tipo, notas?}] }
+     * Body: { registros: [{empleado_id, fecha, parte, hora_inicio, hora_fin, tipo, notas?}] }
      * Hace upsert (INSERT … ON CONFLICT DO UPDATE).
      */
     public function bulk(Request $request): JsonResponse
