@@ -15,6 +15,7 @@ class HorarioEmpleado extends Model
         'hora_inicio',
         'hora_fin',
         'tipo',
+        'parte',
         'notas',
         'aud_usuario',
     ];
@@ -23,17 +24,13 @@ class HorarioEmpleado extends Model
         'fecha' => 'date:Y-m-d',
     ];
 
-    // Tipos válidos
-    public const TIPOS = ['normal', 'apertura', 'cierre', 'libre', 'vacacion', 'dia_cadejo', 'incapacidad'];
+    public const TIPOS = ['normal', 'libre', 'vacacion', 'dia_cadejo', 'incapacidad'];
 
     public function empleado()
     {
         return $this->belongsTo(Empleado::class);
     }
 
-    /**
-     * Horas trabajadas del turno (null si no es tipo normal o faltan datos).
-     */
     public function getHorasTrabajadas(): ?float
     {
         if ($this->tipo !== 'normal' || !$this->hora_inicio || !$this->hora_fin) {
