@@ -80,7 +80,9 @@ class HorariosController extends RRHHBaseController
             /** @var \Illuminate\Support\Collection $registros */
             $registros = $horarios->get($emp->id, collect());
             foreach ($registros as $h) {
-                $dias[$h->fecha instanceof \Carbon\Carbon ? $h->fecha->toDateString() : substr($h->fecha, 0, 10)] = [
+                $fecha = $h->fecha instanceof \Carbon\Carbon ? $h->fecha->toDateString() : substr($h->fecha, 0, 10);
+                if (!isset($dias[$fecha])) $dias[$fecha] = [];
+                $dias[$fecha][] = [
                     'id'          => $h->id,
                     'hora_inicio' => $h->hora_inicio ? substr($h->hora_inicio, 0, 5) : null,
                     'hora_fin'    => $h->hora_fin    ? substr($h->hora_fin,    0, 5) : null,
@@ -138,7 +140,8 @@ class HorariosController extends RRHHBaseController
         $dias = [];
         foreach ($horarios as $h) {
             $fecha = $h->fecha instanceof \Carbon\Carbon ? $h->fecha->toDateString() : substr($h->fecha, 0, 10);
-            $dias[$fecha] = [
+            if (!isset($dias[$fecha])) $dias[$fecha] = [];
+            $dias[$fecha][] = [
                 'hora_inicio' => $h->hora_inicio ? substr($h->hora_inicio, 0, 5) : null,
                 'hora_fin'    => $h->hora_fin    ? substr($h->hora_fin,    0, 5) : null,
                 'tipo'        => $h->tipo,
@@ -186,7 +189,7 @@ class HorariosController extends RRHHBaseController
             }
 
             $horario = HorarioEmpleado::updateOrCreate(
-                ['empleado_id' => $row['empleado_id'], 'fecha' => $row['fecha']],
+                ['empleado_id' => $row['empleado_id'], 'fecha' => $row['fecha'], 'tipo' => $row['tipo']],
                 [
                     'hora_inicio' => $row['hora_inicio'] ?? null,
                     'hora_fin'    => $row['hora_fin']    ?? null,
@@ -203,10 +206,10 @@ class HorariosController extends RRHHBaseController
     }
 
     /**
-     * DELETE /rrhh/horarios/{empleadoId}/{fecha}
-     * Elimina el registro de ese día (lo convierte en "sin horario").
+     * DELETE /rrhh/horarios/{empleadoId}/{fecha}/{tipo}
+     * Elimina el turno específico de ese día (apertura, cierre, normal, etc.).
      */
-    public function destroy(int $empleadoId, string $fecha): JsonResponse
+    public function destroy(int $empleadoId, string $fecha, string $tipo): JsonResponse
     {
         $request = request();
         $allowedIds = $this->resolverEmpleadosIds($request);
@@ -217,6 +220,7 @@ class HorariosController extends RRHHBaseController
 
         HorarioEmpleado::where('empleado_id', $empleadoId)
             ->where('fecha', $fecha)
+            ->where('tipo', $tipo)
             ->delete();
 
         return response()->json(['ok' => true]);

@@ -24,7 +24,7 @@ class HorarioEmpleado extends Model
     ];
 
     // Tipos válidos
-    public const TIPOS = ['normal', 'libre', 'vacacion', 'dia_cadejo', 'incapacidad'];
+    public const TIPOS = ['normal', 'apertura', 'cierre', 'libre', 'vacacion', 'dia_cadejo', 'incapacidad'];
 
     public function empleado()
     {
