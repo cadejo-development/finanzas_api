@@ -80,6 +80,32 @@ class DashboardRRHHController extends RRHHBaseController
             })->values();
         }
 
+        // Contrataciones del mes actual (solo rrhh_admin y gerencia_ops)
+        $contratacionesMes = [];
+        if ($this->esAdminRrhh() || $this->esGerenciaOps()) {
+            $idsScope = ($this->esGerenciaOps() && !$this->esAdminRrhh()) ? $subordinadosIds : null;
+
+            $query = DB::connection('pgsql')
+                ->table('empleados as e')
+                ->leftJoin('cargos as c', 'e.cargo_id', '=', 'c.id')
+                ->where('e.activo', true)
+                ->whereYear('e.fecha_ingreso', $anioActual)
+                ->whereMonth('e.fecha_ingreso', $mesActual)
+                ->selectRaw("e.id, TRIM(e.nombres || ' ' || e.apellidos) as nombre, e.fecha_ingreso, COALESCE(c.nombre, 'Sin cargo') as cargo");
+
+            if ($idsScope) {
+                $query->whereIn('e.id', $idsScope);
+            }
+
+            $contratacionesMes = $query->orderBy('e.fecha_ingreso')->get()
+                ->map(fn($e) => [
+                    'empleado_id'   => $e->id,
+                    'nombre'        => $e->nombre,
+                    'cargo'         => $e->cargo,
+                    'fecha_ingreso' => $e->fecha_ingreso,
+                ])->values()->all();
+        }
+
         return response()->json([
             'success' => true,
             'data'    => [
@@ -90,6 +116,7 @@ class DashboardRRHHController extends RRHHBaseController
                 'incapacidades_mes'      => $incapacidadesMes,
                 'amonestaciones_mes'     => $amonestacionesMes,
                 'saldos_vacaciones'      => $saldosEnriquecidos,
+                'contrataciones_mes'     => $contratacionesMes,
             ],
         ]);
     }
