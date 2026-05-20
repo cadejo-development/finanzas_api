@@ -179,8 +179,8 @@ class DepartamentosController extends Controller
     {
         $miembros = DB::connection('pgsql')
             ->table('empleados as e')
-            ->join('cargos as c', 'e.cargo_id', '=', 'c.id')
-            ->join('sucursales as s', 'e.sucursal_id', '=', 's.id')
+            ->leftJoin('cargos as c', 'e.cargo_id', '=', 'c.id')
+            ->leftJoin('sucursales as s', 'e.sucursal_id', '=', 's.id')
             ->where('e.departamento_id', $id)
             ->where('e.activo', true)
             ->select('e.id', 'e.codigo', 'e.nombres', 'e.apellidos',
