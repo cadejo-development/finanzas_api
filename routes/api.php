@@ -42,6 +42,7 @@ use App\Http\Controllers\Api\RRHH\AusenciasController;
 use App\Http\Controllers\Api\RRHH\ReportesRRHHController;
 use App\Http\Controllers\Api\RRHH\HorariosController;
 use App\Http\Controllers\Api\GeoController;
+use App\Http\Controllers\Api\Compras\MenuPublicoController;
 
 // ─── Geo catálogos El Salvador (público, sin auth) ────────────────────────
 Route::prefix('geo')->group(function () {
@@ -49,6 +50,11 @@ Route::prefix('geo')->group(function () {
     Route::get('departamentos/{id}/distritos',     [GeoController::class, 'distritos']);
     Route::get('distritos/{id}/municipios',        [GeoController::class, 'municipios']);
     Route::get('municipios/{id}/ubicacion',        [GeoController::class, 'ubicacionMunicipio']);
+});
+
+// ─── Menú público (para sistema de reservas, sin auth) ────────────────────
+Route::prefix('public')->group(function () {
+    Route::get('menu', [MenuPublicoController::class, 'porSucursal']);
 });
 
 // ─── Portal SSO (protegido con Sanctum) ──────────────────────────────────
