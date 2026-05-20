@@ -39,7 +39,17 @@ class MenuPublicoController extends Controller
             return response()->json([], 200);
         }
 
-        // Si se especificó hora y es >= 11:00, excluir categorías de desayuno
+        // Categorías permanentemente excluidas del menú público de eventos
+        $categoriasExcluidas = [
+            '%empleado%',
+            '%extras caliente%',
+            '%extras cliente%',
+            '%alcohol%',
+        ];
+
+        // Cuando no hay hora o es >= 11:00 → almuerzo/cena (sin desayunos)
+        // Cuando es < 11:00 → desayuno (solo desayunos)
+        $esDesayuno     = $timeStart && $timeStart < '11:00';
         $esAlmuerzoCena = $timeStart && $timeStart >= '11:00';
 
         $platos = Receta::with(['categoria'])
@@ -56,6 +66,23 @@ class MenuPublicoController extends Controller
             ->where(function ($q) {
                 $q->where('precio', '>', 0)->orWhereNotNull('foto_plato');
             })
+            // Excluir categorías permanentemente ocultas
+            ->whereHas('categoria', function ($cq) use ($categoriasExcluidas) {
+                foreach ($categoriasExcluidas as $patron) {
+                    $cq->whereRaw("lower(nombre) NOT LIKE ?", [$patron]);
+                }
+                // "otros" excluido por nombre exacto (evitar false positives)
+                $cq->whereRaw("lower(trim(nombre)) != 'otros'");
+            })
+            // Filtro por hora: desayuno vs almuerzo/cena
+            ->when($esDesayuno, fn ($q) =>
+                $q->whereHas('categoria', fn ($cq) =>
+                    $cq->where(function ($inner) {
+                        $inner->whereRaw("lower(nombre) LIKE '%desayuno%'")
+                              ->orWhereRaw("lower(nombre) LIKE '%breakfast%'");
+                    })
+                )
+            )
             ->when($esAlmuerzoCena, fn ($q) =>
                 $q->whereHas('categoria', fn ($cq) =>
                     $cq->whereRaw("lower(nombre) NOT LIKE '%desayuno%'")
