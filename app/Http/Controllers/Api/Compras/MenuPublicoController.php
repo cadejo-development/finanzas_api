@@ -102,7 +102,7 @@ class MenuPublicoController extends Controller
                 'id'             => $plato->id,
                 'nombre'         => $plato->nombre,
                 'categoria'      => $cat,
-                'precio_unitario'=> $precio > 0 ? round($precio / self::IVA, 2) : null,
+                'precio_unitario'=> $precio > 0 ? round($precio, 2) : null,
                 'foto_plato'     => $plato->foto_plato,
             ];
         }
