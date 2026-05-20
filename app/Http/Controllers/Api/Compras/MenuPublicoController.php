@@ -18,13 +18,15 @@ class MenuPublicoController extends Controller
     private const IVA = 1.13;
 
     /**
-     * GET /api/public/menu?sucursal=mansion
+     * GET /api/public/menu?sucursal=mansion&time_start=HH:MM
      * Retorna platos activos de la sucursal, agrupados por categoría.
+     * Si time_start >= 11:00 se excluyen categorías de desayuno.
      * Sin autenticación — solo datos públicos (nombre, categoría, precio, foto).
      */
     public function porSucursal(Request $request): JsonResponse
     {
-        $slug = strtolower(trim($request->query('sucursal', 'mansion')));
+        $slug      = strtolower(trim($request->query('sucursal', 'mansion')));
+        $timeStart = $request->query('time_start');
 
         if (! isset(self::SLUG_MAP[$slug])) {
             return response()->json(['error' => 'Sucursal no válida.'], 422);
@@ -36,6 +38,9 @@ class MenuPublicoController extends Controller
         if (! $sucursal) {
             return response()->json([], 200);
         }
+
+        // Si se especificó hora y es >= 11:00, excluir categorías de desayuno
+        $esAlmuerzoCena = $timeStart && $timeStart >= '11:00';
 
         $platos = Receta::with(['categoria'])
             ->where('activa', true)
@@ -51,6 +56,12 @@ class MenuPublicoController extends Controller
             ->where(function ($q) {
                 $q->where('precio', '>', 0)->orWhereNotNull('foto_plato');
             })
+            ->when($esAlmuerzoCena, fn ($q) =>
+                $q->whereHas('categoria', fn ($cq) =>
+                    $cq->whereRaw("lower(nombre) NOT LIKE '%desayuno%'")
+                       ->whereRaw("lower(nombre) NOT LIKE '%breakfast%'")
+                )
+            )
             ->orderBy('nombre')
             ->get(['id', 'nombre', 'categoria_id', 'precio', 'foto_plato']);
 
