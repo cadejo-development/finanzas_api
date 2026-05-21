@@ -454,18 +454,20 @@ abstract class RRHHBaseController extends Controller
             ->table('empleados as e')
             ->leftJoin('cargos as c', 'e.cargo_id', '=', 'c.id')
             ->leftJoin('sucursales as s', 'e.sucursal_id', '=', 's.id')
+            ->leftJoin('departamentos as d', 'e.departamento_id', '=', 'd.id')
             ->whereIn('e.id', $empleadoIds)
-            ->select('e.id', 'e.codigo', 'e.nombres', 'e.apellidos', 'c.nombre as cargo_nombre', 's.nombre as sucursal_nombre')
+            ->select('e.id', 'e.codigo', 'e.nombres', 'e.apellidos', 'c.nombre as cargo_nombre', 's.nombre as sucursal_nombre', 'd.nombre as departamento_nombre')
             ->get()
             ->keyBy('id');
 
         return collect($records)->map(function ($record) use ($empleados, $empleadoIdKey) {
             $arr = is_array($record) ? $record : (array) $record;
             $emp = $empleados[$arr[$empleadoIdKey] ?? null] ?? null;
-            $arr['empleado_nombre']    = $emp ? trim($emp->nombres . ' ' . $emp->apellidos) : null;
-            $arr['empleado_codigo']    = $emp?->codigo;
-            $arr['cargo_nombre']       = $emp?->cargo_nombre;
-            $arr['sucursal_nombre']    = $emp?->sucursal_nombre;
+            $arr['empleado_nombre']      = $emp ? trim($emp->nombres . ' ' . $emp->apellidos) : null;
+            $arr['empleado_codigo']      = $emp?->codigo;
+            $arr['cargo_nombre']         = $emp?->cargo_nombre;
+            $arr['sucursal_nombre']      = $emp?->sucursal_nombre;
+            $arr['departamento_nombre']  = $emp?->departamento_nombre;
             return $arr;
         })->all();
     }
