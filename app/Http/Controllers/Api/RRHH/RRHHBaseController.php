@@ -452,8 +452,8 @@ abstract class RRHHBaseController extends Controller
 
         $empleados = DB::connection('pgsql')
             ->table('empleados as e')
-            ->join('cargos as c', 'e.cargo_id', '=', 'c.id')
-            ->join('sucursales as s', 'e.sucursal_id', '=', 's.id')
+            ->leftJoin('cargos as c', 'e.cargo_id', '=', 'c.id')
+            ->leftJoin('sucursales as s', 'e.sucursal_id', '=', 's.id')
             ->whereIn('e.id', $empleadoIds)
             ->select('e.id', 'e.codigo', 'e.nombres', 'e.apellidos', 'c.nombre as cargo_nombre', 's.nombre as sucursal_nombre')
             ->get()
