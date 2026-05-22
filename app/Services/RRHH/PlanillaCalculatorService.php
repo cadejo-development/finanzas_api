@@ -2,7 +2,6 @@
 
 namespace App\Services\RRHH;
 
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -17,52 +16,55 @@ use Illuminate\Support\Facades\DB;
  */
 class PlanillaCalculatorService
 {
-    private const CACHE_TTL    = 600; // 10 minutos
     private const ISSS_MAX_EMP = 15.00; // máximo descuento ISSS empleado por quincena
+
+    // Caché estático a nivel de request (sin depender del driver de caché de Laravel)
+    private static array $configCache = [];
+    private static array $rentaCache  = [];
 
     // ─── Configuración ───────────────────────────────────────────────────────
 
     /**
-     * Retorna el mapa clave→valor de planilla_config (cacheado).
+     * Retorna el mapa clave→valor de planilla_config (cacheado por request).
      */
     public function getConfig(): array
     {
-        return Cache::remember('planilla_config', self::CACHE_TTL, function () {
+        if (empty(self::$configCache)) {
             $rows = DB::connection('pgsql')
                 ->table('planilla_config')
                 ->get(['clave', 'valor']);
 
-            $map = [];
             foreach ($rows as $row) {
-                $map[$row->clave] = (float) $row->valor;
+                self::$configCache[$row->clave] = (float) $row->valor;
             }
-            return $map;
-        });
+        }
+        return self::$configCache;
     }
 
     /**
-     * Retorna los tramos de renta activos, ordenados por desde (cacheado).
+     * Retorna los tramos de renta activos, ordenados por desde (cacheado por request).
      */
     public function getTablaRenta(): array
     {
-        return Cache::remember('planilla_tabla_renta', self::CACHE_TTL, function () {
-            return DB::connection('pgsql')
+        if (empty(self::$rentaCache)) {
+            self::$rentaCache = DB::connection('pgsql')
                 ->table('planilla_tabla_renta')
                 ->where('activo', true)
                 ->orderBy('desde')
                 ->get()
                 ->map(fn($r) => (array) $r)
                 ->all();
-        });
+        }
+        return self::$rentaCache;
     }
 
     /**
-     * Limpia la caché de configuración (llamar tras guardar cambios).
+     * Limpia la caché estática (llamar tras guardar cambios en mantenimiento).
      */
     public function clearCache(): void
     {
-        Cache::forget('planilla_config');
-        Cache::forget('planilla_tabla_renta');
+        self::$configCache = [];
+        self::$rentaCache  = [];
     }
 
     // ─── Cálculos por empleado ───────────────────────────────────────────────
