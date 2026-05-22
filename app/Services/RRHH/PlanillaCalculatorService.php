@@ -228,8 +228,8 @@ class PlanillaCalculatorService
         $afpEmp  = $this->calcularAFPEmpleado($salarioProp);
         $isssEmp = $this->calcularISSSEmpleado($salarioProp);
 
-        // Base para renta = salario prop - AFP (AFP es deducible del ISR)
-        $baseRenta = round($salarioProp - $afpEmp, 2);
+        // Base para renta = salario prop - AFP - ISSS (Art. 29 Ley ISR El Salvador)
+        $baseRenta = round($salarioProp - $afpEmp - $isssEmp, 2);
         $renta     = $this->calcularRenta($baseRenta);
 
         // Órdenes de descuento
