@@ -30,7 +30,7 @@ class PlanillaCalculatorService
     public function getConfig(): array
     {
         if (empty(self::$configCache)) {
-            $rows = DB::connection('pgsql')
+            $rows = DB::connection('rrhh')
                 ->table('planilla_config')
                 ->get(['clave', 'valor']);
 
@@ -47,7 +47,7 @@ class PlanillaCalculatorService
     public function getTablaRenta(): array
     {
         if (empty(self::$rentaCache)) {
-            self::$rentaCache = DB::connection('pgsql')
+            self::$rentaCache = DB::connection('rrhh')
                 ->table('planilla_tabla_renta')
                 ->where('activo', true)
                 ->orderBy('desde')

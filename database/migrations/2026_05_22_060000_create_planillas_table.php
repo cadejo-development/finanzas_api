@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -6,11 +6,11 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    protected $connection = 'pgsql';
+    protected $connection$connection = 'rrhh';
 
     public function up(): void
     {
-        Schema::connection('pgsql')->create('planillas', function (Blueprint $table) {
+        Schema::connection('rrhh')->create('planillas', function (Blueprint $table) {
             $table->id();
             $table->integer('anio');
             $table->integer('mes');
@@ -29,16 +29,16 @@ return new class extends Migration
 
         // Índice único compuesto: permite múltiples planillas por período si difieren en sucursal_id
         // PostgreSQL permite NULL en unique index sin conflicto entre NULLs
-        \Illuminate\Support\Facades\DB::connection('pgsql')->statement(
+        \Illuminate\Support\Facades\DB::connection('rrhh')->statement(
             'CREATE UNIQUE INDEX planillas_periodo_sucursal_unique ON planillas (anio, mes, quincena, sucursal_id) WHERE sucursal_id IS NOT NULL'
         );
-        \Illuminate\Support\Facades\DB::connection('pgsql')->statement(
+        \Illuminate\Support\Facades\DB::connection('rrhh')->statement(
             'CREATE UNIQUE INDEX planillas_periodo_sin_sucursal_unique ON planillas (anio, mes, quincena) WHERE sucursal_id IS NULL'
         );
     }
 
     public function down(): void
     {
-        Schema::connection('pgsql')->dropIfExists('planillas');
+        Schema::connection('rrhh')->dropIfExists('planillas');
     }
 };

@@ -6,11 +6,11 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    protected $connection = 'pgsql';
+    protected $connection = 'rrhh';
 
     public function up(): void
     {
-        Schema::connection('pgsql')->create('planilla_config', function (Blueprint $table) {
+        Schema::connection('rrhh')->create('planilla_config', function (Blueprint $table) {
             $table->id();
             $table->string('clave', 100)->unique();
             $table->decimal('valor', 12, 4);
@@ -21,6 +21,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::connection('pgsql')->dropIfExists('planilla_config');
+        Schema::connection('rrhh')->dropIfExists('planilla_config');
     }
 };

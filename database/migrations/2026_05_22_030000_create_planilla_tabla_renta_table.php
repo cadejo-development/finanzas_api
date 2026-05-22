@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -6,11 +6,11 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    protected $connection = 'pgsql';
+    protected $connection$connection = 'rrhh';
 
     public function up(): void
     {
-        Schema::connection('pgsql')->create('planilla_tabla_renta', function (Blueprint $table) {
+        Schema::connection('rrhh')->create('planilla_tabla_renta', function (Blueprint $table) {
             $table->id();
             $table->decimal('desde', 10, 2);
             $table->decimal('hasta', 10, 2)->nullable();
@@ -25,6 +25,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::connection('pgsql')->dropIfExists('planilla_tabla_renta');
+        Schema::connection('rrhh')->dropIfExists('planilla_tabla_renta');
     }
 };

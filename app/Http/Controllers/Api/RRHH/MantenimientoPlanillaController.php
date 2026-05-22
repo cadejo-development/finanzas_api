@@ -36,17 +36,17 @@ class MantenimientoPlanillaController extends RRHHBaseController
         try {
             $validated = $request->validate([
                 'configs'          => 'required|array',
-                'configs.*.id'     => 'required|integer|exists:pgsql.planilla_config,id',
+                'configs.*.id'     => 'required|integer|exists:rrhh.planilla_config,id',
                 'configs.*.valor'  => 'required|numeric|min:0',
             ]);
 
-            DB::connection('pgsql')->beginTransaction();
+            DB::connection('rrhh')->beginTransaction();
             foreach ($validated['configs'] as $item) {
                 PlanillaConfig::where('id', $item['id'])->update([
                     'valor' => $item['valor'],
                 ]);
             }
-            DB::connection('pgsql')->commit();
+            DB::connection('rrhh')->commit();
 
             // Limpiar caché
             $this->calc->clearCache();
@@ -57,7 +57,7 @@ class MantenimientoPlanillaController extends RRHHBaseController
                 'data'    => PlanillaConfig::orderBy('clave')->get(),
             ]);
         } catch (\Throwable $e) {
-            DB::connection('pgsql')->rollBack();
+            DB::connection('rrhh')->rollBack();
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
@@ -84,13 +84,13 @@ class MantenimientoPlanillaController extends RRHHBaseController
         try {
             $validated = $request->validate([
                 'tramos'                   => 'required|array|min:1',
-                'tramos.*.id'              => 'required|integer|exists:pgsql.planilla_tabla_renta,id',
+                'tramos.*.id'              => 'required|integer|exists:rrhh.planilla_tabla_renta,id',
                 'tramos.*.cuota_fija'      => 'required|numeric|min:0',
                 'tramos.*.porcentaje'      => 'required|numeric|min:0|max:100',
                 'tramos.*.sobre_exceso_de' => 'required|numeric|min:0',
             ]);
 
-            DB::connection('pgsql')->beginTransaction();
+            DB::connection('rrhh')->beginTransaction();
             foreach ($validated['tramos'] as $tramo) {
                 PlanillaTablaRenta::where('id', $tramo['id'])->update([
                     'cuota_fija'      => $tramo['cuota_fija'],
@@ -98,7 +98,7 @@ class MantenimientoPlanillaController extends RRHHBaseController
                     'sobre_exceso_de' => $tramo['sobre_exceso_de'],
                 ]);
             }
-            DB::connection('pgsql')->commit();
+            DB::connection('rrhh')->commit();
 
             $this->calc->clearCache();
 
@@ -108,7 +108,7 @@ class MantenimientoPlanillaController extends RRHHBaseController
                 'data'    => PlanillaTablaRenta::where('activo', true)->orderBy('desde')->get(),
             ]);
         } catch (\Throwable $e) {
-            DB::connection('pgsql')->rollBack();
+            DB::connection('rrhh')->rollBack();
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
@@ -228,7 +228,7 @@ class MantenimientoPlanillaController extends RRHHBaseController
         try {
             $validated = $request->validate([
                 'empleado_id'     => 'required|integer|exists:pgsql.empleados,id',
-                'acreedor_id'     => 'nullable|integer|exists:pgsql.planilla_acreedores,id',
+                'acreedor_id'     => 'nullable|integer|exists:rrhh.planilla_acreedores,id',
                 'concepto'        => 'required|string|max:200',
                 'monto_quincenal' => 'required|numeric|min:0.01',
                 'fecha_inicio'    => 'required|date',
@@ -252,7 +252,7 @@ class MantenimientoPlanillaController extends RRHHBaseController
         $orden = PlanillaOrdenDescuento::findOrFail($id);
 
         $validated = $request->validate([
-            'acreedor_id'     => 'nullable|integer|exists:pgsql.planilla_acreedores,id',
+            'acreedor_id'     => 'nullable|integer|exists:rrhh.planilla_acreedores,id',
             'concepto'        => 'sometimes|string|max:200',
             'monto_quincenal' => 'sometimes|numeric|min:0.01',
             'fecha_inicio'    => 'sometimes|date',

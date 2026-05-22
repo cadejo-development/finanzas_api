@@ -184,7 +184,7 @@ class PlanillasController extends RRHHBaseController
 
             $lineasCalc = [];
 
-            DB::connection('pgsql')->beginTransaction();
+            DB::connection('rrhh')->beginTransaction();
             try {
                 // Borrar líneas anteriores de esta planilla
                 PlanillaLinea::where('planilla_id', $planilla->id)->delete();
@@ -223,9 +223,9 @@ class PlanillasController extends RRHHBaseController
                 $totales = $this->calc->calcularTotalesPlanilla($lineasCalc);
                 $planilla->update($totales);
 
-                DB::connection('pgsql')->commit();
+                DB::connection('rrhh')->commit();
             } catch (\Throwable $e) {
-                DB::connection('pgsql')->rollBack();
+                DB::connection('rrhh')->rollBack();
                 throw $e;
             }
 

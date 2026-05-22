@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Models\RRHH;
 
@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class PlanillaOrdenDescuento extends Model
 {
-    protected $connection = 'pgsql';
+    protected $connection = 'rrhh';
     protected $table      = 'planilla_ordenes_descuento';
 
     protected $fillable = [

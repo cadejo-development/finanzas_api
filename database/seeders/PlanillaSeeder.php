@@ -49,7 +49,7 @@ class PlanillaSeeder extends Seeder
         ];
 
         foreach ($configs as $config) {
-            DB::connection('pgsql')->table('planilla_config')->updateOrInsert(
+            DB::connection('rrhh')->table('planilla_config')->updateOrInsert(
                 ['clave' => $config['clave']],
                 array_merge($config, [
                     'created_at' => now(),
@@ -60,7 +60,7 @@ class PlanillaSeeder extends Seeder
 
         // ── Tabla de Renta Quincenal 2024/2025 ────────────────────────────────
         // Primero desactivar cualquier tabla activa previa
-        DB::connection('pgsql')->table('planilla_tabla_renta')
+        DB::connection('rrhh')->table('planilla_tabla_renta')
             ->where('activo', true)
             ->update(['activo' => false]);
 
@@ -96,7 +96,7 @@ class PlanillaSeeder extends Seeder
         ];
 
         foreach ($tramos as $tramo) {
-            DB::connection('pgsql')->table('planilla_tabla_renta')->insert(array_merge($tramo, [
+            DB::connection('rrhh')->table('planilla_tabla_renta')->insert(array_merge($tramo, [
                 'vigente_desde' => '2024-01-01',
                 'activo'        => true,
                 'created_at'    => now(),
