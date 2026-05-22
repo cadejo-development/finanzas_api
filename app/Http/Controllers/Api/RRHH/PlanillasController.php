@@ -93,7 +93,7 @@ class PlanillasController extends RRHHBaseController
             $arr['departamento_nombre'] = $emp?->departamento_nombre;
             $arr['sin_salario']         = ($arr['salario_base'] ?? 0) == 0;
             return $arr;
-        });
+        })->sortBy(fn($l) => $l['empleado_codigo'] ?? '')->values();
 
         $sucursalNombre = null;
         if ($planilla->sucursal_id) {
@@ -169,9 +169,10 @@ class PlanillasController extends RRHHBaseController
                 ]);
             }
 
-            // Cargar empleados activos
-            $empleados = $this->getEmpleadosParaPlanilla($sucursalId);
-            $empIds    = array_column($empleados, 'id');
+            // Cargar empleados activos + desvinculados durante el período
+            ['empleados' => $empleados, 'desvinculados' => $desvinculados]
+                = $this->getEmpleadosParaPlanilla($sucursalId, $fechaInicio, $fechaFin);
+            $empIds = array_column($empleados, 'id');
 
             // Cargar eventos del período (misma lógica que ReportesRRHHController)
             $permisos      = $this->getPermisos($empIds, $fechaInicio, $fechaFin);
@@ -190,15 +191,26 @@ class PlanillasController extends RRHHBaseController
                 PlanillaLinea::where('planilla_id', $planilla->id)->delete();
 
                 foreach ($empleados as $emp) {
-                    $eid        = (int) $emp['id'];
-                    $salBase    = (float) ($emp['salario_base'] ?? 0);
+                    $eid     = (int) $emp['id'];
+                    $salBase = (float) ($emp['salario_base'] ?? 0);
 
-                    // Días no trabajados (misma lógica que reporte quincenal)
+                    // Para desvinculados: acotar el período hasta su fecha efectiva
+                    $desvinc = $desvinculados->get($eid);
+                    if ($desvinc) {
+                        $fechaTerm    = Carbon::parse($desvinc->fecha_efectiva);
+                        $hastaEfectivo = $fechaTerm->lessThan($fechaFin) ? $fechaTerm : $fechaFin;
+                        $diasEfectivos = max(1, $fechaInicio->diffInDays($hastaEfectivo) + 1);
+                    } else {
+                        $hastaEfectivo = $fechaFin;
+                        $diasEfectivos = $diasQuincena;
+                    }
+
+                    // Días no trabajados dentro del período efectivo del empleado
                     $diasNoTrab = $this->calcDiasNoTrabajados(
                         $eid, $permisos, $incapacidades, $vacaciones, $ausencias,
-                        $fechaInicio, $fechaFin
+                        $fechaInicio, $hastaEfectivo
                     );
-                    $diasLab = max(0, $diasQuincena - $diasNoTrab);
+                    $diasLab = max(0, $diasEfectivos - $diasNoTrab);
 
                     // Órdenes de descuento del empleado
                     $ordenes = $ordenesMap[$eid] ?? [];
@@ -346,18 +358,38 @@ class PlanillasController extends RRHHBaseController
         return [$desde, $hasta];
     }
 
-    private function getEmpleadosParaPlanilla(?int $sucursalId): array
+    private function getEmpleadosParaPlanilla(?int $sucursalId, Carbon $fechaInicio, Carbon $fechaFin): array
     {
+        // Empleados desvinculados con fecha efectiva dentro del período
+        $desvinculados = DB::connection('rrhh')
+            ->table('desvinculaciones')
+            ->where('estado', 'aprobado')
+            ->where('fecha_efectiva', '>=', $fechaInicio->toDateString())
+            ->where('fecha_efectiva', '<=', $fechaFin->toDateString())
+            ->select('empleado_id', 'fecha_efectiva')
+            ->get()
+            ->keyBy('empleado_id');
+
+        $desvinculadosIds = $desvinculados->keys()->all();
+
         $query = DB::connection('pgsql')
             ->table('empleados as e')
-            ->where('e.activo', true)
+            ->where(function ($q) use ($desvinculadosIds) {
+                $q->where('e.activo', true);
+                if (!empty($desvinculadosIds)) {
+                    $q->orWhereIn('e.id', $desvinculadosIds);
+                }
+            })
             ->select('e.id', 'e.salario_base');
 
         if ($sucursalId) {
             $query->where('e.sucursal_id', $sucursalId);
         }
 
-        return $query->get()->map(fn($r) => (array) $r)->all();
+        return [
+            'empleados'     => $query->get()->map(fn($r) => (array) $r)->all(),
+            'desvinculados' => $desvinculados,
+        ];
     }
 
     private function getPermisos(array $empIds, Carbon $desde, Carbon $hasta): \Illuminate\Support\Collection
