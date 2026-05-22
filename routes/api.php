@@ -41,6 +41,8 @@ use App\Http\Controllers\Api\RRHH\HistorialController;
 use App\Http\Controllers\Api\RRHH\AusenciasController;
 use App\Http\Controllers\Api\RRHH\ReportesRRHHController;
 use App\Http\Controllers\Api\RRHH\HorariosController;
+use App\Http\Controllers\Api\RRHH\PlanillasController;
+use App\Http\Controllers\Api\RRHH\MantenimientoPlanillaController;
 use App\Http\Controllers\Api\GeoController;
 use App\Http\Controllers\Api\Compras\MenuPublicoController;
 
@@ -474,6 +476,33 @@ Route::prefix('rrhh/expediente')->middleware(['auth:sanctum', 'role:jefatura,por
 
     // Fecha de ingreso (solo rrhh_admin)
     Route::patch('{empleadoId}/fecha-ingreso',                    [ExpedienteController::class, 'updateFechaIngreso']);
+});
+
+// ─── RRHH Planillas (solo rrhh_admin) ────────────────────────────────────────
+Route::prefix('rrhh/planillas')->middleware(['auth:sanctum', 'role:rrhh_admin'])->group(function () {
+
+    // IMPORTANTE: rutas estáticas ANTES de {id} para evitar conflictos de orden
+    Route::get('mantenimiento/config',              [MantenimientoPlanillaController::class, 'getConfig']);
+    Route::put('mantenimiento/config',              [MantenimientoPlanillaController::class, 'updateConfig']);
+    Route::get('mantenimiento/renta',               [MantenimientoPlanillaController::class, 'getTablaRenta']);
+    Route::put('mantenimiento/renta',               [MantenimientoPlanillaController::class, 'updateTablaRenta']);
+    Route::get('mantenimiento/acreedores',          [MantenimientoPlanillaController::class, 'getAcreedores']);
+    Route::post('mantenimiento/acreedores',         [MantenimientoPlanillaController::class, 'storeAcreedor']);
+    Route::put('mantenimiento/acreedores/{id}',     [MantenimientoPlanillaController::class, 'updateAcreedor']);
+    Route::patch('mantenimiento/acreedores/{id}/toggle', [MantenimientoPlanillaController::class, 'toggleAcreedor']);
+    Route::get('mantenimiento/ordenes',             [MantenimientoPlanillaController::class, 'getOrdenes']);
+    Route::post('mantenimiento/ordenes',            [MantenimientoPlanillaController::class, 'storeOrden']);
+    Route::put('mantenimiento/ordenes/{id}',        [MantenimientoPlanillaController::class, 'updateOrden']);
+    Route::delete('mantenimiento/ordenes/{id}',     [MantenimientoPlanillaController::class, 'deleteOrden']);
+
+    // Generar ANTES de {id} para evitar que "generar" sea interpretado como {id}
+    Route::post('generar',                          [PlanillasController::class, 'generar']);
+
+    // CRUD planillas
+    Route::get('',                                  [PlanillasController::class, 'index']);
+    Route::get('{id}',                              [PlanillasController::class, 'show']);
+    Route::put('{id}/aprobar',                      [PlanillasController::class, 'aprobar']);
+    Route::get('{id}/exportar',                     [PlanillasController::class, 'exportar']);
 });
 
 // ─── RRHH Admin — Departamentos (portal_admin o rrhh_admin) ─────────────────
