@@ -2,6 +2,7 @@
 
 namespace App\Services\RRHH;
 
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -13,9 +14,15 @@ use Illuminate\Support\Facades\DB;
  *   ISSS patronal 7.5%    (mismo tope)
  *   INSAFORP      1.0%    (sin tope, solo patronal)
  *   Renta (ISR)   tabla quincenal vigente en DB
+ *
+ * Convención de días: El Salvador usa el estándar de 30 días/mes.
+ * Cada quincena = 15 días, independiente de los días calendario del mes.
  */
 class PlanillaCalculatorService
 {
+    /** Días estándar por quincena (30-day month standard, El Salvador). */
+    public const DIAS_QUINCENA = 15;
+
     private const ISSS_MAX_EMP = 15.00; // máximo descuento ISSS empleado por quincena
 
     // Caché estático a nivel de request (sin depender del driver de caché de Laravel)
@@ -65,6 +72,37 @@ class PlanillaCalculatorService
     {
         self::$configCache = [];
         self::$rentaCache  = [];
+    }
+
+    // ─── Rango de quincena (centralizado) ────────────────────────────────────
+
+    /**
+     * Rango de fechas de una quincena.
+     * Q1 = días 1–15, Q2 = días 16–fin de mes (para lookup de eventos).
+     * Para cálculo salarial usar siempre DIAS_QUINCENA = 15.
+     */
+    public function rangoQuincena(int $anio, int $mes, int $q): array
+    {
+        if ($q === 1) {
+            $desde = Carbon::create($anio, $mes, 1);
+            $hasta = Carbon::create($anio, $mes, 15);
+        } else {
+            $desde = Carbon::create($anio, $mes, 16);
+            $hasta = Carbon::create($anio, $mes)->endOfMonth()->startOfDay();
+        }
+        return [$desde, $hasta];
+    }
+
+    /**
+     * Quincena anterior a la dada.
+     */
+    public function quincenaAnterior(int $anio, int $mes, int $q): array
+    {
+        if ($q === 2) {
+            return [$anio, $mes, 1];
+        }
+        $fecha = Carbon::create($anio, $mes, 1)->subMonth();
+        return [$fecha->year, $fecha->month, 2];
     }
 
     // ─── Cálculos por empleado ───────────────────────────────────────────────
@@ -168,18 +206,21 @@ class PlanillaCalculatorService
     /**
      * Cálculo completo de un empleado para la quincena.
      *
-     * @param float $salarioBase       Salario base quincenal
-     * @param float $diasLaborados     Días realmente trabajados
-     * @param int   $diasQuincena      Días totales de la quincena (14, 15 o 16)
+     * @param float $salarioMensual    Salario mensual del empleado (empleados.salario_base)
+     * @param float $diasLaborados     Días realmente trabajados (máx DIAS_QUINCENA = 15)
+     * @param int   $diasQuincena      Siempre 15 (estándar 30 días/mes, El Salvador)
      * @param array $ordenes           Órdenes de descuento activas [{concepto, monto_quincenal}]
      * @return array
      */
     public function calcularPlanillaEmpleado(
-        float $salarioBase,
+        float $salarioMensual,
         float $diasLaborados,
         int   $diasQuincena,
         array $ordenes = []
     ): array {
+        // Quincenal = mensual / 2 (estándar 30 días/mes)
+        $salarioBase = round($salarioMensual / 2, 2);
+
         // Proporcional
         $salarioProp = $this->calcularSalarioProporcional($salarioBase, $diasLaborados, $diasQuincena);
 
@@ -218,7 +259,7 @@ class PlanillaCalculatorService
         $costoTotal  = round($salarioProp + $totalPat, 2);
 
         return [
-            'salario_base'             => round($salarioBase, 2),
+            'salario_base'             => round($salarioMensual, 2),  // Mensual (referencia)
             'dias_quincena'            => $diasQuincena,
             'dias_laborados'           => round($diasLaborados, 2),
             'salario_proporcional'     => $salarioProp,

@@ -6,6 +6,7 @@ use App\Models\RRHH\AusenciaInjustificada;
 use App\Models\RRHH\Incapacidad;
 use App\Models\RRHH\Permiso;
 use App\Models\RRHH\Vacacion;
+use App\Services\RRHH\PlanillaCalculatorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +28,8 @@ use Carbon\Carbon;
  */
 class ReportesRRHHController extends RRHHBaseController
 {
+    public function __construct(private PlanillaCalculatorService $calc) {}
+
     public function quincena(Request $request): JsonResponse
     {
         try {
@@ -39,15 +42,15 @@ class ReportesRRHHController extends RRHHBaseController
         $deptoId     = $request->query('departamento_id');
 
         // Calcular rango de fechas de la quincena actual
-        [$desdeAct, $hastaAct] = $this->rangoQuincena($anio, $mes, $quincena);
+        [$desdeAct, $hastaAct] = $this->calc->rangoQuincena($anio, $mes, $quincena);
 
         // Quincena anterior
-        [$prevAnio, $prevMes, $prevQ] = $this->quincenaAnterior($anio, $mes, $quincena);
-        [$desdePrev, $hastaPrev] = $this->rangoQuincena($prevAnio, $prevMes, $prevQ);
+        [$prevAnio, $prevMes, $prevQ] = $this->calc->quincenaAnterior($anio, $mes, $quincena);
+        [$desdePrev, $hastaPrev] = $this->calc->rangoQuincena($prevAnio, $prevMes, $prevQ);
 
-        // Días hábiles de la quincena actual y anterior
-        $diasQuincena     = $desdeAct->diffInDays($hastaAct) + 1;
-        $diasQuincenaPrev = $desdePrev->diffInDays($hastaPrev) + 1;
+        // Estándar 30 días/mes: cada quincena siempre 15 días (El Salvador)
+        $diasQuincena     = PlanillaCalculatorService::DIAS_QUINCENA;
+        $diasQuincenaPrev = PlanillaCalculatorService::DIAS_QUINCENA;
 
         // --- Cargar empleados filtrados ---
         $empleados = $this->getEmpleadosFiltrados($subordinadosIds, $sucursalId, $deptoId);
@@ -143,29 +146,6 @@ class ReportesRRHHController extends RRHHBaseController
                 'file'    => $e->getFile() . ':' . $e->getLine(),
             ], 500);
         }
-    }
-
-    // ─── Helpers de rango ────────────────────────────────────────────────────
-
-    private function rangoQuincena(int $anio, int $mes, int $q): array
-    {
-        if ($q === 1) {
-            $desde = Carbon::create($anio, $mes, 1);
-            $hasta = Carbon::create($anio, $mes, 15);
-        } else {
-            $desde = Carbon::create($anio, $mes, 16);
-            $hasta = Carbon::create($anio, $mes)->endOfMonth()->startOfDay();
-        }
-        return [$desde, $hasta];
-    }
-
-    private function quincenaAnterior(int $anio, int $mes, int $q): array
-    {
-        if ($q === 2) {
-            return [$anio, $mes, 1];
-        }
-        $fecha = Carbon::create($anio, $mes, 1)->subMonth();
-        return [$fecha->year, $fecha->month, 2];
     }
 
     // ─── Carga de datos ──────────────────────────────────────────────────────

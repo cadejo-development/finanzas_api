@@ -149,8 +149,8 @@ class PlanillasController extends RRHHBaseController
             }
 
             // Calcular rango de fechas de la quincena
-            [$fechaInicio, $fechaFin] = $this->rangoQuincena($anio, $mes, $quincena);
-            $diasQuincena = $fechaInicio->diffInDays($fechaFin) + 1;
+            [$fechaInicio, $fechaFin] = $this->calc->rangoQuincena($anio, $mes, $quincena);
+            $diasQuincena = PlanillaCalculatorService::DIAS_QUINCENA; // Siempre 15 (30 días/mes)
 
             if (!$planilla) {
                 $planilla = Planilla::create([
@@ -199,12 +199,13 @@ class PlanillasController extends RRHHBaseController
                     // Para desvinculados: acotar el período hasta su fecha efectiva
                     $desvinc = $desvinculados->get($eid);
                     if ($desvinc) {
-                        $fechaTerm    = Carbon::parse($desvinc->fecha_efectiva);
+                        $fechaTerm     = Carbon::parse($desvinc->fecha_efectiva);
                         $hastaEfectivo = $fechaTerm->lessThan($fechaFin) ? $fechaTerm : $fechaFin;
-                        $diasEfectivos = max(1, $fechaInicio->diffInDays($hastaEfectivo) + 1);
+                        // Días proporcionales al período efectivo, máx 15 (estándar 30 días/mes)
+                        $diasEfectivos = min($diasQuincena, max(1, $fechaInicio->diffInDays($hastaEfectivo) + 1));
                     } else {
                         $hastaEfectivo = $fechaFin;
-                        $diasEfectivos = $diasQuincena;
+                        $diasEfectivos = $diasQuincena; // 15
                     }
 
                     // Días no trabajados dentro del período efectivo del empleado
@@ -212,7 +213,8 @@ class PlanillasController extends RRHHBaseController
                         $eid, $permisos, $incapacidades, $vacaciones, $ausencias,
                         $fechaInicio, $hastaEfectivo
                     );
-                    $diasLab = max(0, $diasEfectivos - $diasNoTrab);
+                    // Cap a diasQuincena: en meses con 31 días no se pagan días extra
+                    $diasLab = min($diasQuincena, max(0, $diasEfectivos - $diasNoTrab));
 
                     // Órdenes de descuento del empleado
                     $ordenes = $ordenesMap[$eid] ?? [];
@@ -347,18 +349,6 @@ class PlanillasController extends RRHHBaseController
     }
 
     // ─── Helpers privados ────────────────────────────────────────────────────
-
-    private function rangoQuincena(int $anio, int $mes, int $q): array
-    {
-        if ($q === 1) {
-            $desde = Carbon::create($anio, $mes, 1);
-            $hasta = Carbon::create($anio, $mes, 15);
-        } else {
-            $desde = Carbon::create($anio, $mes, 16);
-            $hasta = Carbon::create($anio, $mes)->endOfMonth()->startOfDay();
-        }
-        return [$desde, $hasta];
-    }
 
     private function getEmpleadosParaPlanilla(?int $sucursalId, Carbon $fechaInicio, Carbon $fechaFin): array
     {
