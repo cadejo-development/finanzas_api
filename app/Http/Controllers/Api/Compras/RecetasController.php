@@ -318,7 +318,15 @@ class RecetasController extends Controller
                 'modificado_localmente' => true,
             ]);
 
-            foreach ($validated['ingredientes'] ?? [] as $ing) {
+            $ings = $validated['ingredientes'] ?? [];
+            $productoIdsStore = array_filter(array_column($ings, 'producto_id'));
+            if (count($productoIdsStore) !== count(array_unique($productoIdsStore))) {
+                $duplicados = array_values(array_unique(array_diff_assoc($productoIdsStore, array_unique($productoIdsStore))));
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'ingredientes' => 'La receta tiene ingredientes duplicados (producto_id: ' . implode(', ', $duplicados) . '). Cada producto debe aparecer una sola vez.',
+                ]);
+            }
+            foreach ($ings as $ing) {
                 RecetaIngrediente::create([
                     'receta_id'          => $receta->id,
                     'producto_id'        => $ing['producto_id'] ?? null,
@@ -436,6 +444,15 @@ class RecetasController extends Controller
 
             // Reemplazar ingredientes si se envian
             if (array_key_exists('ingredientes', $validated)) {
+                // Detectar producto_id duplicados antes de insertar
+                $productoIds = array_filter(array_column($validated['ingredientes'], 'producto_id'));
+                if (count($productoIds) !== count(array_unique($productoIds))) {
+                    $duplicados = array_values(array_unique(array_diff_assoc($productoIds, array_unique($productoIds))));
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'ingredientes' => 'La receta tiene ingredientes duplicados (producto_id: ' . implode(', ', $duplicados) . '). Cada producto debe aparecer una sola vez.',
+                    ]);
+                }
+
                 $receta->ingredientes()->delete();
                 foreach ($validated['ingredientes'] as $ing) {
                     RecetaIngrediente::create([
