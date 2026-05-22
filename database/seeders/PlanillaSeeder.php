@@ -58,8 +58,9 @@ class PlanillaSeeder extends Seeder
             );
         }
 
-        // ── Tabla de Renta Quincenal 2024/2025 ────────────────────────────────
-        // Primero desactivar cualquier tabla activa previa
+        // ── Tabla de Renta Quincenal — Decreto Ejecutivo No. 10, 30-04-2025 ────
+        // Vigente desde 1ª quincena de mayo 2025 (Art. 33 Ley ISR El Salvador)
+        // Exención mensual sube de $472 a $550 → quincenal exento hasta $275
         DB::connection('rrhh')->table('planilla_tabla_renta')
             ->where('activo', true)
             ->update(['activo' => false]);
@@ -67,43 +68,43 @@ class PlanillaSeeder extends Seeder
         $tramos = [
             [
                 'desde'           => 0.01,
-                'hasta'           => 169.33,
+                'hasta'           => 275.00,
                 'cuota_fija'      => 0.00,
                 'porcentaje'      => 0.00,
                 'sobre_exceso_de' => 0.00,
             ],
             [
-                'desde'           => 169.34,
-                'hasta'           => 380.95,
-                'cuota_fija'      => 0.00,
+                'desde'           => 275.01,
+                'hasta'           => 447.62,
+                'cuota_fija'      => 8.83,
                 'porcentaje'      => 10.00,
-                'sobre_exceso_de' => 169.33,
+                'sobre_exceso_de' => 275.00,
             ],
             [
-                'desde'           => 380.96,
-                'hasta'           => 952.38,
-                'cuota_fija'      => 21.16,
+                'desde'           => 447.63,
+                'hasta'           => 1019.05,
+                'cuota_fija'      => 30.00,
                 'porcentaje'      => 20.00,
-                'sobre_exceso_de' => 380.95,
+                'sobre_exceso_de' => 447.62,
             ],
             [
-                'desde'           => 952.39,
+                'desde'           => 1019.06,
                 'hasta'           => null,
-                'cuota_fija'      => 135.45,
+                'cuota_fija'      => 144.28,
                 'porcentaje'      => 30.00,
-                'sobre_exceso_de' => 952.38,
+                'sobre_exceso_de' => 1019.05,
             ],
         ];
 
         foreach ($tramos as $tramo) {
             DB::connection('rrhh')->table('planilla_tabla_renta')->insert(array_merge($tramo, [
-                'vigente_desde' => '2024-01-01',
+                'vigente_desde' => '2025-05-01',
                 'activo'        => true,
                 'created_at'    => now(),
                 'updated_at'    => now(),
             ]));
         }
 
-        $this->command->info('PlanillaSeeder: configuración y tabla de renta insertadas.');
+        $this->command->info('PlanillaSeeder: configuración y tabla de renta insertadas (Decreto No. 10, 2025).');
     }
 }
