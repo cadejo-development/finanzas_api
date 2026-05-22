@@ -44,7 +44,7 @@ class PlanillaSeeder extends Seeder
             [
                 'clave'       => 'insaforp_patronal_porcentaje',
                 'valor'       => 1.0000,
-                'descripcion' => 'Porcentaje INSAFORP aporte patronal (1.0%, sin tope)',
+                'descripcion' => 'Porcentaje INCAF aporte patronal (1.0%, sin tope) — sustituyó a INSAFORP (Decreto N.°893, dic-2023)',
             ],
         ];
 

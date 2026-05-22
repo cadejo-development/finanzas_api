@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
  *   AFP patronal  8.75%   (mismo tope)
  *   ISSS empleado 3.0%    (tope quincenal configurable, max $15)
  *   ISSS patronal 7.5%    (mismo tope)
- *   INSAFORP      1.0%    (sin tope, solo patronal)
+ *   INCAF      1.0%    (sin tope, solo patronal)
  *   Renta (ISR)   tabla quincenal vigente en DB
  *
  * Convención de días: El Salvador usa el estándar de 30 días/mes.
@@ -165,9 +165,9 @@ class PlanillaCalculatorService
     }
 
     /**
-     * INSAFORP aporte patronal (1%, sin tope).
+     * INCAF aporte patronal (1%, sin tope).
      */
-    public function calcularINSAFORP(float $salario): float
+    public function calcularINCAF(float $salario): float
     {
         $cfg = $this->getConfig();
         $pct = ($cfg['insaforp_patronal_porcentaje'] ?? 1.00) / 100;
@@ -254,7 +254,7 @@ class PlanillaCalculatorService
         // Cargas patronales
         $afpPat      = $this->calcularAFPPatronal($salarioProp);
         $isssPat     = $this->calcularISSSPatronal($salarioProp);
-        $insaforpPat = $this->calcularINSAFORP($salarioProp);
+        $insaforpPat = $this->calcularINCAF($salarioProp);
         $totalPat    = round($afpPat + $isssPat + $insaforpPat, 2);
         $costoTotal  = round($salarioProp + $totalPat, 2);
 
