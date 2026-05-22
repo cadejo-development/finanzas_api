@@ -92,6 +92,8 @@ class PlanillasController extends RRHHBaseController
             $arr['sucursal_nombre']     = $emp?->sucursal_nombre;
             $arr['departamento_nombre'] = $emp?->departamento_nombre;
             $arr['sin_salario']         = ($arr['salario_base'] ?? 0) == 0;
+            $arr['jefe_de_deptos']      = $emp?->jefe_de_deptos ?? [];
+            $arr['jefe_en_sucs']        = $emp?->jefe_en_sucs   ?? [];
             return $arr;
         })->sortBy(fn($l) => $l['empleado_codigo'] ?? '')->values();
 
@@ -501,7 +503,7 @@ class PlanillasController extends RRHHBaseController
     {
         if (empty($empIds)) return collect([]);
 
-        return DB::connection('pgsql')
+        $empleados = DB::connection('pgsql')
             ->table('empleados as e')
             ->leftJoin('cargos as c', 'e.cargo_id', '=', 'c.id')
             ->leftJoin('sucursales as s', 'e.sucursal_id', '=', 's.id')
@@ -515,6 +517,34 @@ class PlanillasController extends RRHHBaseController
             )
             ->get()
             ->keyBy('id');
+
+        // Departamentos en los que cada empleado figura como jefe
+        $jefaturasRaw = DB::connection('pgsql')
+            ->table('departamentos as d')
+            ->leftJoin('sucursales as s', 'd.sucursal_id', '=', 's.id')
+            ->whereIn('d.jefe_empleado_id', $empIds)
+            ->whereNotNull('d.jefe_empleado_id')
+            ->select('d.jefe_empleado_id', 'd.nombre as depto_nombre', 's.nombre as suc_nombre')
+            ->get();
+
+        $jefaturasMap = [];
+        foreach ($jefaturasRaw as $j) {
+            $eid = $j->jefe_empleado_id;
+            if (!isset($jefaturasMap[$eid])) {
+                $jefaturasMap[$eid] = ['deptos' => [], 'sucs' => []];
+            }
+            if ($j->depto_nombre) $jefaturasMap[$eid]['deptos'][] = $j->depto_nombre;
+            if ($j->suc_nombre && !in_array($j->suc_nombre, $jefaturasMap[$eid]['sucs'])) {
+                $jefaturasMap[$eid]['sucs'][] = $j->suc_nombre;
+            }
+        }
+
+        return $empleados->map(function ($emp) use ($jefaturasMap) {
+            $eid = $emp->id;
+            $emp->jefe_de_deptos = $jefaturasMap[$eid]['deptos'] ?? [];
+            $emp->jefe_en_sucs   = $jefaturasMap[$eid]['sucs']   ?? [];
+            return $emp;
+        });
     }
 
     /**
