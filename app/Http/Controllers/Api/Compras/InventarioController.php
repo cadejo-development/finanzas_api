@@ -65,7 +65,7 @@ class InventarioController extends Controller
                 'producto_id'         => $inv->producto_id,
                 'producto_nombre'     => $inv->producto?->nombre,
                 'producto_codigo'     => $inv->producto?->codigo,
-                'unidad'              => $inv->unidad,
+                'unidad'              => $inv->unidad ?: $inv->producto?->unidad,
                 'unidad_base'         => $inv->producto?->unidad_base,
                 'factor_conversion'   => $factor,
                 'fecha_conteo'        => $inv->fecha_conteo?->toDateString(),
