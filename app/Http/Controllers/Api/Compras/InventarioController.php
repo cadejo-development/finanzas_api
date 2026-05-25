@@ -38,11 +38,12 @@ class InventarioController extends Controller
 
         $productoIds = $inventarios->pluck('producto_id')->all();
 
-        // Sumar movimientos por producto
+        // Sumar movimientos por producto (excluir carga_inicial: ya está en cantidad_inicial_base)
         $movimientos = DB::connection('compras')
             ->table('movimientos_inventario')
             ->where('sucursal_id', $sucursalId)
             ->whereIn('producto_id', $productoIds)
+            ->where('tipo', '!=', 'carga_inicial')
             ->selectRaw('producto_id, SUM(cantidad_base) as total_base')
             ->groupBy('producto_id')
             ->pluck('total_base', 'producto_id');
