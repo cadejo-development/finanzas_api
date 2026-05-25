@@ -11,6 +11,7 @@ class Producto extends Model
     protected $fillable = [
         'categoria_id', 'codigo', 'nombre', 'unidad', 'unidad_base', 'factor_conversion',
         'precio', 'costo', 'origen', 'activo', 'aud_usuario', 'codigo_origen', 'modificado_localmente',
+        'unidad_compra', 'unidad_compra_nombre', 'factor_unidad_compra',
     ];
     protected $casts = [
         'precio'               => 'decimal:4',

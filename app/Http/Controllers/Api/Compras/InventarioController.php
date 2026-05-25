@@ -29,7 +29,7 @@ class InventarioController extends Controller
         }
 
         $inventarios = Inventario::where('sucursal_id', $sucursalId)
-            ->with('producto')
+            ->with(['producto', 'producto.categoria'])
             ->get();
 
         if ($inventarios->isEmpty()) {
@@ -71,9 +71,15 @@ class InventarioController extends Controller
                 'fecha_conteo'        => $inv->fecha_conteo?->toDateString(),
                 'cantidad_inicial'    => $inv->cantidad_inicial,
                 'stock_minimo'        => $inv->stock_minimo,
-                'seccion'             => $inv->seccion,
-                'costo'               => (float) ($inv->producto?->costo ?? 0),
-                'movimientos_base'    => round($movBase / $factor, 4),
+                'seccion'                 => $inv->seccion,
+                'costo'                   => (float) ($inv->producto?->costo ?? 0),
+                'categoria_id'            => $inv->producto?->categoria_id,
+                'categoria_nombre'        => $inv->producto?->categoria?->nombre,
+                'unidad_compra'           => $inv->producto?->unidad_compra,
+                'unidad_compra_nombre'    => $inv->producto?->unidad_compra_nombre,
+                'factor_unidad_compra'    => $inv->producto?->factor_unidad_compra
+                                              ? (float) $inv->producto->factor_unidad_compra : null,
+                'movimientos_base'        => round($movBase / $factor, 4),
                 'stock_actual'        => round($stockActual, 4),
                 'stock_actual_base'   => round($stockActualBase, 6),
                 'alerta'              => $alerta,
@@ -204,6 +210,44 @@ class InventarioController extends Controller
         ]);
 
         return response()->json(['success' => true, 'message' => 'Ajuste registrado.']);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /api/compras/inventario/secciones-masivas
+    // Asigna secciones por categoría de producto (bulk)
+    // Body: { sucursal_id, asignaciones: [{categoria_id, seccion}] }
+    // ─────────────────────────────────────────────────────────────────────────
+    public function asignarSeccionesMasivas(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'sucursal_id'                => 'required|integer',
+            'asignaciones'               => 'required|array|min:1',
+            'asignaciones.*.categoria_id'=> 'required|integer',
+            'asignaciones.*.seccion'     => 'nullable|string|max:50',
+        ]);
+
+        $sucursalId = (int) $validated['sucursal_id'];
+        $usuario    = Auth::user()->email;
+        $total      = 0;
+
+        foreach ($validated['asignaciones'] as $asig) {
+            $subIds = DB::connection('compras')
+                ->table('productos')
+                ->where('categoria_id', (int) $asig['categoria_id'])
+                ->pluck('id');
+
+            if ($subIds->isEmpty()) continue;
+
+            $affected = DB::connection('compras')
+                ->table('inventarios')
+                ->where('sucursal_id', $sucursalId)
+                ->whereIn('producto_id', $subIds)
+                ->update(['seccion' => $asig['seccion'] ?? null, 'aud_usuario' => $usuario, 'updated_at' => now()]);
+
+            $total += $affected;
+        }
+
+        return response()->json(['success' => true, 'message' => "{$total} productos actualizados.", 'total' => $total]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
