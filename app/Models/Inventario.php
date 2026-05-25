@@ -17,6 +17,7 @@ class Inventario extends Model
         'cantidad_inicial_base',
         'fecha_conteo',
         'stock_minimo',
+        'seccion',
         'aud_usuario',
     ];
 

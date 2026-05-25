@@ -71,6 +71,8 @@ class InventarioController extends Controller
                 'fecha_conteo'        => $inv->fecha_conteo?->toDateString(),
                 'cantidad_inicial'    => $inv->cantidad_inicial,
                 'stock_minimo'        => $inv->stock_minimo,
+                'seccion'             => $inv->seccion,
+                'costo'               => (float) ($inv->producto?->costo ?? 0),
                 'movimientos_base'    => round($movBase / $factor, 4),
                 'stock_actual'        => round($stockActual, 4),
                 'stock_actual_base'   => round($stockActualBase, 6),
@@ -202,6 +204,109 @@ class InventarioController extends Controller
         ]);
 
         return response()->json(['success' => true, 'message' => 'Ajuste registrado.']);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PATCH /api/compras/inventario/{id}/seccion
+    // Asigna el área física (SECOS, FRIOS, CUARTO FRIO, COCINA, OTROS) al item
+    // ─────────────────────────────────────────────────────────────────────────
+    public function actualizarSeccion(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'seccion' => 'nullable|string|max:50',
+        ]);
+
+        $inv = Inventario::findOrFail($id);
+        $inv->update(['seccion' => $validated['seccion'] ?? null, 'aud_usuario' => Auth::user()->email]);
+
+        return response()->json(['success' => true]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /api/compras/inventario/aplicar-conteo
+    // Aplica un conteo físico: genera movimientos conteo_fisico con la diferencia
+    // Body: { sucursal_id, fecha_conteo, items: [{producto_id, cantidad_contada, unidad}] }
+    // ─────────────────────────────────────────────────────────────────────────
+    public function aplicarConteo(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'sucursal_id'               => 'required|integer',
+            'fecha_conteo'              => 'required|date',
+            'items'                     => 'required|array|min:1',
+            'items.*.producto_id'       => 'required|integer',
+            'items.*.cantidad_contada'  => 'required|numeric|min:0',
+            'items.*.unidad'            => 'required|string|max:30',
+        ]);
+
+        $sucursalId = (int) $validated['sucursal_id'];
+        $fecha      = $validated['fecha_conteo'];
+        $usuario    = Auth::user()->email;
+
+        $productoIds = collect($validated['items'])->pluck('producto_id')->unique()->all();
+
+        $inventarios = Inventario::where('sucursal_id', $sucursalId)
+            ->whereIn('producto_id', $productoIds)
+            ->get()
+            ->keyBy('producto_id');
+
+        $movimientos = DB::connection('compras')
+            ->table('movimientos_inventario')
+            ->where('sucursal_id', $sucursalId)
+            ->whereIn('producto_id', $productoIds)
+            ->where('tipo', '!=', 'carga_inicial')
+            ->selectRaw('producto_id, SUM(cantidad_base) as total_base')
+            ->groupBy('producto_id')
+            ->pluck('total_base', 'producto_id');
+
+        $productos = DB::connection('compras')
+            ->table('productos')
+            ->whereIn('id', $productoIds)
+            ->select('id', 'factor_conversion')
+            ->get()
+            ->keyBy('id');
+
+        DB::connection('compras')->beginTransaction();
+        try {
+            $aplicados = 0;
+            foreach ($validated['items'] as $item) {
+                $pid = (int) $item['producto_id'];
+                $inv = $inventarios[$pid] ?? null;
+                if (!$inv) continue;
+
+                $factor          = max((float) ($productos[$pid]?->factor_conversion ?? 1), 0.0001);
+                $movBase         = (float) ($movimientos[$pid] ?? 0);
+                $stockActualBase = $inv->cantidad_inicial_base + $movBase;
+                $cantadaBase     = (float) $item['cantidad_contada'] * $factor;
+                $diferenciaBase  = $cantadaBase - $stockActualBase;
+
+                if (abs($diferenciaBase) < 0.00001) continue;
+
+                MovimientoInventario::create([
+                    'sucursal_id'     => $sucursalId,
+                    'producto_id'     => $pid,
+                    'tipo'            => 'conteo_fisico',
+                    'cantidad'        => round($diferenciaBase / $factor, 4),
+                    'unidad'          => $item['unidad'],
+                    'cantidad_base'   => round($diferenciaBase, 6),
+                    'motivo'          => "Conteo físico — {$fecha}",
+                    'fecha'           => $fecha,
+                    'referencia_tipo' => 'conteo',
+                    'aud_usuario'     => $usuario,
+                ]);
+                $aplicados++;
+            }
+
+            DB::connection('compras')->commit();
+        } catch (\Throwable $e) {
+            DB::connection('compras')->rollBack();
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+
+        return response()->json([
+            'success'   => true,
+            'message'   => "{$aplicados} productos ajustados por conteo físico.",
+            'aplicados' => $aplicados,
+        ]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

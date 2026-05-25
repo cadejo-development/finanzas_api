@@ -245,7 +245,9 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::post('inventario/ajuste',            [InventarioController::class, 'ajuste']);
     Route::post('inventario/aplicar-consumo',   [InventarioController::class, 'aplicarConsumo']);
     Route::post('inventario/agregar-al-pedido', [InventarioController::class, 'agregarAlPedido']);
+    Route::post('inventario/aplicar-conteo',    [InventarioController::class, 'aplicarConteo']);
     Route::put('inventario/{id}/stock-minimo',  [InventarioController::class, 'actualizarStockMinimo']);
+    Route::patch('inventario/{id}/seccion',     [InventarioController::class, 'actualizarSeccion']);
 
     // ─── Producción Cervecera ────────────────────────────────────────────────
     Route::prefix('brew')->group(function () {
