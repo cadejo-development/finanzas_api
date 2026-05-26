@@ -220,7 +220,7 @@ class AdminController extends Controller
             $nombreCompleto = $empleado->email;
         }
 
-        $isDefaultPassword = $data['password'] === 'C@dejo2026';
+        $isDefaultPassword = in_array($data['password'], ['C@dejo2026', 'Cadejo2026']);
 
         $userId = $this->db()->table('users')->insertGetId([
             'name'                  => $nombreCompleto,
