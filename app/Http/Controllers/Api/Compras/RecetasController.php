@@ -768,6 +768,7 @@ class RecetasController extends Controller
                     'precio'             => round($precio, 4),
                     'costo'              => round($costo, 4),
                     'margen'             => round($precio - $costo, 4),
+                    'codigo_origen'      => $r->codigo_origen,
                 ];
             });
 
