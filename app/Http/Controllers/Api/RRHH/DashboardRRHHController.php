@@ -24,16 +24,25 @@ class DashboardRRHHController extends RRHHBaseController
         $anioActual      = now()->year;
         $mesActual       = now()->month;
 
+        $propioId = null;
+        try { $propioId = $this->getJefeEmpleado()->id; } catch (\Throwable) {}
+
         // Empleados supervisados
         $totalEmpleados = count($subordinadosIds);
 
-        // Permisos pendientes
-        $permisosPendientes = Permiso::whereIn('empleado_id', $subordinadosIds)
+        // Permisos pendientes (incluyendo los donde es aprobador designado)
+        $permisosPendientes = Permiso::where(function ($q) use ($subordinadosIds, $propioId) {
+                $q->whereIn('empleado_id', $subordinadosIds);
+                if ($propioId) $q->orWhere('jefe_id', $propioId);
+            })
             ->where('estado', 'pendiente')
             ->count();
 
-        // Vacaciones pendientes
-        $vacacionesPendientes = Vacacion::whereIn('empleado_id', $subordinadosIds)
+        // Vacaciones pendientes (incluyendo los donde es aprobador designado)
+        $vacacionesPendientes = Vacacion::where(function ($q) use ($subordinadosIds, $propioId) {
+                $q->whereIn('empleado_id', $subordinadosIds);
+                if ($propioId) $q->orWhere('jefe_id', $propioId);
+            })
             ->where('estado', 'pendiente')
             ->count();
 

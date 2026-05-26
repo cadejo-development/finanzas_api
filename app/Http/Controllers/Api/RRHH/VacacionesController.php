@@ -18,13 +18,18 @@ class VacacionesController extends RRHHBaseController
     {
         $subordinadosIds = $this->getSubordinadosIds();
 
-        // Incluir al propio jefe para que vea sus propias solicitudes
+        $propioId = null;
         try {
             $propioId = $this->getJefeEmpleado()->id;
             $subordinadosIds = array_values(array_unique(array_merge($subordinadosIds, [$propioId])));
         } catch (\Throwable) {}
 
-        $vacaciones = Vacacion::whereIn('empleado_id', $subordinadosIds)
+        $vacaciones = Vacacion::where(function ($q) use ($subordinadosIds, $propioId) {
+                $q->whereIn('empleado_id', $subordinadosIds);
+                if ($propioId) {
+                    $q->orWhere('jefe_id', $propioId);
+                }
+            })
             ->orderByDesc('id')
             ->get();
 

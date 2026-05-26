@@ -22,14 +22,21 @@ class PermisosController extends RRHHBaseController
     {
         $subordinadosIds = $this->getSubordinadosIds();
 
-        // Incluir al propio jefe para que vea sus propias solicitudes
+        $propioId = null;
         try {
             $propioId = $this->getJefeEmpleado()->id;
             $subordinadosIds = array_values(array_unique(array_merge($subordinadosIds, [$propioId])));
         } catch (\Throwable) {}
 
         $permisos = Permiso::with('tipoPermiso')
-            ->whereIn('empleado_id', $subordinadosIds)
+            ->where(function ($q) use ($subordinadosIds, $propioId) {
+                $q->whereIn('empleado_id', $subordinadosIds);
+                // También mostrar permisos donde este empleado es el aprobador designado,
+                // por si el subordinado está en un dept que no es hijo directo en la jerarquía.
+                if ($propioId) {
+                    $q->orWhere('jefe_id', $propioId);
+                }
+            })
             ->orderByDesc('id')
             ->get();
 
