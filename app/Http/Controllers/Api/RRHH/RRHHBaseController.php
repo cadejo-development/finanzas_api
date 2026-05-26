@@ -371,6 +371,7 @@ abstract class RRHHBaseController extends Controller
      */
     protected function getJefeDepartamento(int $empleadoId): ?int
     {
+        // Intento 1: empleado tiene departamento_id (empleados regulares)
         $row = DB::connection('pgsql')
             ->table('empleados as e')
             ->join('departamentos as d', 'd.id', '=', 'e.departamento_id')
@@ -378,6 +379,16 @@ abstract class RRHHBaseController extends Controller
             ->where('d.activo', true)
             ->select('d.id as dept_id', 'd.jefe_empleado_id', 'd.parent_id')
             ->first();
+
+        // Intento 2: los jefes tienen departamento_id = null — buscar el dept donde son jefe
+        if (! $row) {
+            $row = DB::connection('pgsql')
+                ->table('departamentos as d')
+                ->where('d.jefe_empleado_id', $empleadoId)
+                ->where('d.activo', true)
+                ->select('d.id as dept_id', 'd.jefe_empleado_id', 'd.parent_id')
+                ->first();
+        }
 
         if (! $row) return null;
 
