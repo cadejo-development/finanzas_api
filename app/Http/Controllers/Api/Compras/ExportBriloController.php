@@ -382,12 +382,12 @@ class ExportBriloController extends Controller
                         $fila->receta_nombre  ?? '',      // B
                         $codIngrediente,                  // C
                         $nombreIng,                       // D
-                        '',                               // E (vacío para sub-recetas)
+                        $this->formatNum($tandas),        // E Cantidad MP (TANDA es unidad base)
                         'SI',                             // F
                         $detieneExp,                      // G
                         '',                               // H
-                        'UNID0029',                       // I siempre TANDA
-                        $this->formatNum($tandas),        // J tandas calculadas
+                        '',                               // I vacío (TANDA ya es unidad base del producto)
+                        '',                               // J vacío
                     ]);
                 } else {
                     // Productos (MR) y CPs: cantidad directa, con conversión de unidades si aplica
