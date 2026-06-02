@@ -53,6 +53,65 @@ class IngresoQRController extends Controller
         ]);
     }
 
+    // ── Admin: listar pre-registros recibidos ────────────────────────────
+
+    public function registros(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        if (!$user || !$user->hasRole('rrhh_admin', self::RRHH_SYSTEM_ID)) {
+            return response()->json(['error' => 'No autorizado.'], 403);
+        }
+
+        $page    = max(1, (int) ($request->query('page', 1)));
+        $perPage = min(100, (int) ($request->query('per_page', 25)));
+        $search  = $request->query('search');
+
+        $query = IngresoQrRegistro::with('token')
+            ->when($search, fn ($q) => $q->where(function ($sq) use ($search) {
+                $sq->whereRaw('unaccent(lower(nombres))  ilike unaccent(lower(?))', ["%{$search}%"])
+                   ->orWhereRaw('unaccent(lower(apellidos)) ilike unaccent(lower(?))', ["%{$search}%"])
+                   ->orWhere('dui',   'ilike', "%{$search}%")
+                   ->orWhere('email', 'ilike', "%{$search}%");
+            }))
+            ->orderByDesc('created_at');
+
+        $pagina = $query->paginate($perPage, ['*'], 'page', $page);
+
+        $items = $pagina->getCollection()->map(fn ($r) => [
+            'id'                     => $r->id,
+            'nombres'                => $r->nombres,
+            'apellidos'              => $r->apellidos,
+            'nombre_completo'        => trim($r->nombres . ' ' . $r->apellidos),
+            'fecha_nacimiento'       => $r->fecha_nacimiento?->format('Y-m-d'),
+            'genero'                 => $r->genero,
+            'estado_civil'           => $r->estado_civil,
+            'lugar_nacimiento'       => $r->lugar_nacimiento,
+            'telefono'               => $r->telefono,
+            'email'                  => $r->email,
+            'direccion'              => $r->direccion,
+            'dui'                    => $r->dui,
+            'nit'                    => $r->nit,
+            'afp_nombre'             => $r->afp_nombre,
+            'afp_numero'             => $r->afp_numero,
+            'isss_numero'            => $r->isss_numero,
+            'ultimo_nivel_academico' => $r->ultimo_nivel_academico,
+            'titulo_academico'       => $r->titulo_academico,
+            'institucion_academica'  => $r->institucion_academica,
+            'graduado'               => $r->graduado,
+            'created_at'             => $r->created_at->toISOString(),
+        ]);
+
+        return response()->json([
+            'data' => $items,
+            'meta' => [
+                'total'        => $pagina->total(),
+                'current_page' => $pagina->currentPage(),
+                'last_page'    => $pagina->lastPage(),
+                'per_page'     => $pagina->perPage(),
+            ],
+        ]);
+    }
+
     // ── Admin: listar tokens generados ───────────────────────────────────────
 
     public function listar(Request $request): JsonResponse
