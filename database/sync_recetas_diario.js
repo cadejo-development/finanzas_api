@@ -450,36 +450,31 @@ async function main() {
     `, [NOW]);
     log(`  sub_receta_id reconectados: ${fixRes.rowCount}`);
 
-    // ── 4f. Sincronizar menú (receta_sucursal) ───────────────────
-    log('\n  [4f] Sincronizando menú (receta_sucursal)...');
+    // ── 4f. Sincronizar menú (receta_sucursal) — SOLO para recetas NUEVAS ───────
+    // Las recetas que ya existían en RDS conservan sus asignaciones de sucursal.
+    // Solo las recetas recién insertadas (nuevaMap) reciben las asignaciones de Brilo.
+    log('\n  [4f] Sincronizando menú (receta_sucursal) — solo recetas nuevas...');
     let menuOk = 0;
-
-    // Recargar rdsMap con las nuevas recetas
-    const allRdsRows = (await pg.query(
-      `SELECT id, codigo_origen FROM recetas WHERE codigo_origen IS NOT NULL`
-    )).rows;
-    const fullRdsMap = {};
-    allRdsRows.forEach(r => { fullRdsMap[r.codigo_origen] = r.id; });
 
     for (const [cod, sucIds] of Object.entries(menuMap)) {
       if (!esCodReceta(cod)) continue;
-      const recId = fullRdsMap[cod];
-      if (!recId) continue;
+      const recId = nuevaMap[cod]; // solo recetas insertadas en esta ejecución
+      if (!recId) continue;        // si no es nueva, no tocar su receta_sucursal
 
       for (const sucId of sucIds) {
         const key = `${recId}:${sucId}`;
-        if (rsSet.has(key)) continue; // ya existe
+        if (rsSet.has(key)) continue;
 
         await pg.query(
           `INSERT INTO receta_sucursal (receta_id, sucursal_id, platos_semana, activa, aud_usuario, created_at, updated_at)
            VALUES ($1, $2, 0, true, $3, $4, $4)
-           ON CONFLICT (receta_id, sucursal_id) DO UPDATE SET activa = true, updated_at = $4`,
+           ON CONFLICT (receta_id, sucursal_id) DO NOTHING`,
           [recId, sucId, AUD, NOW]
-        ).catch(() => {}); // ignorar si sucursal_id no existe en RDS
+        ).catch(() => {});
         menuOk++;
       }
     }
-    log(`  receta_sucursal insertadas/actualizadas: ${menuOk}`);
+    log(`  receta_sucursal insertadas (solo recetas nuevas): ${menuOk}`);
 
     // ═══════════════════════════════════════════════════════════════
     // FASE 5 — Resumen
