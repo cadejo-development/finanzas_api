@@ -45,6 +45,7 @@ use App\Http\Controllers\Api\RRHH\PlanillasController;
 use App\Http\Controllers\Api\RRHH\MantenimientoPlanillaController;
 use App\Http\Controllers\Api\GeoController;
 use App\Http\Controllers\Api\Compras\MenuPublicoController;
+use App\Http\Controllers\Api\RRHH\IngresoQRController;
 
 // ─── Geo catálogos El Salvador (público, sin auth) ────────────────────────
 Route::prefix('geo')->group(function () {
@@ -57,6 +58,10 @@ Route::prefix('geo')->group(function () {
 // ─── Menú público (para sistema de reservas, sin auth) ────────────────────
 Route::prefix('public')->group(function () {
     Route::get('menu', [MenuPublicoController::class, 'porSucursal']);
+
+    // Formulario público de ingreso de empleado vía QR
+    Route::get('ingreso/{token}',  [IngresoQRController::class, 'validar']);
+    Route::post('ingreso/{token}', [IngresoQRController::class, 'registrar']);
 });
 
 // ─── Portal SSO (protegido con Sanctum) ──────────────────────────────────
@@ -529,4 +534,8 @@ Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh
     Route::patch('error-logs/{id}/resolver',                 [\App\Http\Controllers\Api\RRHH\ErrorLogsController::class, 'resolver']);
     Route::delete('error-logs/{id}',                         [\App\Http\Controllers\Api\RRHH\ErrorLogsController::class, 'destroy']);
     Route::delete('error-logs',                              [\App\Http\Controllers\Api\RRHH\ErrorLogsController::class, 'clear']);
+
+    // ── Ingreso QR (generación de tokens, solo rrhh_admin) ───────────────
+    Route::post('admin/ingreso-qr/generar',  [IngresoQRController::class, 'generar']);
+    Route::get('admin/ingreso-qr/tokens',    [IngresoQRController::class, 'listar']);
 });
