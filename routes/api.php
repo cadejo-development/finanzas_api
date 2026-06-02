@@ -536,6 +536,6 @@ Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh
     Route::delete('error-logs',                              [\App\Http\Controllers\Api\RRHH\ErrorLogsController::class, 'clear']);
 
     // ── Ingreso QR (generación de tokens, solo rrhh_admin) ───────────────
-    Route::post('admin/ingreso-qr/generar',  [IngresoQRController::class, 'generar']);
-    Route::get('admin/ingreso-qr/tokens',    [IngresoQRController::class, 'listar']);
+    Route::post('ingreso-qr/generar',  [IngresoQRController::class, 'generar']);
+    Route::get('ingreso-qr/tokens',    [IngresoQRController::class, 'listar']);
 });
