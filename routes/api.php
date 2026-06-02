@@ -51,6 +51,7 @@ use App\Http\Controllers\Api\RRHH\IngresoQRController;
 Route::prefix('geo')->group(function () {
     Route::get('departamentos',                    [GeoController::class, 'departamentos']);
     Route::get('departamentos/{id}/distritos',     [GeoController::class, 'distritos']);
+    Route::get('departamentos/{id}/municipios',   [GeoController::class, 'municipiosPorDepartamento']);
     Route::get('distritos/{id}/municipios',        [GeoController::class, 'municipios']);
     Route::get('municipios/{id}/ubicacion',        [GeoController::class, 'ubicacionMunicipio']);
 });

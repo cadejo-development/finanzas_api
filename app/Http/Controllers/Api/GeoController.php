@@ -37,6 +37,15 @@ class GeoController extends Controller
         return response()->json(['success' => true, 'data' => $municipios]);
     }
 
+    /** GET /api/geo/departamentos/{id}/municipios */
+    public function municipiosPorDepartamento(int $deptoId): JsonResponse
+    {
+        $municipios = GeoMunicipio::where('departamento_id', $deptoId)
+            ->orderBy('nombre')
+            ->get(['id', 'nombre']);
+        return response()->json(['success' => true, 'data' => $municipios]);
+    }
+
     /**
      * Lookup inverso: dado un municipio_id devuelve departamento_id y distrito_id.
      * GET /api/geo/municipios/{id}/ubicacion
