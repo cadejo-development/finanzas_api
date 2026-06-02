@@ -506,6 +506,7 @@ Route::prefix('rrhh/planillas')->middleware(['auth:sanctum', 'role:rrhh_admin'])
     Route::get('{id}',                              [PlanillasController::class, 'show']);
     Route::put('{id}/aprobar',                      [PlanillasController::class, 'aprobar']);
     Route::get('{id}/exportar',                     [PlanillasController::class, 'exportar']);
+    Route::get('{id}/boleta/{empleadoId}',          [PlanillasController::class, 'boletaPdf']);
 });
 
 // ─── RRHH Admin — Departamentos (portal_admin o rrhh_admin) ─────────────────

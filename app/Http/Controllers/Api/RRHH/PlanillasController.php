@@ -537,6 +537,61 @@ class PlanillasController extends RRHHBaseController
         });
     }
 
+    // ─── Boleta PDF ──────────────────────────────────────────────────────────
+
+    /**
+     * GET /api/rrhh/planillas/{id}/boleta/{empleadoId}
+     * Genera el PDF de boleta de pago para un empleado en una planilla.
+     */
+    public function boletaPdf(int $id, int $empleadoId): \Illuminate\Http\Response
+    {
+        $planilla = Planilla::findOrFail($id);
+
+        $linea = PlanillaLinea::where('planilla_id', $id)
+            ->where('empleado_id', $empleadoId)
+            ->firstOrFail();
+
+        $empleado = DB::connection('pgsql')
+            ->table('empleados as e')
+            ->leftJoin('cargos as c',        'c.id', '=', 'e.cargo_id')
+            ->leftJoin('sucursales as s',     's.id', '=', 'e.sucursal_id')
+            ->leftJoin('departamentos as d',  'd.id', '=', 'e.departamento_id')
+            ->where('e.id', $empleadoId)
+            ->select(
+                'e.id', 'e.codigo', 'e.nombres', 'e.apellidos',
+                'c.nombre as cargo_nombre',
+                's.nombre as sucursal_nombre',
+                'd.nombre as departamento_nombre'
+            )
+            ->first();
+
+        abort_if(!$empleado, 404, 'Empleado no encontrado');
+
+        // Adaptar para el blade (objetos con propiedades)
+        $emp = (object)[
+            'codigo'    => $empleado->codigo,
+            'nombres'   => $empleado->nombres,
+            'apellidos' => $empleado->apellidos,
+            'cargo'     => $empleado->cargo_nombre ? (object)['nombre' => $empleado->cargo_nombre] : null,
+            'sucursal'  => $empleado->sucursal_nombre ? (object)['nombre' => $empleado->sucursal_nombre] : null,
+            'departamento' => $empleado->departamento_nombre ? (object)['nombre' => $empleado->departamento_nombre] : null,
+        ];
+
+        $meses = ['', 'enero','febrero','marzo','abril','mayo','junio',
+                  'julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('rrhh.boleta', [
+            'planilla' => $planilla,
+            'linea'    => $linea,
+            'empleado' => $emp,
+            'mes_nombre' => $meses[$planilla->mes] ?? '',
+        ])->setPaper('letter', 'portrait');
+
+        $filename = "boleta_{$empleado->codigo}_Q{$planilla->quincena}_{$planilla->anio}_{$planilla->mes}.pdf";
+
+        return $pdf->download($filename);
+    }
+
     /**
      * Retorna mapa de tipo de sucursal por sucursal_id.
      * (Heredado de ReportesRRHHController para consistencia)
