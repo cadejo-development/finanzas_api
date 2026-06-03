@@ -252,13 +252,20 @@ async function run() {
           const batch = paraActualizar.slice(i, i + BATCH);
           for (const [activo, departamentoId, codigo] of batch) {
             await pg.query(
-              // Actualiza activo (incluyendo reactivaciones desde Brilo)
-              // y asigna departamento_id si aún no tiene uno
+              // Actualiza activo y departamento_id (solo si aún no tiene).
+              // Protección: no reactivar si fue inactivado por desvinculación
+              // (aud_usuario lo identifica). Sí permite reactivar empleados
+              // que quedaron inactivos por errores de sync u otras razones.
               `UPDATE empleados
                SET activo         = $1,
                    departamento_id = COALESCE(departamento_id, $2),
                    updated_at      = $3
-               WHERE codigo = $4`,
+               WHERE codigo = $4
+                 AND NOT (
+                   activo = false
+                   AND $1 = true
+                   AND aud_usuario IN ('sistema:desvinculacion', 'sistema:inactivar-desvinculados')
+                 )`,
               [activo, departamentoId, NOW, codigo]
             );
             updOk++;
