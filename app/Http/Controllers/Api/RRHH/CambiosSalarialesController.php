@@ -78,6 +78,7 @@ class CambiosSalarialesController extends RRHHBaseController
             'porcentaje'        => $porcentaje,
             'estado'            => 'pendiente',
             'aud_usuario'       => Auth::user()->email,
+            'creado_por'        => $this->creadoPor(),
         ]));
 
         $cambio->load('tipoAumento');

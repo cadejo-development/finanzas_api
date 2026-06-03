@@ -16,7 +16,7 @@ class Incapacidad extends Model
         'fecha_inicio', 'fecha_fin', 'dias',
         'archivo_nombre', 'archivo_ruta',
         'homologada', 'homologada_por_id', 'homologada_en',
-        'observaciones', 'aud_usuario',
+        'observaciones', 'aud_usuario', 'creado_por',
     ];
 
     protected $casts = [

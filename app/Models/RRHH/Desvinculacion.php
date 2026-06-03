@@ -15,7 +15,7 @@ class Desvinculacion extends Model
         'empleado_nombre', 'cargo_nombre', 'sucursal_nombre',
         'estado', 'aprobado_por_id', 'aprobado_en', 'rechazo_motivo',
         'archivo_nombre', 'archivo_ruta',
-        'aud_usuario',
+        'aud_usuario', 'creado_por',
     ];
 
     protected $casts = ['fecha_efectiva' => 'date'];

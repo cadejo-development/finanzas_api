@@ -97,6 +97,7 @@ class IncapacidadesController extends RRHHBaseController
                 'archivo_ruta'        => $archivoRuta,
                 'homologada'          => false,
                 'aud_usuario'         => Auth::user()->email,
+                'creado_por'          => $this->creadoPor(),
             ]);
 
             $incapacidad->load('tipoIncapacidad');

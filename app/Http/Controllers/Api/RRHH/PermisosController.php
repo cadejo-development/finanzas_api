@@ -141,6 +141,7 @@ class PermisosController extends RRHHBaseController
             'archivo_nombre' => $archivoNombre,
             'archivo_ruta'   => $archivoRuta,
             'aud_usuario'    => Auth::user()->email,
+            'creado_por'     => $this->creadoPor(),
         ]));
 
         $permiso->load('tipoPermiso');

@@ -12,7 +12,7 @@ class CambioSalarial extends Model
     protected $fillable = [
         'empleado_id', 'solicitado_por_id', 'tipo_aumento_id',
         'salario_anterior', 'salario_nuevo', 'porcentaje',
-        'fecha_efectiva', 'justificacion', 'estado', 'aud_usuario',
+        'fecha_efectiva', 'justificacion', 'estado', 'aud_usuario', 'creado_por',
         'documento_ruta', 'documento_nombre', 'documento_mime',
     ];
 

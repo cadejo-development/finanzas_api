@@ -14,7 +14,7 @@ class Permiso extends Model
         'fecha', 'es_dia_completo', 'hora_inicio', 'hora_fin', 'horas_solicitadas',
         'dias', 'motivo', 'estado', 'observaciones_jefe',
         'archivo_nombre', 'archivo_ruta',
-        'aud_usuario',
+        'aud_usuario', 'creado_por',
     ];
 
     protected $casts = [

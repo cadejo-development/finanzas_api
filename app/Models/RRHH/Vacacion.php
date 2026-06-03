@@ -12,7 +12,7 @@ class Vacacion extends Model
     protected $fillable = [
         'empleado_id', 'jefe_id',
         'fecha_inicio', 'fecha_fin', 'dias',
-        'estado', 'observaciones', 'aud_usuario',
+        'estado', 'observaciones', 'aud_usuario', 'creado_por',
     ];
 
     protected $casts = [

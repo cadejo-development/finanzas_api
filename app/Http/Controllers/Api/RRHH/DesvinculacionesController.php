@@ -99,6 +99,7 @@ class DesvinculacionesController extends RRHHBaseController
             'archivo_nombre'    => $archivoNombre,
             'archivo_ruta'      => $archivoRuta,
             'aud_usuario'       => Auth::user()->email,
+            'creado_por'        => $this->creadoPor(),
         ]));
 
         // Solo inactivar si no requiere aprobación previa

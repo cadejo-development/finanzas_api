@@ -65,6 +65,7 @@ class DepartamentosController extends Controller
                 ->whereIn('departamento_id', $deptIds)
                 ->where('activo', true)
                 ->select('id', 'nombres', 'apellidos', 'departamento_id')
+                ->orderBy('apellidos')
                 ->orderBy('nombres')
                 ->get();
 

@@ -15,7 +15,7 @@ class Amonestacion extends Model
         'aplica_suspension', 'aplica_suspension_propina', 'dias_suspension_propina',
         'estado', 'aprobado_por_id', 'aprobado_en', 'rechazo_motivo',
         'archivo_nombre', 'archivo_ruta',
-        'aud_usuario',
+        'aud_usuario', 'creado_por',
     ];
 
     protected $casts = [

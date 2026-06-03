@@ -102,6 +102,7 @@ class AmonestacionesController extends RRHHBaseController
             'archivo_nombre'            => $archivoNombre,
             'archivo_ruta'              => $archivoRuta,
             'aud_usuario'               => Auth::user()->email,
+            'creado_por'                => $this->creadoPor(),
         ]);
 
         // Guardar días de suspensión si aplica

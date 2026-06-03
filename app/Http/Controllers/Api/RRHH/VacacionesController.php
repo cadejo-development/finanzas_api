@@ -92,6 +92,7 @@ class VacacionesController extends RRHHBaseController
             'jefe_id'     => $aprobadorId ?? $jefe->id,
             'estado'      => $estadoInicial,
             'aud_usuario' => Auth::user()->email,
+            'creado_por'  => $this->creadoPor(),
         ]));
 
         // Si se crea directamente como aprobado (jefe aprueba para subordinado), descontar saldo

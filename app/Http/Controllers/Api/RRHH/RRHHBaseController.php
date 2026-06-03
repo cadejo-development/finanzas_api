@@ -29,6 +29,13 @@ abstract class RRHHBaseController extends Controller
     // ID del sistema RRHH en la tabla systems/roles
     private const RRHH_SYSTEM_ID = 5;
 
+    /** Devuelve el nombre de usuario (parte antes del @) del usuario autenticado. */
+    protected function creadoPor(): string
+    {
+        $email = Auth::user()?->email ?? '';
+        return strtok($email, '@') ?: $email;
+    }
+
     /**
      * Indica si el usuario autenticado tiene rol rrhh_admin (scoped al sistema RRHH).
      */

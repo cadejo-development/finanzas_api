@@ -83,6 +83,7 @@ class AusenciasController extends RRHHBaseController
             'fecha'            => $validated['fecha'],
             'descripcion'      => $validated['descripcion'] ?? null,
             'aud_usuario'      => Auth::user()->email,
+            'creado_por'       => $this->creadoPor(),
         ]);
 
         $arr = $this->enrichWithEmpleadoData([$ausencia->toArray()]);

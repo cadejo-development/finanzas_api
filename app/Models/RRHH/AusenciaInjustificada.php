@@ -11,7 +11,7 @@ class AusenciaInjustificada extends Model
 
     protected $fillable = [
         'empleado_id', 'registrado_por_id', 'fecha', 'descripcion',
-        'cubierta_por_incapacidad_id', 'aud_usuario',
+        'cubierta_por_incapacidad_id', 'aud_usuario', 'creado_por',
     ];
 
     protected $casts = [

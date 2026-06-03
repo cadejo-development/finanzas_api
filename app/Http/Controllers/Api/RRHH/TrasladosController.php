@@ -121,6 +121,7 @@ class TrasladosController extends RRHHBaseController
             'motivo'                     => $validated['motivo'] ?? null,
             'estado'                     => $estado,
             'aud_usuario'                => Auth::user()->email,
+            'creado_por'                 => $this->creadoPor(),
         ]);
 
         if ($estado === 'aprobado') {
