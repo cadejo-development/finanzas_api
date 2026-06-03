@@ -373,6 +373,7 @@ class ExpedienteController extends RRHHBaseController
         $data = $request->validate([
             'tipo'                  => 'required|in:dui,nit,isss,afp,pasaporte,licencia_conducir,otro',
             'numero'                => 'nullable|string|max:60',
+            'entidad_emisora'       => 'nullable|string|max:60',
             'fecha_emision'         => 'nullable|date',
             'fecha_vencimiento'     => 'nullable|date',
             'lugar_exp_municipio_id'=> 'nullable|integer',
@@ -402,6 +403,7 @@ class ExpedienteController extends RRHHBaseController
         $data = $request->validate([
             'tipo'                  => 'sometimes|in:dui,nit,isss,afp,pasaporte,licencia_conducir,otro',
             'numero'                => 'nullable|string|max:60',
+            'entidad_emisora'       => 'nullable|string|max:60',
             'fecha_emision'         => 'nullable|date',
             'fecha_vencimiento'     => 'nullable|date',
             'lugar_exp_municipio_id'=> 'nullable|integer',

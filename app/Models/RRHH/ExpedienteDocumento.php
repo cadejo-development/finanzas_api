@@ -10,7 +10,7 @@ class ExpedienteDocumento extends Model
     protected $table      = 'expediente_documentos';
 
     protected $fillable = [
-        'empleado_id', 'tipo', 'numero',
+        'empleado_id', 'tipo', 'numero', 'entidad_emisora',
         'fecha_emision', 'fecha_vencimiento',
         'lugar_exp_municipio_id', 'lugar_exp_texto',
         'foto_frente_ruta', 'foto_reverso_ruta',
