@@ -50,13 +50,38 @@ const DEP_SUCURSAL_MAP = {
   'RT-001':           'SUC-ZR',
   'DPT0002':          'SUC-AE1',
   'DPT0003':          'SUC-AE2',
-  'MAL-AE':           'SUC-AE1',
+  'MAL-AE':           'SUC0015',  // RESTAURANTE MALCRIADAS (id=16)
   'DPT0006':          'SUC-PV',
   'DPT0007':          'SUC-SE',
   'DPT0008':          'SUC-HZ',
   'DPT0009':          'SUC-OP',
   'DTP00010':         'SUC-GU',
   'RT-003':           'SUC-LL',
+};
+
+// ── Mapeo depCodigo → departamento_id en RDS ──────────────────────────────────
+const DEP_DEPARTAMENTO_MAP = {
+  'C_LOGISTICA':      14,   // LOGÍSTICA
+  'C_MANTTO':         28,   // MANTENIMIENTO
+  'C_Mercadeo':        9,   // MERCADEO
+  'C_Producción':      6,   // PRODUCCIÓN
+  'C_Produccion_R':   16,   // CENTRO DE PRODUCCIÓN - RESTAURANTES
+  'C_Ventas':         30,   // VENTAS
+  'DPT0001':          15,   // BODEGA
+  'DPT0002':          25,   // RESTAURANTE AEROPUERTO 1
+  'DPT0003':          26,   // RESTAURANTE AEROPUERTO 2
+  'DPT0004':          30,   // VENTAS (eventuales)
+  'DPT0006':          22,   // RESTAURANTE PASEO VENECIA
+  'DPT0007':          23,   // RESTAURANTE SANTA ELENA
+  'DPT0008':          19,   // RESTAURANTE MONTAÑA (antes Huizúcar)
+  'DPT0009':          21,   // RESTAURANTE OPICO
+  'EVE-EXT':          29,   // EVENTOS
+  'EVE-INT':          29,   // EVENTOS
+  'MAL-AE':           27,   // RESTAURANTE MALCRIADAS AE
+  'PROD':              6,   // PRODUCCIÓN
+  'RT-001':           24,   // RESTAURANTE ZONA ROSA
+  'RT-003':           20,   // RESTAURANTE LA LIBERTAD
+  'DTP00010':         18,   // RESTAURANTE CASA GUIROLA (código RES_GUI)
 };
 
 const DRY_RUN = process.argv.includes('--dry-run');
@@ -178,17 +203,18 @@ async function run() {
     log(`SQL Server: ${empRows.length} empleados (activos + inactivos)`);
 
     const paraInsertar = [];
-    const paraActualizar = [];  // [activo, codigo]
+    const paraActualizar = [];  // [activo, departamento_id, codigo]
 
     let sinDepMap = 0;
 
     for (const r of empRows) {
-      const codigo   = clean(r.codigo, 20);
-      const activo   = r.activo === 1 || r.activo === true;
+      const codigo        = clean(r.codigo, 20);
+      const activo        = r.activo === 1 || r.activo === true;
+      const departamentoId = DEP_DEPARTAMENTO_MAP[r.dep_codigo] ?? null;
 
       if (existentes.has(codigo)) {
-        // YA existe → solo actualizar activo
-        paraActualizar.push([activo, codigo]);
+        // YA existe → actualizar activo + departamento_id si aún no tiene
+        paraActualizar.push([activo, departamentoId, codigo]);
       } else if (activo) {
         // NUEVO y activo en SQL Server → insertar completo
         const sucCodigo  = DEP_SUCURSAL_MAP[r.dep_codigo] ?? null;
@@ -204,6 +230,7 @@ async function run() {
           clean(r.email, 150),
           cargoId,
           sucursalId,
+          departamentoId,
           activo,
           AUD,
           NOW,
@@ -223,12 +250,16 @@ async function run() {
         let updOk = 0;
         for (let i = 0; i < paraActualizar.length; i += BATCH) {
           const batch = paraActualizar.slice(i, i + BATCH);
-          for (const [activo, codigo] of batch) {
+          for (const [activo, departamentoId, codigo] of batch) {
             await pg.query(
-              // Never re-activate an employee that is currently inactive in RDS
-              // (could have been deactivated by inactivar-desvinculados or manually)
-              'UPDATE empleados SET activo = $1, updated_at = $2 WHERE codigo = $3 AND NOT (activo = false AND $1 = true)',
-              [activo, NOW, codigo]
+              // Actualiza activo (incluyendo reactivaciones desde Brilo)
+              // y asigna departamento_id si aún no tiene uno
+              `UPDATE empleados
+               SET activo         = $1,
+                   departamento_id = COALESCE(departamento_id, $2),
+                   updated_at      = $3
+               WHERE codigo = $4`,
+              [activo, departamentoId, NOW, codigo]
             );
             updOk++;
           }
@@ -241,7 +272,7 @@ async function run() {
       // ── Insertar empleados nuevos ─────────────────────────────────────────
       if (paraInsertar.length) {
         const cols = ['codigo', 'nombres', 'apellidos', 'email', 'cargo_id',
-                      'sucursal_id', 'activo', 'aud_usuario', 'created_at', 'updated_at'];
+                      'sucursal_id', 'departamento_id', 'activo', 'aud_usuario', 'created_at', 'updated_at'];
         let insOk = 0;
         for (let i = 0; i < paraInsertar.length; i += BATCH) {
           const batch  = paraInsertar.slice(i, i + BATCH);
