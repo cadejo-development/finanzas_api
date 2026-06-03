@@ -184,7 +184,7 @@ class IngresoQRController extends Controller
             'direccion'              => 'nullable|string|max:500',
             'dui'                    => 'nullable|string|max:20',
             'nit'                    => 'nullable|string|max:20',
-            'afp_nombre'             => 'nullable|in:AFP CONFÍA,AFP CRECER',
+            'afp_nombre'             => 'nullable|in:AFP CONFIA,AFP CRECER',
             'afp_numero'             => 'nullable|string|max:30',
             'isss_numero'            => 'nullable|string|max:30',
             'ultimo_nivel_academico' => 'nullable|in:primaria,bachillerato,tecnico,universitario,posgrado,maestria,doctorado,diplomado,curso,otro',
