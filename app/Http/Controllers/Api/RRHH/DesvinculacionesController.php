@@ -113,6 +113,7 @@ class DesvinculacionesController extends RRHHBaseController
         $desvinculacion->load('motivo');
 
         $tipoLabel          = $esDespido ? 'Despido' : 'Renuncia';
+        $subRuta            = $esDespido ? 'despidos' : 'renuncias';
         $empNombreDesvincul = $desvinculacion->empleado_nombre ?? "Empleado #{$validated['empleado_id']}";
         $detallesDesvincul  = [
             'Tipo'           => $tipoLabel,
@@ -122,32 +123,31 @@ class DesvinculacionesController extends RRHHBaseController
             'Sucursal'       => $desvinculacion->sucursal_nombre ?? '—',
         ];
 
+        $rutaDesvincul = "desvinculaciones/{$subRuta}?ver={$desvinculacion->id}";
+
         if ($requiereAprobacion) {
-            // Solicitar aprobación a gerencia_ops antes de procesar
             $this->notificarGerenciaOpsSolicitud(
                 tipo:           'Despido',
                 empleadoNombre: $empNombreDesvincul,
                 detalles:       $detallesDesvincul,
-                rutaFrontend:   'desvinculaciones',
+                rutaFrontend:   $rutaDesvincul,
                 solicitudId:    $desvinculacion->id,
                 tipoModelo:     'despido',
             );
         } else {
-            // Notificar a admins RRHH
             $this->notificarAdminsRrhh(
                 tipo:           "Desvinculación — {$tipoLabel}",
                 empleadoNombre: $empNombreDesvincul,
                 detalles:       $detallesDesvincul,
-                rutaFrontend:   'desvinculaciones',
+                rutaFrontend:   $rutaDesvincul,
             );
 
-            // Notificar (informativo) a gerencia_ops si es empleado de restaurante
             if ($esDeRestaurante) {
                 $this->notificarGerenciaOps(
                     tipo:           "Desvinculación — {$tipoLabel}",
                     empleadoNombre: $empNombreDesvincul,
                     detalles:       $detallesDesvincul,
-                    rutaFrontend:   'desvinculaciones',
+                    rutaFrontend:   $rutaDesvincul,
                 );
             }
         }

@@ -92,7 +92,6 @@ class AmonestacionesController extends RRHHBaseController
         // Propina en restaurante → aprobación de gerencia_ops (solo leve/grave).
         $requiereAprobacionRrhh    = $esMuyGrave && !$this->esAdminRrhh();
         $requiereAprobacionPropina = !$esMuyGrave && $aplicaPropina && $esDeRestaurante && !$this->esAdminRrhh() && !$this->esGerenciaOps();
-        $requiereAprobacion        = $requiereAprobacionRrhh || $requiereAprobacionPropina;
 
         $amonestacion = Amonestacion::create([
             'empleado_id'               => $validated['empleado_id'],
@@ -154,28 +153,27 @@ class AmonestacionesController extends RRHHBaseController
             Log::warning('RRHH: Error generando PDF de amonestación', ['id' => $amonestacion->id, 'error' => $e->getMessage()]);
         }
 
+        $rutaAmon = "amonestaciones?ver={$amonestacion->id}";
+
         if ($requiereAprobacionRrhh) {
-            // Muy grave → solicitar aprobación a jefa RRHH (Gabriela)
             $this->notificarJefaRRHHSolicitud(
                 tipo:           'Amonestación Muy Grave',
                 empleadoNombre: $empNombre,
                 detalles:       $detallesEmail,
-                rutaFrontend:   'amonestaciones',
+                rutaFrontend:   $rutaAmon,
                 solicitudId:    $amonestacion->id,
                 tipoModelo:     'amonestacion',
             );
         } elseif ($requiereAprobacionPropina) {
-            // Propina en restaurante → solicitar aprobación a gerencia_ops
             $this->notificarGerenciaOpsSolicitud(
                 tipo:           'Amonestación con Suspensión de Propina',
                 empleadoNombre: $empNombre,
                 detalles:       $detallesEmail,
-                rutaFrontend:   'amonestaciones',
+                rutaFrontend:   $rutaAmon,
                 solicitudId:    $amonestacion->id,
                 tipoModelo:     'amonestacion',
             );
         } else {
-            // Notificar directamente al empleado con PDF adjunto
             $this->notificarAlEmpleado(
                 empleadoId:   $validated['empleado_id'],
                 tipo:         'Amonestación',
@@ -186,13 +184,12 @@ class AmonestacionesController extends RRHHBaseController
                 pdfNombre:    $pdfNombre,
             );
 
-            // Informar a gerencia_ops si es empleado de restaurante
             if ($esDeRestaurante) {
                 $this->notificarGerenciaOps(
                     tipo:           'Amonestación',
                     empleadoNombre: $empNombre,
                     detalles:       $detallesEmail,
-                    rutaFrontend:   'amonestaciones',
+                    rutaFrontend:   $rutaAmon,
                 );
             }
         }

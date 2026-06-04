@@ -246,8 +246,11 @@ class SolicitudEmailController extends Controller
     {
         try {
             $baseUrl  = rtrim(config('app.frontend_rrhh_url', 'https://www.talentohumano.cervezacadejo.com'), '/');
-            $rutaMap  = ['amonestacion' => 'amonestaciones', 'despido' => 'desvinculaciones'];
-            $linkUrl  = $baseUrl . '/' . ($rutaMap[$tipo] ?? $tipo);
+            $linkUrl  = match ($tipo) {
+                'amonestacion' => "{$baseUrl}/amonestaciones?ver={$solicitud->id}",
+                'despido'      => "{$baseUrl}/desvinculaciones/despidos?ver={$solicitud->id}",
+                default        => "{$baseUrl}/{$tipo}",
+            };
             $detalles = $this->buildDetalles($solicitud, $tipo);
 
             if ($tipo === 'amonestacion') {
@@ -331,6 +334,8 @@ class SolicitudEmailController extends Controller
 
     private function notificarJefeAprobacionMuyGrave($solicitud, array $detalles, string $linkUrl): void
     {
+        $baseUrl = rtrim(config('app.frontend_rrhh_url', 'https://www.talentohumano.cervezacadejo.com'), '/');
+        $linkUrl = "{$baseUrl}/amonestaciones?ver={$solicitud->id}";
         try {
             $jefe = DB::connection('pgsql')->table('empleados')->where('id', $solicitud->jefe_id)->first();
             $jefeEmail = $jefe
@@ -358,7 +363,7 @@ class SolicitudEmailController extends Controller
     {
         try {
             $baseUrl = rtrim(config('app.frontend_rrhh_url', 'https://www.talentohumano.cervezacadejo.com'), '/');
-            $linkUrl = $baseUrl . '/amonestaciones';
+            $linkUrl = "{$baseUrl}/amonestaciones?ver={$solicitud->id}";
 
             $jefe = DB::connection('pgsql')->table('empleados')->where('id', $solicitud->jefe_id)->first();
             $jefeEmail = $jefe
