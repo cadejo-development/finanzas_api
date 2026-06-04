@@ -13,3 +13,6 @@ Route::get('/rrhh/email/solicitud/{tipo}/{id}/aprobar', [SolicitudEmailControlle
 
 Route::get('/rrhh/email/solicitud/{tipo}/{id}/rechazar', [SolicitudEmailController::class, 'rechazar'])
     ->name('rrhh.email.rechazar');
+
+Route::post('/rrhh/email/rechazar-con-motivo/{tipo}/{id}', [SolicitudEmailController::class, 'rechazarConMotivo'])
+    ->name('rrhh.email.rechazar.motivo');

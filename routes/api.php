@@ -378,6 +378,7 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::put('amonestaciones/{id}',               [AmonestacionesController::class, 'update']);
     Route::delete('amonestaciones/{id}',            [AmonestacionesController::class, 'destroy']);
     Route::get('amonestaciones/{id}/descargar',     [AmonestacionesController::class, 'descargar']);
+    Route::get('amonestaciones/{id}/pdf',           [AmonestacionesController::class, 'pdf']);
 
     // Desvinculaciones (despidos + renuncias, filtrar por ?tipo=despido|renuncia)
     Route::get('desvinculaciones',                  [DesvinculacionesController::class, 'index']);

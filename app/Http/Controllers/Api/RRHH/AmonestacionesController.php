@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Api\RRHH;
 
 use App\Models\RRHH\Amonestacion;
 use App\Models\RRHH\DiaSuspension;
+use App\Services\RRHH\AmonestacionPdfService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class AmonestacionesController extends RRHHBaseController
@@ -82,10 +85,14 @@ class AmonestacionesController extends RRHHBaseController
             $archivoRuta   = $file->store('rrhh/amonestaciones', 's3');
         }
 
-        // Amonestaciones con suspensión de propina para empleados de restaurante
-        // requieren aprobación previa de gerencia_ops.
-        $esDeRestaurante        = $this->esEmpleadoDeRestaurante($validated['empleado_id']);
-        $requiereAprobacion     = $aplicaPropina && $esDeRestaurante && !$this->esAdminRrhh() && !$this->esGerenciaOps();
+        $esDeRestaurante    = $this->esEmpleadoDeRestaurante($validated['empleado_id']);
+        $esMuyGrave         = $tipoFalta?->gravedad === 'muy_grave';
+
+        // Muy grave → aprobación de jefa RRHH (siempre, salvo admin RRHH).
+        // Propina en restaurante → aprobación de gerencia_ops (solo leve/grave).
+        $requiereAprobacionRrhh    = $esMuyGrave && !$this->esAdminRrhh();
+        $requiereAprobacionPropina = !$esMuyGrave && $aplicaPropina && $esDeRestaurante && !$this->esAdminRrhh() && !$this->esGerenciaOps();
+        $requiereAprobacion        = $requiereAprobacionRrhh || $requiereAprobacionPropina;
 
         $amonestacion = Amonestacion::create([
             'empleado_id'               => $validated['empleado_id'],
@@ -98,7 +105,7 @@ class AmonestacionesController extends RRHHBaseController
             'aplica_suspension'         => $aplica,
             'aplica_suspension_propina' => $aplicaPropina,
             'dias_suspension_propina'   => $diasPropina,
-            'estado'                    => $requiereAprobacion ? 'pendiente_gerencia_ops' : 'aprobado',
+            'estado'                    => $requiereAprobacionRrhh ? 'pendiente_rrhh' : ($requiereAprobacionPropina ? 'pendiente_gerencia_ops' : 'aprobado'),
             'archivo_nombre'            => $archivoNombre,
             'archivo_ruta'              => $archivoRuta,
             'aud_usuario'               => Auth::user()->email,
@@ -136,10 +143,31 @@ class AmonestacionesController extends RRHHBaseController
             $detallesEmail['Suspensión de propina'] = implode(', ', $diasPropina);
         }
 
-        if ($requiereAprobacion) {
-            // Solicitar aprobación a gerencia_ops (no notificar al empleado todavía)
+        // Generar PDF (best-effort — no abortar si falla)
+        $pdfContent = null;
+        $pdfNombre  = null;
+        try {
+            $pdf        = AmonestacionPdfService::generar($amonestacion);
+            $pdfContent = $pdf->output();
+            $pdfNombre  = AmonestacionPdfService::nombreArchivo($amonestacion);
+        } catch (\Throwable $e) {
+            Log::warning('RRHH: Error generando PDF de amonestación', ['id' => $amonestacion->id, 'error' => $e->getMessage()]);
+        }
+
+        if ($requiereAprobacionRrhh) {
+            // Muy grave → solicitar aprobación a jefa RRHH (Gabriela)
+            $this->notificarJefaRRHHSolicitud(
+                tipo:           'Amonestación Muy Grave',
+                empleadoNombre: $empNombre,
+                detalles:       $detallesEmail,
+                rutaFrontend:   'amonestaciones',
+                solicitudId:    $amonestacion->id,
+                tipoModelo:     'amonestacion',
+            );
+        } elseif ($requiereAprobacionPropina) {
+            // Propina en restaurante → solicitar aprobación a gerencia_ops
             $this->notificarGerenciaOpsSolicitud(
-                tipo:          'Amonestación con Suspensión de Propina',
+                tipo:           'Amonestación con Suspensión de Propina',
                 empleadoNombre: $empNombre,
                 detalles:       $detallesEmail,
                 rutaFrontend:   'amonestaciones',
@@ -147,16 +175,18 @@ class AmonestacionesController extends RRHHBaseController
                 tipoModelo:     'amonestacion',
             );
         } else {
-            // Notificar al empleado amonestado
+            // Notificar directamente al empleado con PDF adjunto
             $this->notificarAlEmpleado(
                 empleadoId:   $validated['empleado_id'],
                 tipo:         'Amonestación',
                 mensaje:      "Tu jefe inmediato ha registrado una amonestacion en tu expediente. A continuacion encontraras los detalles del registro.",
                 detalles:     $detallesEmail,
                 rutaFrontend: 'mi-expediente',
+                pdfContent:   $pdfContent,
+                pdfNombre:    $pdfNombre,
             );
 
-            // Notificar (informativo) a gerencia_ops si es empleado de restaurante
+            // Informar a gerencia_ops si es empleado de restaurante
             if ($esDeRestaurante) {
                 $this->notificarGerenciaOps(
                     tipo:           'Amonestación',
@@ -240,6 +270,25 @@ class AmonestacionesController extends RRHHBaseController
         $amonestacion->delete();
 
         return response()->json(['success' => true, 'message' => 'Amonestación eliminada.']);
+    }
+
+    /**
+     * GET /api/rrhh/amonestaciones/{id}/pdf
+     * Genera y descarga el PDF de la amonestación.
+     */
+    public function pdf(int $id): Response
+    {
+        $amonestacion = Amonestacion::with(['tipoFalta', 'diasSuspension'])->findOrFail($id);
+
+        $subordinadosIds = $this->getSubordinadosIds();
+        if (! in_array($amonestacion->empleado_id, $subordinadosIds)) {
+            abort(403, 'No tienes acceso a esta amonestación.');
+        }
+
+        $pdf    = AmonestacionPdfService::generar($amonestacion);
+        $nombre = AmonestacionPdfService::nombreArchivo($amonestacion);
+
+        return $pdf->download($nombre);
     }
 
     /**

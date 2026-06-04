@@ -4,6 +4,7 @@ namespace App\Mail\RRHH;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -23,7 +24,20 @@ class NotificacionAlEmpleado extends Mailable
         public readonly array   $detalles,
         public readonly string  $linkUrl,
         public readonly string  $destinatarioNombre,
+        public readonly ?string $pdfContent = null,
+        public readonly ?string $pdfNombre  = null,
     ) {}
+
+    public function attachments(): array
+    {
+        if ($this->pdfContent && $this->pdfNombre) {
+            return [
+                Attachment::fromData(fn () => $this->pdfContent, $this->pdfNombre)
+                    ->withMime('application/pdf'),
+            ];
+        }
+        return [];
+    }
 
     public function envelope(): Envelope
     {

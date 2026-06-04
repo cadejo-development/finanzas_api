@@ -640,11 +640,13 @@ abstract class RRHHBaseController extends Controller
      * @param string $rutaFrontend     Path frontend (e.g. 'amonestaciones')
      */
     protected function notificarAlEmpleado(
-        int    $empleadoId,
-        string $tipo,
-        string $mensaje,
-        array  $detalles,
-        string $rutaFrontend,
+        int     $empleadoId,
+        string  $tipo,
+        string  $mensaje,
+        array   $detalles,
+        string  $rutaFrontend,
+        ?string $pdfContent = null,
+        ?string $pdfNombre  = null,
     ): void {
         $destinatarioEmail = null;
         $mailable          = null;
@@ -670,6 +672,8 @@ abstract class RRHHBaseController extends Controller
                 detalles:           $detalles,
                 linkUrl:            "{$baseUrl}/{$rutaFrontend}",
                 destinatarioNombre: $empleadoNombre,
+                pdfContent:         $pdfContent,
+                pdfNombre:          $pdfNombre,
             );
 
             Mail::to($destinatarioEmail)->send($mailable);
@@ -892,6 +896,54 @@ abstract class RRHHBaseController extends Controller
             }
         } catch (\Throwable $e) {
             Log::warning('RRHH: Error enviando solicitud aprobación a gerencia_ops', [
+                'tipo'  => $tipo,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Envía a la jefa de RRHH (Gabriela) una solicitud de aprobación para amonestaciones muy graves.
+     */
+    protected function notificarJefaRRHHSolicitud(
+        string $tipo,
+        string $empleadoNombre,
+        array  $detalles,
+        string $rutaFrontend,
+        int    $solicitudId,
+        string $tipoModelo,
+    ): void {
+        try {
+            $jefaEmail = config('app.rrhh_jefa_email', 'gabriela@cervezacadejo.com');
+
+            $baseUrl     = rtrim(config('app.frontend_rrhh_url', 'https://www.talentohumano.cervezacadejo.com'), '/');
+            $linkUrl     = "{$baseUrl}/{$rutaFrontend}";
+            $aprobarUrl  = \Illuminate\Support\Facades\URL::temporarySignedRoute('rrhh.email.aprobar',  now()->addDays(7), ['tipo' => $tipoModelo, 'id' => $solicitudId]);
+            $rechazarUrl = \Illuminate\Support\Facades\URL::temporarySignedRoute('rrhh.email.rechazar', now()->addDays(7), ['tipo' => $tipoModelo, 'id' => $solicitudId]);
+
+            $mailable = new SolicitudAprobacion(
+                $tipo,
+                $empleadoNombre,
+                'Gabriela Bustamante',
+                $detalles,
+                $linkUrl,
+                $aprobarUrl,
+                $rechazarUrl,
+            );
+
+            Mail::to($jefaEmail)->send($mailable);
+
+            $this->registrarEmailLog([
+                'tipo'            => 'solicitud_aprobacion_rrhh',
+                'destinatario'    => $jefaEmail,
+                'asunto'          => $mailable->envelope()->subject,
+                'estado'          => 'enviado',
+                'enviado_por'     => Auth::user()->email,
+                'referencia_id'   => $solicitudId,
+                'referencia_tipo' => $tipoModelo,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('RRHH: Error enviando solicitud aprobación muy grave a jefa RRHH', [
                 'tipo'  => $tipo,
                 'error' => $e->getMessage(),
             ]);

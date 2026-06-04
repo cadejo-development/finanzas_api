@@ -4,11 +4,13 @@ namespace App\Http\Controllers\RRHH;
 
 use App\Http\Controllers\Controller;
 use App\Mail\RRHH\AccionPersonalNotificacion;
+use App\Mail\RRHH\NotificacionAlEmpleado;
 use App\Mail\RRHH\VeredictoSolicitud;
 use App\Models\RRHH\Amonestacion;
 use App\Models\RRHH\Desvinculacion;
 use App\Models\RRHH\Permiso;
 use App\Models\RRHH\Vacacion;
+use App\Services\RRHH\AmonestacionPdfService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -30,7 +32,67 @@ class SolicitudEmailController extends Controller
 
     public function rechazar(Request $request, string $tipo, int $id)
     {
+        if (! $request->hasValidSignature()) {
+            return view('rrhh.resultado-solicitud', [
+                'exito'   => false,
+                'accion'  => 'rechazado',
+                'tipo'    => $tipo,
+                'mensaje' => 'El enlace ha expirado o no es válido.',
+            ]);
+        }
+
+        // Para amonestaciones muy graves se requiere ingresar el motivo de rechazo
+        if ($tipo === 'amonestacion') {
+            $solicitud = Amonestacion::with('tipoFalta')->find($id);
+            if ($solicitud && $solicitud->tipoFalta?->gravedad === 'muy_grave' && $solicitud->estado === 'pendiente_rrhh') {
+                session(['rechazar_amonestacion_autorizado' => $id]);
+                return view('rrhh.rechazar-form', ['id' => $id, 'tipo' => $tipo, 'amonestacion' => $solicitud]);
+            }
+        }
+
         return $this->procesarAccion($request, $tipo, $id, 'rechazado');
+    }
+
+    public function rechazarConMotivo(Request $request, string $tipo, int $id)
+    {
+        if ((int) session('rechazar_amonestacion_autorizado') !== $id) {
+            return view('rrhh.resultado-solicitud', [
+                'exito'   => false,
+                'accion'  => 'rechazado',
+                'tipo'    => $tipo,
+                'mensaje' => 'Sesión inválida o expirada. Usa el enlace del correo nuevamente.',
+            ]);
+        }
+
+        $solicitud = Amonestacion::with('tipoFalta')->find($id);
+
+        if (! $solicitud || $solicitud->estado !== 'pendiente_rrhh') {
+            return view('rrhh.resultado-solicitud', [
+                'exito'   => false,
+                'accion'  => 'rechazado',
+                'tipo'    => $tipo,
+                'mensaje' => 'Esta solicitud ya fue procesada o no existe.',
+            ]);
+        }
+
+        $motivo = trim($request->input('motivo', ''));
+
+        $solicitud->update([
+            'estado'         => 'rechazado',
+            'aprobado_en'    => now(),
+            'rechazo_motivo' => $motivo ?: null,
+        ]);
+
+        $this->notificarJefeRechazoMuyGrave($solicitud, $motivo);
+
+        session()->forget('rechazar_amonestacion_autorizado');
+
+        return view('rrhh.resultado-solicitud', [
+            'exito'   => true,
+            'accion'  => 'rechazado',
+            'tipo'    => 'Amonestación muy grave',
+            'mensaje' => 'La amonestación fue rechazada. Se notificó al jefe responsable.',
+        ]);
     }
 
     private function procesarAccion(Request $request, string $tipo, int $id, string $nuevoEstado)
@@ -66,7 +128,7 @@ class SolicitudEmailController extends Controller
             ]);
         }
 
-        $estadosPendientes = ['pendiente', 'pendiente_gerencia_ops'];
+        $estadosPendientes = ['pendiente', 'pendiente_gerencia_ops', 'pendiente_rrhh'];
         if (! in_array($solicitud->estado, $estadosPendientes)) {
             return view('rrhh.resultado-solicitud', [
                 'exito'   => false,
@@ -183,18 +245,18 @@ class SolicitudEmailController extends Controller
     private function notificarVeredictoAccion($solicitud, string $tipo, string $estado): void
     {
         try {
-            $baseUrl = rtrim(config('app.frontend_rrhh_url', 'https://www.talentohumano.cervezacadejo.com'), '/');
-            $rutaMap = ['amonestacion' => 'amonestaciones', 'despido' => 'desvinculaciones'];
-            $linkUrl = $baseUrl . '/' . ($rutaMap[$tipo] ?? $tipo);
+            $baseUrl  = rtrim(config('app.frontend_rrhh_url', 'https://www.talentohumano.cervezacadejo.com'), '/');
+            $rutaMap  = ['amonestacion' => 'amonestaciones', 'despido' => 'desvinculaciones'];
+            $linkUrl  = $baseUrl . '/' . ($rutaMap[$tipo] ?? $tipo);
             $detalles = $this->buildDetalles($solicitud, $tipo);
 
-            if ($estado === 'aprobado') {
-                // Notificar al empleado afectado
-                $empleado = DB::connection('pgsql')
-                    ->table('empleados')
-                    ->where('id', $solicitud->empleado_id)
-                    ->first();
+            if ($tipo === 'amonestacion') {
+                $solicitud->loadMissing('tipoFalta');
+            }
+            $esMuyGrave = $tipo === 'amonestacion' && $solicitud->tipoFalta?->gravedad === 'muy_grave';
 
+            if ($estado === 'aprobado') {
+                $empleado = DB::connection('pgsql')->table('empleados')->where('id', $solicitud->empleado_id)->first();
                 $empleadoEmail = $empleado
                     ? DB::connection('pgsql')->table('users')->where('id', $empleado->user_id)->value('email')
                     : null;
@@ -206,36 +268,47 @@ class SolicitudEmailController extends Controller
                         ? 'Se ha registrado una amonestacion aprobada en tu expediente.'
                         : 'Tu desvinculacion ha sido procesada. Contacta a RRHH para los pasos a seguir.';
 
-                    $mailable = new \App\Mail\RRHH\NotificacionAlEmpleado(
+                    // Generar PDF para amonestaciones
+                    $pdfContent = null;
+                    $pdfNombre  = null;
+                    if ($tipo === 'amonestacion') {
+                        try {
+                            $pdfContent = AmonestacionPdfService::generar($solicitud)->output();
+                            $pdfNombre  = AmonestacionPdfService::nombreArchivo($solicitud);
+                        } catch (\Throwable $e) {
+                            Log::warning('RRHH: Error generando PDF en aprobación', ['id' => $solicitud->id, 'error' => $e->getMessage()]);
+                        }
+                    }
+
+                    $mailable = new NotificacionAlEmpleado(
                         tipo:               $tipoLabel,
                         empleadoNombre:     $empleadoNombre,
                         mensaje:            $mensaje,
                         detalles:           $detalles,
                         linkUrl:            $linkUrl . '/mi-expediente',
                         destinatarioNombre: $empleadoNombre,
+                        pdfContent:         $pdfContent,
+                        pdfNombre:          $pdfNombre,
                     );
 
                     Mail::to($empleadoEmail)->send($mailable);
                 }
+
+                // Si es muy grave aprobada: notificar también al jefe (confirmación)
+                if ($esMuyGrave) {
+                    $this->notificarJefeAprobacionMuyGrave($solicitud, $detalles, $linkUrl);
+                }
+
             } else {
-                // Rechazado: notificar al jefe que creó el registro
+                // Rechazado (propina/despido): notificar al jefe que creó el registro
                 $jefeId = $tipo === 'amonestacion' ? $solicitud->jefe_id : $solicitud->procesado_por_id;
-
-                $jefe = DB::connection('pgsql')
-                    ->table('empleados')
-                    ->where('id', $jefeId)
-                    ->first();
-
+                $jefe   = DB::connection('pgsql')->table('empleados')->where('id', $jefeId)->first();
                 $jefeEmail = $jefe
                     ? DB::connection('pgsql')->table('users')->where('id', $jefe->user_id)->value('email')
                     : null;
 
                 if ($jefeEmail) {
-                    $empleado = DB::connection('pgsql')
-                        ->table('empleados')
-                        ->where('id', $solicitud->empleado_id)
-                        ->first();
-
+                    $empleado   = DB::connection('pgsql')->table('empleados')->where('id', $solicitud->empleado_id)->first();
                     $empNombre  = $empleado ? trim($empleado->nombres . ' ' . $empleado->apellidos) : "Empleado #{$solicitud->empleado_id}";
                     $jefeNombre = trim($jefe->nombres . ' ' . $jefe->apellidos);
                     $tipoLabel  = $tipo === 'amonestacion' ? 'Amonestación' : 'Despido';
@@ -252,10 +325,65 @@ class SolicitudEmailController extends Controller
                 }
             }
         } catch (\Throwable $e) {
-            Log::warning('RRHH: Error notificando veredicto de acción', [
-                'tipo'  => $tipo,
-                'error' => $e->getMessage(),
-            ]);
+            Log::warning('RRHH: Error notificando veredicto de acción', ['tipo' => $tipo, 'error' => $e->getMessage()]);
+        }
+    }
+
+    private function notificarJefeAprobacionMuyGrave($solicitud, array $detalles, string $linkUrl): void
+    {
+        try {
+            $jefe = DB::connection('pgsql')->table('empleados')->where('id', $solicitud->jefe_id)->first();
+            $jefeEmail = $jefe
+                ? DB::connection('pgsql')->table('users')->where('id', $jefe->user_id)->value('email')
+                : null;
+            if (! $jefeEmail) return;
+
+            $empleado = DB::connection('pgsql')->table('empleados')->where('id', $solicitud->empleado_id)->first();
+            $empNombre  = $empleado ? trim($empleado->nombres . ' ' . $empleado->apellidos) : "Empleado #{$solicitud->empleado_id}";
+            $jefeNombre = trim($jefe->nombres . ' ' . $jefe->apellidos);
+
+            Mail::to($jefeEmail)->send(new AccionPersonalNotificacion(
+                tipo:             'Amonestación Muy Grave — Aprobada por RRHH',
+                empleadoNombre:   $empNombre,
+                supervisorNombre: $jefeNombre,
+                detalles:         $detalles,
+                linkUrl:          $linkUrl,
+            ));
+        } catch (\Throwable $e) {
+            Log::warning('RRHH: Error notificando jefe de aprobación muy grave', ['error' => $e->getMessage()]);
+        }
+    }
+
+    private function notificarJefeRechazoMuyGrave($solicitud, string $motivo): void
+    {
+        try {
+            $baseUrl = rtrim(config('app.frontend_rrhh_url', 'https://www.talentohumano.cervezacadejo.com'), '/');
+            $linkUrl = $baseUrl . '/amonestaciones';
+
+            $jefe = DB::connection('pgsql')->table('empleados')->where('id', $solicitud->jefe_id)->first();
+            $jefeEmail = $jefe
+                ? DB::connection('pgsql')->table('users')->where('id', $jefe->user_id)->value('email')
+                : null;
+            if (! $jefeEmail) return;
+
+            $empleado  = DB::connection('pgsql')->table('empleados')->where('id', $solicitud->empleado_id)->first();
+            $empNombre = $empleado ? trim($empleado->nombres . ' ' . $empleado->apellidos) : "Empleado #{$solicitud->empleado_id}";
+            $jefeNombre = trim($jefe->nombres . ' ' . $jefe->apellidos);
+
+            $detalles = $this->buildDetalles($solicitud, 'amonestacion');
+            if ($motivo) {
+                $detalles['Motivo de rechazo'] = $motivo;
+            }
+
+            Mail::to($jefeEmail)->send(new AccionPersonalNotificacion(
+                tipo:             'Amonestación Muy Grave — Rechazada por RRHH',
+                empleadoNombre:   $empNombre,
+                supervisorNombre: $jefeNombre,
+                detalles:         $detalles,
+                linkUrl:          $linkUrl,
+            ));
+        } catch (\Throwable $e) {
+            Log::warning('RRHH: Error notificando jefe de rechazo muy grave', ['error' => $e->getMessage()]);
         }
     }
 
