@@ -97,13 +97,14 @@ const clean = (s, max = 150) =>
 // ── SQL Server: todos los empleados (activos e inactivos) ─────────────────────
 const Q_EMPLEADOS = `
 SELECT
-  e.empCodigo     AS codigo,
-  e.empNombres    AS nombres,
-  e.empApellidos  AS apellidos,
-  e.empEmail      AS email,
-  c.crgCodigo     AS cargo_codigo,
-  d.depCodigo     AS dep_codigo,
-  CASE WHEN e.empActivo = 1 THEN 1 ELSE 0 END AS activo
+  e.empCodigo       AS codigo,
+  e.empNombres      AS nombres,
+  e.empApellidos    AS apellidos,
+  e.empEmail        AS email,
+  c.crgCodigo       AS cargo_codigo,
+  d.depCodigo       AS dep_codigo,
+  CASE WHEN e.empActivo = 1 THEN 1 ELSE 0 END AS activo,
+  CONVERT(date, e.empFechaIngreso) AS fecha_ingreso
 FROM olComun.dbo.Empleados e WITH (NOLOCK)
 INNER JOIN olComun.dbo.Cargos c WITH (NOLOCK) ON c.crgId = e.crgId
 INNER JOIN olComun.dbo.Deptos d WITH (NOLOCK) ON d.depId = e.depId
@@ -203,7 +204,7 @@ async function run() {
     log(`SQL Server: ${empRows.length} empleados (activos + inactivos)`);
 
     const paraInsertar = [];
-    const paraActualizar = [];  // [activo, departamento_id, codigo]
+    const paraActualizar = [];  // [activo, departamento_id, fecha_ingreso, codigo]
 
     let sinDepMap = 0;
 
@@ -213,8 +214,9 @@ async function run() {
       const departamentoId = DEP_DEPARTAMENTO_MAP[r.dep_codigo] ?? null;
 
       if (existentes.has(codigo)) {
-        // YA existe → actualizar activo + departamento_id si aún no tiene
-        paraActualizar.push([activo, departamentoId, codigo]);
+        // YA existe → actualizar activo + departamento_id + fecha_ingreso si aún no tiene
+        const fechaIngreso = r.fecha_ingreso ? new Date(r.fecha_ingreso) : null;
+        paraActualizar.push([activo, departamentoId, fechaIngreso, codigo]);
       } else if (activo) {
         // NUEVO y activo en SQL Server → insertar completo
         const sucCodigo  = DEP_SUCURSAL_MAP[r.dep_codigo] ?? null;
@@ -232,6 +234,7 @@ async function run() {
           sucursalId,
           departamentoId,
           activo,
+          r.fecha_ingreso ? new Date(r.fecha_ingreso) : null,
           AUD,
           NOW,
           NOW,
@@ -250,23 +253,24 @@ async function run() {
         let updOk = 0;
         for (let i = 0; i < paraActualizar.length; i += BATCH) {
           const batch = paraActualizar.slice(i, i + BATCH);
-          for (const [activo, departamentoId, codigo] of batch) {
+          for (const [activo, departamentoId, fechaIngreso, codigo] of batch) {
             await pg.query(
-              // Actualiza activo y departamento_id (solo si aún no tiene).
+              // Actualiza activo, departamento_id y fecha_ingreso (estos dos solo si aún no tiene).
               // Protección: no reactivar si fue inactivado por desvinculación
               // (aud_usuario lo identifica). Sí permite reactivar empleados
               // que quedaron inactivos por errores de sync u otras razones.
               `UPDATE empleados
-               SET activo         = $1,
+               SET activo          = $1,
                    departamento_id = COALESCE(departamento_id, $2),
-                   updated_at      = $3
-               WHERE codigo = $4
+                   fecha_ingreso   = COALESCE(fecha_ingreso, $3),
+                   updated_at      = $4
+               WHERE codigo = $5
                  AND NOT (
                    activo = false
                    AND $1 = true
                    AND aud_usuario IN ('sistema:desvinculacion', 'sistema:inactivar-desvinculados')
                  )`,
-              [activo, departamentoId, NOW, codigo]
+              [activo, departamentoId, fechaIngreso, NOW, codigo]
             );
             updOk++;
           }
@@ -279,7 +283,7 @@ async function run() {
       // ── Insertar empleados nuevos ─────────────────────────────────────────
       if (paraInsertar.length) {
         const cols = ['codigo', 'nombres', 'apellidos', 'email', 'cargo_id',
-                      'sucursal_id', 'departamento_id', 'activo', 'aud_usuario', 'created_at', 'updated_at'];
+                      'sucursal_id', 'departamento_id', 'activo', 'fecha_ingreso', 'aud_usuario', 'created_at', 'updated_at'];
         let insOk = 0;
         for (let i = 0; i < paraInsertar.length; i += BATCH) {
           const batch  = paraInsertar.slice(i, i + BATCH);
