@@ -29,12 +29,13 @@ class CatalogosRRHHController extends RRHHBaseController
 
         $equipoQuery = DB::connection('pgsql')
             ->table('empleados as e')
-            ->leftJoin('cargos as c', 'e.cargo_id', '=', 'c.id')
-            ->leftJoin('sucursales as s', 'e.sucursal_id', '=', 's.id')
-            ->leftJoin('tipos_sucursal as ts', 'ts.id', '=', 's.tipo_sucursal_id')
+            ->leftJoin('cargos as c',        'e.cargo_id',       '=', 'c.id')
+            ->leftJoin('sucursales as s',     'e.sucursal_id',    '=', 's.id')
+            ->leftJoin('tipos_sucursal as ts','ts.id',            '=', 's.tipo_sucursal_id')
+            ->leftJoin('departamentos as d',  'e.departamento_id','=', 'd.id')
             ->where('e.activo', true)
-            ->select('e.id', 'e.codigo', 'e.nombres', 'e.apellidos', 'e.fecha_ingreso', 'e.sucursal_id', 'e.departamento_id', 'c.nombre as cargo', 's.nombre as sucursal', 'ts.codigo as sucursal_tipo')
-            ->selectRaw('EXISTS(SELECT 1 FROM departamentos d WHERE d.jefe_empleado_id = e.id AND d.activo = true) AS es_jefe');
+            ->select('e.id', 'e.codigo', 'e.nombres', 'e.apellidos', 'e.fecha_ingreso', 'e.sucursal_id', 'e.departamento_id', 'c.nombre as cargo', 's.nombre as sucursal', 'd.nombre as departamento', 'ts.codigo as sucursal_tipo')
+            ->selectRaw('EXISTS(SELECT 1 FROM departamentos d2 WHERE d2.jefe_empleado_id = e.id AND d2.activo = true) AS es_jefe');
 
         if ($esAdmin) {
             // Admin ve todos; opcionalmente filtrado por sucursal_id del request
