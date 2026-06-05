@@ -588,7 +588,7 @@ class PlanillasController extends RRHHBaseController
         } catch (\Throwable) {}
 
         // ── DUI desde expediente_documentos (ya sincronizado por el script) ──
-        $docExp = DB::connection('pgsql')
+        $docExp = DB::connection('rrhh')
             ->table('expediente_documentos')
             ->where('empleado_id', $empleadoId)
             ->whereIn('tipo', ['dui', 'pasaporte', 'carnet_residente'])
