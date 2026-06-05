@@ -3,203 +3,273 @@
 <head>
 <meta charset="UTF-8">
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; background: #fff; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10.5px; color: #1a1a1a; background: #fff; }
 
-  .page { padding: 24px 28px; max-width: 780px; margin: 0 auto; }
+.page { padding: 30px 32px; max-width: 720px; margin: 0 auto; }
 
-  /* Header */
-  .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #1a3a5c; padding-bottom: 12px; margin-bottom: 14px; }
-  .company-name { font-size: 17px; font-weight: bold; color: #1a3a5c; }
-  .company-sub  { font-size: 10px; color: #555; margin-top: 2px; }
-  .boleta-title { text-align: right; }
-  .boleta-title h2 { font-size: 14px; color: #1a3a5c; font-weight: bold; }
-  .boleta-title .periodo { font-size: 11px; color: #444; margin-top: 3px; }
-  .boleta-title .estado  { display: inline-block; font-size: 9px; padding: 2px 8px; border-radius: 3px; margin-top: 4px; background: #e8f4ea; color: #2d6a2d; font-weight: bold; text-transform: uppercase; }
+/* ── Header ── */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 16px;
+  margin-bottom: 18px;
+  border-bottom: 2px solid #1a3a5c;
+}
+.header-left { display: flex; align-items: center; gap: 14px; }
+.header-logo { width: 54px; height: 54px; }
+.company-name { font-size: 16px; font-weight: bold; color: #1a3a5c; line-height: 1.2; }
+.company-sub  { font-size: 9px; color: #777; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 3px; }
+.header-right { text-align: right; }
+.boleta-label { font-size: 13px; font-weight: bold; color: #1a3a5c; text-transform: uppercase; letter-spacing: 1px; }
+.periodo-q    { font-size: 10px; color: #444; margin-top: 4px; }
+.periodo-d    { font-size: 9.5px; color: #666; margin-top: 2px; }
+.estado-badge {
+  display: inline-block; margin-top: 5px;
+  font-size: 8px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 2px 9px; border-radius: 10px;
+  background: #dff0d8; color: #2d6a2d;
+}
+@if($planilla->estado !== 'aprobada')
+.estado-badge { background: #fff3cd; color: #856404; }
+@endif
 
-  /* Info empleado */
-  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; background: #f5f7fa; border: 1px solid #dde3ec; border-radius: 5px; padding: 10px 14px; margin-bottom: 14px; }
-  .info-item { display: flex; flex-direction: column; }
-  .info-label { font-size: 8.5px; color: #777; text-transform: uppercase; letter-spacing: 0.4px; }
-  .info-value { font-size: 11px; font-weight: bold; color: #1a1a1a; margin-top: 1px; }
+/* ── Info empleado ── */
+.emp-box {
+  background: #f7f9fc;
+  border: 1px solid #d8e2ef;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 18px;
+}
+.emp-row { display: flex; gap: 0; }
+.emp-cell { flex: 1; padding: 4px 8px 4px 0; }
+.emp-cell:first-child { padding-left: 0; }
+.emp-label { font-size: 7.5px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+.emp-value { font-size: 10.5px; font-weight: bold; color: #1a1a1a; }
+.emp-divider { border-top: 1px solid #e2e8f2; margin: 6px 0; }
 
-  /* Secciones de cálculo */
-  .seccion { margin-bottom: 12px; }
-  .seccion-titulo { font-size: 9px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #fff; background: #1a3a5c; padding: 4px 10px; border-radius: 3px 3px 0 0; }
-  .seccion table { width: 100%; border-collapse: collapse; }
-  .seccion table td { padding: 5px 10px; border-bottom: 1px solid #eee; font-size: 11px; }
-  .seccion table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
-  .seccion table tr:last-child td { border-bottom: none; }
-  .seccion table tr.subtotal td { font-weight: bold; background: #f0f4fa; border-top: 1px solid #c8d4e8; }
-  .seccion table tr.descuento td:last-child { color: #b02020; }
+/* ── Secciones ── */
+.section { margin-bottom: 14px; }
+.section-head {
+  background: #1a3a5c;
+  color: #fff;
+  font-size: 8.5px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 5px 12px;
+  border-radius: 4px 4px 0 0;
+}
+.section-body {
+  border: 1px solid #d8e2ef;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  overflow: hidden;
+}
+.row-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid #f0f3f8;
+}
+.row-item:last-child { border-bottom: none; }
+.row-item.alt { background: #fafbfd; }
+.row-item.subtotal {
+  background: #eef2fa;
+  border-top: 1px solid #c8d6ea;
+  font-weight: bold;
+  font-size: 10.5px;
+}
+.row-label { color: #333; }
+.row-label-muted { color: #888; font-size: 9.5px; }
+.row-val { font-variant-numeric: tabular-nums; }
+.red { color: #b02020; }
+.bold { font-weight: bold; }
 
-  /* Neto */
-  .neto-box { background: #1a3a5c; color: #fff; border-radius: 5px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-  .neto-label { font-size: 12px; font-weight: bold; }
-  .neto-value { font-size: 22px; font-weight: bold; }
+/* ── Neto ── */
+.neto-box {
+  background: #1a3a5c;
+  color: #fff;
+  border-radius: 6px;
+  padding: 13px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 28px;
+}
+.neto-label { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.9; }
+.neto-amount { font-size: 24px; font-weight: bold; }
 
-  /* Cargas patronales */
-  .patronal { border: 1px solid #dde3ec; border-radius: 5px; }
-  .patronal-titulo { font-size: 9px; font-weight: bold; color: #555; text-transform: uppercase; padding: 5px 10px; background: #f5f7fa; border-bottom: 1px solid #dde3ec; border-radius: 5px 5px 0 0; }
-  .patronal table { width: 100%; border-collapse: collapse; }
-  .patronal table td { padding: 4px 10px; font-size: 10px; border-bottom: 1px solid #f0f0f0; }
-  .patronal table td:last-child { text-align: right; }
-  .patronal table tr:last-child td { border-bottom: none; font-weight: bold; }
+/* ── Firmas ── */
+.footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 40px;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+.firma-block { flex: 1; text-align: center; }
+.firma-line { border-top: 1px solid #aaa; padding-top: 6px; margin-top: 32px; }
+.firma-name { font-size: 9px; font-weight: bold; color: #1a1a1a; }
+.firma-sub  { font-size: 8.5px; color: #777; margin-top: 1px; }
 
-  /* Footer */
-  .footer { margin-top: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
-  .firma { border-top: 1px solid #aaa; padding-top: 6px; text-align: center; font-size: 9px; color: #555; }
-
-  .fmt { font-variant-numeric: tabular-nums; }
+/* ── Nota pie ── */
+.nota { margin-top: 18px; font-size: 8px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 8px; }
 </style>
 </head>
 <body>
 <div class="page">
 
-  {{-- Header --}}
+  {{-- ══ HEADER ══ --}}
   <div class="header">
-    <div>
-      <div class="company-name">Cadejo Brewing Company</div>
-      <div class="company-sub">Comprobante de Pago de Salario</div>
-    </div>
-    <div class="boleta-title">
-      <h2>BOLETA DE PAGO</h2>
-      <div class="periodo">
-        Quincena {{ $planilla->quincena }} &nbsp;·&nbsp;
-        {{ \Carbon\Carbon::create($planilla->anio, $planilla->mes)->locale('es')->monthName }} {{ $planilla->anio }}
+    <div class="header-left">
+      @if($logoB64)
+        <img src="{{ $logoB64 }}" class="header-logo" alt="Logo Cadejo" />
+      @endif
+      <div>
+        <div class="company-name">Cadejo Brewing Company</div>
+        <div class="company-sub">Comprobante de Pago de Salario</div>
       </div>
-      <div class="periodo">
+    </div>
+    <div class="header-right">
+      <div class="boleta-label">Boleta de Pago</div>
+      <div class="periodo-q">
+        Quincena {{ $planilla->quincena }} &nbsp;·&nbsp;
+        {{ ucfirst(\Carbon\Carbon::create($planilla->anio, $planilla->mes)->locale('es')->monthName) }}
+        {{ $planilla->anio }}
+      </div>
+      <div class="periodo-d">
         {{ \Carbon\Carbon::parse($planilla->fecha_inicio)->format('d/m/Y') }}
-        al
+        &nbsp;—&nbsp;
         {{ \Carbon\Carbon::parse($planilla->fecha_fin)->format('d/m/Y') }}
       </div>
-      <span class="estado">{{ ucfirst($planilla->estado) }}</span>
+      <span class="estado-badge">{{ ucfirst($planilla->estado) }}</span>
     </div>
   </div>
 
-  {{-- Info empleado --}}
-  <div class="info-grid">
-    <div class="info-item">
-      <span class="info-label">Nombre</span>
-      <span class="info-value">{{ $empleado->nombres }} {{ $empleado->apellidos }}</span>
+  {{-- ══ DATOS EMPLEADO ══ --}}
+  <div class="emp-box">
+    <div class="emp-row">
+      <div class="emp-cell" style="flex:2">
+        <div class="emp-label">Empleado</div>
+        <div class="emp-value">{{ strtoupper($empleado->apellidos) }}, {{ $empleado->nombres }}</div>
+      </div>
+      <div class="emp-cell">
+        <div class="emp-label">Código</div>
+        <div class="emp-value">{{ $empleado->codigo }}</div>
+      </div>
+      <div class="emp-cell">
+        <div class="emp-label">Días laborados</div>
+        <div class="emp-value">{{ number_format($linea->dias_laborados, 1) }} / {{ $linea->dias_quincena }}</div>
+      </div>
     </div>
-    <div class="info-item">
-      <span class="info-label">Código</span>
-      <span class="info-value">{{ $empleado->codigo }}</span>
-    </div>
-    <div class="info-item">
-      <span class="info-label">Cargo</span>
-      <span class="info-value">{{ $empleado->cargo?->nombre ?? '—' }}</span>
-    </div>
-    <div class="info-item">
-      <span class="info-label">Sucursal / Departamento</span>
-      <span class="info-value">{{ $empleado->sucursal?->nombre ?? $empleado->departamento?->nombre ?? '—' }}</span>
-    </div>
-    <div class="info-item">
-      <span class="info-label">Días laborados</span>
-      <span class="info-value">{{ number_format($linea->dias_laborados, 1) }} / {{ $linea->dias_quincena }}</span>
-    </div>
-    <div class="info-item">
-      <span class="info-label">Salario base mensual</span>
-      <span class="info-value">${{ number_format($linea->salario_base, 2) }}</span>
+    <div class="emp-divider"></div>
+    <div class="emp-row">
+      <div class="emp-cell" style="flex:2">
+        <div class="emp-label">Cargo</div>
+        <div class="emp-value">{{ $empleado->cargo?->nombre ?? '—' }}</div>
+      </div>
+      <div class="emp-cell" style="flex:2">
+        <div class="emp-label">Sucursal / Departamento</div>
+        <div class="emp-value">
+          @if($empleado->departamento?->nombre && str_contains(strtoupper($empleado->sucursal?->nombre ?? ''), 'CASA MATRIZ'))
+            {{ $empleado->departamento->nombre }}
+          @else
+            {{ $empleado->sucursal?->nombre ?? $empleado->departamento?->nombre ?? '—' }}
+          @endif
+        </div>
+      </div>
+      <div class="emp-cell">
+        <div class="emp-label">Salario mensual</div>
+        <div class="emp-value">${{ number_format($linea->salario_base, 2) }}</div>
+      </div>
     </div>
   </div>
 
-  {{-- Ingresos --}}
-  <div class="seccion">
-    <div class="seccion-titulo">Ingresos</div>
-    <table>
-      <tr>
-        <td>Salario base (quincena)</td>
-        <td class="fmt">${{ number_format($linea->salario_base / 2, 2) }}</td>
-      </tr>
+  {{-- ══ INGRESOS ══ --}}
+  <div class="section">
+    <div class="section-head">Ingresos</div>
+    <div class="section-body">
+      <div class="row-item">
+        <span class="row-label">Salario base quincenal</span>
+        <span class="row-val bold">${{ number_format($linea->salario_base / 2, 2) }}</span>
+      </div>
       @if($linea->dias_laborados < $linea->dias_quincena)
-      <tr>
-        <td style="color:#777">Ajuste proporcional ({{ number_format($linea->dias_laborados,1) }}/{{ $linea->dias_quincena }} días)</td>
-        <td class="fmt" style="color:#777">${{ number_format($linea->salario_proporcional, 2) }}</td>
-      </tr>
+      <div class="row-item alt">
+        <span class="row-label-muted">
+          Ajuste proporcional ({{ number_format($linea->dias_laborados,1) }} / {{ $linea->dias_quincena }} días)
+        </span>
+        <span class="row-val" style="color:#888">${{ number_format($linea->salario_proporcional, 2) }}</span>
+      </div>
       @endif
-      <tr class="subtotal">
-        <td>Total devengado</td>
-        <td class="fmt">${{ number_format($linea->salario_proporcional, 2) }}</td>
-      </tr>
-    </table>
+      <div class="row-item subtotal">
+        <span>Total devengado</span>
+        <span class="row-val">${{ number_format($linea->salario_proporcional, 2) }}</span>
+      </div>
+    </div>
   </div>
 
-  {{-- Deducciones --}}
-  <div class="seccion">
-    <div class="seccion-titulo">Deducciones del Empleado</div>
-    <table>
-      <tr class="descuento">
-        <td>AFP ({{ number_format(7.25, 2) }}%)</td>
-        <td class="fmt">- ${{ number_format($linea->afp_empleado, 2) }}</td>
-      </tr>
-      <tr class="descuento">
-        <td>ISSS (3.00%)</td>
-        <td class="fmt">- ${{ number_format($linea->isss_empleado, 2) }}</td>
-      </tr>
-      <tr class="descuento">
-        <td>Renta (ISR)</td>
-        <td class="fmt">- ${{ number_format($linea->renta, 2) }}</td>
-      </tr>
+  {{-- ══ DEDUCCIONES ══ --}}
+  <div class="section">
+    <div class="section-head">Deducciones</div>
+    <div class="section-body">
+      <div class="row-item">
+        <span class="row-label">AFP &nbsp;<span style="color:#aaa;font-size:9px">(7.25%)</span></span>
+        <span class="row-val red">– ${{ number_format($linea->afp_empleado, 2) }}</span>
+      </div>
+      <div class="row-item alt">
+        <span class="row-label">ISSS &nbsp;<span style="color:#aaa;font-size:9px">(3.00%)</span></span>
+        <span class="row-val red">– ${{ number_format($linea->isss_empleado, 2) }}</span>
+      </div>
+      <div class="row-item">
+        <span class="row-label">Renta (ISR)</span>
+        <span class="row-val red">– ${{ number_format($linea->renta, 2) }}</span>
+      </div>
       @if($linea->otros_descuentos > 0)
         @foreach(($linea->detalle_descuentos ?? []) as $desc)
-        <tr class="descuento">
-          <td>{{ $desc['concepto'] ?? 'Otros descuentos' }}@if(!empty($desc['acreedor'])) — {{ $desc['acreedor'] }}@endif</td>
-          <td class="fmt">- ${{ number_format($desc['monto_quincenal'] ?? 0, 2) }}</td>
-        </tr>
+        <div class="row-item alt">
+          <span class="row-label">
+            {{ $desc['concepto'] ?? 'Otros descuentos' }}
+            @if(!empty($desc['acreedor'])) &nbsp;—&nbsp; <span style="color:#888">{{ $desc['acreedor'] }}</span> @endif
+          </span>
+          <span class="row-val red">– ${{ number_format($desc['monto_quincenal'] ?? 0, 2) }}</span>
+        </div>
         @endforeach
       @endif
-      <tr class="subtotal">
-        <td>Total deducciones</td>
-        <td class="fmt" style="color:#b02020">- ${{ number_format($linea->total_descuentos_empleado, 2) }}</td>
-      </tr>
-    </table>
+      <div class="row-item subtotal">
+        <span>Total deducciones</span>
+        <span class="row-val red">– ${{ number_format($linea->total_descuentos_empleado, 2) }}</span>
+      </div>
+    </div>
   </div>
 
-  {{-- Neto --}}
+  {{-- ══ NETO ══ --}}
   <div class="neto-box">
-    <span class="neto-label">SALARIO NETO A RECIBIR</span>
-    <span class="neto-value">${{ number_format($linea->salario_neto, 2) }}</span>
+    <span class="neto-label">Salario neto a recibir</span>
+    <span class="neto-amount">${{ number_format($linea->salario_neto, 2) }}</span>
   </div>
 
-  {{-- Cargas patronales --}}
-  <div class="patronal">
-    <div class="patronal-titulo">Cargas Patronales (referencia — no se descuentan al empleado)</div>
-    <table>
-      <tr>
-        <td>AFP Patronal (8.75%)</td>
-        <td>${{ number_format($linea->afp_patronal, 2) }}</td>
-      </tr>
-      <tr>
-        <td>ISSS Patronal (7.50%)</td>
-        <td>${{ number_format($linea->isss_patronal, 2) }}</td>
-      </tr>
-      <tr>
-        <td>INCAF/INSAFORP (1.00%)</td>
-        <td>${{ number_format($linea->insaforp_patronal, 2) }}</td>
-      </tr>
-      <tr>
-        <td><strong>Total patronal</strong></td>
-        <td><strong>${{ number_format($linea->total_patronal, 2) }}</strong></td>
-      </tr>
-    </table>
-  </div>
-
-  {{-- Firmas --}}
+  {{-- ══ FIRMAS ══ --}}
   <div class="footer">
-    <div class="firma">
-      <br><br>
-      ___________________________________<br>
-      Firma del Empleado<br>
-      {{ $empleado->nombres }} {{ $empleado->apellidos }}
+    <div class="firma-block">
+      <div class="firma-line">
+        <div class="firma-name">{{ strtoupper($empleado->apellidos) }}, {{ $empleado->nombres }}</div>
+        <div class="firma-sub">Firma del Empleado</div>
+      </div>
     </div>
-    <div class="firma">
-      <br><br>
-      ___________________________________<br>
-      Recursos Humanos<br>
-      Cadejo Brewing Company
+    <div class="firma-block">
+      <div class="firma-line">
+        <div class="firma-name">Recursos Humanos</div>
+        <div class="firma-sub">Cadejo Brewing Company</div>
+      </div>
     </div>
+  </div>
+
+  <div class="nota">
+    Documento generado el {{ now()->format('d/m/Y H:i') }} — Cadejo Brewing Company
   </div>
 
 </div>

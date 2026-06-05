@@ -580,11 +580,22 @@ class PlanillasController extends RRHHBaseController
         $meses = ['', 'enero','febrero','marzo','abril','mayo','junio',
                   'julio','agosto','septiembre','octubre','noviembre','diciembre'];
 
+        // Logo como base64 para DomPDF (evita problemas con imágenes remotas)
+        $logoB64 = null;
+        try {
+            $logoUrl = 'https://cadejo-storage.s3.us-east-2.amazonaws.com/public/logo2.png';
+            $logoData = @file_get_contents($logoUrl);
+            if ($logoData) {
+                $logoB64 = 'data:image/png;base64,' . base64_encode($logoData);
+            }
+        } catch (\Throwable $e) { /* sin logo si falla la red */ }
+
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('rrhh.boleta', [
-            'planilla' => $planilla,
-            'linea'    => $linea,
-            'empleado' => $emp,
+            'planilla'   => $planilla,
+            'linea'      => $linea,
+            'empleado'   => $emp,
             'mes_nombre' => $meses[$planilla->mes] ?? '',
+            'logoB64'    => $logoB64,
         ])->setPaper('letter', 'portrait');
 
         $filename = "boleta_{$empleado->codigo}_Q{$planilla->quincena}_{$planilla->anio}_{$planilla->mes}.pdf";
