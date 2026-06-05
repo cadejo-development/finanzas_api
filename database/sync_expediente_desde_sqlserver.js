@@ -170,15 +170,24 @@ async function run() {
     const expPorId = Object.fromEntries(expRows.map(r => [r.empleado_id, r]));
     log(`rrhh_db: ${expRows.length} registros existentes en expediente_datos_personales\n`);
 
-    // ── 4. Leer contactos existentes (celular/casa/emergencia ya cargados) ────
+    // ── 4. Leer todos los contactos existentes (valor + etiqueta) ────────────
     log('Cargando expediente_contactos...');
     const { rows: ctRows } = await pgRrhh.query(
-      `SELECT empleado_id, etiqueta FROM expediente_contactos
-       WHERE etiqueta IN ('celular', 'casa', 'emergencia')`
+      `SELECT empleado_id, etiqueta, valor FROM expediente_contactos WHERE tipo = 'telefono'`
     );
-    // Set de "empleado_id:etiqueta" ya existentes
-    const ctExistentes = new Set(ctRows.map(r => `${r.empleado_id}:${r.etiqueta}`));
-    log(`rrhh_db: ${ctRows.length} contactos existentes (celular/casa/emergencia)\n`);
+    // Normalizar teléfono: quitar espacios, guiones, paréntesis → solo dígitos
+    const normTel = v => (v || '').replace(/[\s\-().+]/g, '');
+    // Doble check: por etiqueta Y por valor normalizado
+    const ctPorEtiqueta = new Set(ctRows.filter(r => ['celular','casa','emergencia'].includes(r.etiqueta)).map(r => `${r.empleado_id}:${r.etiqueta}`));
+    const ctPorValor    = new Set(ctRows.map(r => `${r.empleado_id}:${normTel(r.valor)}`).filter(k => k.endsWith(':') === false && !k.endsWith(':')));
+    log(`rrhh_db: ${ctRows.length} contactos de teléfono existentes\n`);
+
+    const yaExisteContacto = (empId, etiqueta, valor) => {
+      if (ctPorEtiqueta.has(`${empId}:${etiqueta}`)) return true;
+      const vNorm = normTel(valor);
+      if (vNorm && ctPorValor.has(`${empId}:${vNorm}`)) return true;
+      return false;
+    };
 
     // ── 5. Calcular inserciones/actualizaciones para datos personales ─────────
     const dpInsertar   = [];
@@ -233,14 +242,14 @@ async function run() {
       const nomAvisa = clean(row.nom_avisar, 100);
       const telAvisa = clean(row.tel_avisar, 30);
 
-      if (celular && !ctExistentes.has(`${empId}:celular`)) {
+      if (celular && !yaExisteContacto(empId, 'celular', celular)) {
         ctInsertar.push({ empleado_id: empId, tipo: 'telefono', etiqueta: 'celular', valor: celular, es_emergencia: false, nombre_contacto: null });
       }
-      if (telCasa && !ctExistentes.has(`${empId}:casa`)) {
+      if (telCasa && !yaExisteContacto(empId, 'casa', telCasa)) {
         ctInsertar.push({ empleado_id: empId, tipo: 'telefono', etiqueta: 'casa', valor: telCasa, es_emergencia: false, nombre_contacto: null });
       }
-      // Emergencia: solo si hay teléfono (valor no puede ser null)
-      if (telAvisa && !ctExistentes.has(`${empId}:emergencia`)) {
+      // Emergencia: solo si hay teléfono y no duplica
+      if (telAvisa && !yaExisteContacto(empId, 'emergencia', telAvisa)) {
         ctInsertar.push({ empleado_id: empId, tipo: 'telefono', etiqueta: 'emergencia', valor: telAvisa, es_emergencia: true, nombre_contacto: nomAvisa });
       }
     }
