@@ -104,7 +104,8 @@ SELECT
   c.crgCodigo       AS cargo_codigo,
   d.depCodigo       AS dep_codigo,
   CASE WHEN e.empActivo = 1 THEN 1 ELSE 0 END AS activo,
-  CONVERT(date, e.empFechaIngreso) AS fecha_ingreso
+  CONVERT(date, e.empFechaIngreso)    AS fecha_ingreso,
+  e.empSalarioMes                     AS salario_mes
 FROM olComun.dbo.Empleados e WITH (NOLOCK)
 INNER JOIN olComun.dbo.Cargos c WITH (NOLOCK) ON c.crgId = e.crgId
 INNER JOIN olComun.dbo.Deptos d WITH (NOLOCK) ON d.depId = e.depId
@@ -204,7 +205,7 @@ async function run() {
     log(`SQL Server: ${empRows.length} empleados (activos + inactivos)`);
 
     const paraInsertar = [];
-    const paraActualizar = [];  // [activo, departamento_id, fecha_ingreso, codigo]
+    const paraActualizar = [];  // [activo, departamento_id, fecha_ingreso, cargo_id, salario_base, email, codigo]
 
     let sinDepMap = 0;
 
@@ -214,9 +215,11 @@ async function run() {
       const departamentoId = DEP_DEPARTAMENTO_MAP[r.dep_codigo] ?? null;
 
       if (existentes.has(codigo)) {
-        // YA existe → actualizar activo + departamento_id + fecha_ingreso si aún no tiene
-        const fechaIngreso = r.fecha_ingreso ? new Date(r.fecha_ingreso) : null;
-        paraActualizar.push([activo, departamentoId, fechaIngreso, codigo]);
+        const fechaIngreso  = r.fecha_ingreso ? new Date(r.fecha_ingreso) : null;
+        const cargoId       = cargoByCode[r.cargo_codigo] ?? null;
+        const salarioBase   = r.salario_mes != null ? parseFloat(r.salario_mes) : null;
+        const emailVal      = clean(r.email, 150);
+        paraActualizar.push([activo, departamentoId, fechaIngreso, cargoId, salarioBase, emailVal, codigo]);
       } else if (activo) {
         // NUEVO y activo en SQL Server → insertar completo
         const sucCodigo  = DEP_SUCURSAL_MAP[r.dep_codigo] ?? null;
@@ -235,6 +238,7 @@ async function run() {
           departamentoId,
           activo,
           r.fecha_ingreso ? new Date(r.fecha_ingreso) : null,
+          r.salario_mes != null ? parseFloat(r.salario_mes) : null,
           AUD,
           NOW,
           NOW,
@@ -253,24 +257,27 @@ async function run() {
         let updOk = 0;
         for (let i = 0; i < paraActualizar.length; i += BATCH) {
           const batch = paraActualizar.slice(i, i + BATCH);
-          for (const [activo, departamentoId, fechaIngreso, codigo] of batch) {
+          for (const [activo, departamentoId, fechaIngreso, cargoId, salarioBase, emailVal, codigo] of batch) {
             await pg.query(
-              // Actualiza activo, departamento_id y fecha_ingreso (estos dos solo si aún no tiene).
-              // Protección: no reactivar si fue inactivado por desvinculación
-              // (aud_usuario lo identifica). Sí permite reactivar empleados
-              // que quedaron inactivos por errores de sync u otras razones.
+              // activo: siempre sincronizado.
+              // departamento_id, fecha_ingreso, salario_base, email: COALESCE (solo si aún está vacío).
+              // cargo_id: siempre actualizado (refleja ascensos/cambios de puesto).
+              // Protección: no reactivar si fue inactivado por desvinculación.
               `UPDATE empleados
                SET activo          = $1,
                    departamento_id = COALESCE(departamento_id, $2),
                    fecha_ingreso   = COALESCE(fecha_ingreso, $3),
-                   updated_at      = $4
-               WHERE codigo = $5
+                   cargo_id        = COALESCE($4, cargo_id),
+                   salario_base    = COALESCE(salario_base, $5),
+                   email           = COALESCE(NULLIF(email, ''), $6),
+                   updated_at      = $7
+               WHERE codigo = $8
                  AND NOT (
                    activo = false
                    AND $1 = true
                    AND aud_usuario IN ('sistema:desvinculacion', 'sistema:inactivar-desvinculados')
                  )`,
-              [activo, departamentoId, fechaIngreso, NOW, codigo]
+              [activo, departamentoId, fechaIngreso, cargoId, salarioBase, emailVal, NOW, codigo]
             );
             updOk++;
           }
@@ -283,7 +290,7 @@ async function run() {
       // ── Insertar empleados nuevos ─────────────────────────────────────────
       if (paraInsertar.length) {
         const cols = ['codigo', 'nombres', 'apellidos', 'email', 'cargo_id',
-                      'sucursal_id', 'departamento_id', 'activo', 'fecha_ingreso', 'aud_usuario', 'created_at', 'updated_at'];
+                      'sucursal_id', 'departamento_id', 'activo', 'fecha_ingreso', 'salario_base', 'aud_usuario', 'created_at', 'updated_at'];
         let insOk = 0;
         for (let i = 0; i < paraInsertar.length; i += BATCH) {
           const batch  = paraInsertar.slice(i, i + BATCH);
