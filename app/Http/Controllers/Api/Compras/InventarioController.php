@@ -28,39 +28,81 @@ class InventarioController extends Controller
             return response()->json(['success' => false, 'message' => 'sucursal_id requerido.'], 422);
         }
 
+        // ── 1. Productos ya en inventarios para esta sucursal ─────────────────
         $inventarios = Inventario::where('sucursal_id', $sucursalId)
             ->with(['producto', 'producto.categoria'])
-            ->get();
+            ->get()
+            ->keyBy('producto_id');
 
-        if ($inventarios->isEmpty()) {
+        // ── 2. Todos los productos de recetas asignadas a esta sucursal ───────
+        //      Resuelve sub-recetas recursivamente (cualquier profundidad).
+        //      No filtra por activa ni por estado de menú.
+        $recetaRows = DB::connection('compras')->select("
+            WITH RECURSIVE ingredientes_flat AS (
+                SELECT ri.producto_id, ri.sub_receta_id
+                FROM receta_sucursal rs
+                INNER JOIN receta_ingredientes ri ON ri.receta_id = rs.receta_id
+                WHERE rs.sucursal_id = ?
+                UNION
+                SELECT ri.producto_id, ri.sub_receta_id
+                FROM ingredientes_flat prev
+                INNER JOIN receta_ingredientes ri ON ri.receta_id = prev.sub_receta_id
+                WHERE prev.sub_receta_id IS NOT NULL
+            )
+            SELECT DISTINCT producto_id
+            FROM ingredientes_flat
+            WHERE producto_id IS NOT NULL
+        ", [$sucursalId]);
+
+        $recetaProductoIds = collect($recetaRows)->pluck('producto_id')->map(fn($id) => (int) $id)->all();
+
+        // ── 3. Productos de recetas que todavía no están en inventarios ────────
+        $inventarioIds = $inventarios->keys()->map(fn($id) => (int) $id)->all();
+        $missingIds    = array_values(array_diff($recetaProductoIds, $inventarioIds));
+
+        $missingProductos = collect();
+        if ($missingIds) {
+            $missingProductos = DB::connection('compras')
+                ->table('productos as p')
+                ->leftJoin('categorias as c', 'c.id', '=', 'p.categoria_id')
+                ->whereIn('p.id', $missingIds)
+                ->select('p.*', 'c.nombre as categoria_nombre_cat')
+                ->get()
+                ->keyBy('id');
+        }
+
+        // ── 4. Movimientos para todos los productos ───────────────────────────
+        $allIds = array_unique(array_merge($inventarioIds, $recetaProductoIds));
+
+        if (empty($allIds)) {
             return response()->json(['success' => true, 'data' => []]);
         }
 
-        $productoIds = $inventarios->pluck('producto_id')->all();
-
-        // Sumar movimientos por producto (excluir carga_inicial: ya está en cantidad_inicial_base)
         $movimientos = DB::connection('compras')
             ->table('movimientos_inventario')
             ->where('sucursal_id', $sucursalId)
-            ->whereIn('producto_id', $productoIds)
+            ->whereIn('producto_id', $allIds)
             ->where('tipo', '!=', 'carga_inicial')
             ->selectRaw('producto_id, SUM(cantidad_base) as total_base')
             ->groupBy('producto_id')
             ->pluck('total_base', 'producto_id');
 
-        $data = $inventarios->map(function ($inv) use ($movimientos) {
-            $factor         = max((float) ($inv->producto?->factor_conversion ?? 1), 0.0001);
-            $movBase        = (float) ($movimientos[$inv->producto_id] ?? 0);
+        $data = collect();
+
+        // ── 5a. Productos con entrada en inventarios (comportamiento existente) ─
+        foreach ($inventarios as $inv) {
+            $factor          = max((float) ($inv->producto?->factor_conversion ?? 1), 0.0001);
+            $movBase         = (float) ($movimientos[$inv->producto_id] ?? 0);
             $stockActualBase = $inv->cantidad_inicial_base + $movBase;
-            $stockActual    = $stockActualBase / $factor;
+            $stockActual     = $stockActualBase / $factor;
 
             $alerta = null;
             if ($inv->stock_minimo !== null) {
-                if ($stockActual <= 0)              $alerta = 'agotado';
+                if ($stockActual <= 0)                     $alerta = 'agotado';
                 elseif ($stockActual < $inv->stock_minimo) $alerta = 'bajo';
             }
 
-            return [
+            $data->push([
                 'id'                  => $inv->id,
                 'producto_id'         => $inv->producto_id,
                 'producto_nombre'     => $inv->producto?->nombre,
@@ -71,22 +113,55 @@ class InventarioController extends Controller
                 'fecha_conteo'        => $inv->fecha_conteo?->toDateString(),
                 'cantidad_inicial'    => $inv->cantidad_inicial,
                 'stock_minimo'        => $inv->stock_minimo,
-                'seccion'                 => $inv->seccion,
-                'costo'                   => (float) ($inv->producto?->costo ?? 0),
-                'categoria_id'            => $inv->producto?->categoria_id,
-                'categoria_nombre'        => $inv->producto?->categoria?->nombre,
-                'unidad_compra'           => $inv->producto?->unidad_compra,
-                'unidad_compra_nombre'    => $inv->producto?->unidad_compra_nombre,
-                'factor_unidad_compra'    => $inv->producto?->factor_unidad_compra
-                                              ? (float) $inv->producto->factor_unidad_compra : null,
-                'movimientos_base'        => round($movBase / $factor, 4),
+                'seccion'             => $inv->seccion,
+                'costo'               => (float) ($inv->producto?->costo ?? 0),
+                'categoria_id'        => $inv->producto?->categoria_id,
+                'categoria_nombre'    => $inv->producto?->categoria?->nombre,
+                'unidad_compra'       => $inv->producto?->unidad_compra,
+                'unidad_compra_nombre'=> $inv->producto?->unidad_compra_nombre,
+                'factor_unidad_compra'=> $inv->producto?->factor_unidad_compra
+                                          ? (float) $inv->producto->factor_unidad_compra : null,
+                'movimientos_base'    => round($movBase / $factor, 4),
                 'stock_actual'        => round($stockActual, 4),
                 'stock_actual_base'   => round($stockActualBase, 6),
                 'alerta'              => $alerta,
-            ];
-        });
+            ]);
+        }
 
-        return response()->json(['success' => true, 'data' => $data]);
+        // ── 5b. Productos de recetas sin entrada en inventarios (stock = 0) ────
+        foreach ($missingProductos as $prod) {
+            $factor          = max((float) ($prod->factor_conversion ?? 1), 0.0001);
+            $movBase         = (float) ($movimientos[$prod->id] ?? 0);
+            $stockActualBase = $movBase;
+            $stockActual     = $stockActualBase / $factor;
+
+            $data->push([
+                'id'                  => null,
+                'producto_id'         => (int) $prod->id,
+                'producto_nombre'     => $prod->nombre,
+                'producto_codigo'     => $prod->codigo,
+                'unidad'              => $prod->unidad,
+                'unidad_base'         => $prod->unidad_base,
+                'factor_conversion'   => $factor,
+                'fecha_conteo'        => null,
+                'cantidad_inicial'    => null,
+                'stock_minimo'        => null,
+                'seccion'             => null,
+                'costo'               => (float) ($prod->costo ?? 0),
+                'categoria_id'        => $prod->categoria_id,
+                'categoria_nombre'    => $prod->categoria_nombre_cat,
+                'unidad_compra'       => $prod->unidad_compra,
+                'unidad_compra_nombre'=> $prod->unidad_compra_nombre,
+                'factor_unidad_compra'=> $prod->factor_unidad_compra
+                                          ? (float) $prod->factor_unidad_compra : null,
+                'movimientos_base'    => round($movBase / $factor, 4),
+                'stock_actual'        => round($stockActual, 4),
+                'stock_actual_base'   => round($stockActualBase, 6),
+                'alerta'              => $stockActual <= 0 ? 'agotado' : null,
+            ]);
+        }
+
+        return response()->json(['success' => true, 'data' => $data->values()]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -315,7 +390,24 @@ class InventarioController extends Controller
             foreach ($validated['items'] as $item) {
                 $pid = (int) $item['producto_id'];
                 $inv = $inventarios[$pid] ?? null;
-                if (!$inv) continue;
+
+                // Producto de receta sin entrada previa en inventarios → crear con stock 0
+                if (!$inv) {
+                    $prod = $productos[$pid] ?? null;
+                    if (!$prod) continue;
+
+                    $inv = Inventario::create([
+                        'sucursal_id'           => $sucursalId,
+                        'producto_id'           => $pid,
+                        'cantidad_inicial'      => 0,
+                        'unidad'                => $item['unidad'],
+                        'cantidad_inicial_base' => 0,
+                        'fecha_conteo'          => $fecha,
+                        'stock_minimo'          => null,
+                        'aud_usuario'           => $usuario,
+                    ]);
+                    $inventarios[$pid] = $inv;
+                }
 
                 $factor          = max((float) ($productos[$pid]?->factor_conversion ?? 1), 0.0001);
                 $movBase         = (float) ($movimientos[$pid] ?? 0);
