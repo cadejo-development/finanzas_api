@@ -580,15 +580,64 @@ class PlanillasController extends RRHHBaseController
         $meses = ['', 'enero','febrero','marzo','abril','mayo','junio',
                   'julio','agosto','septiembre','octubre','noviembre','diciembre'];
 
-        // Logo como base64 para DomPDF (evita problemas con imágenes remotas)
+        // ── Logo como base64 ──────────────────────────────────────────────────
         $logoB64 = null;
         try {
-            $logoUrl = 'https://cadejo-storage.s3.us-east-2.amazonaws.com/public/logo2.png';
-            $logoData = @file_get_contents($logoUrl);
-            if ($logoData) {
-                $logoB64 = 'data:image/png;base64,' . base64_encode($logoData);
+            $logoData = @file_get_contents('https://cadejo-storage.s3.us-east-2.amazonaws.com/public/logo2.png');
+            if ($logoData) $logoB64 = 'data:image/png;base64,' . base64_encode($logoData);
+        } catch (\Throwable) {}
+
+        // ── DUI desde SQL Server → sincronizar al expediente si no existe ────
+        $duiNumero = null;
+        try {
+            $origen = DB::connection('origen')
+                ->table('olComun.dbo.Empleados')
+                ->where('empCodigo', $empleado->codigo)
+                ->where('empActivo', 1)
+                ->select('empDUI', 'empNIT', 'empTipoDocumento', 'empNumeroDocumento')
+                ->first();
+
+            if ($origen) {
+                // Determinar número y tipo de documento
+                $duiRaw  = trim($origen->empDUI ?? '');
+                $docTipo = trim($origen->empTipoDocumento ?? '');
+                $docNum  = trim($origen->empNumeroDocumento ?? '');
+
+                // Prioridad: DUI propio, luego otro documento
+                $docFinal = $duiRaw ?: ($docTipo && $docNum ? $docNum : null);
+                $tipoFinal = $duiRaw ? 'dui' : ($docTipo ?: null);
+
+                if ($docFinal) {
+                    // Verificar si ya existe en expediente_documentos
+                    $existente = DB::connection('pgsql')
+                        ->table('expediente_documentos')
+                        ->where('empleado_id', $empleadoId)
+                        ->where('tipo', $tipoFinal)
+                        ->first();
+
+                    if (!$existente) {
+                        DB::connection('pgsql')->table('expediente_documentos')->insert([
+                            'empleado_id' => $empleadoId,
+                            'tipo'        => $tipoFinal,
+                            'numero'      => $docFinal,
+                            'created_at'  => now(),
+                            'updated_at'  => now(),
+                        ]);
+                    }
+
+                    $duiNumero = $existente ? $existente->numero : $docFinal;
+                }
             }
-        } catch (\Throwable $e) { /* sin logo si falla la red */ }
+        } catch (\Throwable) {
+            // Si SQL Server no está disponible, intentar desde expediente
+            $docExp = DB::connection('pgsql')
+                ->table('expediente_documentos')
+                ->where('empleado_id', $empleadoId)
+                ->whereIn('tipo', ['dui', 'pasaporte', 'carnet_residente'])
+                ->orderByRaw("CASE tipo WHEN 'dui' THEN 0 ELSE 1 END")
+                ->first();
+            $duiNumero = $docExp?->numero;
+        }
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('rrhh.boleta', [
             'planilla'   => $planilla,
@@ -596,6 +645,7 @@ class PlanillasController extends RRHHBaseController
             'empleado'   => $emp,
             'mes_nombre' => $meses[$planilla->mes] ?? '',
             'logoB64'    => $logoB64,
+            'duiNumero'  => $duiNumero,
         ])->setPaper('letter', 'portrait');
 
         $filename = "boleta_{$empleado->codigo}_Q{$planilla->quincena}_{$planilla->anio}_{$planilla->mes}.pdf";
