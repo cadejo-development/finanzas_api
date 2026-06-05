@@ -50,6 +50,62 @@ const log     = s  => console.log(`[${ts()}] ${s}`);
 
 const SEXO_MAP = { M: 'masculino', F: 'femenino' };
 
+// Abreviaciones de departamentos que aparecen en SQL Server
+const DEPTO_ALIAS = {
+  'SS': 'SAN SALVADOR', 'S.S.': 'SAN SALVADOR', 'SAN SALV': 'SAN SALVADOR',
+  'USULL': 'USULUTAN', 'USULUTAN': 'USULUTAN', 'USULUTÁN': 'USULUTAN',
+  'LA LIB': 'LA LIBERTAD', 'LALIBERTAD': 'LA LIBERTAD',
+  'S.ANA': 'SANTA ANA', 'STA ANA': 'SANTA ANA',
+  'CHAL': 'CHALATENANGO', 'CHALA': 'CHALATENANGO',
+  'CUS': 'CUSCATLAN', 'CUSC': 'CUSCATLAN',
+  'SONSONATE': 'SONSONATE',
+  'S.MIGUEL': 'SAN MIGUEL', 'SMiguel': 'SAN MIGUEL',
+  'MORAZAN': 'MORAZAN', 'MORAZÁN': 'MORAZAN',
+  'LA PAZ': 'LA PAZ',
+  'SAN VIC': 'SAN VICENTE', 'S.VICENTE': 'SAN VICENTE',
+  'CABANAS': 'CABANAS', 'CABAÑAS': 'CABANAS',
+  'LA UNION': 'LA UNION', 'LA UNIÓN': 'LA UNION',
+};
+
+function norm(s) {
+  return (s || '').toUpperCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^A-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function parsearMunicipio(texto, municipios) {
+  if (!texto) return null;
+  const t = norm(texto);
+
+  // Intentar separar "MUNICIPIO, DEPARTAMENTO"
+  const coma = t.indexOf(',');
+  const parteMuni  = coma > -1 ? t.slice(0, coma).trim() : t;
+  const parteDepto = coma > -1 ? t.slice(coma + 1).trim() : '';
+
+  // Normalizar abreviación de departamento si aplica
+  const deptoNorm = DEPTO_ALIAS[parteDepto] ?? parteDepto;
+
+  // 1. Buscar municipios cuyo nombre normalizado coincida exactamente
+  const candidatos = municipios.filter(m => norm(m.municipio) === parteMuni);
+
+  if (candidatos.length === 1) return candidatos[0];
+
+  // 2. Si hay varios con ese nombre (e.g. "San Lorenzo" en varios deptos), desambiguar por depto
+  if (candidatos.length > 1 && deptoNorm) {
+    const porDepto = candidatos.find(m => norm(m.departamento).includes(deptoNorm.slice(0, 5)));
+    if (porDepto) return porDepto;
+  }
+
+  // 3. Si no hubo coincidencia exacta, intentar también con el texto completo (sin coma)
+  if (coma === -1) {
+    const full = municipios.find(m => norm(m.municipio) === t);
+    if (full) return full;
+  }
+
+  // 4. Sin match confiable
+  return null;
+}
+
 const ESTADO_CIVIL_MAP = {
   0: 'soltero',
   1: 'casado',
@@ -99,10 +155,17 @@ async function run() {
     const idPorCodigo = Object.fromEntries(empRows.map(r => [r.codigo, r.id]));
     log(`core_db: ${empRows.length} empleados activos\n`);
 
-    // ── 3. Leer estado actual de expediente_datos_personales ─────────────────
+    // ── 3. Cargar municipios de core_db para el parseo de lugar_nacimiento ───
+    log('Cargando municipios desde core_db...');
+    const { rows: munRows } = await pgCore.query(
+      'SELECT m.id, m.nombre AS municipio, d.nombre AS departamento FROM geo_municipios m JOIN geo_departamentos d ON d.id = m.departamento_id'
+    );
+    log(`core_db: ${munRows.length} municipios cargados\n`);
+
+    // ── 4. Leer estado actual de expediente_datos_personales ─────────────────
     log('Cargando expediente_datos_personales...');
     const { rows: expRows } = await pgRrhh.query(
-      'SELECT empleado_id, genero, fecha_nacimiento, estado_civil, grupo_sanguineo, lugar_nacimiento FROM expediente_datos_personales'
+      'SELECT empleado_id, genero, fecha_nacimiento, estado_civil, grupo_sanguineo, lugar_nacimiento, nacimiento_municipio_id FROM expediente_datos_personales'
     );
     const expPorId = Object.fromEntries(expRows.map(r => [r.empleado_id, r]));
     log(`rrhh_db: ${expRows.length} registros existentes en expediente_datos_personales\n`);
@@ -132,21 +195,35 @@ async function run() {
       const fechaNueva     = row.fecha_nacimiento ? toDate(row.fecha_nacimiento)                 : null;
       const estadoCivil    = row.estado_civil != null ? (ESTADO_CIVIL_MAP[row.estado_civil] ?? null) : null;
       const grupoSanguineo = clean(row.tipo_sangre, 10);
-      const lugarNac       = clean(row.lugar_nacimiento, 150);
+
+      // Parsear lugar_nacimiento inteligentemente:
+      //   Si match → municipio_id + lugar_nacimiento = null (no es un complemento)
+      //   Si no match → guardar el texto en lugar_nacimiento como texto libre
+      const munMatch   = parsearMunicipio(row.lugar_nacimiento, munRows);
+      const munId      = munMatch ? munMatch.id : null;
+      const lugarTexto = munMatch ? null : clean(row.lugar_nacimiento, 150);
 
       const exp = expPorId[empId];
 
       if (!exp) {
-        if (generoNuevo || fechaNueva || estadoCivil || grupoSanguineo || lugarNac) {
-          dpInsertar.push({ empleado_id: empId, genero: generoNuevo, fecha_nacimiento: fechaNueva, estado_civil: estadoCivil, grupo_sanguineo: grupoSanguineo, lugar_nacimiento: lugarNac });
+        if (generoNuevo || fechaNueva || estadoCivil || grupoSanguineo || munId || lugarTexto) {
+          dpInsertar.push({ empleado_id: empId, genero: generoNuevo, fecha_nacimiento: fechaNueva, estado_civil: estadoCivil, grupo_sanguineo: grupoSanguineo, nacimiento_municipio_id: munId, lugar_nacimiento: lugarTexto });
         }
       } else {
         const campos = {};
-        if (!exp.genero           && generoNuevo)    campos.genero           = generoNuevo;
-        if (!exp.fecha_nacimiento && fechaNueva)      campos.fecha_nacimiento = fechaNueva;
-        if (!exp.estado_civil     && estadoCivil)     campos.estado_civil     = estadoCivil;
-        if (!exp.grupo_sanguineo  && grupoSanguineo)  campos.grupo_sanguineo  = grupoSanguineo;
-        if (!exp.lugar_nacimiento && lugarNac)         campos.lugar_nacimiento = lugarNac;
+        if (!exp.genero                  && generoNuevo)    campos.genero                  = generoNuevo;
+        if (!exp.fecha_nacimiento        && fechaNueva)      campos.fecha_nacimiento        = fechaNueva;
+        if (!exp.estado_civil            && estadoCivil)     campos.estado_civil            = estadoCivil;
+        if (!exp.grupo_sanguineo         && grupoSanguineo)  campos.grupo_sanguineo         = grupoSanguineo;
+        if (!exp.nacimiento_municipio_id && munId)           campos.nacimiento_municipio_id = munId;
+        // Si ya teníamos texto en lugar_nacimiento pero era el texto del municipio (que acabamos de mapear)
+        // lo limpiamos; si el municipio ya está mapeado y hay texto libre lo dejamos
+        if (!exp.nacimiento_municipio_id && munId && exp.lugar_nacimiento) {
+          campos.lugar_nacimiento = null; // el texto fue el municipio, ya no hace falta
+        }
+        if (!exp.nacimiento_municipio_id && !munId && !exp.lugar_nacimiento && lugarTexto) {
+          campos.lugar_nacimiento = lugarTexto;
+        }
         if (Object.keys(campos).length) dpActualizar.push({ empleado_id: empId, ...campos });
       }
 
@@ -185,10 +262,10 @@ async function run() {
     for (const r of dpInsertar) {
       await pgRrhh.query(
         `INSERT INTO expediente_datos_personales
-           (empleado_id, genero, fecha_nacimiento, estado_civil, grupo_sanguineo, lugar_nacimiento, aud_usuario, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8)
+           (empleado_id, genero, fecha_nacimiento, estado_civil, grupo_sanguineo, nacimiento_municipio_id, lugar_nacimiento, aud_usuario, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9)
          ON CONFLICT (empleado_id) DO NOTHING`,
-        [r.empleado_id, r.genero, r.fecha_nacimiento, r.estado_civil, r.grupo_sanguineo, r.lugar_nacimiento, AUD, NOW]
+        [r.empleado_id, r.genero, r.fecha_nacimiento, r.estado_civil, r.grupo_sanguineo, r.nacimiento_municipio_id, r.lugar_nacimiento, AUD, NOW]
       );
       dpInsOk++;
       process.stdout.write(`\r  Datos personales insertados: ${dpInsOk}/${dpInsertar.length} `);
@@ -200,9 +277,14 @@ async function run() {
     for (const r of dpActualizar) {
       const sets   = [];
       const params = [];
-      const campos = ['genero','fecha_nacimiento','estado_civil','grupo_sanguineo','lugar_nacimiento'];
+      const campos = ['genero','fecha_nacimiento','estado_civil','grupo_sanguineo','nacimiento_municipio_id'];
       for (const c of campos) {
         if (r[c] != null) { params.push(r[c]); sets.push(`${c} = $${params.length}`); }
+      }
+      // lugar_nacimiento puede enviarse como null explícito para limpiarlo
+      if ('lugar_nacimiento' in r) {
+        params.push(r.lugar_nacimiento);
+        sets.push(`lugar_nacimiento = $${params.length}`);
       }
       params.push(AUD);  sets.push(`aud_usuario = $${params.length}`);
       params.push(NOW);  sets.push(`updated_at  = $${params.length}`);
