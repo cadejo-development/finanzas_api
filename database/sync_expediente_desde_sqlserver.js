@@ -142,7 +142,10 @@ async function run() {
         RTRIM(e.empCelular)         AS celular,
         RTRIM(e.empTelCasa)         AS tel_casa,
         RTRIM(e.empNomAvisarA)      AS nom_avisar,
-        RTRIM(e.empTelAvisarA)      AS tel_avisar
+        RTRIM(e.empTelAvisarA)      AS tel_avisar,
+        RTRIM(e.empDUI)             AS dui,
+        RTRIM(e.empTipoDocumento)   AS tipo_doc,
+        RTRIM(e.empNumeroDocumento) AS num_doc
       FROM olComun.dbo.Empleados e WITH (NOLOCK)
       WHERE e.empActivo = 1
         AND e.empCodigo IS NOT NULL
@@ -193,7 +196,16 @@ async function run() {
     const dpInsertar   = [];
     const dpActualizar = [];
     const ctInsertar   = [];
+    const docInsertar  = [];
     let sinMatch = 0;
+
+    // ── 4b. Leer documentos ya existentes en rrhh_db ────────────────────────
+    log('Cargando expediente_documentos...');
+    const { rows: docsRows } = await pgRrhh.query(
+      `SELECT empleado_id, tipo FROM expediente_documentos WHERE tipo IN ('dui','pasaporte','carnet_residente')`
+    );
+    const docExistente = new Set(docsRows.map(r => `${r.empleado_id}:${r.tipo}`));
+    log(`rrhh_db: ${docsRows.length} documentos existentes\n`);
 
     for (const row of recordset) {
       const empId = idPorCodigo[row.codigo];
@@ -236,6 +248,18 @@ async function run() {
         if (Object.keys(campos).length) dpActualizar.push({ empleado_id: empId, ...campos });
       }
 
+      // ── Documento de identidad ───────────────────────────────────────────
+      const duiVal  = clean(row.dui, 20);
+      const docTipo = clean(row.tipo_doc, 30);
+      const docNum  = clean(row.num_doc, 40);
+      // Prioridad: DUI propio → otro tipo de documento
+      const docFinal = duiVal || (docTipo && docNum ? docNum : null);
+      const tipoFinal = duiVal ? 'dui' : (docTipo ? docTipo.toLowerCase().replace(/\s+/g, '_') : null);
+      if (docFinal && tipoFinal && !docExistente.has(`${empId}:${tipoFinal}`)) {
+        docInsertar.push({ empleado_id: empId, tipo: tipoFinal, numero: docFinal });
+        docExistente.add(`${empId}:${tipoFinal}`);
+      }
+
       // ── Contactos ─────────────────────────────────────────────────────────
       const celular  = clean(row.celular, 30);
       const telCasa  = clean(row.tel_casa, 30);
@@ -254,10 +278,50 @@ async function run() {
       }
     }
 
+    // ── 5b. Pre-calcular experiencia laboral Cadejo (antes del dry-run check) ──
+    const { rows: coreEmps } = await pgCore.query(`
+      SELECT e.id, e.fecha_ingreso, c.nombre AS cargo
+      FROM empleados e
+      LEFT JOIN cargos c ON c.id = e.cargo_id
+      WHERE e.activo = true AND e.fecha_ingreso IS NOT NULL
+    `);
+    let existCadejo = [];
+    try {
+      const { rows } = await pgRrhh.query(`
+        SELECT id, empleado_id, cargo, fecha_inicio, es_cadejo
+        FROM expediente_experiencia_laboral
+        WHERE es_cadejo = true OR empresa ILIKE '%cadejo brewing%'
+      `);
+      existCadejo = rows;
+    } catch {
+      const { rows } = await pgRrhh.query(`
+        SELECT id, empleado_id, cargo, fecha_inicio
+        FROM expediente_experiencia_laboral
+        WHERE empresa ILIKE '%cadejo brewing%'
+      `);
+      existCadejo = rows.map(r => ({ ...r, es_cadejo: true }));
+    }
+    const cadjoPorEmpId = Object.fromEntries(existCadejo.map(r => [r.empleado_id, r]));
+    const expInsertar  = [];
+    const expActualizar = [];
+    for (const emp of coreEmps) {
+      const cargo    = clean(emp.cargo, 150) ?? 'Colaborador';
+      const fechaIng = toDate(emp.fecha_ingreso);
+      const existing = cadjoPorEmpId[emp.id];
+      if (!existing) {
+        expInsertar.push({ empleado_id: emp.id, cargo, fecha_inicio: fechaIng });
+      } else if (!existing.es_cadejo || existing.cargo !== cargo) {
+        expActualizar.push({ id: existing.id, cargo });
+      }
+    }
+
     log('──────────────────────────────────────────────────────');
     log(`Datos personales INSERTAR (sin registro): ${dpInsertar.length}`);
     log(`Datos personales ACTUALIZAR (null→valor): ${dpActualizar.length}`);
+    log(`Documentos       INSERTAR (nuevos):       ${docInsertar.length}`);
     log(`Contactos        INSERTAR (nuevos):       ${ctInsertar.length}`);
+    log(`Experiencia Cadejo INSERTAR:              ${expInsertar.length}`);
+    log(`Experiencia Cadejo ACTUALIZAR:            ${expActualizar.length}`);
     log(`Sin match en core_db:                     ${sinMatch}`);
     log('──────────────────────────────────────────────────────\n');
 
@@ -308,7 +372,22 @@ async function run() {
     }
     if (dpActualizar.length) console.log();
 
-    // ── 8. Insertar contactos nuevos ─────────────────────────────────────────
+    // ── 8. Insertar documentos nuevos ────────────────────────────────────────
+    let docInsOk = 0;
+    for (const r of docInsertar) {
+      await pgRrhh.query(
+        `INSERT INTO expediente_documentos
+           (empleado_id, tipo, numero, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$4)
+         ON CONFLICT DO NOTHING`,
+        [r.empleado_id, r.tipo, r.numero, NOW]
+      );
+      docInsOk++;
+      process.stdout.write(`\r  Documentos insertados: ${docInsOk}/${docInsertar.length} `);
+    }
+    if (docInsertar.length) console.log();
+
+    // ── 8b. Insertar contactos nuevos ─────────────────────────────────────────
     let ctInsOk = 0;
     for (const r of ctInsertar) {
       await pgRrhh.query(
@@ -322,7 +401,40 @@ async function run() {
     }
     if (ctInsertar.length) console.log();
 
-    // ── 9. Resumen ────────────────────────────────────────────────────────────
+    // ── 9. Aplicar experiencia laboral Cadejo ─────────────────────────────────
+    // Asegurar columna es_cadejo (idempotente)
+    await pgRrhh.query(`
+      ALTER TABLE expediente_experiencia_laboral
+        ADD COLUMN IF NOT EXISTS es_cadejo BOOLEAN NOT NULL DEFAULT false
+    `);
+
+    let expInsOk = 0;
+    for (const r of expInsertar) {
+      await pgRrhh.query(
+        `INSERT INTO expediente_experiencia_laboral
+           (empleado_id, empresa, cargo, fecha_inicio, es_actual, pais, es_cadejo, created_at, updated_at)
+         VALUES ($1,'Cadejo Brewing Company',$2,$3,true,'El Salvador',true,$4,$4)`,
+        [r.empleado_id, r.cargo, r.fecha_inicio, NOW]
+      );
+      expInsOk++;
+      process.stdout.write(`\r  Experiencia Cadejo insertada: ${expInsOk}/${expInsertar.length} `);
+    }
+    if (expInsertar.length) console.log();
+
+    let expUpdOk = 0;
+    for (const r of expActualizar) {
+      await pgRrhh.query(
+        `UPDATE expediente_experiencia_laboral
+            SET cargo = $1, es_cadejo = true, updated_at = $2
+          WHERE id = $3`,
+        [r.cargo, NOW, r.id]
+      );
+      expUpdOk++;
+      process.stdout.write(`\r  Experiencia Cadejo actualizada: ${expUpdOk}/${expActualizar.length} `);
+    }
+    if (expActualizar.length) console.log();
+
+    // ── 10. Resumen ───────────────────────────────────────────────────────────
     const { rows: res } = await pgRrhh.query(`
       SELECT
         COUNT(*) FILTER (WHERE genero IS NOT NULL)           AS con_genero,
@@ -340,6 +452,8 @@ async function run() {
     log(`  Con fecha nacimiento:         ${res[0].con_fecha_nac}`);
     log(`  Con estado civil:             ${res[0].con_estado_civil}`);
     log(`  Con grupo sanguíneo:          ${res[0].con_grupo_sang}`);
+    log(`  Experiencia Cadejo insertadas:${expInsertar.length}`);
+    log(`  Experiencia Cadejo actualizadas:${expActualizar.length}`);
     log('==========================================');
 
   } finally {

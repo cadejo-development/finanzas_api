@@ -587,57 +587,14 @@ class PlanillasController extends RRHHBaseController
             if ($logoData) $logoB64 = 'data:image/png;base64,' . base64_encode($logoData);
         } catch (\Throwable) {}
 
-        // ── DUI desde SQL Server → sincronizar al expediente si no existe ────
-        $duiNumero = null;
-        try {
-            $origen = DB::connection('origen')
-                ->table('olComun.dbo.Empleados')
-                ->where('empCodigo', $empleado->codigo)
-                ->where('empActivo', 1)
-                ->select('empDUI', 'empNIT', 'empTipoDocumento', 'empNumeroDocumento')
-                ->first();
-
-            if ($origen) {
-                // Determinar número y tipo de documento
-                $duiRaw  = trim($origen->empDUI ?? '');
-                $docTipo = trim($origen->empTipoDocumento ?? '');
-                $docNum  = trim($origen->empNumeroDocumento ?? '');
-
-                // Prioridad: DUI propio, luego otro documento
-                $docFinal = $duiRaw ?: ($docTipo && $docNum ? $docNum : null);
-                $tipoFinal = $duiRaw ? 'dui' : ($docTipo ?: null);
-
-                if ($docFinal) {
-                    // Verificar si ya existe en expediente_documentos
-                    $existente = DB::connection('pgsql')
-                        ->table('expediente_documentos')
-                        ->where('empleado_id', $empleadoId)
-                        ->where('tipo', $tipoFinal)
-                        ->first();
-
-                    if (!$existente) {
-                        DB::connection('pgsql')->table('expediente_documentos')->insert([
-                            'empleado_id' => $empleadoId,
-                            'tipo'        => $tipoFinal,
-                            'numero'      => $docFinal,
-                            'created_at'  => now(),
-                            'updated_at'  => now(),
-                        ]);
-                    }
-
-                    $duiNumero = $existente ? $existente->numero : $docFinal;
-                }
-            }
-        } catch (\Throwable) {
-            // Si SQL Server no está disponible, intentar desde expediente
-            $docExp = DB::connection('pgsql')
-                ->table('expediente_documentos')
-                ->where('empleado_id', $empleadoId)
-                ->whereIn('tipo', ['dui', 'pasaporte', 'carnet_residente'])
-                ->orderByRaw("CASE tipo WHEN 'dui' THEN 0 ELSE 1 END")
-                ->first();
-            $duiNumero = $docExp?->numero;
-        }
+        // ── DUI desde expediente_documentos (ya sincronizado por el script) ──
+        $docExp = DB::connection('pgsql')
+            ->table('expediente_documentos')
+            ->where('empleado_id', $empleadoId)
+            ->whereIn('tipo', ['dui', 'pasaporte', 'carnet_residente'])
+            ->orderByRaw("CASE tipo WHEN 'dui' THEN 0 ELSE 1 END")
+            ->first();
+        $duiNumero = $docExp?->numero;
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('rrhh.boleta', [
             'planilla'   => $planilla,
