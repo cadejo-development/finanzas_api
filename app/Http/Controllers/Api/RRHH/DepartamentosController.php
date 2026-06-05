@@ -75,8 +75,8 @@ class DepartamentosController extends Controller
                 if (count($preview[$did]) < 4) {
                     $preview[$did][] = [
                         'id'     => $emp->id,
-                        'nombre' => trim($emp->nombres . ' ' . $emp->apellidos),
-                        'inicial'=> mb_strtoupper(mb_substr(trim($emp->nombres), 0, 1)),
+                        'nombre' => trim($emp->apellidos . ', ' . $emp->nombres),
+                        'inicial'=> mb_strtoupper(mb_substr(trim($emp->apellidos), 0, 1)),
                     ];
                 }
             }
