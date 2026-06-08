@@ -6,6 +6,7 @@ use App\Models\RRHH\ErrorLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Auth;
 
 class ErrorLogsController extends Controller
 {
@@ -91,12 +92,36 @@ class ErrorLogsController extends Controller
     }
 
     /**
-     * DELETE /rrhh/admin/error-logs
-     * Limpia todos los logs resueltos.
+     * PATCH /rrhh/admin/error-logs/resolver-todos
+     * Marca como resueltos todos los logs pendientes del filtro actual.
      */
-    public function clear(): JsonResponse
+    public function resolverTodos(Request $request): JsonResponse
     {
-        $count = ErrorLog::where('resuelto', true)->delete();
+        $query = ErrorLog::where('resuelto', false);
+        if ($request->filled('desde'))    $query->whereDate('created_at', '>=', $request->desde);
+        if ($request->filled('hasta'))    $query->whereDate('created_at', '<=', $request->hasta);
+        if ($request->filled('severidad')) $query->where('severidad', $request->severidad);
+
+        $count = $query->update([
+            'resuelto'          => true,
+            'resuelto_en'       => now(),
+            'resuelto_por'      => Auth::user()?->email ?? 'sistema',
+            'notas_resolucion'  => 'Resuelto en bloque',
+        ]);
+        return response()->json(['success' => true, 'resueltos' => $count]);
+    }
+
+    /**
+     * DELETE /rrhh/admin/error-logs
+     * Elimina logs según filtros (por defecto solo resueltos).
+     */
+    public function clear(Request $request): JsonResponse
+    {
+        $query = ErrorLog::query();
+        if ($request->filled('resuelto')) $query->where('resuelto', filter_var($request->resuelto, FILTER_VALIDATE_BOOLEAN));
+        if ($request->filled('desde'))    $query->whereDate('created_at', '>=', $request->desde);
+        if ($request->filled('hasta'))    $query->whereDate('created_at', '<=', $request->hasta);
+        $count = $query->delete();
         return response()->json(['success' => true, 'eliminados' => $count]);
     }
 

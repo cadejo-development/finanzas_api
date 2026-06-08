@@ -533,6 +533,7 @@ Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh
     // ── Error logs (visible solo para GEN_INF en el frontend) ────────────
     Route::get('error-logs',                                 [\App\Http\Controllers\Api\RRHH\ErrorLogsController::class, 'index']);
     Route::get('error-logs/stats',                           [\App\Http\Controllers\Api\RRHH\ErrorLogsController::class, 'stats']);
+    Route::patch('error-logs/resolver-todos',                [\App\Http\Controllers\Api\RRHH\ErrorLogsController::class, 'resolverTodos']);
     Route::patch('error-logs/{id}/resolver',                 [\App\Http\Controllers\Api\RRHH\ErrorLogsController::class, 'resolver']);
     Route::delete('error-logs/{id}',                         [\App\Http\Controllers\Api\RRHH\ErrorLogsController::class, 'destroy']);
     Route::delete('error-logs',                              [\App\Http\Controllers\Api\RRHH\ErrorLogsController::class, 'clear']);
