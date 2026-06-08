@@ -103,10 +103,10 @@ class ErrorLogsController extends Controller
         if ($request->filled('severidad')) $query->where('severidad', $request->severidad);
 
         $count = $query->update([
-            'resuelto'          => true,
-            'resuelto_en'       => now(),
-            'resuelto_por'      => Auth::user()?->email ?? 'sistema',
-            'notas_resolucion'  => 'Resuelto en bloque',
+            'resuelto'         => true,
+            'resuelto_at'      => now(),
+            'resuelto_por'     => Auth::user()?->email ?? 'sistema',
+            'notas_resolucion' => 'Resuelto en bloque',
         ]);
         return response()->json(['success' => true, 'resueltos' => $count]);
     }
