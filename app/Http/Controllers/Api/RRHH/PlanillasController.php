@@ -587,14 +587,21 @@ class PlanillasController extends RRHHBaseController
             if ($logoData) $logoB64 = 'data:image/png;base64,' . base64_encode($logoData);
         } catch (\Throwable) {}
 
-        // ── DUI desde expediente_documentos (ya sincronizado por el script) ──
-        $docExp = DB::connection('rrhh')
+        // ── Documentos desde expediente (ya sincronizados por el script) ────
+        $docs = DB::connection('rrhh')
             ->table('expediente_documentos')
             ->where('empleado_id', $empleadoId)
-            ->whereIn('tipo', ['dui', 'pasaporte', 'carnet_residente'])
-            ->orderByRaw("CASE tipo WHEN 'dui' THEN 0 ELSE 1 END")
-            ->first();
-        $duiNumero = $docExp?->numero;
+            ->whereIn('tipo', ['dui', 'pasaporte', 'carnet_residente', 'afp'])
+            ->get()
+            ->keyBy('tipo');
+
+        $duiNumero = $docs->get('dui')?->numero
+                  ?? $docs->get('pasaporte')?->numero
+                  ?? $docs->get('carnet_residente')?->numero;
+
+        $afpDoc    = $docs->get('afp');
+        $afpNombre = $afpDoc?->entidad_emisora;
+        $afpNumero = $afpDoc?->numero;
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('rrhh.boleta', [
             'planilla'   => $planilla,
@@ -603,6 +610,8 @@ class PlanillasController extends RRHHBaseController
             'mes_nombre' => $meses[$planilla->mes] ?? '',
             'logoB64'    => $logoB64,
             'duiNumero'  => $duiNumero,
+            'afpNombre'  => $afpNombre,
+            'afpNumero'  => $afpNumero,
         ])->setPaper('letter', 'portrait');
 
         $filename = "boleta_{$empleado->codigo}_Q{$planilla->quincena}_{$planilla->anio}_{$planilla->mes}.pdf";
