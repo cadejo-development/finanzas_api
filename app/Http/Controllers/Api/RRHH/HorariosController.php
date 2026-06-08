@@ -75,7 +75,10 @@ class HorariosController extends RRHHBaseController
             ->get()
             ->groupBy('empleado_id');
 
-        $resultado = $empleados->map(function ($emp) use ($horarios) {
+        // ── Eventos automáticos aprobados (vacaciones, permisos, incapacidades) ──
+        $eventosAuto = $this->getEventosAuto($empleadoIds, $inicio, $fin);
+
+        $resultado = $empleados->map(function ($emp) use ($horarios, $eventosAuto) {
             $dias = [];
             /** @var \Illuminate\Support\Collection $registros */
             $registros = $horarios->get($emp->id, collect());
@@ -90,6 +93,15 @@ class HorariosController extends RRHHBaseController
                     'parte'       => $h->parte ?? 1,
                     'notas'       => $h->notas,
                 ];
+            }
+            // Overlay eventos automáticos (no reemplazan turnos de trabajo, suman info)
+            foreach ($eventosAuto[$emp->id] ?? [] as $fecha => $evento) {
+                if (!isset($dias[$fecha])) $dias[$fecha] = [];
+                // Solo agregar si no existe ya un evento auto en esa fecha
+                $yaTieneAuto = collect($dias[$fecha])->contains('auto', true);
+                if (!$yaTieneAuto) {
+                    $dias[$fecha][] = $evento;
+                }
             }
             return [
                 'id'          => $emp->id,
@@ -289,5 +301,79 @@ class HorariosController extends RRHHBaseController
             ->pluck('id')
             ->map(fn($id) => (int)$id)
             ->all();
+    }
+
+    /**
+     * Devuelve eventos automáticos (vacaciones, permisos, incapacidades aprobadas)
+     * agrupados por empleado_id y fecha.
+     * Formato: [ empleado_id => [ 'YYYY-MM-DD' => evento, ... ], ... ]
+     */
+    private function getEventosAuto(array $empleadoIds, Carbon $inicio, Carbon $fin): array
+    {
+        if (empty($empleadoIds)) return [];
+
+        $eventos = [];
+        $inicioStr = $inicio->toDateString();
+        $finStr    = $fin->toDateString();
+
+        // ── Vacaciones aprobadas ─────────────────────────────────────────────
+        $vacaciones = DB::connection('rrhh')
+            ->table('vacaciones')
+            ->whereIn('empleado_id', $empleadoIds)
+            ->where('estado', 'aprobado')
+            ->where('fecha_inicio', '<=', $finStr)
+            ->where('fecha_fin',    '>=', $inicioStr)
+            ->select('empleado_id', 'fecha_inicio', 'fecha_fin')
+            ->get();
+
+        foreach ($vacaciones as $v) {
+            $cur = Carbon::parse($v->fecha_inicio)->max($inicio)->copy();
+            $end = Carbon::parse($v->fecha_fin)->min($fin);
+            while ($cur->lte($end)) {
+                $f = $cur->toDateString();
+                $eventos[$v->empleado_id][$f] = ['tipo' => 'vacacion', 'auto' => true, 'parte' => 99];
+                $cur->addDay();
+            }
+        }
+
+        // ── Permisos aprobados ───────────────────────────────────────────────
+        $permisos = DB::connection('rrhh')
+            ->table('permisos as p')
+            ->join('tipos_permiso as tp', 'tp.id', '=', 'p.tipo_permiso_id')
+            ->whereIn('p.empleado_id', $empleadoIds)
+            ->where('p.estado', 'aprobado')
+            ->whereBetween('p.fecha', [$inicioStr, $finStr])
+            ->select('p.empleado_id', 'p.fecha', 'tp.categoria')
+            ->get();
+
+        foreach ($permisos as $p) {
+            // Si ya tiene vacación ese día, no sobreescribir
+            if (isset($eventos[$p->empleado_id][$p->fecha])) continue;
+            $tipo = ($p->categoria === 'cadejo') ? 'dia_cadejo' : 'permiso';
+            $eventos[$p->empleado_id][$p->fecha] = ['tipo' => $tipo, 'auto' => true, 'parte' => 99];
+        }
+
+        // ── Incapacidades registradas ────────────────────────────────────────
+        $incapacidades = DB::connection('rrhh')
+            ->table('incapacidades')
+            ->whereIn('empleado_id', $empleadoIds)
+            ->where('fecha_inicio', '<=', $finStr)
+            ->where('fecha_fin',    '>=', $inicioStr)
+            ->select('empleado_id', 'fecha_inicio', 'fecha_fin')
+            ->get();
+
+        foreach ($incapacidades as $inc) {
+            $cur = Carbon::parse($inc->fecha_inicio)->max($inicio)->copy();
+            $end = Carbon::parse($inc->fecha_fin)->min($fin);
+            while ($cur->lte($end)) {
+                $f = $cur->toDateString();
+                if (!isset($eventos[$inc->empleado_id][$f])) {
+                    $eventos[$inc->empleado_id][$f] = ['tipo' => 'incapacidad', 'auto' => true, 'parte' => 99];
+                }
+                $cur->addDay();
+            }
+        }
+
+        return $eventos;
     }
 }
