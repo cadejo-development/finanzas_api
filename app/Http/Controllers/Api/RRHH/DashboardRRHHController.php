@@ -560,19 +560,29 @@ class DashboardRRHHController extends RRHHBaseController
      */
     public function pendientesRevision(): JsonResponse
     {
-        $subordinadosIds = $this->getSubordinadosIds();
-
         $propioId = null;
         try { $propioId = $this->getJefeEmpleado()->id; } catch (\Throwable) {}
 
-        if (empty($subordinadosIds) && ! $propioId) {
+        if (! $propioId) {
             return response()->json(['success' => true, 'data' => []]);
         }
 
-        $scope = function ($q) use ($subordinadosIds, $propioId) {
-            $q->whereIn('empleado_id', $subordinadosIds);
-            if ($propioId) $q->orWhere('jefe_id', $propioId);
-        };
+        /**
+         * Filtro clave: solo mostrar items donde este jefe ES el aprobador designado
+         * (jefe_id = propioId). Esto garantiza que:
+         *
+         *  - Gerente de sucursal (jefatura) → ve solo las solicitudes de SUS empleados
+         *    de restaurante (donde él fue asignado como aprobador al crearse la solicitud).
+         *
+         *  - Gerencia de ops (gerencia_ops) → ve solo las solicitudes de los gerentes de
+         *    sucursal cuando estos crean solicitudes PARA SÍ MISMOS (que escalan hasta ella),
+         *    no las de meseros/cocineros que corresponden al gerente de cada sucursal.
+         *
+         * No usamos whereIn(subordinados) porque gerencia_ops tiene a TODOS los empleados
+         * operativos como subordinados, lo que haría que viera solicitudes que no le
+         * corresponde aprobar.
+         */
+        $scope = fn($q) => $q->where('jefe_id', $propioId);
 
         // ── Permisos pendientes ──────────────────────────────────────────────
         $permisos = Permiso::with('tipoPermiso')
