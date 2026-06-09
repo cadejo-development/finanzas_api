@@ -465,6 +465,7 @@ Route::prefix('rrhh/expediente')->middleware(['auth:sanctum', 'role:jefatura,por
     Route::get('{empleadoId}/estudios/{estudioId}/atestado',          [ExpedienteController::class, 'verAtestadoEstudio']);
 
     // Archivos
+    Route::get('{empleadoId}/archivos',                               [ExpedienteController::class, 'listArchivos']);
     Route::get('{empleadoId}/archivos/presign',                       [ExpedienteController::class, 'presignArchivo']);
     Route::post('{empleadoId}/archivos',                              [ExpedienteController::class, 'uploadArchivo']);
     Route::get('{empleadoId}/archivos/{archivoId}/descargar',         [ExpedienteController::class, 'descargarArchivo']);

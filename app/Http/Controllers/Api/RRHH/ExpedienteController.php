@@ -378,6 +378,7 @@ class ExpedienteController extends RRHHBaseController
             'fecha_vencimiento'     => 'nullable|date',
             'lugar_exp_municipio_id'=> 'nullable|integer',
             'lugar_exp_texto'       => 'nullable|string|max:200',
+            'notas'                 => 'nullable|string|max:255',
         ]);
 
         if ($data['tipo'] !== 'otro') {
@@ -408,6 +409,7 @@ class ExpedienteController extends RRHHBaseController
             'fecha_vencimiento'     => 'nullable|date',
             'lugar_exp_municipio_id'=> 'nullable|integer',
             'lugar_exp_texto'       => 'nullable|string|max:200',
+            'notas'                 => 'nullable|string|max:255',
         ]);
 
         $doc->update($data);
@@ -512,6 +514,18 @@ class ExpedienteController extends RRHHBaseController
     // ─────────────────────────────────────────────────────────────────────────
     // Archivos  POST (upload) / DELETE /{id} / GET /{id}/descargar
     // ─────────────────────────────────────────────────────────────────────────
+    public function listArchivos(Request $request, int $empleadoId): JsonResponse
+    {
+        $this->autorizarAcceso($empleadoId);
+        $tipo = $request->query('tipo');
+        $query = ExpedienteArchivo::where('empleado_id', $empleadoId);
+        if ($tipo) $query->where('tipo', $tipo);
+        $archivos = $query->orderByDesc('id')->get()->map(fn ($a) => array_merge($a->toArray(), [
+            'url' => $this->s3TemporaryUrl($a->archivo_ruta),
+        ]));
+        return response()->json(['success' => true, 'data' => $archivos]);
+    }
+
     public function presignArchivo(Request $request, int $empleadoId): JsonResponse
     {
         $this->autorizarAcceso($empleadoId);

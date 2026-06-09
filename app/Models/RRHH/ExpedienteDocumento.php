@@ -14,6 +14,7 @@ class ExpedienteDocumento extends Model
         'fecha_emision', 'fecha_vencimiento',
         'lugar_exp_municipio_id', 'lugar_exp_texto',
         'foto_frente_ruta', 'foto_reverso_ruta',
+        'notas',
     ];
 
     protected $casts = [
