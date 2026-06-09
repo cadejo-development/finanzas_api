@@ -27,7 +27,7 @@ class SupervisorChainService
      */
     public function resolverSupervisorANotificar(int $empleadoId, int $actorEmpleadoId): ?object
     {
-        // Find the employee's active department
+        // Intento 1: empleado regular — tiene departamento_id en su fila
         $dept = DB::connection('pgsql')
             ->table('departamentos as d')
             ->join('empleados as e', 'e.departamento_id', '=', 'd.id')
@@ -35,6 +35,18 @@ class SupervisorChainService
             ->where('d.activo', true)
             ->select('d.id', 'd.nombre', 'd.parent_id', 'd.jefe_empleado_id')
             ->first();
+
+        // Intento 2: jefe de departamento — su departamento_id es NULL porque la relación
+        // es inversa (departamentos.jefe_empleado_id apunta a él).
+        // Ocurre cuando un gerente de sucursal crea una solicitud para sí mismo.
+        if (! $dept) {
+            $dept = DB::connection('pgsql')
+                ->table('departamentos')
+                ->where('jefe_empleado_id', $empleadoId)
+                ->where('activo', true)
+                ->select('id', 'nombre', 'parent_id', 'jefe_empleado_id')
+                ->first();
+        }
 
         if (! $dept) {
             return null;
