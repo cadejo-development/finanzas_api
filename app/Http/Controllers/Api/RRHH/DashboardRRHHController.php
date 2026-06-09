@@ -550,4 +550,81 @@ class DashboardRRHHController extends RRHHBaseController
             'data'    => compact('genero', 'edades', 'estudios', 'antiguedad'),
         ]);
     }
+
+    /**
+     * Devuelve las acciones de personal pendientes de revisión para el jefe autenticado.
+     * Incluye permisos y vacaciones con estado 'pendiente' donde el usuario es
+     * el aprobador designado (jefe_id) o el empleado está en sus subordinados.
+     *
+     * GET /api/rrhh/pendientes-revision
+     */
+    public function pendientesRevision(): JsonResponse
+    {
+        $subordinadosIds = $this->getSubordinadosIds();
+
+        $propioId = null;
+        try { $propioId = $this->getJefeEmpleado()->id; } catch (\Throwable) {}
+
+        if (empty($subordinadosIds) && ! $propioId) {
+            return response()->json(['success' => true, 'data' => []]);
+        }
+
+        $scope = function ($q) use ($subordinadosIds, $propioId) {
+            $q->whereIn('empleado_id', $subordinadosIds);
+            if ($propioId) $q->orWhere('jefe_id', $propioId);
+        };
+
+        // ── Permisos pendientes ──────────────────────────────────────────────
+        $permisos = Permiso::with('tipoPermiso')
+            ->where($scope)
+            ->where('estado', 'pendiente')
+            ->orderByDesc('id')
+            ->get()
+            ->toArray();
+
+        $permisos = $this->enrichWithEmpleadoData($permisos);
+        $permisos = array_map(fn($p) => [
+            'id'              => $p['id'],
+            'tipo'            => 'permiso',
+            'tipo_label'      => 'Permiso',
+            'descripcion'     => $p['tipo_permiso']['nombre'] ?? 'Permiso',
+            'empleado_id'     => $p['empleado_id'],
+            'empleado_nombre' => $p['empleado_nombre'],
+            'sucursal_nombre' => $p['sucursal_nombre'],
+            'fecha'           => $p['fecha'],
+            'fecha_fin'       => null,
+            'estado'          => $p['estado'],
+            'creado_en'       => $p['created_at'] ?? null,
+            'ruta'            => 'permisos',
+        ], $permisos);
+
+        // ── Vacaciones pendientes ────────────────────────────────────────────
+        $vacaciones = Vacacion::where($scope)
+            ->where('estado', 'pendiente')
+            ->orderByDesc('id')
+            ->get()
+            ->toArray();
+
+        $vacaciones = $this->enrichWithEmpleadoData($vacaciones);
+        $vacaciones = array_map(fn($v) => [
+            'id'              => $v['id'],
+            'tipo'            => 'vacacion',
+            'tipo_label'      => 'Vacaciones',
+            'descripcion'     => 'Solicitud de vacaciones',
+            'empleado_id'     => $v['empleado_id'],
+            'empleado_nombre' => $v['empleado_nombre'],
+            'sucursal_nombre' => $v['sucursal_nombre'],
+            'fecha'           => $v['fecha_inicio'],
+            'fecha_fin'       => $v['fecha_fin'],
+            'estado'          => $v['estado'],
+            'creado_en'       => $v['created_at'] ?? null,
+            'ruta'            => 'vacaciones',
+        ], $vacaciones);
+
+        // Ordenar todo por fecha de creación descendente
+        $todos = array_merge($permisos, $vacaciones);
+        usort($todos, fn($a, $b) => strcmp($b['creado_en'] ?? '', $a['creado_en'] ?? ''));
+
+        return response()->json(['success' => true, 'data' => $todos]);
+    }
 }

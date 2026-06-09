@@ -63,6 +63,14 @@ Route::prefix('public')->group(function () {
     // Formulario público de ingreso de empleado vía QR
     Route::get('ingreso/{token}',  [IngresoQRController::class, 'validar']);
     Route::post('ingreso/{token}', [IngresoQRController::class, 'registrar']);
+
+    // Portal de empleo — sucursales activas (sin auth)
+    Route::get('sucursales-activas', function () {
+        $sucursales = \App\Models\Sucursal::where(fn($q) => $q->where('activa', true)->orWhereNull('activa'))
+            ->orderBy('nombre')
+            ->get(['id', 'nombre', 'codigo']);
+        return response()->json(['data' => $sucursales]);
+    });
 });
 
 // ─── Portal SSO (protegido con Sanctum) ──────────────────────────────────
@@ -335,9 +343,10 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::get('catalogos', [CatalogosRRHHController::class, 'index']);
 
     // Dashboard KPIs
-    Route::get('dashboard',              [DashboardRRHHController::class, 'resumen']);
-    Route::get('dashboard/demograficos', [DashboardRRHHController::class, 'demograficos']);
-    Route::get('dashboard/charts',       [DashboardRRHHController::class, 'charts']);
+    Route::get('dashboard',                  [DashboardRRHHController::class, 'resumen']);
+    Route::get('dashboard/demograficos',     [DashboardRRHHController::class, 'demograficos']);
+    Route::get('dashboard/charts',           [DashboardRRHHController::class, 'charts']);
+    Route::get('pendientes-revision',        [DashboardRRHHController::class, 'pendientesRevision']);
 
     // Calendario de equipo
     Route::get('calendario', [CalendarioController::class, 'index']);
