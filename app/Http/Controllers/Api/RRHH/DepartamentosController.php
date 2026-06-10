@@ -48,6 +48,8 @@ class DepartamentosController extends Controller
 
         // Conteo de empleados por departamento
         $deptIds = collect($depts)->pluck('id')->all();
+        // IDs de todos los jefes de cualquier departamento (para excluirlos del preview/conteo)
+        $todosJefeIds = collect($depts)->pluck('jefe_empleado_id')->filter()->unique()->values()->all();
         $counts = [];
         $preview = [];
         if (!empty($deptIds)) {
@@ -55,15 +57,17 @@ class DepartamentosController extends Controller
                 ->table('empleados')
                 ->whereIn('departamento_id', $deptIds)
                 ->where('activo', true)
+                ->when(!empty($todosJefeIds), fn($q) => $q->whereNotIn('id', $todosJefeIds))
                 ->groupBy('departamento_id')
                 ->selectRaw('departamento_id, COUNT(*) as total')
                 ->get()->keyBy('departamento_id')->toArray();
 
-            // Preview: primeros 4 empleados por departamento (excluye al jefe para no duplicar)
+            // Preview: primeros 4 empleados por departamento, excluye a cualquier jefe de departamento
             $allEmps = DB::connection('pgsql')
                 ->table('empleados')
                 ->whereIn('departamento_id', $deptIds)
                 ->where('activo', true)
+                ->when(!empty($todosJefeIds), fn($q) => $q->whereNotIn('id', $todosJefeIds))
                 ->select('id', 'nombres', 'apellidos', 'departamento_id')
                 ->orderBy('apellidos')
                 ->orderBy('nombres')
