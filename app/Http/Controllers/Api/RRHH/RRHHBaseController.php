@@ -37,7 +37,9 @@ abstract class RRHHBaseController extends Controller
             ->first();
 
         if ($empleado) {
-            return trim($empleado->apellidos . ', ' . $empleado->nombres);
+            $nombre   = explode(' ', trim($empleado->nombres))[0]   ?? '';
+            $apellido = explode(' ', trim($empleado->apellidos))[0]  ?? '';
+            return trim($nombre . ' ' . $apellido);
         }
 
         $email = Auth::user()?->email ?? '';
