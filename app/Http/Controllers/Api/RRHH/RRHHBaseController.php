@@ -32,6 +32,14 @@ abstract class RRHHBaseController extends Controller
     /** Devuelve el nombre de usuario (parte antes del @) del usuario autenticado. */
     protected function creadoPor(): string
     {
+        $empleado = Empleado::where('user_id', Auth::id())
+            ->select('nombres', 'apellidos')
+            ->first();
+
+        if ($empleado) {
+            return trim($empleado->apellidos . ', ' . $empleado->nombres);
+        }
+
         $email = Auth::user()?->email ?? '';
         return strtok($email, '@') ?: $email;
     }
