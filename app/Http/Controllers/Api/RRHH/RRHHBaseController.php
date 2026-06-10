@@ -258,18 +258,21 @@ abstract class RRHHBaseController extends Controller
         $inPlaceholders = implode(',', array_fill(0, count($deptIds), '?'));
         $rows = DB::connection('pgsql')->select(<<<SQL
             WITH RECURSIVE all_sub_depts AS (
-                SELECT id FROM departamentos
+                SELECT id, jefe_empleado_id FROM departamentos
                 WHERE id IN ({$inPlaceholders}) AND activo = true
                 UNION ALL
-                SELECT d.id FROM departamentos d
+                SELECT d.id, d.jefe_empleado_id FROM departamentos d
                 INNER JOIN all_sub_depts s ON d.parent_id = s.id
                 WHERE d.activo = true
             )
             SELECT DISTINCT e.id
             FROM empleados e
             WHERE e.activo = true
-              AND e.departamento_id IN (SELECT id FROM all_sub_depts)
               AND e.id != ?
+              AND (
+                  e.departamento_id IN (SELECT id FROM all_sub_depts)
+                  OR e.id IN (SELECT jefe_empleado_id FROM all_sub_depts WHERE jefe_empleado_id IS NOT NULL)
+              )
         SQL, array_merge($deptIds, [$jefeEmpleadoId]));
 
         return collect($rows)
