@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api\RRHH;
 
 use App\Models\RRHH\Permiso;
-use App\Models\RRHH\SaldoVacaciones;
 use App\Models\RRHH\TipoPermiso;
+use App\Services\RRHH\SaldoCadejoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -62,6 +62,8 @@ class PermisosController extends RRHHBaseController
             'hora_fin'          => 'nullable|date_format:H:i|required_if:es_dia_completo,false|after:hora_inicio',
             'dias'              => 'nullable|numeric|min:0.5|required_if:es_dia_completo,true',
             'motivo'            => 'nullable|string|max:500',
+            'relacion_familiar' => 'nullable|string|max:100',
+            'fecha_evento'      => 'nullable|date',
             'observaciones_jefe'=> 'nullable|string|max:500',
             'archivo'           => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
         ]);
@@ -105,6 +107,99 @@ class PermisosController extends RRHHBaseController
             }
         }
 
+        // ── Validaciones por subtipo de permiso especial ──────────────────────
+
+        // Maternidad: solo días completos, máximo 112 días, documento obligatorio
+        if ($tipoPermiso?->codigo === 'maternidad') {
+            if (!($validated['es_dia_completo'] ?? true)) {
+                return response()->json(['success' => false, 'message' => 'La licencia por maternidad solo puede registrarse en días completos.'], 422);
+            }
+            $dias = (float) ($validated['dias'] ?? 0);
+            if ($dias > 112) {
+                return response()->json(['success' => false, 'message' => 'La licencia por maternidad tiene un máximo de 112 días (16 semanas).'], 422);
+            }
+            if (!$request->hasFile('archivo')) {
+                return response()->json(['success' => false, 'message' => 'La licencia por maternidad requiere adjuntar la incapacidad emitida por el ISSS.'], 422);
+            }
+        }
+
+        // Paternidad: 3 días, requiere fecha_evento (nacimiento), usar dentro de 15 días
+        if ($tipoPermiso?->codigo === 'paternidad') {
+            $dias = (float) ($validated['dias'] ?? 0);
+            if ($dias > 3) {
+                return response()->json(['success' => false, 'message' => 'El permiso por paternidad tiene un máximo de 3 días laborales.'], 422);
+            }
+            if (empty($validated['fecha_evento'])) {
+                return response()->json(['success' => false, 'message' => 'Debes indicar la fecha de nacimiento para el permiso por paternidad.'], 422);
+            }
+            $fechaNacimiento = \Carbon\Carbon::parse($validated['fecha_evento']);
+            $diasDesdeNacimiento = $fechaNacimiento->diffInDays(\Carbon\Carbon::parse($validated['fecha']), false);
+            if ($diasDesdeNacimiento < 0 || $diasDesdeNacimiento > 15) {
+                return response()->json(['success' => false, 'message' => 'El permiso por paternidad debe tomarse dentro de los 15 días posteriores al nacimiento.'], 422);
+            }
+            if (!$request->hasFile('archivo')) {
+                return response()->json(['success' => false, 'message' => 'El permiso por paternidad requiere adjuntar la partida de nacimiento u otro documento válido.'], 422);
+            }
+        }
+
+        // Matrimonio: 3 días, solicitud con al menos 30 días de anticipación, requiere doc posterior
+        if ($tipoPermiso?->codigo === 'matrimonio') {
+            $dias = (float) ($validated['dias'] ?? 0);
+            if ($dias > 3) {
+                return response()->json(['success' => false, 'message' => 'El permiso por matrimonio tiene un máximo de 3 días laborales.'], 422);
+            }
+            $fechaPermiso = \Carbon\Carbon::parse($validated['fecha']);
+            $diasAnticipacion = now()->diffInDays($fechaPermiso, false);
+            if ($diasAnticipacion < 30) {
+                return response()->json(['success' => false, 'message' => 'El permiso por matrimonio debe solicitarse con al menos 30 días de anticipación.'], 422);
+            }
+        }
+        // Flag para rastrear entrega posterior del acta matrimonial
+        $docPosteriorPendiente = $tipoPermiso?->codigo === 'matrimonio';
+
+        // Fallecimiento de familiar: 2 días base con posibilidad de extensión previa evaluación de RH
+        if ($tipoPermiso?->codigo === 'fallecimiento_familiar') {
+            if (empty($validated['relacion_familiar'])) {
+                return response()->json(['success' => false, 'message' => 'Debes indicar el parentesco del familiar fallecido.'], 422);
+            }
+            // Extensiones >2 días requieren que RH apruebe explícitamente
+            $dias = (float) ($validated['dias'] ?? 0);
+            if ($dias > 2 && !$this->esAdminRrhh()) {
+                return response()->json(['success' => false, 'message' => 'Las extensiones de más de 2 días por fallecimiento deben ser registradas directamente por Recursos Humanos.'], 422);
+            }
+        }
+
+        // Días Cadejo: anticipación mínima de 5 días hábiles + validación de saldo
+        if ($tipoPermiso?->codigo === 'dias_cadejo') {
+            // Anticipación
+            $fechaPermiso = \Carbon\Carbon::parse($validated['fecha']);
+            $diasHabilesAnticipacion = 0;
+            $cursor = now()->copy()->startOfDay();
+            while ($cursor->lt($fechaPermiso->copy()->startOfDay())) {
+                if (!$cursor->isWeekend()) {
+                    $diasHabilesAnticipacion++;
+                }
+                $cursor->addDay();
+            }
+            if ($diasHabilesAnticipacion < 5) {
+                return response()->json(['success' => false, 'message' => 'Los Días Cadejo deben solicitarse con al menos 5 días hábiles de anticipación.'], 422);
+            }
+
+            // Saldo disponible
+            $empleadoData   = $this->enrichWithEmpleadoData([['empleado_id' => $validated['empleado_id']]]);
+            $mesesAntiguedad = $empleadoData[0]['meses_antiguedad'] ?? 0;
+            $diasSolicitados = (float) ($validated['dias'] ?? 1);
+            $errorSaldo = SaldoCadejoService::validar(
+                $validated['empleado_id'],
+                $diasSolicitados,
+                now()->year,
+                (int) $mesesAntiguedad
+            );
+            if ($errorSaldo) {
+                return response()->json(['success' => false, 'message' => $errorSaldo], 422);
+            }
+        }
+
         // Permiso personal: máximo según max_dias del tipo (default 5 días/año)
         if ($tipoPermiso?->codigo === 'PERSONAL') {
             $maxDias    = (float) ($tipoPermiso->max_dias ?? 5);
@@ -136,15 +231,24 @@ class PermisosController extends RRHHBaseController
 
         $aprobadorId = $this->getAprobadorPara($validated['empleado_id']);
         $permiso = Permiso::create(array_merge($validated, [
-            'jefe_id'        => $aprobadorId,
-            'estado'         => $this->estadoParaEmpleado($validated['empleado_id'], $aprobadorId),
-            'archivo_nombre' => $archivoNombre,
-            'archivo_ruta'   => $archivoRuta,
-            'aud_usuario'    => Auth::user()->email,
-            'creado_por'     => $this->creadoPor(),
+            'jefe_id'                 => $aprobadorId,
+            'estado'                  => $this->estadoParaEmpleado($validated['empleado_id'], $aprobadorId),
+            'relacion_familiar'       => $validated['relacion_familiar'] ?? null,
+            'fecha_evento'            => $validated['fecha_evento'] ?? null,
+            'archivo_nombre'          => $archivoNombre,
+            'archivo_ruta'            => $archivoRuta,
+            'doc_posterior_pendiente' => $docPosteriorPendiente ?? false,
+            'aud_usuario'             => Auth::user()->email,
+            'creado_por'              => $this->creadoPor(),
         ]));
 
         $permiso->load('tipoPermiso');
+
+        // Si el permiso Días Cadejo se crea directamente como aprobado, descontar el saldo
+        if ($permiso->estado === 'aprobado' && $tipoPermiso?->codigo === 'dias_cadejo') {
+            $anio = (int) \Carbon\Carbon::parse($permiso->fecha)->year;
+            SaldoCadejoService::descontar($permiso->empleado_id, (float) ($permiso->dias ?? 1), $anio);
+        }
 
         // Notify supervisor when employee submits own request (or jefe submits for themselves)
         if ($this->debeNotificar($validated['empleado_id'])) {
@@ -158,7 +262,34 @@ class PermisosController extends RRHHBaseController
             $this->notificarSolicitud($validated['empleado_id'], 'Permiso', $detalles, 'permisos', $permiso->id, 'permiso');
         }
 
-        $arr = $this->enrichWithEmpleadoData([$permiso->toArray()]);
+        $arr       = $this->enrichWithEmpleadoData([$permiso->toArray()]);
+        $empNombre = $arr[0]['empleado_nombre'] ?? "Empleado #{$validated['empleado_id']}";
+
+        // Alerta a RH si el colaborador acumula 3+ permisos personales en los últimos 30 días
+        if ($tipoPermiso?->codigo === 'PERSONAL') {
+            $recientes = Permiso::where('empleado_id', $validated['empleado_id'])
+                ->where('tipo_permiso_id', $validated['tipo_permiso_id'])
+                ->where('fecha', '>=', now()->subDays(30)->toDateString())
+                ->whereIn('estado', ['pendiente', 'aprobado'])
+                ->count();
+
+            if ($recientes >= 3) {
+                try {
+                    $this->notificarAdminsRrhh(
+                        tipo:           'Alerta: Uso Recurrente de Permisos Personales',
+                        empleadoNombre: $empNombre,
+                        detalles: [
+                            'Permisos personales en los últimos 30 días' => $recientes,
+                            'Sucursal' => $arr[0]['sucursal_nombre'] ?? null,
+                        ],
+                        rutaFrontend: 'permisos',
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('PermisosController: error notificando recurrencia', ['error' => $e->getMessage()]);
+                }
+            }
+        }
+
         return response()->json(['success' => true, 'data' => $arr[0]], 201);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -219,15 +350,16 @@ class PermisosController extends RRHHBaseController
         $permiso = Permiso::findOrFail($id);
 
         $validated = $request->validate([
-            'tipo_permiso_id'    => 'sometimes|exists:rrhh.tipos_permiso,id',
-            'fecha'              => 'sometimes|date',
-            'es_dia_completo'    => 'sometimes|boolean',
-            'hora_inicio'        => 'nullable|date_format:H:i',
-            'hora_fin'           => 'nullable|date_format:H:i|after:hora_inicio',
-            'dias'               => 'nullable|numeric|min:0.5',
-            'motivo'             => 'nullable|string|max:500',
-            'estado'             => 'sometimes|in:pendiente,aprobado,rechazado',
-            'observaciones_jefe' => 'nullable|string|max:500',
+            'tipo_permiso_id'        => 'sometimes|exists:rrhh.tipos_permiso,id',
+            'fecha'                  => 'sometimes|date',
+            'es_dia_completo'        => 'sometimes|boolean',
+            'hora_inicio'            => 'nullable|date_format:H:i',
+            'hora_fin'               => 'nullable|date_format:H:i|after:hora_inicio',
+            'dias'                   => 'nullable|numeric|min:0.5',
+            'motivo'                 => 'nullable|string|max:500',
+            'estado'                 => 'sometimes|in:pendiente,aprobado,rechazado',
+            'observaciones_jefe'     => 'nullable|string|max:500',
+            'doc_posterior_pendiente'=> 'sometimes|boolean',
         ]);
 
         // Recalcular horas si cambia a parcial
@@ -244,8 +376,28 @@ class PermisosController extends RRHHBaseController
             }
         }
 
+        $estadoAnterior = $permiso->estado;
         $permiso->update(array_merge($validated, ['aud_usuario' => Auth::user()->email]));
         $permiso->load('tipoPermiso');
+
+        // Gestión de saldo Días Cadejo cuando cambia el estado
+        if (
+            isset($validated['estado']) &&
+            $validated['estado'] !== $estadoAnterior &&
+            $permiso->tipoPermiso?->codigo === 'dias_cadejo'
+        ) {
+            $dias = (float) ($permiso->dias ?? 1);
+            $anio = (int) \Carbon\Carbon::parse($permiso->fecha)->year;
+
+            // Aprobado → descontar
+            if ($validated['estado'] === 'aprobado') {
+                SaldoCadejoService::descontar($permiso->empleado_id, $dias, $anio);
+            }
+            // Rechazado desde aprobado → devolver
+            if ($estadoAnterior === 'aprobado' && in_array($validated['estado'], ['rechazado', 'pendiente'])) {
+                SaldoCadejoService::devolver($permiso->empleado_id, $dias, $anio);
+            }
+        }
 
         return response()->json(['success' => true, 'data' => $permiso]);
     }
@@ -255,12 +407,34 @@ class PermisosController extends RRHHBaseController
      */
     public function destroy(int $id): JsonResponse
     {
-        $permiso = Permiso::findOrFail($id);
+        $permiso = Permiso::with('tipoPermiso')->findOrFail($id);
+
+        // Devolver saldo si era Días Cadejo aprobado
+        if ($permiso->estado === 'aprobado' && $permiso->tipoPermiso?->codigo === 'dias_cadejo') {
+            $anio = (int) \Carbon\Carbon::parse($permiso->fecha)->year;
+            SaldoCadejoService::devolver($permiso->empleado_id, (float) ($permiso->dias ?? 1), $anio);
+        }
+
         if ($permiso->archivo_ruta) {
             Storage::disk('s3')->delete($permiso->archivo_ruta);
         }
         $permiso->delete();
         return response()->json(['success' => true, 'message' => 'Permiso eliminado.']);
+    }
+
+    /**
+     * Saldo de Días Cadejo del equipo para el año actual.
+     * GET /api/rrhh/permisos/saldos-cadejo
+     */
+    public function saldosCadejo(): JsonResponse
+    {
+        $subordinadosIds = $this->getSubordinadosIds();
+        $anio = now()->year;
+
+        $saldos = SaldoCadejoService::saldosPorEmpleados($subordinadosIds, $anio);
+        $data   = $this->enrichWithEmpleadoData($saldos);
+
+        return response()->json(['success' => true, 'data' => $data]);
     }
 
     /**
@@ -275,25 +449,26 @@ class PermisosController extends RRHHBaseController
         // Tipo permiso personal
         $tipoPersonal = TipoPermiso::where('codigo', 'PERSONAL')->first();
 
-        $saldos = collect($subordinadosIds)->map(function ($empId) use ($anio, $tipoPersonal) {
-            $diasUsados = Permiso::where('empleado_id', $empId)
-                ->where('tipo_permiso_id', $tipoPersonal?->id)
-                ->whereYear('fecha', $anio)
-                ->where('estado', 'aprobado')
-                ->sum('dias');
+        // Query agregada: una sola consulta en vez de 2 por empleado
+        $usados = Permiso::selectRaw('empleado_id, SUM(dias) as total_dias, SUM(horas_solicitadas) as total_horas')
+            ->where('tipo_permiso_id', $tipoPersonal?->id)
+            ->whereIn('empleado_id', $subordinadosIds)
+            ->whereYear('fecha', $anio)
+            ->where('estado', 'aprobado')
+            ->groupBy('empleado_id')
+            ->get()
+            ->keyBy('empleado_id');
 
-            $horasUsadas = Permiso::where('empleado_id', $empId)
-                ->where('tipo_permiso_id', $tipoPersonal?->id)
-                ->whereYear('fecha', $anio)
-                ->where('estado', 'aprobado')
-                ->sum('horas_solicitadas');
+        $maxDias = (float) ($tipoPersonal?->max_dias ?? 5);
 
+        $saldos = collect($subordinadosIds)->map(function ($empId) use ($anio, $usados, $maxDias) {
+            $fila = $usados[$empId] ?? null;
             return [
                 'empleado_id'  => $empId,
                 'anio'         => $anio,
-                'max_dias'     => $tipoPersonal?->max_dias ?? 5,
-                'dias_usados'  => (float) $diasUsados,
-                'horas_usadas' => (float) $horasUsadas,
+                'max_dias'     => $maxDias,
+                'dias_usados'  => (float) ($fila?->total_dias ?? 0),
+                'horas_usadas' => (float) ($fila?->total_horas ?? 0),
             ];
         });
 

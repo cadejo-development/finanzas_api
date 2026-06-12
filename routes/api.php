@@ -46,6 +46,7 @@ use App\Http\Controllers\Api\RRHH\MantenimientoPlanillaController;
 use App\Http\Controllers\Api\GeoController;
 use App\Http\Controllers\Api\Compras\MenuPublicoController;
 use App\Http\Controllers\Api\RRHH\IngresoQRController;
+use App\Http\Controllers\Api\RRHH\IngresoPersonalController;
 
 // ─── Geo catálogos El Salvador (público, sin auth) ────────────────────────
 Route::prefix('geo')->group(function () {
@@ -356,6 +357,7 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
 
     // Permisos
     Route::get('permisos/saldos',         [PermisosController::class, 'saldos']);
+    Route::get('permisos/saldos-cadejo',  [PermisosController::class, 'saldosCadejo']);
     Route::get('permisos',                [PermisosController::class, 'index']);
     Route::post('permisos',               [PermisosController::class, 'store']);
     Route::get('permisos/{id}',           [PermisosController::class, 'show']);
@@ -388,6 +390,15 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::delete('amonestaciones/{id}',            [AmonestacionesController::class, 'destroy']);
     Route::get('amonestaciones/{id}/descargar',     [AmonestacionesController::class, 'descargar']);
     Route::get('amonestaciones/{id}/pdf',           [AmonestacionesController::class, 'pdf']);
+    Route::patch('amonestaciones/{id}/invalidar',   [AmonestacionesController::class, 'invalidar']);
+
+    // Ingreso de Personal y Período de Prueba
+    Route::get('ingresos',                                  [IngresoPersonalController::class, 'index']);
+    Route::post('ingresos',                                 [IngresoPersonalController::class, 'store']);
+    Route::get('ingresos/{id}',                             [IngresoPersonalController::class, 'show']);
+    Route::delete('ingresos/{id}',                          [IngresoPersonalController::class, 'destroy']);
+    Route::patch('ingresos/{id}/confirmacion',              [IngresoPersonalController::class, 'confirmar']);
+    Route::patch('ingresos/{id}/periodo-prueba',            [IngresoPersonalController::class, 'actualizarPeriodoPrueba']);
 
     // Desvinculaciones (despidos + renuncias, filtrar por ?tipo=despido|renuncia)
     Route::get('desvinculaciones',                  [DesvinculacionesController::class, 'index']);
@@ -418,7 +429,8 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::get('ausencias/resumen-mes',  [AusenciasController::class, 'resumenMes']);
     Route::get('ausencias',              [AusenciasController::class, 'index']);
     Route::post('ausencias',             [AusenciasController::class, 'store']);
-    Route::delete('ausencias/{id}',      [AusenciasController::class, 'destroy']);
+    Route::delete('ausencias/{id}',          [AusenciasController::class, 'destroy']);
+    Route::patch('ausencias/{id}/regularizar',[AusenciasController::class, 'regularizar']);
 
     // Reportes quincenales
     Route::get('reportes/quincena',  [ReportesRRHHController::class, 'quincena']);

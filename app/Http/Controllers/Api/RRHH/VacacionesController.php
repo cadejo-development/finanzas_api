@@ -61,7 +61,50 @@ class VacacionesController extends RRHHBaseController
         }
 
         // ── Validaciones de negocio ───────────────────────────────────────────
-        $diasSolicitados = (float) $validated['dias'];
+        $diasSolicitados  = (float) $validated['dias'];
+        $esDeRestaurante  = $this->esEmpleadoDeRestaurante($validated['empleado_id']);
+        $esAdmin          = $this->esAdminRrhh();
+        $esEmpleado       = $this->esEmpleado();
+
+        // Anticipación mínima de 30 días — solo para colaboradores con rol empleado
+        if ($esEmpleado) {
+            $diasAnticipacion = now()->diffInDays(\Carbon\Carbon::parse($validated['fecha_inicio']), false);
+            if ($diasAnticipacion < 30) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Las vacaciones deben solicitarse con al menos 30 días de anticipación. La fecha elegida está a {$diasAnticipacion} día(s) de hoy.",
+                ], 422);
+            }
+        }
+
+        // Personal operativo (restaurante): solo un período continuo al año
+        if ($esDeRestaurante) {
+            $yaExiste = Vacacion::where('empleado_id', $validated['empleado_id'])
+                ->whereYear('fecha_inicio', now()->year)
+                ->whereIn('estado', ['pendiente', 'aprobado'])
+                ->exists();
+
+            if ($yaExiste && !$esAdmin) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El personal operativo debe tomar las vacaciones en un único período continuo. Ya existe una solicitud de vacaciones registrada para este año.',
+                ], 422);
+            }
+        }
+
+        // Validar traslape de fechas con solicitudes activas
+        $traslape = Vacacion::where('empleado_id', $validated['empleado_id'])
+            ->whereIn('estado', ['pendiente', 'aprobado'])
+            ->where('fecha_inicio', '<=', $validated['fecha_fin'])
+            ->where('fecha_fin', '>=', $validated['fecha_inicio'])
+            ->exists();
+
+        if ($traslape) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ya existe una solicitud de vacaciones que se traslapa con el período seleccionado.',
+            ], 422);
+        }
 
         // Mínimo 5 días por solicitud
         if ($diasSolicitados < 5) {
@@ -71,18 +114,20 @@ class VacacionesController extends RRHHBaseController
             ], 422);
         }
 
-        // Máximo 15 días en total al año (suma de todas las solicitudes pendientes/aprobadas)
-        $diasAcumulados = Vacacion::where('empleado_id', $validated['empleado_id'])
+        // Calcular días disponibles reales (incluye acumulación del año anterior, máx 30)
+        $diasBase = $this->calcularDiasDisponibles($validated['empleado_id'], now()->year);
+
+        $diasYaSolicitados = Vacacion::where('empleado_id', $validated['empleado_id'])
             ->whereYear('fecha_inicio', now()->year)
             ->whereIn('estado', ['pendiente', 'aprobado'])
             ->sum('dias');
 
-        $disponibles = max(15 - (float) $diasAcumulados, 0);
+        $disponibles = max($diasBase - (float) $diasYaSolicitados, 0);
 
         if ($diasSolicitados > $disponibles) {
             return response()->json([
                 'success' => false,
-                'message' => "Solo quedan {$disponibles} día(s) de vacaciones disponibles para este año (máximo 15). Ya se han solicitado {$diasAcumulados} días.",
+                'message' => "Solo quedan {$disponibles} día(s) disponibles (de {$diasBase} en total este año). Ya se han solicitado {$diasYaSolicitados} días.",
             ], 422);
         }
 
@@ -169,21 +214,40 @@ class VacacionesController extends RRHHBaseController
         $subordinadosIds = $this->getSubordinadosIds();
         $anio = now()->year;
 
-        $saldos = SaldoVacaciones::whereIn('empleado_id', $subordinadosIds)
+        $saldosAnio = SaldoVacaciones::whereIn('empleado_id', $subordinadosIds)
             ->where('anio', $anio)
             ->get()
             ->keyBy('empleado_id');
 
-        // Para empleados sin saldo registrado, mostrar valores por defecto
-        $data = collect($subordinadosIds)->map(function ($empId) use ($saldos, $anio) {
-            $saldo = $saldos[$empId] ?? null;
+        // Año anterior para calcular carry-over en batch
+        $saldosAnterior = SaldoVacaciones::whereIn('empleado_id', $subordinadosIds)
+            ->where('anio', $anio - 1)
+            ->get()
+            ->keyBy('empleado_id');
+
+        $data = collect($subordinadosIds)->map(function ($empId) use ($saldosAnio, $saldosAnterior, $anio) {
+            $saldo = $saldosAnio[$empId] ?? null;
+
+            if ($saldo) {
+                $disponibles = (float) $saldo->dias_disponibles;
+                $usados      = (float) $saldo->dias_usados;
+            } else {
+                // Sin registro: calcular con carry-over del año anterior
+                $anterior    = $saldosAnterior[$empId] ?? null;
+                $noUsados    = $anterior ? max(0, (float)$anterior->dias_disponibles - (float)$anterior->dias_usados) : 0;
+                $disponibles = min(15 + $noUsados, 30);
+                $usados      = 0;
+            }
+
+            $restantes = max(0, $disponibles - $usados);
+
             return [
                 'empleado_id'      => $empId,
                 'anio'             => $anio,
-                'dias_disponibles' => $saldo?->dias_disponibles ?? 15,
-                'dias_usados'      => $saldo?->dias_usados      ?? 0,
-                'dias_acumulados'  => $saldo?->dias_acumulados  ?? 0,
-                'dias_totales'     => ($saldo?->dias_disponibles ?? 15) + ($saldo?->dias_acumulados ?? 0),
+                'dias_disponibles' => $disponibles,
+                'dias_usados'      => $usados,
+                'dias_acumulados'  => $restantes,   // días restantes no usados (UI los muestra como "Acumulados")
+                'dias_totales'     => $disponibles,
             ];
         });
 
@@ -194,11 +258,39 @@ class VacacionesController extends RRHHBaseController
 
     private function descontarSaldo(int $empleadoId, float $dias): void
     {
-        $anio = now()->year;
+        $anio  = now()->year;
+        $disp  = $this->calcularDiasDisponibles($empleadoId, $anio);
         $saldo = SaldoVacaciones::firstOrCreate(
             ['empleado_id' => $empleadoId, 'anio' => $anio],
-            ['dias_disponibles' => 15, 'dias_usados' => 0, 'dias_acumulados' => 0]
+            ['dias_disponibles' => $disp, 'dias_usados' => 0, 'dias_acumulados' => 0]
         );
         $saldo->increment('dias_usados', $dias);
+    }
+
+    /**
+     * Días disponibles para un empleado en un año dado.
+     * Incluye carry-over del año anterior (máximo 30 días total = 2 años).
+     */
+    private function calcularDiasDisponibles(int $empleadoId, int $anio): float
+    {
+        $saldoAnio = SaldoVacaciones::where('empleado_id', $empleadoId)
+            ->where('anio', $anio)
+            ->first();
+
+        // Si ya existe registro para este año, usar ese valor
+        if ($saldoAnio) {
+            return (float) $saldoAnio->dias_disponibles;
+        }
+
+        // Calcular carry-over desde año anterior
+        $anterior = SaldoVacaciones::where('empleado_id', $empleadoId)
+            ->where('anio', $anio - 1)
+            ->first();
+
+        $noUsados = $anterior
+            ? max(0, (float)$anterior->dias_disponibles - (float)$anterior->dias_usados)
+            : 0;
+
+        return min(15 + $noUsados, 30);
     }
 }

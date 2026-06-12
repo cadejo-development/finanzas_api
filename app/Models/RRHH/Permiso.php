@@ -12,16 +12,20 @@ class Permiso extends Model
     protected $fillable = [
         'empleado_id', 'jefe_id', 'tipo_permiso_id',
         'fecha', 'es_dia_completo', 'hora_inicio', 'hora_fin', 'horas_solicitadas',
-        'dias', 'motivo', 'estado', 'observaciones_jefe',
+        'dias', 'motivo', 'relacion_familiar', 'fecha_evento',
+        'estado', 'observaciones_jefe',
         'archivo_nombre', 'archivo_ruta',
+        'doc_posterior_pendiente',
         'aud_usuario', 'creado_por',
     ];
 
     protected $casts = [
-        'fecha'           => 'date',
-        'es_dia_completo' => 'boolean',
-        'horas_solicitadas' => 'decimal:2',
-        'dias'            => 'decimal:1',
+        'fecha'                   => 'date',
+        'fecha_evento'            => 'date',
+        'es_dia_completo'         => 'boolean',
+        'horas_solicitadas'       => 'decimal:2',
+        'dias'                    => 'decimal:1',
+        'doc_posterior_pendiente' => 'boolean',
     ];
 
     public function tipoPermiso()

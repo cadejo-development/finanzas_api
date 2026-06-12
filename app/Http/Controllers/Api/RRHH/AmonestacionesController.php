@@ -44,6 +44,7 @@ class AmonestacionesController extends RRHHBaseController
             'descripcion'               => 'required|string|max:1000',
             'observacion'               => 'nullable|string|max:1000',
             'accion_tomada'             => 'nullable|string|max:500',
+            'tipo_sancion'              => 'required|in:verbal,escrita,suspension',
             'aplica_suspension'         => 'boolean',
             'dias_suspension'           => 'nullable|array|required_if:aplica_suspension,true',
             'dias_suspension.*'         => 'date',
@@ -70,6 +71,14 @@ class AmonestacionesController extends RRHHBaseController
             return response()->json([
                 'success' => false,
                 'message' => 'Las faltas leves no pueden incluir días de suspensión.',
+            ], 422);
+        }
+
+        // Faltas graves y muy graves requieren evidencia documental
+        if (in_array($tipoFalta?->gravedad, ['grave', 'muy_grave']) && !$request->hasFile('archivo')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Las faltas graves y muy graves requieren adjuntar evidencia documental.',
             ], 422);
         }
 
@@ -104,6 +113,7 @@ class AmonestacionesController extends RRHHBaseController
             'aplica_suspension'         => $aplica,
             'aplica_suspension_propina' => $aplicaPropina,
             'dias_suspension_propina'   => $diasPropina,
+            'tipo_sancion'              => $validated['tipo_sancion'],
             'estado'                    => $requiereAprobacionRrhh ? 'pendiente_rrhh' : ($requiereAprobacionPropina ? 'pendiente_gerencia_ops' : 'aprobado'),
             'archivo_nombre'            => $archivoNombre,
             'archivo_ruta'              => $archivoRuta,
@@ -222,6 +232,7 @@ class AmonestacionesController extends RRHHBaseController
             'descripcion'        => 'sometimes|string|max:1000',
             'observacion'        => 'nullable|string|max:1000',
             'accion_tomada'      => 'nullable|string|max:500',
+            'tipo_sancion'       => 'sometimes|in:verbal,escrita,suspension',
             'aplica_suspension'  => 'sometimes|boolean',
             'dias_suspension'    => 'nullable|array',
             'dias_suspension.*'  => 'date',
@@ -254,10 +265,33 @@ class AmonestacionesController extends RRHHBaseController
 
     /**
      * DELETE /api/rrhh/amonestaciones/{id}
+     *
+     * Solo se permite eliminar registros en estado pendiente (no aprobados) y
+     * únicamente por el jefe que los creó o por rrhh_admin.
+     * Los registros aprobados no pueden eliminarse — deben invalidarse.
      */
     public function destroy(int $id): JsonResponse
     {
         $amonestacion = Amonestacion::findOrFail($id);
+
+        if ($amonestacion->estado === 'aprobado') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Las amonestaciones aprobadas no pueden eliminarse. Usa la opción de invalidación para registrar la corrección.',
+            ], 403);
+        }
+
+        $user = Auth::user();
+        $esAdmin = $this->esAdminRrhh();
+        $jefeActual = null;
+        try { $jefeActual = $this->getJefeEmpleado(); } catch (\Throwable) {}
+
+        if (!$esAdmin && $amonestacion->jefe_id !== $jefeActual?->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tienes permiso para eliminar esta amonestación.',
+            ], 403);
+        }
 
         if ($amonestacion->archivo_ruta) {
             Storage::disk('s3')->delete($amonestacion->archivo_ruta);
@@ -267,6 +301,75 @@ class AmonestacionesController extends RRHHBaseController
         $amonestacion->delete();
 
         return response()->json(['success' => true, 'message' => 'Amonestación eliminada.']);
+    }
+
+    /**
+     * PATCH /api/rrhh/amonestaciones/{id}/invalidar
+     *
+     * Invalida una amonestación aprobada. Solo rrhh_admin puede ejecutar esta acción.
+     * El registro permanece en la base de datos para trazabilidad; se marca como invalidado
+     * con el motivo documentado, conforme al lineamiento de RRHH.
+     */
+    public function invalidar(Request $request, int $id): JsonResponse
+    {
+        if (!$this->esAdminRrhh()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Solo el administrador de RRHH puede invalidar amonestaciones.',
+            ], 403);
+        }
+
+        $amonestacion = Amonestacion::with(['tipoFalta'])->findOrFail($id);
+
+        if ($amonestacion->invalidada) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Esta amonestación ya fue invalidada.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'motivo_invalidacion' => 'required|string|min:10|max:1000',
+        ]);
+
+        $amonestacion->update([
+            'invalidada'          => true,
+            'invalidada_por'      => Auth::id(),
+            'invalidada_en'       => now(),
+            'motivo_invalidacion' => $validated['motivo_invalidacion'],
+            'aud_usuario'         => Auth::user()->email,
+        ]);
+
+        // Notificar al empleado que la amonestación fue invalidada
+        $enriched  = $this->enrichWithEmpleadoData([$amonestacion->toArray()]);
+        $empNombre = $enriched[0]['empleado_nombre'] ?? "Empleado #{$amonestacion->empleado_id}";
+
+        try {
+            $this->notificarAlEmpleado(
+                empleadoId:   $amonestacion->empleado_id,
+                tipo:         'Amonestación Invalidada',
+                mensaje:      'Una amonestación registrada en tu expediente ha sido invalidada por el área de Recursos Humanos. A continuación encontrarás los detalles.',
+                detalles:     [
+                    'Tipo de falta'        => $amonestacion->tipoFalta?->nombre ?? '—',
+                    'Fecha'                => $amonestacion->fecha_amonestacion?->format('Y-m-d'),
+                    'Motivo de invalidación' => $validated['motivo_invalidacion'],
+                    'Invalidada por'       => Auth::user()->name ?? Auth::user()->email,
+                ],
+                rutaFrontend: 'mi-expediente',
+                pdfContent:   null,
+                pdfNombre:    null,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('RRHH: Error notificando invalidación de amonestación', [
+                'id' => $amonestacion->id, 'error' => $e->getMessage(),
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Amonestación invalidada correctamente.',
+            'data'    => $amonestacion,
+        ]);
     }
 
     /**

@@ -1,6 +1,8 @@
 <?php
 
 use App\Console\Commands\InactivarEmpleadosDesvinculados;
+use App\Console\Commands\AlertasPeriodoPrueba;
+use App\Console\Commands\AlertasVacacionesVencimiento;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -11,8 +13,22 @@ Artisan::command('inspire', function () {
 
 // Inactiva empleados cuya fecha efectiva de desvinculación ya llegó.
 // Corre cada mañana a las 06:00.
-Schedule::command('rrhh:inactivar-desvinculados')
+Schedule::command(InactivarEmpleadosDesvinculados::class)
     ->dailyAt('06:00')
     ->withoutOverlapping()
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/inactivar-desvinculados.log'));
+
+// Alertas automáticas de períodos de prueba: vencimientos 15d / 7d / sin evaluación / primer día pendiente.
+Schedule::command(AlertasPeriodoPrueba::class)
+    ->dailyAt('07:00')
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/alertas-periodo-prueba.log'));
+
+// Alertas de vacaciones próximas a vencer (30 días y 15 días antes del límite anual).
+Schedule::command(AlertasVacacionesVencimiento::class)
+    ->dailyAt('08:00')
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/alertas-vacaciones-vencimiento.log'));

@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api\RRHH;
 
+use App\Models\RRHH\Amonestacion;
 use App\Models\RRHH\AusenciaInjustificada;
+use App\Models\RRHH\DiaSuspension;
 use App\Models\RRHH\Incapacidad;
 use App\Models\RRHH\Permiso;
 use App\Models\RRHH\Planilla;
@@ -181,6 +183,7 @@ class PlanillasController extends RRHHBaseController
             $incapacidades = $this->getIncapacidades($empIds, $fechaInicio, $fechaFin);
             $vacaciones    = $this->getVacaciones($empIds, $fechaInicio, $fechaFin);
             $ausencias     = $this->getAusencias($empIds, $fechaInicio, $fechaFin);
+            $suspensiones  = $this->getSuspensiones($empIds, $fechaInicio, $fechaFin);
 
             // Cargar órdenes de descuento activas del período
             $ordenesMap = $this->getOrdenesActivasMap($empIds, $fechaInicio->toDateString());
@@ -210,7 +213,7 @@ class PlanillasController extends RRHHBaseController
 
                     // Días no trabajados dentro del período efectivo del empleado
                     $diasNoTrab = $this->calcDiasNoTrabajados(
-                        $eid, $permisos, $incapacidades, $vacaciones, $ausencias,
+                        $eid, $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
                         $fechaInicio, $hastaEfectivo
                     );
                     // Cap a diasQuincena: en meses con 31 días no se pagan días extra
@@ -223,6 +226,21 @@ class PlanillasController extends RRHHBaseController
                     $resultado = $this->calc->calcularPlanillaEmpleado(
                         $salBase, (float) $diasLab, $diasQuincena, $ordenes
                     );
+
+                    // Anotar días de suspensión en detalle para trazabilidad
+                    $diasSusp = $suspensiones
+                        ->filter(fn($s) => $s->amonestacion?->empleado_id === $eid)
+                        ->count();
+                    if ($diasSusp > 0) {
+                        $detalle = json_decode($resultado['detalle_descuentos'] ?? '[]', true) ?: [];
+                        $detalle[] = [
+                            'concepto' => "Suspensión disciplinaria ({$diasSusp} día(s))",
+                            'tipo'     => 'suspension',
+                            'dias'     => $diasSusp,
+                            'monto'    => 0, // el impacto ya está en dias_laborados reducidos
+                        ];
+                        $resultado['detalle_descuentos'] = json_encode($detalle);
+                    }
 
                     $linea = PlanillaLinea::create(array_merge(
                         [
@@ -451,7 +469,7 @@ class PlanillasController extends RRHHBaseController
      */
     private function calcDiasNoTrabajados(
         int $eid,
-        $permisos, $incapacidades, $vacaciones, $ausencias,
+        $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
         Carbon $desde, Carbon $hasta
     ): float {
         $total = 0.0;
@@ -479,7 +497,30 @@ class PlanillasController extends RRHHBaseController
             $total += 1;
         }
 
+        // Días de suspensión disciplinaria (sin goce de salario)
+        $total += $suspensiones
+            ->filter(fn($s) => $s->amonestacion?->empleado_id === $eid)
+            ->count();
+
         return round($total, 2);
+    }
+
+    /**
+     * Carga días de suspensión disciplinaria aprobados en el período.
+     */
+    private function getSuspensiones(array $empIds, Carbon $desde, Carbon $hasta): \Illuminate\Support\Collection
+    {
+        if (empty($empIds)) return collect([]);
+
+        return DiaSuspension::with('amonestacion')
+            ->whereHas('amonestacion', fn($q) => $q
+                ->whereIn('empleado_id', $empIds)
+                ->where('estado', 'aprobado')
+                ->where('aplica_suspension', true)
+                ->where('invalidada', false)
+            )
+            ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->get();
     }
 
     private function diasSolapados($inicio, $fin, Carbon $desde, Carbon $hasta): int
