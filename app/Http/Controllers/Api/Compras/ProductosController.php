@@ -93,6 +93,12 @@ class ProductosController extends Controller
                   ->whereDoesntHave('categoria', fn ($q) => $q->where('key', 'ilike', 'MP-%'));
         }
 
+        // para_inventario=1: excluye platos del menú (categorías cuyo nombre contiene "plato")
+        // Usado en la búsqueda del modal de agregar producto al conteo físico.
+        if ($request->boolean('para_inventario')) {
+            $query->whereDoesntHave('categoria', fn ($q) => $q->whereRaw("lower(nombre) like '%plato%'"));
+        }
+
         // Búsqueda por nombre o código (con unaccent para ignorar tildes)
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
