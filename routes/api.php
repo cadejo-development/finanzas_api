@@ -592,4 +592,7 @@ Route::prefix('cadejo-ventas')->group(function () {
     // Aprobaciones
     Route::get('aprobaciones',               [\App\Http\Controllers\Api\Ventas\AprobacionesController::class, 'index']);
     Route::patch('aprobaciones/{id}/resolver', [\App\Http\Controllers\Api\Ventas\AprobacionesController::class, 'resolver']);
+
+    // Exportación
+    Route::get('ordenes/{id}/export/excel',  [\App\Http\Controllers\Api\Ventas\ExportController::class, 'ordenExcel']);
 });
