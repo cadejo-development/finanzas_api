@@ -565,3 +565,31 @@ Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh
     Route::get('ingreso-qr/tokens',     [IngresoQRController::class, 'listar']);
     Route::get('ingreso-qr/registros',  [IngresoQRController::class, 'registros']);
 });
+
+// ─── CADEJO VENTAS ───────────────────────────────────────────────────────────
+Route::prefix('cadejo-ventas')->group(function () {
+    // Auth mock (sin Sanctum — prototipo)
+    Route::post('auth/login', [\App\Http\Controllers\Api\Ventas\AuthController::class, 'login']);
+
+    // Dashboard
+    Route::get('dashboard', [\App\Http\Controllers\Api\Ventas\DashboardController::class, 'index']);
+
+    // Clientes
+    Route::get('clientes',        [\App\Http\Controllers\Api\Ventas\ClientesController::class, 'index']);
+    Route::post('clientes',       [\App\Http\Controllers\Api\Ventas\ClientesController::class, 'store']);
+    Route::get('clientes/{id}',   [\App\Http\Controllers\Api\Ventas\ClientesController::class, 'show']);
+    Route::patch('clientes/{id}', [\App\Http\Controllers\Api\Ventas\ClientesController::class, 'update']);
+
+    // Productos
+    Route::get('productos', [\App\Http\Controllers\Api\Ventas\ProductosController::class, 'index']);
+
+    // Órdenes
+    Route::get('ordenes',         [\App\Http\Controllers\Api\Ventas\OrdenesController::class, 'index']);
+    Route::post('ordenes',        [\App\Http\Controllers\Api\Ventas\OrdenesController::class, 'store']);
+    Route::get('ordenes/{id}',    [\App\Http\Controllers\Api\Ventas\OrdenesController::class, 'show']);
+    Route::patch('ordenes/{id}',  [\App\Http\Controllers\Api\Ventas\OrdenesController::class, 'update']);
+
+    // Aprobaciones
+    Route::get('aprobaciones',               [\App\Http\Controllers\Api\Ventas\AprobacionesController::class, 'index']);
+    Route::patch('aprobaciones/{id}/resolver', [\App\Http\Controllers\Api\Ventas\AprobacionesController::class, 'resolver']);
+});
