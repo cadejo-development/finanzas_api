@@ -38,19 +38,23 @@ class OrdenesController extends Controller
 
     public function store(Request $request)
     {
+        $today = now()->toDateString();
+
         $data = $request->validate([
-            'cliente_id'       => 'required|integer',
-            'tipo_venta'       => 'required|in:contado,credito',
-            'plazo_solicitado' => 'integer|min:0',
-            'notas'            => 'nullable|string',
-            'creado_por'       => 'nullable|string',
-            'items'            => 'required|array|min:1',
+            'cliente_id'         => 'required|integer',
+            'tipo_venta'         => 'required|in:contado,credito',
+            'plazo_solicitado'   => 'integer|min:0',
+            'notas'              => 'nullable|string',
+            'creado_por'         => 'nullable|string',
+            'fecha_facturacion'  => "nullable|date|after_or_equal:{$today}",
+            'fecha_entrega'      => "nullable|date|after_or_equal:{$today}",
+            'items'              => 'required|array|min:1',
             'items.*.producto_id'    => 'required|integer',
             'items.*.cantidad'       => 'required|numeric|min:0.01',
             'items.*.precio_unitario'=> 'required|numeric|min:0',
         ]);
 
-        DB::connection('compras')->transaction(function () use ($data, $request, &$orden) {
+        DB::connection('compras')->transaction(function () use ($data, $today, &$orden) {
             $subtotal = 0;
             $totalIva = 0;
 
@@ -73,16 +77,54 @@ class OrdenesController extends Controller
                 ];
             }
 
+            $totalOrden = $subtotal + $totalIva;
+            $cliente    = VentaCliente::findOrFail($data['cliente_id']);
+            $clienteTieneCredito = $cliente->limite_credito > 0;
+
+            // ── Determinar estado y si necesita aprobación ────────────────────
+            $estado           = 'aprobada';
+            $tipoAprobacion   = null;
+            $detalleAprobacion = null;
+
+            if ($data['tipo_venta'] === 'credito') {
+                if (!$clienteTieneCredito) {
+                    // Cliente contado solicitando crédito
+                    $estado          = 'pendiente_aprobacion';
+                    $tipoAprobacion  = 'cambio_credito';
+                    $detalleAprobacion = "Cliente contado solicita venta a crédito.";
+                } else {
+                    // Cliente con crédito — verificar límite y plazo
+                    $totalAcumulado = VentaOrden::where('cliente_id', $cliente->id)
+                        ->whereIn('estado', ['aprobada', 'pendiente_aprobacion'])
+                        ->sum('total');
+
+                    if (($totalAcumulado + $totalOrden) > $cliente->limite_credito) {
+                        $estado          = 'pendiente_aprobacion';
+                        $tipoAprobacion  = 'exceso_limite';
+                        $detalleAprobacion = "Orden excede límite de crédito de \${$cliente->limite_credito}. Acumulado: \$" . round($totalAcumulado + $totalOrden, 2) . ".";
+                    } elseif ($cliente->plazo_credito > 0 && ($data['plazo_solicitado'] ?? 0) > $cliente->plazo_credito) {
+                        $estado          = 'pendiente_aprobacion';
+                        $tipoAprobacion  = 'cambio_credito';
+                        $detalleAprobacion = "Vendedor solicita plazo de {$data['plazo_solicitado']} días. Estándar del cliente: {$cliente->plazo_credito} días.";
+                    }
+                }
+            }
+            // contado (cualquier cliente) → aprobada directamente
+
             $orden = VentaOrden::create([
-                'cliente_id'       => $data['cliente_id'],
-                'tipo_venta'       => $data['tipo_venta'],
-                'plazo_solicitado' => $data['plazo_solicitado'] ?? 0,
-                'estado'           => 'borrador',
-                'subtotal'         => $subtotal,
-                'total_iva'        => $totalIva,
-                'total'            => $subtotal + $totalIva,
-                'notas'            => $data['notas'] ?? null,
-                'creado_por'       => $data['creado_por'] ?? null,
+                'cliente_id'        => $data['cliente_id'],
+                'tipo_venta'        => $data['tipo_venta'],
+                'plazo_solicitado'  => $data['plazo_solicitado'] ?? 0,
+                'estado'            => $estado,
+                'subtotal'          => $subtotal,
+                'total_iva'         => $totalIva,
+                'total'             => $totalOrden,
+                'notas'             => $data['notas'] ?? null,
+                'creado_por'        => $data['creado_por'] ?? null,
+                'fecha_facturacion' => $data['fecha_facturacion'] ?? $today,
+                'fecha_entrega'     => $data['fecha_entrega'] ?? $today,
+                'aprobado_at'       => $estado === 'aprobada' ? now() : null,
+                'aprobado_por'      => $estado === 'aprobada' ? 'Sistema' : null,
             ]);
 
             foreach ($itemsData as $item) {
@@ -90,24 +132,15 @@ class OrdenesController extends Controller
                 VentaOrdenItem::create($item);
             }
 
-            // Si excede límite de crédito → crear solicitud de aprobación automáticamente
-            $cliente = VentaCliente::find($data['cliente_id']);
-            if ($data['tipo_venta'] === 'credito' && $cliente && $cliente->limite_credito > 0) {
-                $totalPendiente = VentaOrden::where('cliente_id', $cliente->id)
-                    ->whereIn('estado', ['aprobada', 'borrador', 'pendiente_aprobacion'])
-                    ->sum('total');
-
-                if ($totalPendiente > $cliente->limite_credito) {
-                    VentaAprobacion::create([
-                        'tipo'          => 'exceso_limite',
-                        'orden_id'      => $orden->id,
-                        'cliente_id'    => $cliente->id,
-                        'detalle'       => "Orden #{$orden->id} excede límite de crédito. Límite: \${$cliente->limite_credito}, Total acumulado: \${$totalPendiente}",
-                        'estado'        => 'pendiente',
-                        'solicitado_por'=> $data['creado_por'] ?? null,
-                    ]);
-                    $orden->update(['estado' => 'pendiente_aprobacion']);
-                }
+            if ($tipoAprobacion) {
+                VentaAprobacion::create([
+                    'tipo'           => $tipoAprobacion,
+                    'orden_id'       => $orden->id,
+                    'cliente_id'     => $cliente->id,
+                    'detalle'        => $detalleAprobacion,
+                    'estado'         => 'pendiente',
+                    'solicitado_por' => $data['creado_por'] ?? null,
+                ]);
             }
         });
 
@@ -135,17 +168,19 @@ class OrdenesController extends Controller
     private function format(VentaOrden $o): array
     {
         return [
-            'id'               => $o->id,
-            'cliente'          => $o->cliente ? ['id' => $o->cliente->id, 'nombres' => $o->cliente->nombres, 'nom_comercial' => $o->cliente->nom_comercial] : null,
-            'tipo_venta'       => $o->tipo_venta,
-            'plazo_solicitado' => $o->plazo_solicitado,
-            'estado'           => $o->estado,
-            'subtotal'         => $o->subtotal,
-            'total_iva'        => $o->total_iva,
-            'total'            => $o->total,
-            'notas'            => $o->notas,
-            'creado_por'       => $o->creado_por,
-            'created_at'       => $o->created_at?->toDateTimeString(),
+            'id'                => $o->id,
+            'cliente'           => $o->cliente ? ['id' => $o->cliente->id, 'nombres' => $o->cliente->nombres, 'nom_comercial' => $o->cliente->nom_comercial] : null,
+            'tipo_venta'        => $o->tipo_venta,
+            'plazo_solicitado'  => $o->plazo_solicitado,
+            'estado'            => $o->estado,
+            'subtotal'          => $o->subtotal,
+            'total_iva'         => $o->total_iva,
+            'total'             => $o->total,
+            'notas'             => $o->notas,
+            'creado_por'        => $o->creado_por,
+            'fecha_facturacion' => $o->fecha_facturacion?->toDateString(),
+            'fecha_entrega'     => $o->fecha_entrega?->toDateString(),
+            'created_at'        => $o->created_at?->toDateTimeString(),
         ];
     }
 

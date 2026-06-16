@@ -13,13 +13,16 @@ class VentaOrden extends Model
         'cliente_id', 'tipo_venta', 'plazo_solicitado', 'estado',
         'subtotal', 'total_iva', 'total', 'notas', 'creado_por',
         'aprobado_por', 'aprobado_at',
+        'fecha_facturacion', 'fecha_entrega',
     ];
 
     protected $casts = [
-        'subtotal' => 'float',
-        'total_iva' => 'float',
-        'total' => 'float',
-        'aprobado_at' => 'datetime',
+        'subtotal'          => 'float',
+        'total_iva'         => 'float',
+        'total'             => 'float',
+        'aprobado_at'       => 'datetime',
+        'fecha_facturacion' => 'date',
+        'fecha_entrega'     => 'date',
     ];
 
     public function cliente()
