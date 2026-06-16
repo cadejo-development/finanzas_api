@@ -450,6 +450,21 @@ async function main() {
     `, [NOW]);
     log(`  sub_receta_id reconectados: ${fixRes.rowCount}`);
 
+    // Eliminar duplicados (sub_receta_id) que pudo haber creado la reconexión
+    // Causa: si ya existía (receta_id, sub_receta_id=X) de un sync anterior, la fase 4b
+    // re-insertó el mismo ingrediente como producto_id y 4e lo convirtió de nuevo, creando un duplicado.
+    const dedupRes = await pg.query(`
+      DELETE FROM receta_ingredientes
+      WHERE id NOT IN (
+        SELECT MIN(id)
+        FROM receta_ingredientes
+        GROUP BY receta_id,
+                 COALESCE(producto_id::text, ''),
+                 COALESCE(sub_receta_id::text, '')
+      )
+    `);
+    if (dedupRes.rowCount > 0) log(`  Duplicados eliminados: ${dedupRes.rowCount}`);
+
     // ── 4f. Sincronizar menú (receta_sucursal) — SOLO para recetas NUEVAS ───────
     // Las recetas que ya existían en RDS conservan sus asignaciones de sucursal.
     // Solo las recetas recién insertadas (nuevaMap) reciben las asignaciones de Brilo.

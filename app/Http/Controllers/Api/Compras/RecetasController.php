@@ -326,6 +326,13 @@ class RecetasController extends Controller
                     'ingredientes' => 'La receta tiene ingredientes duplicados (producto_id: ' . implode(', ', $duplicados) . '). Cada producto debe aparecer una sola vez.',
                 ]);
             }
+            $subRecetaIdsStore = array_filter(array_column($ings, 'sub_receta_id'));
+            if (count($subRecetaIdsStore) !== count(array_unique($subRecetaIdsStore))) {
+                $duplicados = array_values(array_unique(array_diff_assoc($subRecetaIdsStore, array_unique($subRecetaIdsStore))));
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'ingredientes' => 'La receta tiene sub-recetas duplicadas (sub_receta_id: ' . implode(', ', $duplicados) . '). Cada sub-receta debe aparecer una sola vez.',
+                ]);
+            }
             foreach ($ings as $ing) {
                 RecetaIngrediente::create([
                     'receta_id'          => $receta->id,
@@ -444,12 +451,19 @@ class RecetasController extends Controller
 
             // Reemplazar ingredientes si se envian
             if (array_key_exists('ingredientes', $validated)) {
-                // Detectar producto_id duplicados antes de insertar
+                // Detectar duplicados antes de insertar
                 $productoIds = array_filter(array_column($validated['ingredientes'], 'producto_id'));
                 if (count($productoIds) !== count(array_unique($productoIds))) {
                     $duplicados = array_values(array_unique(array_diff_assoc($productoIds, array_unique($productoIds))));
                     throw \Illuminate\Validation\ValidationException::withMessages([
                         'ingredientes' => 'La receta tiene ingredientes duplicados (producto_id: ' . implode(', ', $duplicados) . '). Cada producto debe aparecer una sola vez.',
+                    ]);
+                }
+                $subRecetaIds = array_filter(array_column($validated['ingredientes'], 'sub_receta_id'));
+                if (count($subRecetaIds) !== count(array_unique($subRecetaIds))) {
+                    $duplicados = array_values(array_unique(array_diff_assoc($subRecetaIds, array_unique($subRecetaIds))));
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'ingredientes' => 'La receta tiene sub-recetas duplicadas (sub_receta_id: ' . implode(', ', $duplicados) . '). Cada sub-receta debe aparecer una sola vez.',
                     ]);
                 }
 
