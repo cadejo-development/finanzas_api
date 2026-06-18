@@ -621,4 +621,16 @@ Route::prefix('cadejo-ventas')->group(function () {
 
     // Exportación
     Route::get('ordenes/{id}/export/excel',  [\App\Http\Controllers\Api\Ventas\ExportController::class, 'ordenExcel']);
+
+    // Catálogos de precios
+    Route::get('catalogos-precio',                          [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'index']);
+    Route::post('catalogos-precio',                         [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'store']);
+    Route::patch('catalogos-precio/{id}',                   [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'update']);
+    Route::patch('catalogos-precio/{id}/toggle',            [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'toggle']);
+    Route::delete('catalogos-precio/{id}',                  [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'destroy']);
+    Route::get('catalogos-precio/{id}/lineas',              [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'lineas']);
+    Route::post('catalogos-precio/{id}/lineas',             [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'storeLinea']);
+    Route::patch('catalogos-precio/{id}/lineas/{lineaId}',  [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'updateLinea']);
+    Route::delete('catalogos-precio/{id}/lineas/{lineaId}', [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'destroyLinea']);
+    Route::get('catalogos-precio/{id}/para-orden',          [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'paraOrden']);
 });

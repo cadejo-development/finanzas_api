@@ -13,6 +13,7 @@ class VentaCliente extends Model
         'brilo_id', 'nombres', 'nom_comercial', 'nit', 'registro_iva',
         'email', 'telefono', 'direccion', 'exento',
         'plazo_credito', 'limite_credito', 'brilo_status', 'brilo_vendedor_id', 'activo',
+        'catalogo_precio_id',
     ];
 
     protected $casts = [
@@ -21,6 +22,11 @@ class VentaCliente extends Model
         'limite_credito' => 'float',
         'plazo_credito' => 'integer',
     ];
+
+    public function catalogoPrecio()
+    {
+        return $this->belongsTo(VentaCatalogoPrecio::class, 'catalogo_precio_id');
+    }
 
     public function ordenes()
     {
