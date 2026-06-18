@@ -245,6 +245,32 @@ class IngresoPersonalController extends RRHHBaseController
             } catch (\Throwable $e) {
                 Log::warning('IngresoPersonal: error notificando resultado período', ['error' => $e->getMessage()]);
             }
+
+            // Notificar a admins RRHH sobre la decisión de contratación (AP)
+            if (in_array($validated['estado'], ['aprobado', 'no_aprobado'])) {
+                try {
+                    $tipoAP  = $validated['estado'] === 'aprobado'
+                        ? 'AP de Contratacion — Contrato Indefinido'
+                        : 'AP de No Contratacion — Fin de Periodo de Prueba';
+                    $mensaje = $validated['estado'] === 'aprobado'
+                        ? "El período de prueba fue aprobado. Proceder con la emisión del contrato indefinido a partir del día siguiente."
+                        : "El período de prueba no fue aprobado. Proceder con la notificación formal al colaborador.";
+                    $this->notificarAdminsRrhh(
+                        tipo:           $tipoAP,
+                        empleadoNombre: $ingreso->empleado_nombre,
+                        detalles: array_filter([
+                            'Cargo'          => $ingreso->cargo_nombre,
+                            'Sucursal'       => $ingreso->sucursal_nombre,
+                            'Fin de periodo' => $periodo->fecha_fin_estimada?->toDateString(),
+                            'Comentarios'    => $validated['comentarios'] ?? null,
+                            'Acción'         => $mensaje,
+                        ]),
+                        rutaFrontend: "ingresos-personal?ver={$ingreso->id}",
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('IngresoPersonal: error notificando AP contratación', ['error' => $e->getMessage()]);
+                }
+            }
         }
 
         $ingreso->load('periodoPrueba');

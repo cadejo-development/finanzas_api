@@ -74,6 +74,26 @@ class AlertasPeriodoPrueba extends Command
             $total++;
         }
 
+        // ── 2b. Alerta 3 días antes — decisión de contratación ───────────────
+        $en3 = now()->addDays(3)->toDateString();
+        $periodos3 = PeriodoPrueba::where('estado', 'en_prueba')
+            ->where('fecha_fin_estimada', $en3)
+            ->where('alerta_3_enviada', false)
+            ->get();
+
+        foreach ($periodos3 as $p) {
+            $this->line("  [3d] Empleado #{$p->empleado_id} — vence {$p->fecha_fin_estimada}");
+            if (!$dryRun) {
+                $this->enviarAlertaAdmins(
+                    $p,
+                    'Periodo de Prueba — Decision de Contratacion (3 dias)',
+                    "El período de prueba vence en 3 días. Confirma si el colaborador será contratado (contrato indefinido) o si no continuará. Ingresa al sistema para registrar tu decisión."
+                );
+                $p->update(['alerta_3_enviada' => true]);
+            }
+            $total++;
+        }
+
         // ── 3. Sin evaluación al vencer ──────────────────────────────────────
         $vencidos = PeriodoPrueba::where('estado', 'en_prueba')
             ->where('fecha_fin_estimada', '<', $hoy)

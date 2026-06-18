@@ -47,6 +47,9 @@ use App\Http\Controllers\Api\GeoController;
 use App\Http\Controllers\Api\Compras\MenuPublicoController;
 use App\Http\Controllers\Api\RRHH\IngresoQRController;
 use App\Http\Controllers\Api\RRHH\IngresoPersonalController;
+use App\Http\Controllers\Api\RRHH\TipoContratoController;
+use App\Http\Controllers\Api\RRHH\PlantillaContratoController;
+use App\Http\Controllers\Api\RRHH\ContratoEmpleadoController;
 
 // ─── Geo catálogos El Salvador (público, sin auth) ────────────────────────
 Route::prefix('geo')->group(function () {
@@ -400,6 +403,14 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::patch('ingresos/{id}/confirmacion',              [IngresoPersonalController::class, 'confirmar']);
     Route::patch('ingresos/{id}/periodo-prueba',            [IngresoPersonalController::class, 'actualizarPeriodoPrueba']);
 
+    // Contratos por ingreso
+    Route::get('ingresos/{ingresoId}/contratos',            [ContratoEmpleadoController::class, 'porIngreso']);
+    Route::post('ingresos/{ingresoId}/contratos',           [ContratoEmpleadoController::class, 'store']);
+
+    // Contratos — acciones individuales
+    Route::patch('contratos/{id}/estado',                   [ContratoEmpleadoController::class, 'actualizarEstado']);
+    Route::get('contratos/{id}/preview',                    [ContratoEmpleadoController::class, 'preview']);
+
     // Desvinculaciones (despidos + renuncias, filtrar por ?tipo=despido|renuncia)
     Route::get('desvinculaciones',                  [DesvinculacionesController::class, 'index']);
     Route::post('desvinculaciones',                 [DesvinculacionesController::class, 'store']);
@@ -526,6 +537,21 @@ Route::prefix('rrhh/planillas')->middleware(['auth:sanctum', 'role:rrhh_admin'])
     Route::post('mantenimiento/ordenes',            [MantenimientoPlanillaController::class, 'storeOrden']);
     Route::put('mantenimiento/ordenes/{id}',        [MantenimientoPlanillaController::class, 'updateOrden']);
     Route::delete('mantenimiento/ordenes/{id}',     [MantenimientoPlanillaController::class, 'deleteOrden']);
+
+    // Tipos de contrato
+    Route::get('mantenimiento/contratos/tipos',             [TipoContratoController::class, 'index']);
+    Route::post('mantenimiento/contratos/tipos',            [TipoContratoController::class, 'store']);
+    Route::put('mantenimiento/contratos/tipos/{id}',        [TipoContratoController::class, 'update']);
+    Route::patch('mantenimiento/contratos/tipos/{id}/toggle',[TipoContratoController::class, 'toggle']);
+    Route::delete('mantenimiento/contratos/tipos/{id}',     [TipoContratoController::class, 'destroy']);
+
+    // Plantillas de contrato
+    Route::get('mantenimiento/contratos/plantillas',             [PlantillaContratoController::class, 'index']);
+    Route::post('mantenimiento/contratos/plantillas',            [PlantillaContratoController::class, 'store']);
+    Route::get('mantenimiento/contratos/plantillas/{id}',        [PlantillaContratoController::class, 'show']);
+    Route::put('mantenimiento/contratos/plantillas/{id}',        [PlantillaContratoController::class, 'update']);
+    Route::patch('mantenimiento/contratos/plantillas/{id}/toggle',[PlantillaContratoController::class, 'toggle']);
+    Route::delete('mantenimiento/contratos/plantillas/{id}',     [PlantillaContratoController::class, 'destroy']);
 
     // Generar ANTES de {id} para evitar que "generar" sea interpretado como {id}
     Route::post('generar',                          [PlanillasController::class, 'generar']);

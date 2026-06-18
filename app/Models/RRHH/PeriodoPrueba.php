@@ -10,14 +10,14 @@ class PeriodoPrueba extends Model
     protected $table      = 'periodos_prueba';
 
     const ESTADOS = ['en_prueba', 'aprobado', 'no_aprobado', 'renuncia', 'desvinculado'];
-    const DIAS_DEFAULT = 90;
+    const DIAS_DEFAULT = 30;
 
     protected $fillable = [
         'ingreso_id', 'empleado_id',
         'fecha_inicio', 'fecha_fin_estimada', 'responsable_id',
         'estado', 'comentarios',
         'evaluado_en', 'evaluado_por_id',
-        'alerta_15_enviada', 'alerta_7_enviada', 'alerta_sin_eval_enviada',
+        'alerta_15_enviada', 'alerta_7_enviada', 'alerta_3_enviada', 'alerta_sin_eval_enviada',
         'aud_usuario',
     ];
 
@@ -27,6 +27,7 @@ class PeriodoPrueba extends Model
         'evaluado_en'            => 'datetime',
         'alerta_15_enviada'      => 'boolean',
         'alerta_7_enviada'       => 'boolean',
+        'alerta_3_enviada'       => 'boolean',
         'alerta_sin_eval_enviada'=> 'boolean',
     ];
 
