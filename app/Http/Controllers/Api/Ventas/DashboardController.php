@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Ventas;
 use App\Http\Controllers\Controller;
 use App\Models\Ventas\VentaOrden;
 use App\Models\Ventas\VentaAprobacion;
+use App\Models\Ventas\VentaCliente;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
@@ -49,6 +50,21 @@ class DashboardController extends Controller
             ->limit(10)
             ->get();
 
+        // Top 5 clientes por ventas este mes
+        $topClientes = DB::connection('compras')
+            ->table('ventas_ordenes as o')
+            ->join('ventas_clientes as c', 'c.id', '=', 'o.cliente_id')
+            ->whereBetween('o.created_at', [$inicioMes, $finMes])
+            ->whereIn('o.estado', ['aprobada', 'completada'])
+            ->selectRaw('c.id, c.nombres, c.nom_comercial, SUM(o.total) as total, COUNT(o.id) as num_ordenes')
+            ->groupBy('c.id', 'c.nombres', 'c.nom_comercial')
+            ->orderByDesc('total')
+            ->limit(5)
+            ->get();
+
+        // Clientes nuevos este mes
+        $clientesNuevos = VentaCliente::whereBetween('created_at', [$inicioMes, $finMes])->count();
+
         // Últimas 5 órdenes
         $ultimasOrdenes = VentaOrden::with('cliente')
             ->latest()
@@ -83,6 +99,8 @@ class DashboardController extends Controller
             'aprobaciones_pendientes' => $aprobacionesPendientes,
             'ventas_por_producto'     => $ventasPorProducto,
             'ultimas_ordenes'         => $ultimasOrdenes,
+            'top_clientes'            => $topClientes,
+            'clientes_nuevos'         => $clientesNuevos,
         ]);
     }
 }

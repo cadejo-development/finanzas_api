@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Ventas;
 
 use App\Http\Controllers\Controller;
 use App\Models\Ventas\VentaAprobacion;
+use App\Models\Ventas\VentaCliente;
 use App\Models\Ventas\VentaOrden;
 use Illuminate\Http\Request;
 
@@ -45,6 +46,18 @@ class AprobacionesController extends Controller
                 'aprobado_por' => $data['resuelto_por'],
                 'aprobado_at'  => now(),
             ]);
+        }
+
+        // Aplicar cambios de datos de cliente si fue aprobado
+        if ($aprobacion->tipo === 'cambio_cliente' && $aprobacion->cliente_id && $data['estado'] === 'aprobado') {
+            $detalle = json_decode($aprobacion->detalle, true);
+            if (isset($detalle['datos'])) {
+                $allowed  = ['nombres','nom_comercial','nit','registro_iva','email','telefono','direccion','exento','plazo_credito','limite_credito','catalogo_precio_id'];
+                $toUpdate = array_intersect_key($detalle['datos'], array_flip($allowed));
+                if (!empty($toUpdate)) {
+                    VentaCliente::where('id', $aprobacion->cliente_id)->update($toUpdate);
+                }
+            }
         }
 
         return response()->json($this->format($aprobacion->fresh(['orden.cliente', 'cliente'])));
