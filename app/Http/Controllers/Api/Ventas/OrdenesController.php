@@ -43,9 +43,12 @@ class OrdenesController extends Controller
         $data = $request->validate([
             'cliente_id'         => 'required|integer',
             'tipo_venta'         => 'required|in:contado,credito',
+            'tipo_orden'         => 'nullable|in:normal,autoconsumo',
+            'sub_ceco'           => 'nullable|string|max:100',
             'plazo_solicitado'   => 'integer|min:0',
             'notas'              => 'nullable|string',
             'creado_por'         => 'nullable|string',
+            'tipo_aprobacion'    => 'nullable|string',
             'fecha_facturacion'  => "nullable|date|after_or_equal:{$today}",
             'fecha_entrega'      => "nullable|date|after_or_equal:{$today}",
             'items'              => 'required|array|min:1',
@@ -54,7 +57,9 @@ class OrdenesController extends Controller
             'items.*.precio_unitario'=> 'required|numeric|min:0',
         ]);
 
-        DB::connection('compras')->transaction(function () use ($data, $today, &$orden) {
+        $esAutoconsumo = ($data['tipo_orden'] ?? 'normal') === 'autoconsumo';
+
+        DB::connection('compras')->transaction(function () use ($data, $today, $esAutoconsumo, &$orden) {
             $subtotal = 0;
             $totalIva = 0;
 
@@ -86,7 +91,15 @@ class OrdenesController extends Controller
             $tipoAprobacion   = null;
             $detalleAprobacion = null;
 
-            if ($data['tipo_venta'] === 'credito') {
+            // Autoconsumo → siempre aprobado, sin flujo de crédito
+            if ($esAutoconsumo) {
+                $estado = 'aprobada';
+            } elseif (isset($data['tipo_aprobacion']) && $data['tipo_aprobacion'] === 'cambio_precio') {
+                // Vendedor modificó precio de catálogo → aprobación de jefe
+                $estado            = 'pendiente_aprobacion';
+                $tipoAprobacion    = 'cambio_precio';
+                $detalleAprobacion = 'Vendedor modificó precios respecto al catálogo asignado al cliente.';
+            } elseif ($data['tipo_venta'] === 'credito') {
                 if (!$clienteTieneCredito) {
                     // Cliente contado solicitando crédito
                     $estado          = 'pendiente_aprobacion';
@@ -113,8 +126,10 @@ class OrdenesController extends Controller
 
             $orden = VentaOrden::create([
                 'cliente_id'        => $data['cliente_id'],
-                'tipo_venta'        => $data['tipo_venta'],
-                'plazo_solicitado'  => $data['plazo_solicitado'] ?? 0,
+                'tipo_venta'        => $esAutoconsumo ? 'contado' : $data['tipo_venta'],
+                'tipo_orden'        => $data['tipo_orden'] ?? 'normal',
+                'sub_ceco'          => $data['sub_ceco'] ?? null,
+                'plazo_solicitado'  => $esAutoconsumo ? 0 : ($data['plazo_solicitado'] ?? 0),
                 'estado'            => $estado,
                 'subtotal'          => $subtotal,
                 'total_iva'         => $totalIva,
@@ -169,8 +184,10 @@ class OrdenesController extends Controller
     {
         return [
             'id'                => $o->id,
-            'cliente'           => $o->cliente ? ['id' => $o->cliente->id, 'nombres' => $o->cliente->nombres, 'nom_comercial' => $o->cliente->nom_comercial] : null,
+            'cliente'           => $o->cliente ? ['id' => $o->cliente->id, 'nombres' => $o->cliente->nombres, 'nom_comercial' => $o->cliente->nom_comercial, 'limite_credito' => $o->cliente->limite_credito, 'plazo_credito' => $o->cliente->plazo_credito] : null,
             'tipo_venta'        => $o->tipo_venta,
+            'tipo_orden'        => $o->tipo_orden ?? 'normal',
+            'sub_ceco'          => $o->sub_ceco,
             'plazo_solicitado'  => $o->plazo_solicitado,
             'estado'            => $o->estado,
             'subtotal'          => $o->subtotal,

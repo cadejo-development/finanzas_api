@@ -10,7 +10,7 @@ class VentaProducto extends Model
     protected $table = 'ventas_productos';
 
     protected $fillable = [
-        'brilo_id', 'codigo', 'nombre', 'exento', 'precio',
+        'brilo_id', 'codigo', 'nombre', 'exento', 'precio', 'costo',
         'existencias', 'bodega', 'bodega_id', 'activo',
     ];
 

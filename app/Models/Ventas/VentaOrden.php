@@ -10,7 +10,7 @@ class VentaOrden extends Model
     protected $table = 'ventas_ordenes';
 
     protected $fillable = [
-        'cliente_id', 'tipo_venta', 'plazo_solicitado', 'estado',
+        'cliente_id', 'tipo_venta', 'tipo_orden', 'sub_ceco', 'plazo_solicitado', 'estado',
         'subtotal', 'total_iva', 'total', 'notas', 'creado_por',
         'aprobado_por', 'aprobado_at',
         'fecha_facturacion', 'fecha_entrega',

@@ -622,6 +622,12 @@ Route::prefix('cadejo-ventas')->group(function () {
     // Exportación
     Route::get('ordenes/{id}/export/excel',  [\App\Http\Controllers\Api\Ventas\ExportController::class, 'ordenExcel']);
 
+    // Devoluciones / Cambios
+    Route::get('devoluciones',               [\App\Http\Controllers\Api\Ventas\DevolucionesController::class, 'index']);
+    Route::post('devoluciones',              [\App\Http\Controllers\Api\Ventas\DevolucionesController::class, 'store']);
+    Route::get('devoluciones/{id}',          [\App\Http\Controllers\Api\Ventas\DevolucionesController::class, 'show']);
+    Route::patch('devoluciones/{id}/estado', [\App\Http\Controllers\Api\Ventas\DevolucionesController::class, 'update']);
+
     // Catálogos de precios
     Route::get('catalogos-precio',                          [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'index']);
     Route::post('catalogos-precio',                         [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'store']);

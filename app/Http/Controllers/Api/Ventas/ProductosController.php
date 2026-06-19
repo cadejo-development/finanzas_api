@@ -38,6 +38,7 @@ class ProductosController extends Controller
             'nombre'      => $p->nombre,
             'exento'      => $p->exento,
             'precio'      => $p->precio,
+            'costo'       => $p->costo,
             'existencias' => $p->existencias,
             'bodega'      => $p->bodega,
             'bodega_id'   => $p->bodega_id,
