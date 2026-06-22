@@ -30,7 +30,13 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        if (! $user || ! Hash::check($request->password, $user->password)) {
+        $passwordValid = false;
+        try {
+            $passwordValid = $user && Hash::check($request->password, $user->password);
+        } catch (\RuntimeException) {
+            // Hash con formato no soportado por el driver activo (ej: $2b$ de bcryptjs)
+        }
+        if (! $passwordValid) {
             throw ValidationException::withMessages([
                 'email' => ['Las credenciales proporcionadas son incorrectas.'],
             ]);
@@ -115,7 +121,15 @@ class AuthController extends Controller
                 'permisos'              => $permisos,
                 'centros_costo'         => $centrosCosto,
                 'is_portal_admin'       => $user->hasRole('portal_admin'),
-                'force_password_change' => $user->force_password_change || Hash::check('C@dejo2026', $user->password) || Hash::check('Cadejo2026', $user->password),
+                'force_password_change' => (function () use ($user): bool {
+                    try {
+                        return $user->force_password_change
+                            || Hash::check('C@dejo2026', $user->password)
+                            || Hash::check('Cadejo2026', $user->password);
+                    } catch (\RuntimeException) {
+                        return true; // Hash no reconocido → forzar cambio de contraseña
+                    }
+                })(),
                 'empleado_id'           => $empleadoId,
                 'departamento_codigo'   => $departamentoCodigo,
             ],
