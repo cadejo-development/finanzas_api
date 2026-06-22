@@ -185,9 +185,14 @@ class PermisosController extends RRHHBaseController
                 return response()->json(['success' => false, 'message' => 'Los Días Cadejo deben solicitarse con al menos 5 días hábiles de anticipación.'], 422);
             }
 
-            // Saldo disponible
-            $empleadoData   = $this->enrichWithEmpleadoData([['empleado_id' => $validated['empleado_id']]]);
-            $mesesAntiguedad = $empleadoData[0]['meses_antiguedad'] ?? 0;
+            // Saldo disponible — calcular meses directamente desde fecha_ingreso
+            $empFecha = \Illuminate\Support\Facades\DB::connection('pgsql')
+                ->table('empleados')
+                ->where('id', $validated['empleado_id'])
+                ->value('fecha_ingreso');
+            $mesesAntiguedad = $empFecha
+                ? (int) \Carbon\Carbon::parse($empFecha)->diffInMonths(now())
+                : 0;
             $diasSolicitados = (float) ($validated['dias'] ?? 1);
             $errorSaldo = SaldoCadejoService::validar(
                 $validated['empleado_id'],
