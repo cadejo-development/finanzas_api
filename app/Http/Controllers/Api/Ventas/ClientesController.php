@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Ventas\VentaCliente;
 use App\Models\Ventas\VentaAprobacion;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ClientesController extends Controller
 {
@@ -32,15 +33,41 @@ class ClientesController extends Controller
 
         $clientes = $q->orderBy('nombres')->paginate(50);
 
-        $clientes->getCollection()->transform(fn($c) => $this->format($c));
+        // Calcular avg_dias_pago en un solo query para todos los clientes de la página
+        $ids       = $clientes->pluck('id')->toArray();
+        $pagStats  = DB::connection('compras')
+            ->table('ventas_pagos as p')
+            ->join('ventas_ordenes as o', 'o.id', '=', 'p.orden_id')
+            ->whereIn('o.cliente_id', $ids)
+            ->selectRaw('o.cliente_id, ROUND(AVG(DATEDIFF(p.fecha, DATE(o.created_at))), 0) as avg_dias, COUNT(DISTINCT o.id) as ord_pagadas')
+            ->groupBy('o.cliente_id')
+            ->get()
+            ->keyBy('cliente_id');
+
+        $clientes->getCollection()->transform(function ($c) use ($pagStats) {
+            $st = $pagStats[$c->id] ?? null;
+            return array_merge($this->format($c), [
+                'avg_dias_pago'   => $st ? (int) $st->avg_dias   : null,
+                'ordenes_pagadas' => $st ? (int) $st->ord_pagadas : 0,
+            ]);
+        });
 
         return response()->json($clientes);
     }
 
     public function show($id)
     {
-        $c = VentaCliente::with('catalogoPrecio')->findOrFail($id);
-        return response()->json($this->format($c));
+        $c     = VentaCliente::with('catalogoPrecio')->findOrFail($id);
+        $st    = DB::connection('compras')
+            ->table('ventas_pagos as p')
+            ->join('ventas_ordenes as o', 'o.id', '=', 'p.orden_id')
+            ->where('o.cliente_id', $id)
+            ->selectRaw('ROUND(AVG(DATEDIFF(p.fecha, DATE(o.created_at))), 0) as avg_dias, COUNT(DISTINCT o.id) as ord_pagadas')
+            ->first();
+        return response()->json(array_merge($this->format($c), [
+            'avg_dias_pago'   => $st?->avg_dias   ? (int) $st->avg_dias   : null,
+            'ordenes_pagadas' => $st?->ord_pagadas ? (int) $st->ord_pagadas : 0,
+        ]));
     }
 
     public function store(Request $request)

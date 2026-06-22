@@ -128,6 +128,63 @@ class CatalogosPrecioController extends Controller
         return response()->json(null, 204);
     }
 
+    // POST /catalogos-precio/{id}/ajuste-masivo
+    public function ajusteMasivo(Request $request, $id)
+    {
+        $data = $request->validate([
+            'tipo'  => 'required|in:porcentaje,monto_fijo',
+            'valor' => 'required|numeric|min:0',
+            'subir' => 'boolean',
+        ]);
+
+        $catalogo = VentaCatalogoPrecio::findOrFail($id);
+        $lineas   = VentaCatalogoPrecioLinea::where('catalogo_id', $id)->get();
+        $subir    = $data['subir'] ?? true;
+
+        foreach ($lineas as $linea) {
+            if ($data['tipo'] === 'porcentaje') {
+                $factor   = $subir ? (1 + $data['valor'] / 100) : max(0, 1 - $data['valor'] / 100);
+                $nuevaSin = round($linea->precio_sin_iva * $factor, 4);
+                $nuevaCon = round($linea->precio_con_iva * $factor, 4);
+            } else {
+                $nuevaSin = $subir
+                    ? round($linea->precio_sin_iva + $data['valor'], 4)
+                    : round(max(0, $linea->precio_sin_iva - $data['valor']), 4);
+                $nuevaCon = round($nuevaSin * 1.13, 4);
+            }
+            $linea->update(['precio_sin_iva' => $nuevaSin, 'precio_con_iva' => $nuevaCon]);
+        }
+
+        $catalogo->touch();
+        return response()->json([
+            'message'        => "Ajuste aplicado a {$lineas->count()} productos",
+            'lineas_updated' => $lineas->count(),
+        ]);
+    }
+
+    // PATCH /catalogos-precio/{id}/lineas/batch
+    public function batchUpdate(Request $request, $id)
+    {
+        VentaCatalogoPrecio::findOrFail($id);
+
+        $data = $request->validate([
+            'lineas'                  => 'required|array',
+            'lineas.*.id'             => 'required|integer',
+            'lineas.*.precio_sin_iva' => 'required|numeric|min:0',
+            'lineas.*.precio_con_iva' => 'required|numeric|min:0',
+        ]);
+
+        foreach ($data['lineas'] as $l) {
+            VentaCatalogoPrecioLinea::where('catalogo_id', $id)
+                ->where('id', $l['id'])
+                ->update(['precio_sin_iva' => $l['precio_sin_iva'], 'precio_con_iva' => $l['precio_con_iva']]);
+        }
+
+        VentaCatalogoPrecio::where('id', $id)->touch();
+
+        return response()->json(['message' => 'Precios actualizados', 'updated' => count($data['lineas'])]);
+    }
+
     // GET /catalogos-precio/{id}/para-orden  (devuelve lineas indexadas por producto_id para lookup rápido)
     public function paraOrden($id)
     {

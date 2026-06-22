@@ -611,10 +611,17 @@ Route::prefix('cadejo-ventas')->group(function () {
     Route::get('productos', [\App\Http\Controllers\Api\Ventas\ProductosController::class, 'index']);
 
     // Órdenes
-    Route::get('ordenes',         [\App\Http\Controllers\Api\Ventas\OrdenesController::class, 'index']);
-    Route::post('ordenes',        [\App\Http\Controllers\Api\Ventas\OrdenesController::class, 'store']);
-    Route::get('ordenes/{id}',    [\App\Http\Controllers\Api\Ventas\OrdenesController::class, 'show']);
-    Route::patch('ordenes/{id}',  [\App\Http\Controllers\Api\Ventas\OrdenesController::class, 'update']);
+    Route::get('ordenes',                     [\App\Http\Controllers\Api\Ventas\OrdenesController::class, 'index']);
+    Route::post('ordenes',                    [\App\Http\Controllers\Api\Ventas\OrdenesController::class, 'store']);
+    Route::get('ordenes/{id}',                [\App\Http\Controllers\Api\Ventas\OrdenesController::class, 'show']);
+    Route::patch('ordenes/{id}',              [\App\Http\Controllers\Api\Ventas\OrdenesController::class, 'update']);
+    Route::patch('ordenes/{id}/despachar',    [\App\Http\Controllers\Api\Ventas\OrdenesController::class, 'marcarDespachada']);
+    Route::patch('ordenes/{id}/facturar',     [\App\Http\Controllers\Api\Ventas\OrdenesController::class, 'marcarFacturado']);
+
+    // Pagos de órdenes
+    Route::get('ordenes/{id}/pagos',          [\App\Http\Controllers\Api\Ventas\PagosController::class, 'index']);
+    Route::post('ordenes/{id}/pagos',         [\App\Http\Controllers\Api\Ventas\PagosController::class, 'store']);
+    Route::delete('ordenes/{id}/pagos/{pid}', [\App\Http\Controllers\Api\Ventas\PagosController::class, 'destroy']);
 
     // Aprobaciones
     Route::get('aprobaciones',               [\App\Http\Controllers\Api\Ventas\AprobacionesController::class, 'index']);
@@ -622,12 +629,21 @@ Route::prefix('cadejo-ventas')->group(function () {
 
     // Exportación
     Route::get('ordenes/{id}/export/excel',  [\App\Http\Controllers\Api\Ventas\ExportController::class, 'ordenExcel']);
+    Route::get('export/brilo-facturas',      [\App\Http\Controllers\Api\Ventas\ExportController::class, 'briloFacturas']);
+    Route::get('export/brilo-clientes',      [\App\Http\Controllers\Api\Ventas\ExportController::class, 'briloClientes']);
+    Route::get('export/contabilidad-csv',    [\App\Http\Controllers\Api\Ventas\ExportController::class, 'contabilidadCsv']);
 
     // Devoluciones / Cambios
     Route::get('devoluciones',               [\App\Http\Controllers\Api\Ventas\DevolucionesController::class, 'index']);
     Route::post('devoluciones',              [\App\Http\Controllers\Api\Ventas\DevolucionesController::class, 'store']);
     Route::get('devoluciones/{id}',          [\App\Http\Controllers\Api\Ventas\DevolucionesController::class, 'show']);
     Route::patch('devoluciones/{id}/estado', [\App\Http\Controllers\Api\Ventas\DevolucionesController::class, 'update']);
+
+    // Documentos de clientes
+    Route::get('clientes/{id}/documentos',          [\App\Http\Controllers\Api\Ventas\ClienteDocumentosController::class, 'index']);
+    Route::post('clientes/{id}/documentos',         [\App\Http\Controllers\Api\Ventas\ClienteDocumentosController::class, 'store']);
+    Route::get('clientes/{id}/documentos/{did}',    [\App\Http\Controllers\Api\Ventas\ClienteDocumentosController::class, 'download']);
+    Route::delete('clientes/{id}/documentos/{did}', [\App\Http\Controllers\Api\Ventas\ClienteDocumentosController::class, 'destroy']);
 
     // Catálogos de precios
     Route::get('catalogos-precio',                          [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'index']);
@@ -640,4 +656,6 @@ Route::prefix('cadejo-ventas')->group(function () {
     Route::patch('catalogos-precio/{id}/lineas/{lineaId}',  [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'updateLinea']);
     Route::delete('catalogos-precio/{id}/lineas/{lineaId}', [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'destroyLinea']);
     Route::get('catalogos-precio/{id}/para-orden',          [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'paraOrden']);
+    Route::post('catalogos-precio/{id}/ajuste-masivo',      [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'ajusteMasivo']);
+    Route::patch('catalogos-precio/{id}/lineas/batch',      [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'batchUpdate']);
 });
