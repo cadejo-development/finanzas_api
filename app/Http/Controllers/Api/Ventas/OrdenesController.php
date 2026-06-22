@@ -8,6 +8,7 @@ use App\Models\Ventas\VentaOrdenItem;
 use App\Models\Ventas\VentaAprobacion;
 use App\Models\Ventas\VentaCliente;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class OrdenesController extends Controller
@@ -22,6 +23,27 @@ class OrdenesController extends Controller
 
         if ($request->filled('cliente_id')) {
             $q->where('cliente_id', $request->cliente_id);
+        }
+
+        if ($request->filled('busqueda')) {
+            $s = $request->busqueda;
+            $q->whereHas('cliente', fn($cq) =>
+                $cq->where('nombres', 'like', "%{$s}%")
+                   ->orWhere('nom_comercial', 'like', "%{$s}%")
+                   ->orWhere('nit', 'like', "%{$s}%")
+            );
+        }
+
+        if ($request->filled('fecha_desde')) {
+            $q->whereDate('created_at', '>=', $request->fecha_desde);
+        }
+
+        if ($request->filled('fecha_hasta')) {
+            $q->whereDate('created_at', '<=', $request->fecha_hasta);
+        }
+
+        if ($request->filled('tipo_documento')) {
+            $q->where('tipo_documento', $request->tipo_documento);
         }
 
         $ordenes = $q->paginate(30);
@@ -43,6 +65,7 @@ class OrdenesController extends Controller
         $data = $request->validate([
             'cliente_id'         => 'required|integer',
             'tipo_venta'         => 'required|in:contado,credito',
+            'tipo_documento'     => 'nullable|in:ccf,cf',
             'tipo_orden'         => 'nullable|in:normal,autoconsumo',
             'sub_ceco'           => 'nullable|string|max:100',
             'plazo_solicitado'   => 'integer|min:0',
@@ -59,6 +82,7 @@ class OrdenesController extends Controller
 
         $esAutoconsumo = ($data['tipo_orden'] ?? 'normal') === 'autoconsumo';
 
+        $orden = new VentaOrden();
         DB::connection('compras')->transaction(function () use ($data, $today, $esAutoconsumo, &$orden) {
             $subtotal = 0;
             $totalIva = 0;
@@ -86,27 +110,22 @@ class OrdenesController extends Controller
             $cliente    = VentaCliente::findOrFail($data['cliente_id']);
             $clienteTieneCredito = $cliente->limite_credito > 0;
 
-            // ── Determinar estado y si necesita aprobación ────────────────────
             $estado           = 'aprobada';
             $tipoAprobacion   = null;
             $detalleAprobacion = null;
 
-            // Autoconsumo → siempre aprobado, sin flujo de crédito
             if ($esAutoconsumo) {
                 $estado = 'aprobada';
             } elseif (isset($data['tipo_aprobacion']) && $data['tipo_aprobacion'] === 'cambio_precio') {
-                // Vendedor modificó precio de catálogo → aprobación de jefe
                 $estado            = 'pendiente_aprobacion';
                 $tipoAprobacion    = 'cambio_precio';
                 $detalleAprobacion = 'Vendedor modificó precios respecto al catálogo asignado al cliente.';
             } elseif ($data['tipo_venta'] === 'credito') {
                 if (!$clienteTieneCredito) {
-                    // Cliente contado solicitando crédito
                     $estado          = 'pendiente_aprobacion';
                     $tipoAprobacion  = 'cambio_credito';
                     $detalleAprobacion = "Cliente contado solicita venta a crédito.";
                 } else {
-                    // Cliente con crédito — verificar límite y plazo
                     $totalAcumulado = VentaOrden::where('cliente_id', $cliente->id)
                         ->whereIn('estado', ['aprobada', 'pendiente_aprobacion'])
                         ->sum('total');
@@ -122,11 +141,11 @@ class OrdenesController extends Controller
                     }
                 }
             }
-            // contado (cualquier cliente) → aprobada directamente
 
             $orden = VentaOrden::create([
                 'cliente_id'        => $data['cliente_id'],
                 'tipo_venta'        => $esAutoconsumo ? 'contado' : $data['tipo_venta'],
+                'tipo_documento'    => $data['tipo_documento'] ?? 'ccf',
                 'tipo_orden'        => $data['tipo_orden'] ?? 'normal',
                 'sub_ceco'          => $data['sub_ceco'] ?? null,
                 'plazo_solicitado'  => $esAutoconsumo ? 0 : ($data['plazo_solicitado'] ?? 0),
@@ -167,7 +186,7 @@ class OrdenesController extends Controller
         $orden = VentaOrden::findOrFail($id);
 
         $data = $request->validate([
-            'estado'        => 'sometimes|in:borrador,pendiente_aprobacion,aprobada,rechazada,completada',
+            'estado'        => 'sometimes|in:borrador,pendiente_aprobacion,aprobada,rechazada,completada,despachada',
             'notas'         => 'nullable|string',
             'aprobado_por'  => 'nullable|string',
         ]);
@@ -180,12 +199,49 @@ class OrdenesController extends Controller
         return response()->json($this->format($orden->fresh('cliente')));
     }
 
+    public function marcarDespachada(Request $request, $id)
+    {
+        $orden = VentaOrden::findOrFail($id);
+
+        if (!in_array($orden->estado, ['aprobada'])) {
+            return response()->json(['message' => 'Solo se pueden despachar órdenes aprobadas.'], 422);
+        }
+
+        $orden->update([
+            'estado'         => 'despachada',
+            'despachada_at'  => now(),
+            'despachada_por' => $request->input('despachada_por') ?? Auth::user()?->email,
+        ]);
+
+        return response()->json($this->format($orden->fresh('cliente')));
+    }
+
+    public function marcarFacturado(Request $request, $id)
+    {
+        $orden = VentaOrden::findOrFail($id);
+
+        $orden->update([
+            'facturado'     => true,
+            'facturado_por' => $request->input('facturado_por') ?? Auth::user()?->email,
+            'facturado_at'  => now(),
+        ]);
+
+        return response()->json(['success' => true, 'facturado' => true]);
+    }
+
     private function format(VentaOrden $o): array
     {
         return [
             'id'                => $o->id,
-            'cliente'           => $o->cliente ? ['id' => $o->cliente->id, 'nombres' => $o->cliente->nombres, 'nom_comercial' => $o->cliente->nom_comercial, 'limite_credito' => $o->cliente->limite_credito, 'plazo_credito' => $o->cliente->plazo_credito] : null,
+            'cliente'           => $o->cliente ? [
+                'id' => $o->cliente->id, 'nombres' => $o->cliente->nombres,
+                'nom_comercial' => $o->cliente->nom_comercial,
+                'nit' => $o->cliente->nit,
+                'limite_credito' => $o->cliente->limite_credito,
+                'plazo_credito' => $o->cliente->plazo_credito,
+            ] : null,
             'tipo_venta'        => $o->tipo_venta,
+            'tipo_documento'    => $o->tipo_documento ?? 'ccf',
             'tipo_orden'        => $o->tipo_orden ?? 'normal',
             'sub_ceco'          => $o->sub_ceco,
             'plazo_solicitado'  => $o->plazo_solicitado,
@@ -195,6 +251,13 @@ class OrdenesController extends Controller
             'total'             => $o->total,
             'notas'             => $o->notas,
             'creado_por'        => $o->creado_por,
+            'aprobado_por'      => $o->aprobado_por,
+            'aprobado_at'       => $o->aprobado_at?->toDateTimeString(),
+            'despachada_at'     => $o->despachada_at?->toDateTimeString(),
+            'despachada_por'    => $o->despachada_por,
+            'facturado'         => (bool) ($o->facturado ?? false),
+            'facturado_por'     => $o->facturado_por,
+            'facturado_at'      => $o->facturado_at?->toDateTimeString(),
             'fecha_facturacion' => $o->fecha_facturacion?->toDateString(),
             'fecha_entrega'     => $o->fecha_entrega?->toDateString(),
             'created_at'        => $o->created_at?->toDateTimeString(),

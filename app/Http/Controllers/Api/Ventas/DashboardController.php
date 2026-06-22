@@ -79,6 +79,25 @@ class DashboardController extends Controller
                 'created_at' => $o->created_at?->toDateTimeString(),
             ]);
 
+        // ── Aging de créditos vencidos ────────────────────────────────────────
+        // Fecha de vencimiento = created_at + plazo_solicitado días
+        $hoy = now()->toDateString();
+
+        $creditosVivos = VentaOrden::where('tipo_venta', 'credito')
+            ->whereIn('estado', ['aprobada', 'despachada'])
+            ->selectRaw('id, total, created_at, plazo_solicitado,
+                DATEDIFF(CURDATE(), DATE_ADD(DATE(created_at), INTERVAL plazo_solicitado DAY)) as dias_vencido')
+            ->get();
+
+        $aging = ['corriente' => 0, 'vencido_30' => 0, 'vencido_60' => 0, 'vencido_mas' => 0];
+        foreach ($creditosVivos as $o) {
+            $dv = $o->dias_vencido ?? 0;
+            if ($dv <= 0)       $aging['corriente']   += $o->total;
+            elseif ($dv <= 30)  $aging['vencido_30']  += $o->total;
+            elseif ($dv <= 60)  $aging['vencido_60']  += $o->total;
+            else                $aging['vencido_mas']  += $o->total;
+        }
+
         return response()->json([
             'ventas_mes' => [
                 'total'       => (float) ($ventasMes->total_ventas ?? 0),
@@ -97,6 +116,12 @@ class DashboardController extends Controller
                 'monto'    => (float) ($creditosPendientes->monto ?? 0),
             ],
             'aprobaciones_pendientes' => $aprobacionesPendientes,
+            'creditos_aging' => [
+                'corriente'   => round($aging['corriente'], 2),
+                'vencido_30'  => round($aging['vencido_30'], 2),
+                'vencido_60'  => round($aging['vencido_60'], 2),
+                'vencido_mas' => round($aging['vencido_mas'], 2),
+            ],
             'ventas_por_producto'     => $ventasPorProducto,
             'ultimas_ordenes'         => $ultimasOrdenes,
             'top_clientes'            => $topClientes,
