@@ -127,6 +127,7 @@ class InventarioController extends Controller
                 'stock_actual'        => round($stockActual, 4),
                 'stock_actual_base'   => round($stockActualBase, 6),
                 'alerta'              => $alerta,
+                'activo'              => (bool) ($inv->activo ?? true),
             ]);
         }
 
@@ -343,6 +344,18 @@ class InventarioController extends Controller
         $inv->update(['seccion' => $validated['seccion'] ?? null, 'aud_usuario' => Auth::user()->email]);
 
         return response()->json(['success' => true]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PATCH /api/compras/inventario/{id}/activo
+    // Activa u oculta un producto del inventario (depuración por sucursal)
+    // ─────────────────────────────────────────────────────────────────────────
+    public function toggleActivo(int $id): JsonResponse
+    {
+        $inv = Inventario::findOrFail($id);
+        $inv->update(['activo' => ! $inv->activo, 'aud_usuario' => Auth::user()->email]);
+
+        return response()->json(['success' => true, 'activo' => (bool) $inv->activo]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
