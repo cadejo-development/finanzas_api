@@ -269,6 +269,52 @@ class AuditoriaRecetasController extends Controller
             'estado'             => $a->estado,
         ]);
 
+        // Alertas de períodos pendientes del mes actual (solo aplica cuando tipo=calidad)
+        $alertasPendientes = [];
+        if (!$tipo || $tipo === 'calidad') {
+            $hoy       = now();
+            $anio      = $hoy->year;
+            $mes       = str_pad($hoy->month, 2, '0', STR_PAD_LEFT);
+            $ultimoDia = $hoy->copy()->endOfMonth()->day;
+            $diaHoy    = $hoy->day;
+
+            $periodos = [
+                ['label' => "1–15",              'desde' => "{$anio}-{$mes}-01", 'hasta' => "{$anio}-{$mes}-15"],
+                ['label' => "16–{$ultimoDia}",   'desde' => "{$anio}-{$mes}-16", 'hasta' => "{$anio}-{$mes}-{$ultimoDia}"],
+            ];
+            // Solo mostrar período 2 si ya empezó (día >= 16)
+            $periodosActivos = $diaHoy >= 16 ? $periodos : [$periodos[0]];
+
+            $todasSucs = DB::connection('pgsql')->table('sucursales')
+                ->where('activo', true)
+                ->orderBy('nombre')
+                ->get(['id', 'nombre']);
+
+            foreach ($periodosActivos as $periodo) {
+                $conAuditoria = DB::connection('compras')
+                    ->table('auditorias_receta')
+                    ->where('tipo', 'calidad')
+                    ->whereDate('fecha', '>=', $periodo['desde'])
+                    ->whereDate('fecha', '<=', $periodo['hasta'])
+                    ->whereIn('estado', ['pendiente_respuesta', 'respondida', 'cerrada'])
+                    ->distinct()
+                    ->pluck('sucursal_id')
+                    ->toArray();
+
+                $faltantes = $todasSucs
+                    ->filter(fn ($s) => !in_array($s->id, $conAuditoria))
+                    ->map(fn ($s) => ['id' => $s->id, 'nombre' => $s->nombre])
+                    ->values();
+
+                if ($faltantes->isNotEmpty()) {
+                    $alertasPendientes[] = [
+                        'periodo'    => $periodo['label'],
+                        'sucursales' => $faltantes,
+                    ];
+                }
+            }
+        }
+
         return response()->json([
             'resumen' => [
                 'total'       => $total,
@@ -277,13 +323,14 @@ class AuditoriaRecetasController extends Controller
                 'desde'       => $desde,
                 'hasta'       => $hasta,
             ],
-            'por_sucursal'     => $porSucursalFmt,
-            'por_estado'       => $porEstado,
+            'por_sucursal'      => $porSucursalFmt,
+            'por_estado'        => $porEstado,
             'por_clasificacion' => $porClasificacion,
-            'top_recetas'      => $topRecetasFmt,
-            'tendencia'        => $tendencia,
-            'por_evaluador'    => $porEvaluador,
-            'ultimas'          => $ultimasFmt,
+            'top_recetas'       => $topRecetasFmt,
+            'tendencia'         => $tendencia,
+            'por_evaluador'     => $porEvaluador,
+            'ultimas'           => $ultimasFmt,
+            'alertas_pendientes' => $alertasPendientes,
         ]);
     }
 
