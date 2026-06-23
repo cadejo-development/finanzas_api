@@ -18,6 +18,7 @@ class Inventario extends Model
         'fecha_conteo',
         'stock_minimo',
         'seccion',
+        'activo',
         'brilo_stock',
         'brilo_sync_at',
         'aud_usuario',
@@ -28,6 +29,7 @@ class Inventario extends Model
         'cantidad_inicial_base' => 'float',
         'stock_minimo'          => 'float',
         'brilo_stock'           => 'float',
+        'activo'                => 'boolean',
         'fecha_conteo'          => 'date',
         'brilo_sync_at'         => 'datetime',
     ];
