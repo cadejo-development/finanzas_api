@@ -39,7 +39,7 @@ class ClientesController extends Controller
             ->table('ventas_pagos as p')
             ->join('ventas_ordenes as o', 'o.id', '=', 'p.orden_id')
             ->whereIn('o.cliente_id', $ids)
-            ->selectRaw('o.cliente_id, ROUND(AVG(DATEDIFF(p.fecha, DATE(o.created_at))), 0) as avg_dias, COUNT(DISTINCT o.id) as ord_pagadas')
+            ->selectRaw("o.cliente_id, ROUND(AVG(EXTRACT(EPOCH FROM (p.fecha::timestamp - o.created_at::timestamp)) / 86400), 0) as avg_dias, COUNT(DISTINCT o.id) as ord_pagadas")
             ->groupBy('o.cliente_id')
             ->get()
             ->keyBy('cliente_id');
@@ -62,7 +62,7 @@ class ClientesController extends Controller
             ->table('ventas_pagos as p')
             ->join('ventas_ordenes as o', 'o.id', '=', 'p.orden_id')
             ->where('o.cliente_id', $id)
-            ->selectRaw('ROUND(AVG(DATEDIFF(p.fecha, DATE(o.created_at))), 0) as avg_dias, COUNT(DISTINCT o.id) as ord_pagadas')
+            ->selectRaw("ROUND(AVG(EXTRACT(EPOCH FROM (p.fecha::timestamp - o.created_at::timestamp)) / 86400), 0) as avg_dias, COUNT(DISTINCT o.id) as ord_pagadas")
             ->first();
         return response()->json(array_merge($this->format($c), [
             'avg_dias_pago'   => $st?->avg_dias   ? (int) $st->avg_dias   : null,
