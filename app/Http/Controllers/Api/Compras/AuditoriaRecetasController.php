@@ -24,15 +24,23 @@ class AuditoriaRecetasController extends Controller
         $recetaId   = $request->query('receta_id') ? (int) $request->query('receta_id') : null;
         $evaluadorId = $request->query('evaluador_id') ? (int) $request->query('evaluador_id') : null;
 
+        $tipo = $request->query('tipo');
+
         $query = AuditoriaReceta::with(['estacion', 'receta', 'fotos'])
             ->orderByDesc('fecha')
             ->orderByDesc('hora');
 
+        if ($tipo)        $query->where('tipo', $tipo);
         if ($sucursalId)  $query->where('sucursal_id', $sucursalId);
         if ($desde)       $query->whereDate('fecha', '>=', $desde);
         if ($hasta)       $query->whereDate('fecha', '<=', $hasta);
         if ($recetaId)    $query->where('receta_id', $recetaId);
         if ($evaluadorId) $query->where('evaluador_id', $evaluadorId);
+
+        $estado       = $request->query('estado');
+        $clasificacion = $request->query('clasificacion');
+        if ($estado)        $query->where('estado', $estado);
+        if ($clasificacion) $query->where('clasificacion', $clasificacion);
 
         $paginated = $query->paginate($perPage);
 
@@ -56,6 +64,7 @@ class AuditoriaRecetasController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
+            'tipo'               => 'nullable|in:operaciones,calidad',
             'fecha'              => 'required|date',
             'hora'               => 'required|date_format:H:i,H:i:s',
             'sucursal_id'        => 'required|integer',
@@ -72,8 +81,12 @@ class AuditoriaRecetasController extends Controller
         $usuario = $request->user()?->email ?? 'sistema';
         $user    = $request->user();
 
-        $auditoria = DB::connection('compras')->transaction(function () use ($validated, $usuario, $user): AuditoriaReceta {
+        $tipoAuditoria = $validated['tipo'] ?? 'operaciones';
+        $estadoInicial = $tipoAuditoria === 'calidad' ? 'borrador' : 'completada';
+
+        $auditoria = DB::connection('compras')->transaction(function () use ($validated, $usuario, $user, $tipoAuditoria, $estadoInicial): AuditoriaReceta {
             $auditoria = AuditoriaReceta::create([
+                'tipo'               => $tipoAuditoria,
                 'fecha'              => $validated['fecha'],
                 'hora'               => $validated['hora'],
                 'sucursal_id'        => $validated['sucursal_id'],
@@ -85,7 +98,7 @@ class AuditoriaRecetasController extends Controller
                 'evaluador_id'       => $user?->id,
                 'evaluador_nombre'   => $user?->name ?? $usuario,
                 'notas'              => $validated['notas'] ?? null,
-                'estado'             => 'completada',
+                'estado'             => $estadoInicial,
                 'aud_usuario'        => $usuario,
             ]);
 
@@ -133,11 +146,13 @@ class AuditoriaRecetasController extends Controller
         $sucursalIds = $request->query('sucursal_ids') ? array_map('intval', (array) $request->query('sucursal_ids')) : null;
         $desde       = $request->query('desde', now()->subDays(30)->toDateString());
         $hasta       = $request->query('hasta', now()->toDateString());
+        $tipo        = $request->query('tipo');
 
         $base = DB::connection('compras')->table('auditorias_receta')
             ->whereDate('fecha', '>=', $desde)
             ->whereDate('fecha', '<=', $hasta);
 
+        if ($tipo)              $base->where('tipo', $tipo);
         if ($sucursalId)        $base->where('sucursal_id', $sucursalId);
         elseif ($sucursalIds)   $base->whereIn('sucursal_id', $sucursalIds);
 
@@ -150,7 +165,11 @@ class AuditoriaRecetasController extends Controller
 
         // Por sucursal
         $porSucursal = (clone $base)
-            ->select('sucursal_id', DB::raw('COUNT(*) as total'))
+            ->select(
+                'sucursal_id',
+                DB::raw('COUNT(*) as total'),
+                DB::raw('ROUND(AVG(CAST(calificacion AS DECIMAL(5,1))), 1) as calificacion_promedio')
+            )
             ->groupBy('sucursal_id')
             ->orderByDesc('total')
             ->get();
@@ -161,10 +180,26 @@ class AuditoriaRecetasController extends Controller
             : collect();
 
         $porSucursalFmt = $porSucursal->map(fn ($r) => [
-            'sucursal_id'  => $r->sucursal_id,
-            'sucursal'     => $sucursalesMap[$r->sucursal_id] ?? "Sucursal {$r->sucursal_id}",
-            'total'        => (int) $r->total,
+            'sucursal_id'         => $r->sucursal_id,
+            'sucursal'            => $sucursalesMap[$r->sucursal_id] ?? "Sucursal {$r->sucursal_id}",
+            'total'               => (int) $r->total,
+            'calificacion_promedio' => $r->calificacion_promedio !== null ? (float) $r->calificacion_promedio : null,
         ]);
+
+        // Por estado
+        $porEstado = (clone $base)
+            ->select('estado', DB::raw('COUNT(*) as total'))
+            ->groupBy('estado')
+            ->get()
+            ->map(fn ($r) => ['estado' => $r->estado, 'total' => (int) $r->total]);
+
+        // Por clasificación
+        $porClasificacion = (clone $base)
+            ->select('clasificacion', DB::raw('COUNT(*) as total'))
+            ->whereNotNull('clasificacion')
+            ->groupBy('clasificacion')
+            ->get()
+            ->map(fn ($r) => ['clasificacion' => $r->clasificacion, 'total' => (int) $r->total]);
 
         // Recetas más auditadas
         $topRecetas = (clone $base)
@@ -220,6 +255,7 @@ class AuditoriaRecetasController extends Controller
 
         $ultimasFmt = $ultimas->map(fn ($a) => [
             'id'                 => $a->id,
+            'tipo'               => $a->tipo ?? 'operaciones',
             'fecha'              => $a->fecha?->format('Y-m-d'),
             'hora'               => substr($a->hora ?? '', 0, 5),
             'sucursal'           => $sucUltimas[$a->sucursal_id] ?? '',
@@ -227,6 +263,9 @@ class AuditoriaRecetasController extends Controller
             'receta'             => $a->receta?->nombre,
             'evaluador_nombre'   => $a->evaluador_nombre,
             'responsable_nombre' => $a->responsable_nombre,
+            'calificacion'       => $a->calificacion !== null ? (float) $a->calificacion : null,
+            'clasificacion'      => $a->clasificacion,
+            'estado'             => $a->estado,
         ]);
 
         return response()->json([
@@ -237,11 +276,13 @@ class AuditoriaRecetasController extends Controller
                 'desde'       => $desde,
                 'hasta'       => $hasta,
             ],
-            'por_sucursal'  => $porSucursalFmt,
-            'top_recetas'   => $topRecetasFmt,
-            'tendencia'     => $tendencia,
-            'por_evaluador' => $porEvaluador,
-            'ultimas'       => $ultimasFmt,
+            'por_sucursal'     => $porSucursalFmt,
+            'por_estado'       => $porEstado,
+            'por_clasificacion' => $porClasificacion,
+            'top_recetas'      => $topRecetasFmt,
+            'tendencia'        => $tendencia,
+            'por_evaluador'    => $porEvaluador,
+            'ultimas'          => $ultimasFmt,
         ]);
     }
 
@@ -302,7 +343,9 @@ class AuditoriaRecetasController extends Controller
             'secciones_fotos'             => 'nullable|array',
             'secciones_fotos.*'           => 'array',
             'secciones_fotos.*.*'         => 'string|max:1000',
+            'submit'                      => 'nullable|boolean',
         ]);
+        $submit = $request->boolean('submit', false);
 
         DB::connection('compras')->transaction(function () use ($auditoria, $validated) {
             foreach ($validated['items'] as $item) {
@@ -369,8 +412,15 @@ class AuditoriaRecetasController extends Controller
                 else                          $clasificacion = 'Deficiente';
             }
 
+            // Estado según tipo: calidad usa borrador/pendiente_respuesta; operaciones usa evaluada
+            $nuevoEstado = match(true) {
+                $auditoria->tipo === 'calidad' && $submit => 'pendiente_respuesta',
+                $auditoria->tipo === 'calidad'             => 'borrador',
+                default                                    => 'evaluada',
+            };
+
             $auditoria->update([
-                'estado'                  => 'evaluada',
+                'estado'                  => $nuevoEstado,
                 'calificacion'            => $calificacion,
                 'clasificacion'           => $clasificacion,
                 'observaciones_generales' => $validated['observaciones_generales'] ?? null,
@@ -426,11 +476,41 @@ class AuditoriaRecetasController extends Controller
         }
     }
 
+    // ── POST /api/compras/auditorias/{id}/responder ──────────────────
+    public function responder(Request $request, int $id): JsonResponse
+    {
+        $auditoria = AuditoriaReceta::findOrFail($id);
+
+        if ($auditoria->tipo !== 'calidad') {
+            return response()->json(['message' => 'Solo aplica para auditorías de calidad.'], 422);
+        }
+
+        $validated = $request->validate([
+            'acciones_correctivas' => 'required|string|max:2000',
+        ]);
+
+        $user = $request->user();
+
+        $auditoria->update([
+            'acciones_correctivas'  => $validated['acciones_correctivas'],
+            'respondido_por_id'     => $user?->id,
+            'respondido_por_nombre' => $user?->name,
+            'respondido_at'         => now(),
+            'estado'                => 'respondida',
+        ]);
+
+        $sucursales = DB::connection('pgsql')->table('sucursales')
+            ->where('id', $auditoria->sucursal_id)->pluck('nombre', 'id');
+
+        return response()->json(['message' => 'Respuesta registrada.', 'data' => $this->formatAuditoria($auditoria, $sucursales)]);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────
     private function formatAuditoria(AuditoriaReceta $a, $sucursales): array
     {
         return [
             'id'                      => $a->id,
+            'tipo'                    => $a->tipo ?? 'operaciones',
             'fecha'                   => $a->fecha?->format('Y-m-d'),
             'hora'                    => substr($a->hora ?? '', 0, 5),
             'sucursal_id'             => $a->sucursal_id,
@@ -448,16 +528,19 @@ class AuditoriaRecetasController extends Controller
             'estado'                  => $a->estado,
             'calificacion'            => $a->calificacion !== null ? (float) $a->calificacion : null,
             'clasificacion'           => $a->clasificacion,
-            'observaciones_generales' => $a->observaciones_generales,
-            'acciones_correctivas'    => $a->acciones_correctivas,
-            'fotos'                   => $a->relationLoaded('fotos')
+            'observaciones_generales'  => $a->observaciones_generales,
+            'acciones_correctivas'     => $a->acciones_correctivas,
+            'respondido_por_id'        => $a->respondido_por_id,
+            'respondido_por_nombre'    => $a->respondido_por_nombre,
+            'respondido_at'            => $a->respondido_at?->toIso8601String(),
+            'fotos'                    => $a->relationLoaded('fotos')
                 ? $a->fotos->map(fn ($f) => [
                     'id'          => $f->id,
                     'url'         => $this->presignS3Url($f->url),
                     'descripcion' => $f->descripcion,
                   ])
                 : [],
-            'created_at'              => $a->created_at?->toIso8601String(),
+            'created_at'               => $a->created_at?->toIso8601String(),
         ];
     }
 

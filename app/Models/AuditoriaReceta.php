@@ -10,15 +10,17 @@ class AuditoriaReceta extends Model
     protected $table      = 'auditorias_receta';
 
     protected $fillable = [
-        'fecha', 'hora', 'sucursal_id', 'estacion_id', 'receta_id',
+        'tipo', 'fecha', 'hora', 'sucursal_id', 'estacion_id', 'receta_id',
         'tipo_receta', 'responsable_id', 'responsable_nombre',
         'evaluador_id', 'evaluador_nombre', 'notas', 'estado',
         'calificacion', 'clasificacion', 'observaciones_generales', 'acciones_correctivas',
+        'respondido_por_id', 'respondido_por_nombre', 'respondido_at',
         'aud_usuario',
     ];
 
     protected $casts = [
-        'fecha' => 'date',
+        'fecha'         => 'date',
+        'respondido_at' => 'datetime',
     ];
 
     public function estacion()

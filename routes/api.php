@@ -233,6 +233,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::delete('auditorias/{id}',         [AuditoriaRecetasController::class, 'destroy']);
     Route::get('auditorias/{id}/items',      [AuditoriaRecetasController::class, 'itemsShow']);
     Route::post('auditorias/{id}/items',     [AuditoriaRecetasController::class, 'itemsSave']);
+    Route::post('auditorias/{id}/responder', [AuditoriaRecetasController::class, 'responder']);
 
     // Ventas semanales
     Route::get('ventas',              [VentasController::class, 'index']);
