@@ -973,8 +973,19 @@ class RecetasController extends Controller
     {
         $ext      = preg_replace('/[^a-zA-Z0-9]/', '', $request->query('ext', 'jpg'));
         $mime     = $request->query('mime', 'image/jpeg');
-        $filename = uniqid('receta_', true) . '.' . $ext;
-        $key      = 'recetas/fotos/' . $filename;
+
+        $allowed  = ['recetas/fotos', 'auditorias/calidad', 'auditorias/operaciones'];
+        $folder   = $request->query('folder', 'recetas/fotos');
+        if (!in_array($folder, $allowed, true)) $folder = 'recetas/fotos';
+
+        $prefix   = match ($folder) {
+            'auditorias/calidad'     => 'auditoria_cal_',
+            'auditorias/operaciones' => 'auditoria_op_',
+            default                  => 'receta_',
+        };
+
+        $filename = uniqid($prefix, true) . '.' . $ext;
+        $key      = $folder . '/' . $filename;
 
         $bucket = config('filesystems.disks.s3.bucket');
         $region = config('filesystems.disks.s3.region');
