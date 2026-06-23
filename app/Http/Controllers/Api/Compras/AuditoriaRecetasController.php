@@ -241,6 +241,7 @@ class AuditoriaRecetasController extends Controller
 
         // Últimas 5 auditorías
         $ultimas = AuditoriaReceta::with(['estacion', 'receta'])
+            ->when($tipo,        fn ($q) => $q->where('tipo', $tipo))
             ->when($sucursalId,  fn ($q) => $q->where('sucursal_id', $sucursalId))
             ->when($sucursalIds, fn ($q) => $q->whereIn('sucursal_id', $sucursalIds))
             ->whereDate('fecha', '>=', $desde)
@@ -287,10 +288,12 @@ class AuditoriaRecetasController extends Controller
     }
 
     // ── GET /api/compras/auditorias/criterios ────────────────────────
-    // Devuelve las 5 secciones del formato oficial (todas las auditorías usan los mismos criterios)
     public function criterios(Request $request): JsonResponse
     {
+        $tipo = $request->query('tipo'); // 'operaciones' | 'calidad' | null (todos)
+
         $criterios = AuditoriaCriterio::where('activo', true)
+            ->when($tipo, fn ($q) => $q->where('tipo', $tipo))
             ->orderBy('categoria_orden')
             ->orderBy('orden')
             ->get(['id', 'categoria', 'categoria_orden', 'nombre', 'peso', 'orden']);
