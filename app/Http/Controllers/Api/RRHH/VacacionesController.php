@@ -212,6 +212,13 @@ class VacacionesController extends RRHHBaseController
     public function saldos(): JsonResponse
     {
         $subordinadosIds = $this->getSubordinadosIds();
+
+        // Incluir el propio jefe (igual que index()) para que su saldo aparezca correctamente
+        try {
+            $propioId        = $this->getJefeEmpleado()->id;
+            $subordinadosIds = array_values(array_unique(array_merge($subordinadosIds, [$propioId])));
+        } catch (\Throwable) {}
+
         $anio = now()->year;
 
         $saldosAnio = SaldoVacaciones::whereIn('empleado_id', $subordinadosIds)
