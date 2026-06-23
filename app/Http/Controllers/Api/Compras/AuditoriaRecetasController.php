@@ -286,7 +286,6 @@ class AuditoriaRecetasController extends Controller
             $periodosActivos = $diaHoy >= 16 ? $periodos : [$periodos[0]];
 
             $todasSucs = DB::connection('pgsql')->table('sucursales')
-                ->where('activo', true)
                 ->orderBy('nombre')
                 ->get(['id', 'nombre']);
 
