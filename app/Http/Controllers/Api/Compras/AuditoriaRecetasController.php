@@ -3,14 +3,17 @@
 namespace App\Http\Controllers\Api\Compras;
 
 use App\Http\Controllers\Controller;
+use App\Mail\Compras\AuditoriaCalidadNotificacion;
 use App\Models\AuditoriaFoto;
 use App\Models\AuditoriaItem;
 use App\Models\AuditoriaCriterio;
 use App\Models\AuditoriaReceta;
+use App\Models\Empleado;
 use App\Models\Estacion;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 
 class AuditoriaRecetasController extends Controller
 {
@@ -477,7 +480,44 @@ class AuditoriaRecetasController extends Controller
             ]);
         });
 
-        return response()->json(['message' => 'Evaluación guardada.']);
+        // Notificar por correo al finalizar auditoría de calidad
+        if ($submit && $auditoria->tipo === 'calidad' && $auditoria->sucursal_id) {
+            try {
+                $sucursalNombre = DB::connection('pgsql')
+                    ->table('sucursales')
+                    ->where('id', $auditoria->sucursal_id)
+                    ->value('nombre') ?? 'Sucursal';
+
+                // Gerente de sucursal y jefe de cocina activos en esa sucursal
+                $destinatarios = Empleado::where('sucursal_id', $auditoria->sucursal_id)
+                    ->where('activo', true)
+                    ->whereNotNull('email')
+                    ->whereHas('cargo', fn ($q) => $q->whereRaw("LOWER(nombre) LIKE '%gerente%' OR LOWER(nombre) LIKE '%jefe de cocina%'"))
+                    ->pluck('email')
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->toArray();
+
+                if (!empty($destinatarios)) {
+                    $linkUrl = config('app.frontend_compras_url', 'https://gestion-operaciones.cervezacadejo.com') . '/auditorias-calidad';
+                    $mailable = new AuditoriaCalidadNotificacion(
+                        sucursalNombre: $sucursalNombre,
+                        fecha:          $auditoria->fecha?->format('d/m/Y') ?? '',
+                        evaluadorNombre: $auditoria->evaluador_nombre ?? '',
+                        calificacion:   $auditoria->calificacion !== null ? (float) $auditoria->calificacion : null,
+                        clasificacion:  $auditoria->clasificacion,
+                        observaciones:  $auditoria->observaciones_generales,
+                        linkUrl:        $linkUrl,
+                    );
+                    Mail::to($destinatarios)->send($mailable);
+                }
+            } catch (\Throwable) {
+                // El correo es secundario — no romper la respuesta si falla
+            }
+        }
+
+        return response()->json(['message' => 'Auditoría finalizada.']);
     }
 
     // ── GET /api/compras/auditorias/catalogos ────────────────────────
