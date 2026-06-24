@@ -412,6 +412,7 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     // Contratos — acciones individuales
     Route::patch('contratos/{id}/estado',                   [ContratoEmpleadoController::class, 'actualizarEstado']);
     Route::get('contratos/{id}/preview',                    [ContratoEmpleadoController::class, 'preview']);
+    Route::get('contratos/{id}/pdf',                        [ContratoEmpleadoController::class, 'pdf']);
 
     // Desvinculaciones (despidos + renuncias, filtrar por ?tipo=despido|renuncia)
     Route::get('desvinculaciones',                  [DesvinculacionesController::class, 'index']);
