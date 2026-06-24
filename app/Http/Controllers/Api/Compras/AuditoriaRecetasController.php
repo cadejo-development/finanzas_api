@@ -492,7 +492,7 @@ class AuditoriaRecetasController extends Controller
                 $destinatarios = Empleado::where('sucursal_id', $auditoria->sucursal_id)
                     ->where('activo', true)
                     ->whereNotNull('email')
-                    ->whereHas('cargo', fn ($q) => $q->whereRaw("LOWER(nombre) LIKE '%gerente%' OR LOWER(nombre) LIKE '%jefe de cocina%' OR LOWER(nombre) LIKE '%chef%'"))
+                    ->whereHas('cargo', fn ($q) => $q->whereRaw("LOWER(nombre) LIKE '%gerente%' OR LOWER(nombre) LIKE '%jefe de cocina%' OR LOWER(nombre) LIKE '%chef ejecutivo%'"))
                     ->pluck('email')
                     ->filter()
                     ->unique()
