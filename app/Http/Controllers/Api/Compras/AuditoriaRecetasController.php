@@ -492,7 +492,7 @@ class AuditoriaRecetasController extends Controller
                 $destinatarios = Empleado::where('sucursal_id', $auditoria->sucursal_id)
                     ->where('activo', true)
                     ->whereNotNull('email')
-                    ->whereHas('cargo', fn ($q) => $q->whereRaw("LOWER(nombre) LIKE '%gerente%' OR LOWER(nombre) LIKE '%jefe de cocina%'"))
+                    ->whereHas('cargo', fn ($q) => $q->whereRaw("LOWER(nombre) LIKE '%gerente%' OR LOWER(nombre) LIKE '%jefe de cocina%' OR LOWER(nombre) LIKE '%chef%'"))
                     ->pluck('email')
                     ->filter()
                     ->unique()
@@ -575,13 +575,13 @@ class AuditoriaRecetasController extends Controller
         }
 
         $validated = $request->validate([
-            'acciones_correctivas' => 'required|string|max:2000',
+            'comentario_gerente' => 'required|string|max:2000',
         ]);
 
         $user = $request->user();
 
         $auditoria->update([
-            'acciones_correctivas'  => $validated['acciones_correctivas'],
+            'comentario_gerente'    => $validated['comentario_gerente'],
             'respondido_por_id'     => $user?->id,
             'respondido_por_nombre' => $user?->name,
             'respondido_at'         => now(),
@@ -619,6 +619,7 @@ class AuditoriaRecetasController extends Controller
             'clasificacion'           => $a->clasificacion,
             'observaciones_generales'  => $a->observaciones_generales,
             'acciones_correctivas'     => $a->acciones_correctivas,
+            'comentario_gerente'       => $a->comentario_gerente,
             'respondido_por_id'        => $a->respondido_por_id,
             'respondido_por_nombre'    => $a->respondido_por_nombre,
             'respondido_at'            => $a->respondido_at?->toIso8601String(),

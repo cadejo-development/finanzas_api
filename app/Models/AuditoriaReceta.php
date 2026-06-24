@@ -15,6 +15,7 @@ class AuditoriaReceta extends Model
         'evaluador_id', 'evaluador_nombre', 'notas', 'estado',
         'calificacion', 'clasificacion', 'observaciones_generales', 'acciones_correctivas',
         'respondido_por_id', 'respondido_por_nombre', 'respondido_at',
+        'comentario_gerente',
         'aud_usuario',
     ];
 
