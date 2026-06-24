@@ -37,6 +37,7 @@ class ContratoEmpleadoController extends RRHHBaseController
             'plantilla_id'     => 'nullable|integer|exists:rrhh.plantillas_contrato,id',
             'fecha_inicio'     => 'required|date',
             'fecha_fin'        => 'nullable|date|after:fecha_inicio',
+            'funciones'        => 'nullable|string|max:5000',
             'notas'            => 'nullable|string|max:2000',
         ]);
 
@@ -244,6 +245,7 @@ class ContratoEmpleadoController extends RRHHBaseController
             '{{ciudad_firma}}'        => $ciudadFirma,
             '{{patrono}}'             => 'David Arthur Falkenstein Algara',
             '{{nit_patrono}}'         => '0614-120411-105-11',
+            '{{funciones}}'           => $contrato->funciones ?? '',
         ];
     }
 

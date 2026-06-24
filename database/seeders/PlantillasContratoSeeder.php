@@ -5,10 +5,6 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
-/**
- * Inserta las plantillas de contrato base de Cadejo Brewing Company.
- * Usa variables {{variable}} que se sustituyen en ContratoEmpleadoController::buildVars().
- */
 class PlantillasContratoSeeder extends Seeder
 {
     public function run(): void
@@ -17,12 +13,12 @@ class PlantillasContratoSeeder extends Seeder
             [
                 [
                     'id'               => 1,
-                    'tipo_contrato_id' => 2, // Contrato Indefinido
+                    'tipo_contrato_id' => 2,
                     'cargo_id'         => null,
                     'cargo_nombre'     => null,
-                    'nombre'           => 'Contrato Individual de Trabajo — Indefinido',
-                    'contenido'        => $this->contratoIndividual(),
-                    'version'          => 1,
+                    'nombre'           => 'Contrato Individual de Trabajo — Operativo',
+                    'contenido'        => $this->contratoOperativo(),
+                    'version'          => 2,
                     'activo'           => true,
                     'aud_usuario'      => 'seeder',
                     'created_at'       => now(),
@@ -30,11 +26,24 @@ class PlantillasContratoSeeder extends Seeder
                 ],
                 [
                     'id'               => 2,
-                    'tipo_contrato_id' => 1, // Servicios Profesionales
+                    'tipo_contrato_id' => 1,
                     'cargo_id'         => null,
                     'cargo_nombre'     => null,
                     'nombre'           => 'Contrato de Servicios Profesionales',
                     'contenido'        => $this->contratoServiciosProfesionales(),
+                    'version'          => 2,
+                    'activo'           => true,
+                    'aud_usuario'      => 'seeder',
+                    'created_at'       => now(),
+                    'updated_at'       => now(),
+                ],
+                [
+                    'id'               => 3,
+                    'tipo_contrato_id' => 2,
+                    'cargo_id'         => null,
+                    'cargo_nombre'     => null,
+                    'nombre'           => 'Contrato Individual de Trabajo — Administrativo',
+                    'contenido'        => $this->contratoAdministrativo(),
                     'version'          => 1,
                     'activo'           => true,
                     'aud_usuario'      => 'seeder',
@@ -43,82 +52,142 @@ class PlantillasContratoSeeder extends Seeder
                 ],
             ],
             ['id'],
-            ['contenido', 'version', 'updated_at']
+            ['nombre', 'contenido', 'version', 'updated_at']
         );
     }
 
-    private function contratoIndividual(): string
+    // ─────────────────────────────────────────────────────────────────────────
+    // Contrato Individual — Operativo (roles con turnos rotativos)
+    // Sección d) incluye tabla de horarios posibles
+    // ─────────────────────────────────────────────────────────────────────────
+    private function contratoOperativo(): string
     {
         return <<<'HTML'
-<h2>CONTRATO INDIVIDUAL DE TRABAJO</h2>
+<h2 style="text-align:center; font-size:13pt; margin-bottom:18px;">CONTRATO INDIVIDUAL DE TRABAJO</h2>
 
-<p>Nosotros: <strong>{{patrono}}</strong>, mayor de edad, de nacionalidad norteamericana, con residencia en esta ciudad, NIT <strong>{{nit_patrono}}</strong>, actuando en su calidad de Patrono (en lo sucesivo "EL PATRONO"), y <strong>{{nombre}}</strong>, de <strong>{{estado_civil}}</strong>, de nacionalidad salvadoreña, portador/a del DUI número <strong>{{dui}}</strong>, expedido en <strong>{{dui_expedido_en}}</strong>, con número de ISSS <strong>{{isss}}</strong> y AFP/NUP <strong>{{afp}}</strong>, (en lo sucesivo "EL/LA TRABAJADOR/A"), hemos convenido en celebrar el presente CONTRATO INDIVIDUAL DE TRABAJO, de conformidad con las estipulaciones siguientes:</p>
-
-<h3>a) Clase de Trabajo</h3>
-<p>EL/LA TRABAJADOR/A se obliga a prestar sus servicios como <strong>{{cargo}}</strong>, desempeñando las funciones propias del puesto y todas las tareas que le sean asignadas por su jefe/a inmediato/a, así como cualquier función que sea requerida según las necesidades operativas de LA EMPRESA.</p>
-
-<h3>b) Duración</h3>
-<p>El presente contrato tendrá duración <strong>INDEFINIDA</strong>, iniciando el día <strong>{{fecha_inicio_letras}}</strong>. En el presente contrato se pacta un período de prueba de treinta días calendario contados desde la fecha de inicio.</p>
-
-<h3>c) Lugar de Trabajo</h3>
-<p>EL/LA TRABAJADOR/A prestará sus servicios en las instalaciones de <strong>{{sucursal}}</strong>, ubicadas en la ciudad de San Salvador. No obstante, dada la naturaleza del negocio, EL/LA TRABAJADOR/A podrá ser requerido/a a laborar de manera rotativa en las diferentes sucursales de Cadejo Brewing Company según las necesidades del servicio, sin que ello constituya variación sustancial de las condiciones de trabajo.</p>
-
-<h3>d) Jornada de Trabajo</h3>
-<p>EL/LA TRABAJADOR/A laborará <strong>cuarenta y cuatro (44) horas semanales</strong>, distribuidas en jornadas diurnas y mixtas conforme al cuadrante de turnos que asigne LA EMPRESA. Los días y horarios específicos serán comunicados con al menos 72 horas de anticipación a través del sistema de programación de turnos.</p>
-<p>EL PATRONO se reserva la facultad de modificar los horarios y días de descanso dentro de los límites permitidos por el Código de Trabajo, notificando al/a la TRABAJADOR/A con la debida anticipación.</p>
-
-<h3>e) Salario</h3>
-<p>EL PATRONO pagará a EL/LA TRABAJADOR/A la suma de <strong>{{salario_letras}}</strong> (<strong>{{salario}}</strong>) como salario mensual, pagadero en dos cuotas quincenales iguales por transferencia bancaria o depósito a la cuenta indicada por EL/LA TRABAJADOR/A. Dicho salario incluye la compensación por todos los servicios ordinarios prestados.</p>
-
-<h3>f) Herramientas y Equipo</h3>
-<p>EL PATRONO proporcionará a EL/LA TRABAJADOR/A los implementos, uniformes y herramientas necesarios para el desempeño de sus funciones. EL/LA TRABAJADOR/A se obliga a cuidarlos, mantenerlos en buen estado y devolverlos al término de la relación laboral. El deterioro por uso normal no generará responsabilidad; sin embargo, el daño por negligencia o uso indebido podrá ser deducido de sus prestaciones conforme a la ley.</p>
-
-<h3>g) Dependientes Económicos</h3>
-<p>EL/LA TRABAJADOR/A declara bajo fe de juramento que sus dependientes económicos son los siguientes (en caso de no tener dependientes, dejar en blanco):</p>
-
-<table>
+<table style="width:100%; border-collapse:collapse; font-size:8.5pt; margin-bottom:16px;">
   <tr>
-    <th>Nombre</th>
-    <th>Parentesco</th>
-    <th>Edad</th>
-  </tr>
-  <tr>
-    <td>&nbsp;</td>
-    <td>&nbsp;</td>
-    <td>&nbsp;</td>
-  </tr>
-  <tr>
-    <td>&nbsp;</td>
-    <td>&nbsp;</td>
-    <td>&nbsp;</td>
+    <td style="width:50%; border:1px solid #000; padding:6px; vertical-align:top;">
+      <strong>GENERALES DE PARTE PATRONAL</strong><br>
+      Nombre: David Arthur Falkenstein Algara<br>
+      Edad: 52 años &nbsp;&nbsp; Estado Civil: Soltero/a<br>
+      Profesión u Oficio: Empleado<br>
+      Domicilio: Santa Tecla, La Libertad<br>
+      Nacionalidad: salvadoreño<br>
+      DUI: 02603386-9 — Expedido en San Salvador, San Salvador el 04 de mayo de 2022<br>
+      En Representación de: Cadejo Brewing Company, S.A. de C.V.<br>
+      NIT: {{nit_patrono}}<br>
+      Actividad Económica: Alimentos y Bebidas
+    </td>
+    <td style="width:50%; border:1px solid #000; padding:6px; vertical-align:top;">
+      <strong>GENERALES DEL TRABAJADOR</strong><br>
+      Nombre: {{nombre}}<br>
+      Sexo: {{genero}} &nbsp;&nbsp; Estado Civil: {{estado_civil}}<br>
+      Fecha de nacimiento: {{fecha_nacimiento}}<br>
+      Domicilio: —<br>
+      Nacionalidad: salvadoreño/a<br>
+      DUI: {{dui}} — Expedido en {{dui_expedido_en}}<br>
+      ISSS: {{isss}}<br>
+      AFP/NUP: {{afp}}
+    </td>
   </tr>
 </table>
 
-<h3>h) Otras Estipulaciones</h3>
-<p><strong>Confidencialidad:</strong> EL/LA TRABAJADOR/A se compromete a guardar la más estricta reserva sobre recetas, procesos de producción, estrategias comerciales, información financiera y cualquier dato sensible de LA EMPRESA y sus clientes, tanto durante la vigencia del contrato como después de su terminación.</p>
-<p><strong>Exclusividad:</strong> Durante la vigencia del presente contrato, EL/LA TRABAJADOR/A no podrá prestar servicios a empresas que compitan directamente con Cadejo Brewing Company sin autorización expresa y escrita de EL PATRONO.</p>
-<p><strong>Normas Internas:</strong> EL/LA TRABAJADOR/A se obliga a cumplir el Reglamento Interno de Trabajo, los procedimientos operativos y las políticas de la empresa, cuyo conocimiento declara haber recibido.</p>
+<p style="font-size:9pt; text-align:justify; margin-bottom:12px;">
+  NOSOTROS <strong>David Arthur Falkenstein Algara</strong>, en representación de <strong>CADEJO BREWING COMPANY, SOCIEDAD ANÓNIMA DE CAPITAL VARIABLE</strong>, que puede abreviarse Cadejo Brewing Company, S.A. de C.V., en adelante "<strong>EL PATRONO</strong>" y <strong>{{nombre}}</strong>, en adelante "<strong>EL TRABAJADOR</strong>", de las generales arriba indicadas y actuando en el carácter que aparece expresado, convenimos en celebrar el presente Contrato Individual de Trabajo, sujeto a las estipulaciones siguientes. Cuando se haga referencia conjunta a EL PATRONO y EL TRABAJADOR, se les denominará "las partes".
+</p>
 
-<h3>i) Causas de Terminación por Faltas Graves</h3>
-<p>Además de las causales previstas en el Código de Trabajo, constituirán causas justas de despido: el incumplimiento reiterado de los estándares de calidad establecidos; la comisión de actos que afecten la imagen, el patrimonio o la seguridad alimentaria de LA EMPRESA; el incumplimiento de los protocolos de higiene y manipulación de alimentos; y cualquier acto de deshonestidad comprobado.</p>
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>a) CLASE DE TRABAJO O SERVICIO:</strong> El trabajador se obliga a prestar sus servicios al patrono como <strong>{{cargo}}</strong>. Desempeñando las funciones de: {{funciones}}; estas funciones no son restrictivas, pueden modificarse, adherirse o eliminarse según la necesidad del negocio y en común acuerdo entre las partes. Además de cumplir con todas las tareas que corresponden al cargo, el trabajador deberá cumplir con todas aquellas obligaciones que le impongan las leyes laborales, según políticas y el reglamento interno de trabajo.
+</p>
 
-<hr>
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>b) DURACIÓN DEL CONTRATO Y TIEMPO DE SERVICIO:</strong> El presente Contrato se celebrará por <strong>TIEMPO INDEFINIDO</strong>. El tiempo de servicio se computará a partir del <strong>{{fecha_inicio_letras}}</strong>, fecha desde la cual el trabajador prestará sus servicios al patrono sin que la relación laboral se haya disuelto. Para los trabajadores de nuevo ingreso se estipula que los primeros treinta (30) días serán de prueba y dentro de ese término cualquiera de las partes podrá terminar el contrato sin expresión de causa.
+</p>
 
-<p>En fe de lo cual suscribimos el presente contrato en dos ejemplares de igual tenor y validez, en la ciudad de <strong>{{ciudad_firma}}</strong>, a los <strong>{{fecha_firma_letras}}</strong>.</p>
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>c) LUGAR DE PRESTACIÓN DE SERVICIOS Y DE ALOJAMIENTO:</strong> El lugar de prestación de los servicios será en <strong>Cadejo {{sucursal}}</strong>. Sin embargo, derivado que el negocio posee diferentes sucursales/centros de trabajo, el lugar de presentación de servicios puede cambiar según las necesidades específicas y en común acuerdo entre las partes.
+</p>
 
-<br>
+<p style="font-size:9pt; text-align:justify; margin-bottom:6px;">
+  <strong>d) HORARIO DE TRABAJO:</strong> Semana laboral de 44 horas con 1 día de descanso rotativo. Sin embargo, derivado que el negocio posee diferentes sucursales/centros de trabajo, el horario de trabajo puede cambiar según cada sucursal/centro de trabajo y/o necesidades específicas, siempre y cuando sea en común acuerdo entre las partes.
+</p>
+<p style="font-size:9pt; margin-bottom:6px;">El horario que pudiese aplicar al trabajador será alguno de los siguientes:</p>
+
+<table style="width:100%; border-collapse:collapse; font-size:8pt; margin-bottom:8px;">
+  <tr style="background:#f2f2f2;">
+    <th style="border:1px solid #000; padding:4px; text-align:center;">INICIO LABORES</th>
+    <th style="border:1px solid #000; padding:4px; text-align:center;">INICIO ALMUERZO</th>
+    <th style="border:1px solid #000; padding:4px; text-align:center;">FIN ALMUERZO</th>
+    <th style="border:1px solid #000; padding:4px; text-align:center;">FIN LABORES</th>
+  </tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">05:00 A.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">11:00 a.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">11:30 a.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">01:00 p.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">05:00 A.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">11:30 a.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">12:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">01:00 p.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">10:00 A.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">03:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">06:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">09:00 p.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">10:00 A.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">03:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">07:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">10:00 p.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">10:00 A.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">03:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">08:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">11:00 p.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">10:00 A.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">03:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">09:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">12:00 a.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">11:00 A.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">03:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">06:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">10:00 p.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">11:00 A.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">03:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">07:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">11:00 p.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">11:00 A.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">03:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">08:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">12:00 a.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">12:00 P.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">02:30 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">03:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">08:00 p.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">12:00 P.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">03:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">03:30 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">08:00 p.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">12:00 P.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">03:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">04:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">09:00 p.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">12:00 P.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">03:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">07:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">12:00 a.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">03:00 P.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">05:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">06:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">12:00 a.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">03:00 P.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">09:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">10:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">12:00 a.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">04:00 P.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">05:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">05:30 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">12:30 a.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">04:00 P.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">09:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">10:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">01:00 a.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">04:00 P.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">10:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">10:30 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">12:00 a.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">05:00 P.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">10:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">10:30 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">01:00 a.m.</td></tr>
+  <tr><td style="border:1px solid #000; padding:3px; text-align:center;">06:00 P.M.</td><td style="border:1px solid #000; padding:3px; text-align:center;">10:00 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">10:30 p.m.</td><td style="border:1px solid #000; padding:3px; text-align:center;">01:00 a.m.</td></tr>
+</table>
+
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  Únicamente podrán ejecutarse trabajos extraordinarios cuando se reciba la orden ya sea por escrito o verbalmente por parte del Patrono o sus Representantes Patronales.
+</p>
+
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>e) SALARIO: FORMA, PERÍODO Y LUGAR DEL PAGO:</strong> El salario que recibirá el trabajador, por sus servicios, será la suma de <strong>{{salario_letras}}</strong> (<strong>{{salario}}</strong>) más las prestaciones laborales reconocida por la ley vigente durante la duración del presente contrato laboral. El salario y toda prestación laboral reconocida por la ley se pagará a través de depósito bancario. Dicho pago se hará quincenalmente los días 15 y final de mes, 30 o 31. La operación del pago principiará y se continuará sin interrupción, a más tardar a la Terminación de la jornada de trabajo correspondiente a la respectiva fecha, en caso de reclamo de la persona trabajadora, se estará a lo dispuesto en el art. 613 del Código de Trabajo.
+</p>
+
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>f) HERRAMIENTAS Y MATERIALES:</strong> El patrono suministrará al trabajador las herramientas y materiales que sean necesarios para el cumplimiento de sus labores. Todas las herramientas y materiales que utilice y se le entreguen deben ser devueltos al patrono, en el mismo estado en que sean recibidas cuando sean requeridas por sus jefes inmediatos o al darse por finalizada la relación laboral, salvo la disminución o deterioro causados por caso fortuito o fuerza mayor, o por la acción del tiempo o por el consumo y uso normal de los mismos.
+</p>
+
+<p style="font-size:9pt; margin-bottom:6px;"><strong>g) PERSONAS QUE DEPENDEN ECONÓMICAMENTE DEL TRABAJADOR:</strong></p>
+<table style="width:100%; border-collapse:collapse; font-size:8.5pt; margin-bottom:12px;">
+  <tr style="background:#f2f2f2;">
+    <th style="border:1px solid #000; padding:4px; text-align:center;">NOMBRE</th>
+    <th style="border:1px solid #000; padding:4px; text-align:center;">FECHA DE NACIMIENTO</th>
+    <th style="border:1px solid #000; padding:4px; text-align:center;">PARENTESCO</th>
+  </tr>
+  <tr><td style="border:1px solid #000; padding:4px;">&nbsp;</td><td style="border:1px solid #000; padding:4px;">&nbsp;</td><td style="border:1px solid #000; padding:4px;">&nbsp;</td></tr>
+  <tr><td style="border:1px solid #000; padding:4px;">&nbsp;</td><td style="border:1px solid #000; padding:4px;">&nbsp;</td><td style="border:1px solid #000; padding:4px;">&nbsp;</td></tr>
+</table>
+
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>h) OTRAS ESTIPULACIONES:</strong> El Trabajador se compromete a guardar rigurosa reserva sobre aquellos asuntos confidenciales de los cuales tuviere conocimiento por razón de su cargo, y sobre asuntos administrativos cuya divulgación pudiere perjudicar a Cadejo Brewing Company, S.A. de C.V. o provecho indebido a terceros.
+</p>
+
+<p style="font-size:9pt; text-align:justify; margin-bottom:16px;">
+  <strong>i) TERMINACIÓN DEL CONTRATO POR FALTAS GRAVES:</strong> El presente contrato podrá darse por terminado sin obligación de indemnización alguna por parte de EL PATRONO en caso de que EL TRABAJADOR incurra en faltas graves que atenten contra la integridad, seguridad o bienes de la empresa, sus clientes o sus colaboradores. Se considerarán faltas graves, entre otras, la comisión de actos de robo, hurto, fraude, daño intencional a bienes de la empresa, agresiones físicas o verbales, divulgación de información confidencial en perjuicio del negocio y cualquier otra conducta que vulnere las normas establecidas en el reglamento interno de trabajo y en la legislación laboral aplicable.
+</p>
+
+<p style="font-size:9pt; text-align:justify; margin-bottom:20px;">
+  Este contrato sustituye cualquier otro convenio individual de trabajo anterior, ya sea escrito o verbal, que haya estado vigente entre las partes. En fe de lo cual firmamos este documento por triplicado en <strong>{{ciudad_firma}}</strong> a los <strong>{{fecha_firma_letras}}</strong>.
+</p>
+
 <table style="width:100%; margin-top:30px;">
   <tr>
     <td style="width:50%; text-align:center; padding:10px;">
-      <div style="border-top:1px solid #000; width:80%; margin:0 auto; padding-top:6px;">
-        <strong>{{patrono}}</strong><br>
-        <span style="font-size:9pt;">El Patrono</span>
+      <div style="border-top:1px solid #000; width:80%; margin:0 auto; padding-top:6px; font-size:9pt;">
+        <strong>{{patrono}}</strong><br>PATRONO O REPRESENTANTE
       </div>
     </td>
     <td style="width:50%; text-align:center; padding:10px;">
-      <div style="border-top:1px solid #000; width:80%; margin:0 auto; padding-top:6px;">
-        <strong>{{nombre}}</strong><br>
-        <span style="font-size:9pt;">El/La Trabajador/a — DUI: {{dui}}</span>
+      <div style="border-top:1px solid #000; width:80%; margin:0 auto; padding-top:6px; font-size:9pt;">
+        <strong>{{nombre}}</strong><br>TRABAJADOR/A — DUI: {{dui}}
       </div>
     </td>
   </tr>
@@ -126,56 +195,191 @@ class PlantillasContratoSeeder extends Seeder
 HTML;
     }
 
-    private function contratoServiciosProfesionales(): string
+    // ─────────────────────────────────────────────────────────────────────────
+    // Contrato Individual — Administrativo (horario fijo, sin tabla de turnos)
+    // ─────────────────────────────────────────────────────────────────────────
+    private function contratoAdministrativo(): string
     {
         return <<<'HTML'
-<h2>CONTRATO DE PRESTACIÓN DE SERVICIOS PROFESIONALES</h2>
+<h2 style="text-align:center; font-size:13pt; margin-bottom:18px;">CONTRATO INDIVIDUAL DE TRABAJO</h2>
 
-<p>Conste por el presente instrumento el <strong>CONTRATO DE PRESTACIÓN DE SERVICIOS PROFESIONALES</strong> que celebran, por una parte, <strong>{{patrono}}</strong>, NIT <strong>{{nit_patrono}}</strong>, en calidad de representante de <strong>Cadejo Brewing Company</strong> (en adelante "LA EMPRESA"); y por la otra, <strong>{{nombre}}</strong>, portador/a del DUI número <strong>{{dui}}</strong>, (en adelante "EL/LA PRESTADOR/A"), quienes acuerdan las cláusulas siguientes:</p>
+<table style="width:100%; border-collapse:collapse; font-size:8.5pt; margin-bottom:16px;">
+  <tr>
+    <td style="width:50%; border:1px solid #000; padding:6px; vertical-align:top;">
+      <strong>GENERALES DE PARTE PATRONAL</strong><br>
+      Nombre: David Arthur Falkenstein Algara<br>
+      Edad: 52 años &nbsp;&nbsp; Estado Civil: Soltero/a<br>
+      Profesión u Oficio: Empleado<br>
+      Domicilio: Santa Tecla, La Libertad<br>
+      Nacionalidad: salvadoreño<br>
+      DUI: 02603386-9 — Expedido en San Salvador, San Salvador el 04 de mayo de 2022<br>
+      En Representación de: Cadejo Brewing Company, S.A. de C.V.<br>
+      NIT: {{nit_patrono}}<br>
+      Actividad Económica: Alimentos y Bebidas
+    </td>
+    <td style="width:50%; border:1px solid #000; padding:6px; vertical-align:top;">
+      <strong>GENERALES DEL TRABAJADOR</strong><br>
+      Nombre: {{nombre}}<br>
+      Sexo: {{genero}} &nbsp;&nbsp; Estado Civil: {{estado_civil}}<br>
+      Fecha de nacimiento: {{fecha_nacimiento}}<br>
+      Domicilio: —<br>
+      Nacionalidad: salvadoreño/a<br>
+      DUI: {{dui}} — Expedido en {{dui_expedido_en}}<br>
+      ISSS: {{isss}}<br>
+      AFP/NUP: {{afp}}
+    </td>
+  </tr>
+</table>
 
-<h3>CLÁUSULA I — Objeto</h3>
-<p>EL/LA PRESTADOR/A se obliga a brindar servicios profesionales en el área de <strong>{{cargo}}</strong> para <strong>{{sucursal}}</strong>, ejecutando las actividades que le sean encomendadas dentro del marco del presente contrato y conforme a los estándares de calidad de LA EMPRESA.</p>
+<p style="font-size:9pt; text-align:justify; margin-bottom:12px;">
+  NOSOTROS <strong>David Arthur Falkenstein Algara</strong>, en representación de <strong>CADEJO BREWING COMPANY, SOCIEDAD ANÓNIMA DE CAPITAL VARIABLE</strong>, que puede abreviarse Cadejo Brewing Company, S.A. de C.V., en adelante "<strong>EL PATRONO</strong>" y <strong>{{nombre}}</strong>, en adelante "<strong>EL TRABAJADOR</strong>", de las generales arriba indicadas y actuando en el carácter que aparece expresado, convenimos en celebrar el presente Contrato Individual de Trabajo, sujeto a las estipulaciones siguientes. Cuando se haga referencia conjunta a EL PATRONO y EL TRABAJADOR, se les denominará "las partes".
+</p>
 
-<h3>CLÁUSULA II — Duración</h3>
-<p>El presente contrato tendrá una vigencia de <strong>treinta (30) días calendario</strong>, a partir del día <strong>{{fecha_inicio_letras}}</strong>{{fecha_fin ? ', y hasta el ' : '.'}}<strong>{{fecha_fin}}</strong>. Al vencimiento del plazo, el contrato podrá renovarse por mutuo acuerdo de las partes mediante suscripción de un nuevo instrumento.</p>
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>a) CLASE DE TRABAJO O SERVICIO:</strong> El trabajador se obliga a prestar sus servicios al patrono como <strong>{{cargo}}</strong>. Desempeñando las funciones de: {{funciones}}; estas funciones no son restrictivas, pueden modificarse, adherirse o eliminarse según la necesidad del negocio y en común acuerdo entre las partes. Además de cumplir con todas las tareas que corresponden al cargo, el trabajador deberá cumplir con todas aquellas obligaciones que le impongan las leyes laborales, según políticas y el reglamento interno de trabajo.
+</p>
 
-<h3>CLÁUSULA III — Honorarios</h3>
-<p>LA EMPRESA pagará a EL/LA PRESTADOR/A la suma de <strong>{{salario_letras}}</strong> (<strong>{{salario}}</strong>) mensuales como honorarios por los servicios contratados, sujeto a la retención del <strong>10% del Impuesto sobre la Renta</strong> en cumplimiento de la legislación fiscal vigente. Los honorarios serán pagados en dos cuotas quincenales.</p>
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>b) DURACIÓN DEL CONTRATO Y TIEMPO DE SERVICIO:</strong> El presente Contrato se celebrará por <strong>TIEMPO INDEFINIDO</strong>. El tiempo de servicio se computará a partir del <strong>{{fecha_inicio_letras}}</strong>, fecha desde la cual el trabajador prestará sus servicios al patrono sin que la relación laboral se haya disuelto. Para los trabajadores de nuevo ingreso se estipula que los primeros treinta (30) días serán de prueba y dentro de ese término cualquiera de las partes podrá terminar el contrato sin expresión de causa.
+</p>
 
-<h3>CLÁUSULA IV — Horario y Lugar</h3>
-<p>EL/LA PRESTADOR/A deberá cumplir una jornada de <strong>cuarenta y cuatro (44) horas semanales</strong> distribuidas según el cuadrante de turnos asignado por LA EMPRESA. Los servicios se prestarán en las instalaciones de <strong>{{sucursal}}</strong>, con posibilidad de rotar a otras sucursales según las necesidades operativas.</p>
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>c) LUGAR DE PRESTACIÓN DE SERVICIOS Y DE ALOJAMIENTO:</strong> El lugar de prestación de los servicios será en <strong>Cadejo {{sucursal}}</strong>. Sin embargo, derivado que el negocio posee diferentes sucursales/centros de trabajo, el lugar de presentación de servicios puede cambiar según las necesidades específicas y en común acuerdo entre las partes.
+</p>
 
-<h3>CLÁUSULA V — Beneficios</h3>
-<p>Durante la vigencia del presente contrato, EL/LA PRESTADOR/A gozará de los siguientes beneficios:</p>
-<ul>
-  <li>Descuento del <strong>40%</strong> en consumo personal en cualquier sucursal de Cadejo Brewing Company.</li>
-  <li>Descuento del <strong>25%</strong> para acompañantes (máximo 2 personas por visita).</li>
-  <li>Descuento del <strong>50%</strong> en alimentos del menú de colaboradores.</li>
-</ul>
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>d) HORARIO DE TRABAJO:</strong> Semana laboral de 44 horas. El horario del trabajador es de <strong>8:00 a.m. a 5:00 p.m.</strong> Únicamente podrán ejecutarse trabajos extraordinarios cuando se reciba la orden por escrito o verbalmente por parte del Patrono o sus Representantes Patronales.
+</p>
 
-<h3>CLÁUSULA VI — Obligaciones del Prestador/a</h3>
-<p>EL/LA PRESTADOR/A se obliga a: (a) prestar los servicios con diligencia, puntualidad y profesionalismo; (b) cumplir los protocolos de higiene, seguridad alimentaria y presentación personal establecidos por LA EMPRESA; (c) guardar confidencialidad sobre recetas, procesos y estrategias de negocio; (d) acatar el Reglamento Interno de Trabajo en lo aplicable; y (e) no ejercer actividades que generen conflicto de interés con LA EMPRESA.</p>
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>e) SALARIO: FORMA, PERÍODO Y LUGAR DEL PAGO:</strong> El salario que recibirá el trabajador, por sus servicios, será la suma de <strong>{{salario_letras}}</strong> (<strong>{{salario}}</strong>) más las prestaciones laborales reconocida por la ley vigente durante la duración del presente contrato laboral. El salario y toda prestación laboral reconocida por la ley se pagará a través de depósito bancario. Dicho pago se hará quincenalmente los días 15 y final de mes. La operación del pago principiará y se continuará sin interrupción, a más tardar a la Terminación de la jornada de trabajo correspondiente a la respectiva fecha, en caso de reclamo de la persona trabajadora, se estará a lo dispuesto en el art. 613 del Código de Trabajo.
+</p>
 
-<h3>CLÁUSULA VII — Terminación Anticipada</h3>
-<p>Cualquiera de las partes podrá dar por terminado el presente contrato antes de su vencimiento, dando aviso por escrito con al menos <strong>quince (15) días calendario</strong> de anticipación. LA EMPRESA podrá prescindir de los servicios sin previo aviso en caso de incumplimiento grave de las obligaciones pactadas, sin que ello genere derecho a indemnización alguna.</p>
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>f) HERRAMIENTAS Y MATERIALES:</strong> El patrono suministrará al trabajador las herramientas y materiales que sean necesarios para el cumplimiento de sus labores. Todas las herramientas y materiales que utilice y se le entreguen deben ser devueltos al patrono, en el mismo estado en que sean recibidas cuando sean requeridas por sus jefes inmediatos o al darse por finalizada la relación laboral, salvo la disminución o deterioro causados por caso fortuito o fuerza mayor, o por la acción del tiempo o por el consumo y uso normal de los mismos.
+</p>
 
-<hr>
+<p style="font-size:9pt; margin-bottom:6px;"><strong>g) PERSONAS QUE DEPENDEN ECONÓMICAMENTE DEL TRABAJADOR:</strong></p>
+<table style="width:100%; border-collapse:collapse; font-size:8.5pt; margin-bottom:12px;">
+  <tr style="background:#f2f2f2;">
+    <th style="border:1px solid #000; padding:4px; text-align:center;">NOMBRE</th>
+    <th style="border:1px solid #000; padding:4px; text-align:center;">FECHA DE NACIMIENTO</th>
+    <th style="border:1px solid #000; padding:4px; text-align:center;">PARENTESCO</th>
+  </tr>
+  <tr><td style="border:1px solid #000; padding:4px;">&nbsp;</td><td style="border:1px solid #000; padding:4px;">&nbsp;</td><td style="border:1px solid #000; padding:4px;">&nbsp;</td></tr>
+  <tr><td style="border:1px solid #000; padding:4px;">&nbsp;</td><td style="border:1px solid #000; padding:4px;">&nbsp;</td><td style="border:1px solid #000; padding:4px;">&nbsp;</td></tr>
+</table>
 
-<p>En señal de conformidad con todo lo estipulado, ambas partes suscriben el presente contrato en la ciudad de <strong>{{ciudad_firma}}</strong>, a los <strong>{{fecha_firma_letras}}</strong>.</p>
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>h) OTRAS ESTIPULACIONES:</strong> El Trabajador se compromete a guardar rigurosa reserva sobre aquellos asuntos confidenciales de los cuales tuviere conocimiento por razón de su cargo, y sobre asuntos administrativos cuya divulgación pudiere perjudicar a Cadejo Brewing Company, S.A. de C.V. o provecho indebido a terceros.
+</p>
 
-<br>
+<p style="font-size:9pt; text-align:justify; margin-bottom:16px;">
+  <strong>i) TERMINACIÓN DEL CONTRATO POR FALTAS GRAVES:</strong> El presente contrato podrá darse por terminado sin obligación de indemnización alguna por parte de EL PATRONO en caso de que EL TRABAJADOR incurra en faltas graves que atenten contra la integridad, seguridad o bienes de la empresa, sus clientes o sus colaboradores. Se considerarán faltas graves, entre otras, la comisión de actos de robo, hurto, fraude, daño intencional a bienes de la empresa, agresiones físicas o verbales, divulgación de información confidencial en perjuicio del negocio y cualquier otra conducta que vulnere las normas establecidas en el reglamento interno de trabajo y en la legislación laboral aplicable.
+</p>
+
+<p style="font-size:9pt; text-align:justify; margin-bottom:20px;">
+  Este contrato sustituye cualquier otro convenio individual de trabajo anterior, ya sea escrito o verbal, que haya estado vigente entre las partes. En fe de lo cual firmamos este documento por triplicado en <strong>{{ciudad_firma}}</strong> a los <strong>{{fecha_firma_letras}}</strong>.
+</p>
+
 <table style="width:100%; margin-top:30px;">
   <tr>
     <td style="width:50%; text-align:center; padding:10px;">
-      <div style="border-top:1px solid #000; width:80%; margin:0 auto; padding-top:6px;">
-        <strong>{{patrono}}</strong><br>
-        <span style="font-size:9pt;">La Empresa</span>
+      <div style="border-top:1px solid #000; width:80%; margin:0 auto; padding-top:6px; font-size:9pt;">
+        <strong>{{patrono}}</strong><br>PATRONO O REPRESENTANTE
       </div>
     </td>
     <td style="width:50%; text-align:center; padding:10px;">
-      <div style="border-top:1px solid #000; width:80%; margin:0 auto; padding-top:6px;">
-        <strong>{{nombre}}</strong><br>
-        <span style="font-size:9pt;">El/La Prestador/a — DUI: {{dui}}</span>
+      <div style="border-top:1px solid #000; width:80%; margin:0 auto; padding-top:6px; font-size:9pt;">
+        <strong>{{nombre}}</strong><br>TRABAJADOR/A — DUI: {{dui}}
+      </div>
+    </td>
+  </tr>
+</table>
+HTML;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Contrato de Servicios Profesionales
+    // ─────────────────────────────────────────────────────────────────────────
+    private function contratoServiciosProfesionales(): string
+    {
+        return <<<'HTML'
+<h2 style="text-align:center; font-size:13pt; margin-bottom:6px;">CADEJO BREWING COMPANY S.A. DE C.V.</h2>
+<p style="text-align:center; font-size:9pt; margin-bottom:18px;">NIT: {{nit_patrono}}</p>
+<h2 style="text-align:center; font-size:12pt; margin-bottom:18px;">CONTRATO DE PRESTACIÓN DE SERVICIOS PROFESIONALES</h2>
+
+<table style="width:100%; border-collapse:collapse; font-size:8.5pt; margin-bottom:16px;">
+  <tr>
+    <td style="width:40%; border:1px solid #000; padding:5px; font-weight:bold;">Contratante:</td>
+    <td style="width:60%; border:1px solid #000; padding:5px;">Cadejo Brewing Company S.A. de C.V.</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #000; padding:5px; font-weight:bold;">Representante:</td>
+    <td style="border:1px solid #000; padding:5px;">{{patrono}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #000; padding:5px; font-weight:bold;">Prestador/a:</td>
+    <td style="border:1px solid #000; padding:5px;">{{nombre}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #000; padding:5px; font-weight:bold;">DUI:</td>
+    <td style="border:1px solid #000; padding:5px;">{{dui}} — Expedido en {{dui_expedido_en}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #000; padding:5px; font-weight:bold;">Servicio:</td>
+    <td style="border:1px solid #000; padding:5px;">{{cargo}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #000; padding:5px; font-weight:bold;">Lugar:</td>
+    <td style="border:1px solid #000; padding:5px;">{{sucursal}}</td>
+  </tr>
+</table>
+
+<h3 style="font-size:10pt; margin-bottom:6px;">CLÁUSULAS</h3>
+
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>I. OBJETO.</strong> Por medio del presente instrumento, Cadejo Brewing Company S.A. de C.V., en adelante "El Contratante", contrata los servicios profesionales de <strong>{{nombre}}</strong>, en adelante "El/La Prestador/a", para desempeñar las funciones propias del servicio de <strong>{{cargo}}</strong> según las necesidades operacionales de la sucursal indicada.{{funciones ? ' Funciones específicas: ' : ''}}{{funciones}}
+</p>
+
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>II. DURACIÓN.</strong> El presente contrato tendrá vigencia desde el <strong>{{fecha_inicio_letras}}</strong> hasta el <strong>{{fecha_fin_letras}}</strong>, por un período de treinta (30) días calendario, en atención a necesidades operacionales de la empresa. Al vencimiento del plazo, el contrato concluye automáticamente sin necesidad de aviso previo ni responsabilidad adicional para ninguna de las partes, salvo acuerdo escrito de renovación.
+</p>
+
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>III. HONORARIOS Y RETENCIÓN.</strong> El Contratante reconocerá al/a la Prestador/a honorarios mensuales por la suma de <strong>{{salario_letras}}</strong> (<strong>{{salario}}</strong>), pagaderos quincenalmente. Sobre el monto total de honorarios se aplicará una retención del diez por ciento (10%) de Impuesto sobre la Renta conforme al Art. 156 del Código Tributario de El Salvador, la cual será enterada al Ministerio de Hacienda por El Contratante. El/La Prestador/a recibirá el comprobante de retención correspondiente.
+</p>
+
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>IV. HORARIO DE PRESTACIÓN.</strong> Los servicios se prestarán en un horario de cuarenta y cuatro (44) horas semanales, distribuidas conforme al calendario operacional de la sucursal, pudiendo incluir turnos diurnos, nocturnos y/o fines de semana, con un descanso diario de treinta (30) minutos durante la jornada.
+</p>
+
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>V. BENEFICIOS ADICIONALES.</strong> Durante la vigencia del contrato, El/La Prestador/a gozará de: (a) Descuento en consumo: 40% para hasta 2 personas y 25% para grupos de 3 a 6 personas sobre el menú regular; 50% en productos promocionales y cerveza en botella. (b) Producto gratuito por turno: 1 cerveza artesanal o agua dura de 12 oz y 1 soda artesanal de 12 oz (no acumulables). Se prohíbe el consumo de bebidas alcohólicas durante el turno de trabajo.
+</p>
+
+<p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
+  <strong>VI. OBLIGACIONES DEL/DE LA PRESTADOR/A.</strong> El/La Prestador/a se obliga a: ejecutar los servicios con diligencia y calidad; cumplir las políticas internas y el Reglamento vigente de la empresa; guardar reserva sobre información confidencial; y mantener una conducta acorde con los valores de la marca dentro y fuera del horario de prestación.
+</p>
+
+<p style="font-size:9pt; text-align:justify; margin-bottom:16px;">
+  <strong>VII. TERMINACIÓN ANTICIPADA.</strong> Cualquiera de las partes podrá dar por terminado el presente contrato antes del vencimiento del plazo mediante aviso escrito con tres (3) días de anticipación, sin que ello genere obligación de pago distinta a los honorarios proporcionales devengados hasta la fecha de terminación.
+</p>
+
+<p style="font-size:9pt; text-align:justify; margin-bottom:20px;">
+  En constancia de lo acordado, las partes suscriben el presente contrato en dos ejemplares de igual valor, en <strong>{{ciudad_firma}}</strong>, a los <strong>{{fecha_firma_letras}}</strong>.
+</p>
+
+<table style="width:100%; margin-top:30px;">
+  <tr>
+    <td style="width:50%; text-align:center; padding:10px;">
+      <div style="border-top:1px solid #000; width:80%; margin:0 auto; padding-top:6px; font-size:9pt;">
+        <strong>{{patrono}}</strong><br>El Contratante — Cadejo Brewing Company S.A. de C.V.
+      </div>
+    </td>
+    <td style="width:50%; text-align:center; padding:10px;">
+      <div style="border-top:1px solid #000; width:80%; margin:0 auto; padding-top:6px; font-size:9pt;">
+        <strong>{{nombre}}</strong><br>El/La Prestador/a — DUI: {{dui}}
       </div>
     </td>
   </tr>
