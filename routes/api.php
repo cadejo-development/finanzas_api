@@ -406,6 +406,10 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::patch('ingresos/{id}/confirmacion',              [IngresoPersonalController::class, 'confirmar']);
     Route::patch('ingresos/{id}/periodo-prueba',            [IngresoPersonalController::class, 'actualizarPeriodoPrueba']);
 
+    // Contratos por empleado (desde expediente, sin ingreso)
+    Route::get('empleados/{empleadoId}/contratos',          [ContratoEmpleadoController::class, 'porEmpleado']);
+    Route::post('empleados/{empleadoId}/contratos',         [ContratoEmpleadoController::class, 'storeParaEmpleado']);
+
     // Contratos por ingreso
     Route::get('ingresos/{ingresoId}/contratos',            [ContratoEmpleadoController::class, 'porIngreso']);
     Route::post('ingresos/{ingresoId}/contratos',           [ContratoEmpleadoController::class, 'store']);

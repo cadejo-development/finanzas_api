@@ -14,6 +14,52 @@ use Illuminate\Support\Facades\DB;
 
 class ContratoEmpleadoController extends RRHHBaseController
 {
+    /** GET /api/rrhh/empleados/{empleadoId}/contratos */
+    public function porEmpleado(int $empleadoId): JsonResponse
+    {
+        $contratos = ContratoEmpleado::with(['tipoContrato', 'plantilla'])
+            ->where('empleado_id', $empleadoId)
+            ->orderByDesc('fecha_inicio')
+            ->get();
+
+        return response()->json(['success' => true, 'data' => $contratos]);
+    }
+
+    /** POST /api/rrhh/empleados/{empleadoId}/contratos */
+    public function storeParaEmpleado(Request $request, int $empleadoId): JsonResponse
+    {
+        $emp = DB::connection('pgsql')
+            ->table('empleados')
+            ->where('id', $empleadoId)
+            ->select('nombres', 'apellidos')
+            ->first();
+
+        abort_unless($emp, 404, 'Empleado no encontrado.');
+
+        $v = $request->validate([
+            'tipo_contrato_id' => 'required|integer|exists:rrhh.tipos_contrato,id',
+            'plantilla_id'     => 'nullable|integer|exists:rrhh.plantillas_contrato,id',
+            'fecha_inicio'     => 'required|date',
+            'fecha_fin'        => 'nullable|date|after:fecha_inicio',
+            'funciones'        => 'nullable|string|max:5000',
+            'horario'          => 'nullable|string|max:200',
+            'notas'            => 'nullable|string|max:2000',
+        ]);
+
+        $contrato = ContratoEmpleado::create([
+            ...$v,
+            'empleado_id'     => $empleadoId,
+            'empleado_nombre' => trim($emp->nombres . ' ' . $emp->apellidos),
+            'estado'          => 'activo',
+            'generado_por_id' => Auth::id(),
+            'aud_usuario'     => Auth::user()->email,
+        ]);
+
+        $contrato->load('tipoContrato');
+
+        return response()->json(['success' => true, 'data' => $contrato], 201);
+    }
+
     /** GET /api/rrhh/ingresos/{ingresoId}/contratos */
     public function porIngreso(int $ingresoId): JsonResponse
     {
