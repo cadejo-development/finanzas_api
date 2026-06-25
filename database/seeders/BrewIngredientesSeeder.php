@@ -96,6 +96,18 @@ class BrewIngredientesSeeder extends Seeder
             FROM   olComun.dbo.Productos WITH (NOLOCK)
             WHERE  proActivo = 1
               AND  ({$where})
+              AND  LOWER(proNombre) NOT LIKE '%camisa%'
+              AND  LOWER(proNombre) NOT LIKE '%camiseta%'
+              AND  LOWER(proNombre) NOT LIKE '%playera%'
+              AND  LOWER(proNombre) NOT LIKE '%polo%'
+              AND  LOWER(proNombre) NOT LIKE '%gorra%'
+              AND  LOWER(proNombre) NOT LIKE '%vaso%'
+              AND  LOWER(proNombre) NOT LIKE '%bot. %'
+              AND  LOWER(proNombre) NOT LIKE '%botella%'
+              AND  LOWER(proNombre) NOT LIKE '%caja%'
+              AND  LOWER(proNombre) NOT LIKE '%skyhopper%'
+              AND  LOWER(proNombre) NOT LIKE '%souvenir%'
+              AND  LOWER(proNombre) NOT LIKE '%merch%'
             ORDER BY proNombre
         ");
 
