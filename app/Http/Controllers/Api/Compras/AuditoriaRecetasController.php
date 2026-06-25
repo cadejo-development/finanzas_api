@@ -399,7 +399,7 @@ class AuditoriaRecetasController extends Controller
         ]);
         $submit = $request->boolean('submit', false);
 
-        DB::connection('compras')->transaction(function () use ($auditoria, $validated) {
+        DB::connection('compras')->transaction(function () use ($auditoria, $validated, $submit) {
             foreach ($validated['items'] as $item) {
                 AuditoriaItem::updateOrCreate(
                     ['auditoria_id' => $auditoria->id, 'criterio_id' => $item['criterio_id']],
