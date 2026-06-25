@@ -94,7 +94,7 @@ class AuditoriaRecetasController extends Controller
                 'hora'               => $validated['hora'],
                 'sucursal_id'        => $validated['sucursal_id'],
                 'estacion_id'        => $validated['estacion_id'] ?? null,
-                'receta_id'          => $validated['receta_id'],
+                'receta_id'          => $validated['receta_id'] ?? null,
                 'tipo_receta'        => $validated['tipo_receta'] ?? 'plato',
                 'responsable_id'     => $validated['responsable_id'] ?? null,
                 'responsable_nombre' => $validated['responsable_nombre'] ?? null,
