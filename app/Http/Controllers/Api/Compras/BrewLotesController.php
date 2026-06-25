@@ -386,11 +386,23 @@ class BrewLotesController extends Controller
                 return response()->json([]);
             }
 
-            $empleados = DB::connection('pgsql')
+            $ids = DB::connection('pgsql')
                 ->table('empleados')
                 ->where('departamento_id', $dpto->id)
                 ->where('activo', true)
-                ->select('id', 'nombres', 'apellidos', 'cargo_id')
+                ->pluck('id')
+                ->toArray();
+
+            // Incluir también al jefe del departamento aunque no esté asignado al depto
+            if ($dpto->jefe_empleado_id && !in_array($dpto->jefe_empleado_id, $ids)) {
+                $ids[] = $dpto->jefe_empleado_id;
+            }
+
+            $empleados = DB::connection('pgsql')
+                ->table('empleados')
+                ->whereIn('id', $ids)
+                ->where('activo', true)
+                ->select('id', 'nombres', 'apellidos')
                 ->orderBy('nombres')
                 ->get()
                 ->map(fn($e) => [
