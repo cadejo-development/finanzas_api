@@ -72,7 +72,7 @@ class AuditoriaRecetasController extends Controller
             'hora'               => 'required|date_format:H:i,H:i:s',
             'sucursal_id'        => 'required|integer',
             'estacion_id'        => 'nullable|integer|exists:compras.estaciones,id',
-            'receta_id'          => 'required|integer|exists:compras.recetas,id',
+            'receta_id'          => 'nullable|integer|exists:compras.recetas,id',
             'tipo_receta'        => 'nullable|in:plato,sub_receta',
             'responsable_id'     => 'nullable|integer',
             'responsable_nombre' => 'nullable|string|max:200',
