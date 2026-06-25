@@ -15,7 +15,7 @@ class ContratoEmpleado extends Model
         'empleado_id', 'empleado_nombre',
         'ingreso_id', 'tipo_contrato_id', 'plantilla_id',
         'fecha_inicio', 'fecha_fin', 'estado',
-        'notas', 'funciones', 'generado_por_id', 'aud_usuario',
+        'notas', 'funciones', 'horario', 'generado_por_id', 'aud_usuario',
     ];
 
     protected $casts = [

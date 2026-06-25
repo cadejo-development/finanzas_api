@@ -38,6 +38,7 @@ class ContratoEmpleadoController extends RRHHBaseController
             'fecha_inicio'     => 'required|date',
             'fecha_fin'        => 'nullable|date|after:fecha_inicio',
             'funciones'        => 'nullable|string|max:5000',
+            'horario'          => 'nullable|string|max:200',
             'notas'            => 'nullable|string|max:2000',
         ]);
 
@@ -185,8 +186,11 @@ class ContratoEmpleadoController extends RRHHBaseController
         $salarioLetras = $salarioBase > 0 ? $this->dineroEnLetras($salarioBase) : '';
 
         // ── Documentos ───────────────────────────────────────────────────────
-        $duiNum    = $dui?->numero ?? '';
-        $duiLugar  = $dui?->lugar_exp_texto ?? '';
+        $duiNum       = $dui?->numero ?? '';
+        $duiLugar     = $dui?->lugar_exp_texto ?? '';
+        $duiFechaExp  = $dui?->fecha_emision
+            ? Carbon::parse($dui->fecha_emision)->locale('es')->isoFormat('D [de] MMMM [de] YYYY')
+            : '';
         $isssNum   = $isss?->numero ?? '';
         $afpNum    = $afp?->numero ?? '';
 
@@ -199,7 +203,10 @@ class ContratoEmpleadoController extends RRHHBaseController
             'union_libre'        => 'Unión libre',
             default              => $datosPersonales?->estado_civil ?? '',
         };
-        $genero = ucfirst(strtolower($datosPersonales?->genero ?? ''));
+        $genero       = ucfirst(strtolower($datosPersonales?->genero ?? ''));
+        $nacionalidad = $datosPersonales?->nacionalidad ?? 'salvadoreño/a';
+        $profesion    = $datosPersonales?->profesion ?? '';
+        $domicilio    = $datosPersonales?->domicilio  ?? '';
 
         // ── Fechas ───────────────────────────────────────────────────────────
         $fechaInicio      = $contrato->fecha_inicio ? Carbon::parse($contrato->fecha_inicio) : null;
@@ -208,6 +215,7 @@ class ContratoEmpleadoController extends RRHHBaseController
         $fechaNacimiento  = $datosPersonales?->fecha_nacimiento
             ? Carbon::parse($datosPersonales->fecha_nacimiento)
             : null;
+        $edad = $fechaNacimiento ? $fechaNacimiento->age . ' años' : '';
 
         $fmtDate = fn(?Carbon $d) => $d ? $d->format('d/m/Y') : '';
         $fmtDateLetras = fn(?Carbon $d) => $d
@@ -229,10 +237,15 @@ class ContratoEmpleadoController extends RRHHBaseController
             '{{salario_letras}}'      => $salarioLetras,
             '{{dui}}'                 => $duiNum,
             '{{dui_expedido_en}}'     => $duiLugar,
+            '{{dui_fecha_exp}}'       => $duiFechaExp,
             '{{isss}}'                => $isssNum,
             '{{afp}}'                 => $afpNum,
             '{{estado_civil}}'        => $estadoCivil,
             '{{genero}}'              => $genero,
+            '{{edad}}'                => $edad,
+            '{{nacionalidad}}'        => $nacionalidad,
+            '{{profesion}}'           => $profesion,
+            '{{domicilio}}'           => $domicilio,
             '{{fecha_nacimiento}}'    => $fmtDate($fechaNacimiento),
             '{{fecha_inicio}}'        => $fmtDate($fechaInicio),
             '{{fecha_inicio_letras}}' => $fmtDateLetras($fechaInicio),
@@ -246,6 +259,7 @@ class ContratoEmpleadoController extends RRHHBaseController
             '{{patrono}}'             => 'David Arthur Falkenstein Algara',
             '{{nit_patrono}}'         => '0614-120411-105-11',
             '{{funciones}}'           => $contrato->funciones ?? '',
+            '{{horario}}'             => $contrato->horario ?? '',
         ];
     }
 

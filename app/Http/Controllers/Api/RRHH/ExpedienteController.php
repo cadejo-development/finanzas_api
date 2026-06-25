@@ -242,6 +242,8 @@ class ExpedienteController extends RRHHBaseController
             'grupo_sanguineo'  => 'nullable|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
             'lugar_nacimiento'        => 'nullable|string|max:150',
             'nacimiento_municipio_id' => 'nullable|integer',
+            'profesion'               => 'nullable|string|max:100',
+            'domicilio'               => 'nullable|string|max:200',
             'notas'                   => 'nullable|string|max:2000',
         ]);
 

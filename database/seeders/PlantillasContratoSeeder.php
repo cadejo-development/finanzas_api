@@ -70,25 +70,27 @@ class PlantillasContratoSeeder extends Seeder
     <td style="width:50%; border:1px solid #000; padding:6px; vertical-align:top;">
       <strong>GENERALES DE PARTE PATRONAL</strong><br>
       Nombre: David Arthur Falkenstein Algara<br>
+      Sexo: Masculino<br>
       Edad: 52 años &nbsp;&nbsp; Estado Civil: Soltero/a<br>
       Profesión u Oficio: Empleado<br>
       Domicilio: Santa Tecla, La Libertad<br>
       Nacionalidad: salvadoreño<br>
       DUI: 02603386-9 — Expedido en San Salvador, San Salvador el 04 de mayo de 2022<br>
       En Representación de: Cadejo Brewing Company, S.A. de C.V.<br>
-      NIT: {{nit_patrono}}<br>
+      NIT: 0614-120411-105-11<br>
       Actividad Económica: Alimentos y Bebidas
     </td>
     <td style="width:50%; border:1px solid #000; padding:6px; vertical-align:top;">
       <strong>GENERALES DEL TRABAJADOR</strong><br>
       Nombre: {{nombre}}<br>
       Sexo: {{genero}} &nbsp;&nbsp; Estado Civil: {{estado_civil}}<br>
-      Fecha de nacimiento: {{fecha_nacimiento}}<br>
-      Domicilio: —<br>
-      Nacionalidad: salvadoreño/a<br>
-      DUI: {{dui}} — Expedido en {{dui_expedido_en}}<br>
-      ISSS: {{isss}}<br>
-      AFP/NUP: {{afp}}
+      Edad: {{edad}}<br>
+      Profesión u Oficio: {{profesion}}<br>
+      Domicilio: {{domicilio}}<br>
+      Nacionalidad: {{nacionalidad}}<br>
+      DUI: {{dui}}<br>
+      Expedido en {{dui_expedido_en}}, el {{dui_fecha_exp}}<br>
+      ISSS: {{isss}} &nbsp;&nbsp; AFP/NUP: {{afp}}
     </td>
   </tr>
 </table>
@@ -208,25 +210,27 @@ HTML;
     <td style="width:50%; border:1px solid #000; padding:6px; vertical-align:top;">
       <strong>GENERALES DE PARTE PATRONAL</strong><br>
       Nombre: David Arthur Falkenstein Algara<br>
+      Sexo: Masculino<br>
       Edad: 52 años &nbsp;&nbsp; Estado Civil: Soltero/a<br>
       Profesión u Oficio: Empleado<br>
       Domicilio: Santa Tecla, La Libertad<br>
       Nacionalidad: salvadoreño<br>
       DUI: 02603386-9 — Expedido en San Salvador, San Salvador el 04 de mayo de 2022<br>
       En Representación de: Cadejo Brewing Company, S.A. de C.V.<br>
-      NIT: {{nit_patrono}}<br>
+      NIT: 0614-120411-105-11<br>
       Actividad Económica: Alimentos y Bebidas
     </td>
     <td style="width:50%; border:1px solid #000; padding:6px; vertical-align:top;">
       <strong>GENERALES DEL TRABAJADOR</strong><br>
       Nombre: {{nombre}}<br>
       Sexo: {{genero}} &nbsp;&nbsp; Estado Civil: {{estado_civil}}<br>
-      Fecha de nacimiento: {{fecha_nacimiento}}<br>
-      Domicilio: —<br>
-      Nacionalidad: salvadoreño/a<br>
-      DUI: {{dui}} — Expedido en {{dui_expedido_en}}<br>
-      ISSS: {{isss}}<br>
-      AFP/NUP: {{afp}}
+      Edad: {{edad}}<br>
+      Profesión u Oficio: {{profesion}}<br>
+      Domicilio: {{domicilio}}<br>
+      Nacionalidad: {{nacionalidad}}<br>
+      DUI: {{dui}}<br>
+      Expedido en {{dui_expedido_en}}, el {{dui_fecha_exp}}<br>
+      ISSS: {{isss}} &nbsp;&nbsp; AFP/NUP: {{afp}}
     </td>
   </tr>
 </table>
@@ -248,7 +252,7 @@ HTML;
 </p>
 
 <p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
-  <strong>d) HORARIO DE TRABAJO:</strong> Semana laboral de 44 horas. El horario del trabajador es de <strong>8:00 a.m. a 5:00 p.m.</strong> Únicamente podrán ejecutarse trabajos extraordinarios cuando se reciba la orden por escrito o verbalmente por parte del Patrono o sus Representantes Patronales.
+  <strong>d) HORARIO DE TRABAJO:</strong> Semana laboral de 44 horas, de lunes a viernes. El horario del trabajador es de <strong>{{horario}}</strong>. Únicamente podrán ejecutarse trabajos extraordinarios cuando se reciba la orden por escrito o verbalmente por parte del Patrono o sus Representantes Patronales.
 </p>
 
 <p style="font-size:9pt; text-align:justify; margin-bottom:10px;">
