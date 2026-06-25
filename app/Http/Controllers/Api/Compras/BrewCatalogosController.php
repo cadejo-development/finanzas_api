@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Compras;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Catalogos de ingredientes de cerveza.
@@ -55,6 +56,12 @@ class BrewCatalogosController extends Controller
     public function levaduras()
     {
         return response()->json($this->porTipo('levadura'));
+    }
+
+    // GET /api/compras/brew/catalogos/minerales
+    public function minerales()
+    {
+        return response()->json($this->porTipo('mineral'));
     }
 
     // GET /api/compras/brew/catalogos/materias-primas
