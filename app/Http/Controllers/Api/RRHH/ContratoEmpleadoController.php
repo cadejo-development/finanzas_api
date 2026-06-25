@@ -171,9 +171,11 @@ class ContratoEmpleadoController extends RRHHBaseController
         }
 
         // ── Nombre completo ──────────────────────────────────────────────────
-        $nombreCompleto = $contrato->empleado_nombre;
-        $nombres    = $emp ? trim($emp->nombres)    : $nombreCompleto;
-        $apellidos  = $emp ? trim($emp->apellidos)  : '';
+        $nombres    = $emp ? trim($emp->nombres)   : '';
+        $apellidos  = $emp ? trim($emp->apellidos) : '';
+        $nombreCompleto = $emp
+            ? trim($nombres . ' ' . $apellidos)
+            : $contrato->empleado_nombre;
 
         // ── Cargo / sucursal ─────────────────────────────────────────────────
         $cargoNombre    = $emp?->cargo       ?? $ingreso?->cargo_nombre    ?? '';

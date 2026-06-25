@@ -12,20 +12,6 @@
       line-height: 1.55;
     }
 
-    /* ── Header ── */
-    .header {
-      width: 100%;
-      border-bottom: 2px solid #000;
-      padding-bottom: 10px;
-      margin-bottom: 14px;
-    }
-    .header table { width: 100%; }
-    .header td.logo-cell { width: 70px; vertical-align: middle; }
-    .header td.title-cell { vertical-align: middle; padding-left: 14px; }
-    .header img { width: 55px; height: 55px; }
-    .header .company { font-size: 14pt; font-weight: bold; }
-    .header .doc-type { font-size: 10pt; color: #555; margin-top: 2px; }
-
     /* ── Contenido ── */
     .body-content {
       margin-top: 6px;
@@ -95,42 +81,13 @@
       color: #333;
     }
 
-    /* ── Footer ── */
-    .footer {
-      margin-top: 18px;
-      border-top: 1px solid #ccc;
-      padding-top: 6px;
-      font-size: 8pt;
-      color: #666;
-      text-align: center;
-    }
   </style>
 </head>
 <body>
 
-  {{-- ── Header ── --}}
-  <div class="header">
-    <table>
-      <tr>
-        <td class="logo-cell">
-          <img src="https://cadejo-storage.s3.us-east-2.amazonaws.com/public/logo2.png" alt="Logo Cadejo">
-        </td>
-        <td class="title-cell">
-          <div class="company">Cadejo Brewing Company</div>
-          <div class="doc-type">{{ $tipoContrato }}</div>
-        </td>
-      </tr>
-    </table>
-  </div>
-
   {{-- ── Cuerpo del contrato ── --}}
   <div class="body-content">
     {!! $contenido !!}
-  </div>
-
-  {{-- ── Footer ── --}}
-  <div class="footer">
-    Cadejo Brewing Company &bull; David Arthur Falkenstein Algara &bull; NIT: 0614-120411-105-11
   </div>
 
 </body>
