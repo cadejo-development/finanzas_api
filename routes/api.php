@@ -272,6 +272,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('inventario/borrador',           [InventarioController::class, 'getBorrador']);
     Route::put('inventario/borrador',           [InventarioController::class, 'saveBorrador']);
     Route::delete('inventario/borrador',        [InventarioController::class, 'deleteBorrador']);
+    Route::get('inventario/conteo-hoy',         [InventarioController::class, 'conteoHoy']);
 
     // ─── Producción Cervecera ────────────────────────────────────────────────
     Route::prefix('brew')->group(function () {

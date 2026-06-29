@@ -693,6 +693,42 @@ class InventarioController extends Controller
     // DELETE /api/compras/inventario/borrador?sucursal_id=X
     // Borrador de conteo físico persistido en DB por sucursal + usuario
     // ─────────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET /api/compras/inventario/conteo-hoy?sucursal_id=X&fecha=Y
+    // Devuelve el último conteo físico del día por producto (total + secciones)
+    // ─────────────────────────────────────────────────────────────────────────
+    public function conteoHoy(Request $request): JsonResponse
+    {
+        $request->validate(['sucursal_id' => 'required|integer', 'fecha' => 'required|date']);
+
+        $sucursalId = (int) $request->query('sucursal_id');
+        $fecha      = $request->query('fecha');
+
+        // Trae el último movimiento de conteo_fisico por producto para esa fecha
+        $movs = DB::connection('compras')
+            ->table('movimientos_inventario as m')
+            ->join('productos as p', 'p.id', '=', 'm.producto_id')
+            ->where('m.sucursal_id', $sucursalId)
+            ->where('m.tipo', 'conteo_fisico')
+            ->where('m.fecha', $fecha)
+            ->select('m.producto_id', 'm.detalle', 'm.created_at', 'p.factor_conversion', 'p.unidad')
+            ->orderBy('m.created_at')
+            ->get();
+
+        // Por producto: último movimiento gana (puede haber varios en el día)
+        $byProd = [];
+        foreach ($movs as $mov) {
+            $d = is_string($mov->detalle) ? json_decode($mov->detalle, true) : (array)($mov->detalle ?? []);
+            $byProd[$mov->producto_id] = [
+                'producto_id'   => $mov->producto_id,
+                'total_contado' => $d['total_contado'] ?? null,
+                'secciones'     => $d['secciones']     ?? null,
+            ];
+        }
+
+        return response()->json(['success' => true, 'data' => array_values($byProd)]);
+    }
+
     public function getBorrador(Request $request): JsonResponse
     {
         $request->validate(['sucursal_id' => 'required|integer']);
