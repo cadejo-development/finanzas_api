@@ -269,6 +269,9 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::put('inventario/{id}/stock-minimo',  [InventarioController::class, 'actualizarStockMinimo']);
     Route::patch('inventario/{id}/seccion',     [InventarioController::class, 'actualizarSeccion']);
     Route::patch('inventario/{id}/activo',      [InventarioController::class, 'toggleActivo']);
+    Route::get('inventario/borrador',           [InventarioController::class, 'getBorrador']);
+    Route::put('inventario/borrador',           [InventarioController::class, 'saveBorrador']);
+    Route::delete('inventario/borrador',        [InventarioController::class, 'deleteBorrador']);
 
     // ─── Producción Cervecera ────────────────────────────────────────────────
     Route::prefix('brew')->group(function () {
@@ -407,6 +410,7 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::patch('ingresos/{id}/periodo-prueba',            [IngresoPersonalController::class, 'actualizarPeriodoPrueba']);
 
     // Contratos por empleado (desde expediente, sin ingreso)
+    Route::get('empleados/{empleadoId}/validar-contrato',   [ContratoEmpleadoController::class, 'validarDatos']);
     Route::get('empleados/{empleadoId}/contratos',          [ContratoEmpleadoController::class, 'porEmpleado']);
     Route::post('empleados/{empleadoId}/contratos',         [ContratoEmpleadoController::class, 'storeParaEmpleado']);
 

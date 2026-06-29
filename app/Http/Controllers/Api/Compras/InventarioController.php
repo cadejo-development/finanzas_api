@@ -667,4 +667,69 @@ class InventarioController extends Controller
             'pedido_id' => $pedido->id,
         ]);
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET  /api/compras/inventario/borrador?sucursal_id=X
+    // PUT  /api/compras/inventario/borrador
+    // DELETE /api/compras/inventario/borrador?sucursal_id=X
+    // Borrador de conteo físico persistido en DB por sucursal + usuario
+    // ─────────────────────────────────────────────────────────────────────────
+    public function getBorrador(Request $request): JsonResponse
+    {
+        $request->validate(['sucursal_id' => 'required|integer']);
+        $row = DB::connection('compras')
+            ->table('conteo_borradores')
+            ->where('sucursal_id', (int) $request->query('sucursal_id'))
+            ->where('aud_usuario', Auth::user()->email)
+            ->first();
+
+        if (!$row) return response()->json(['success' => true, 'data' => null]);
+
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'fecha_conteo' => $row->fecha_conteo,
+                'payload'      => json_decode($row->payload, true),
+                'updated_at'   => $row->updated_at,
+            ],
+        ]);
+    }
+
+    public function saveBorrador(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'sucursal_id'  => 'required|integer',
+            'fecha_conteo' => 'required|date',
+            'payload'      => 'required|array',
+        ]);
+
+        DB::connection('compras')
+            ->table('conteo_borradores')
+            ->upsert(
+                [[
+                    'sucursal_id'  => (int) $validated['sucursal_id'],
+                    'aud_usuario'  => Auth::user()->email,
+                    'fecha_conteo' => $validated['fecha_conteo'],
+                    'payload'      => json_encode($validated['payload']),
+                    'created_at'   => now(),
+                    'updated_at'   => now(),
+                ]],
+                ['sucursal_id', 'aud_usuario'],
+                ['fecha_conteo', 'payload', 'updated_at']
+            );
+
+        return response()->json(['success' => true]);
+    }
+
+    public function deleteBorrador(Request $request): JsonResponse
+    {
+        $request->validate(['sucursal_id' => 'required|integer']);
+        DB::connection('compras')
+            ->table('conteo_borradores')
+            ->where('sucursal_id', (int) $request->query('sucursal_id'))
+            ->where('aud_usuario', Auth::user()->email)
+            ->delete();
+
+        return response()->json(['success' => true]);
+    }
 }
