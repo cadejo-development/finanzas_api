@@ -372,6 +372,7 @@ class InventarioController extends Controller
             'items.*.producto_id'       => 'required|integer',
             'items.*.cantidad_contada'  => 'required|numeric|min:0',
             'items.*.unidad'            => 'required|string|max:30',
+            'items.*.secciones'         => 'nullable|array',
         ]);
 
         $sucursalId = (int) $validated['sucursal_id'];
@@ -434,6 +435,22 @@ class InventarioController extends Controller
 
                 if (abs($diferenciaBase) < 0.00001) continue;
 
+                // Construir detalle por sección (solo las que tienen cantidad > 0)
+                $detalle = null;
+                if (!empty($item['secciones'])) {
+                    $seccionesConValor = array_filter(
+                        $item['secciones'],
+                        fn($v) => is_numeric($v) && $v > 0
+                    );
+                    if (!empty($seccionesConValor)) {
+                        $detalle = [
+                            'secciones'       => $seccionesConValor,
+                            'total_contado'   => round((float) $item['cantidad_contada'], 4),
+                            'stock_anterior'  => round($stockActualBase / $factor, 4),
+                        ];
+                    }
+                }
+
                 MovimientoInventario::create([
                     'sucursal_id'     => $sucursalId,
                     'producto_id'     => $pid,
@@ -444,6 +461,7 @@ class InventarioController extends Controller
                     'motivo'          => "Conteo físico — {$fecha}",
                     'fecha'           => $fecha,
                     'referencia_tipo' => 'conteo',
+                    'detalle'         => $detalle ? json_encode($detalle) : null,
                     'aud_usuario'     => $usuario,
                 ]);
                 $aplicados++;
@@ -591,6 +609,7 @@ class InventarioController extends Controller
             'motivo'         => $m->motivo,
             'fecha'          => $m->fecha?->toDateString(),
             'aud_usuario'    => $m->aud_usuario,
+            'detalle'        => $m->detalle ? json_decode($m->detalle, true) : null,
         ]);
 
         return response()->json(['success' => true, 'data' => $data]);
