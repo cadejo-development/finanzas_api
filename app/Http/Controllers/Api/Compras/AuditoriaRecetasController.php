@@ -288,9 +288,12 @@ class AuditoriaRecetasController extends Controller
             // Solo mostrar período 2 si ya empezó (día >= 16)
             $periodosActivos = $diaHoy >= 16 ? $periodos : [$periodos[0]];
 
-            $todasSucs = DB::connection('pgsql')->table('sucursales')
-                ->orderBy('nombre')
-                ->get(['id', 'nombre']);
+            $todasSucs = DB::connection('pgsql')->table('sucursales as s')
+                ->join('tipos_sucursal as ts', 'ts.id', '=', 's.tipo_sucursal_id')
+                ->where('s.activa', true)
+                ->where('ts.codigo', 'operativa')
+                ->orderBy('s.nombre')
+                ->get(['s.id', 's.nombre']);
 
             foreach ($periodosActivos as $periodo) {
                 $conAuditoria = DB::connection('compras')
