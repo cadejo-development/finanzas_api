@@ -94,7 +94,7 @@ async function main() {
     const { rows: catRows2 } = await pg.query(`SELECT nombre FROM receta_categorias WHERE activa = true`);
     const catValidas = catRows2.map(r => r.nombre);
     // Sub-Recetas también es válida en Brilo aunque no exista como receta_categoria en RDS
-    const catValidasSet = new Set([...catValidas, 'Sub-Recetas', 'Sub-Receta', 'Sub Recetas']);
+    const catValidasSet = new Set([...catValidas, 'Sub-Recetas', 'Sub-Receta', 'Sub Recetas', 'Platos Sub-Recetas']);
 
     // 1a. Todas las recetas de Brilo — solo de categorías que corresponden a recetas reales
     const bRec = (await sqlPool.request().query(`
