@@ -623,12 +623,12 @@ class AuditoriaRecetasController extends Controller
             ->select('e.id', DB::raw("CONCAT(e.nombres, ' ', e.apellidos) as nombre_completo"), 'c.nombre as cargo', 'e.sucursal_id')
             ->get();
 
-        // Sucursales operativas activas (excluir área corporativa)
+        // Sucursales operativas + producción (solo para auditorías de calidad)
         $sucursales = DB::connection('pgsql')
             ->table('sucursales as s')
             ->join('tipos_sucursal as ts', 'ts.id', '=', 's.tipo_sucursal_id')
             ->where('s.activa', true)
-            ->where('ts.codigo', 'operativa')
+            ->whereIn('ts.codigo', ['operativa', 'produccion'])
             ->orderBy('s.nombre')
             ->select('s.id', 's.nombre')
             ->get();
