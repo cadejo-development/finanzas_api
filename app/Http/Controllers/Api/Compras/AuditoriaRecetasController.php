@@ -232,6 +232,81 @@ class AuditoriaRecetasController extends Controller
             ->get()
             ->map(fn ($r) => ['dia' => $r->dia, 'total' => (int) $r->total]);
 
+        // Tendencia mensual — últimos 6 meses, promedio de calificación
+        $tendenciaMensual = DB::connection('compras')->table('auditorias_receta')
+            ->whereDate('fecha', '>=', now()->subMonths(5)->startOfMonth()->toDateString())
+            ->whereDate('fecha', '<=', now()->endOfMonth()->toDateString())
+            ->where('tipo', 'calidad')
+            ->when($sucursalId,  fn ($q) => $q->where('sucursal_id', $sucursalId))
+            ->when($sucursalIds, fn ($q) => $q->whereIn('sucursal_id', $sucursalIds))
+            ->whereNotNull('calificacion')
+            ->selectRaw("TO_CHAR(fecha, 'YYYY-MM') as mes, ROUND(AVG(calificacion)::numeric, 1) as promedio, COUNT(*) as total")
+            ->groupByRaw("TO_CHAR(fecha, 'YYYY-MM')")
+            ->orderBy('mes')
+            ->get()
+            ->map(fn ($r) => [
+                'mes'      => $r->mes,
+                'promedio' => (float) $r->promedio,
+                'total'    => (int)   $r->total,
+            ]);
+
+        // Sparklines por sucursal — últimos 4 meses
+        $sparklines = DB::connection('compras')->table('auditorias_receta')
+            ->whereDate('fecha', '>=', now()->subMonths(3)->startOfMonth()->toDateString())
+            ->whereDate('fecha', '<=', now()->endOfMonth()->toDateString())
+            ->where('tipo', 'calidad')
+            ->whereNotNull('calificacion')
+            ->whereNotNull('sucursal_id')
+            ->selectRaw("sucursal_id, TO_CHAR(fecha, 'YYYY-MM') as mes, ROUND(AVG(calificacion)::numeric, 1) as promedio")
+            ->groupByRaw("sucursal_id, TO_CHAR(fecha, 'YYYY-MM')")
+            ->orderBy('mes')
+            ->get()
+            ->groupBy('sucursal_id')
+            ->map(fn ($rows) => $rows->map(fn ($r) => ['mes' => $r->mes, 'promedio' => (float) $r->promedio])->values());
+
+        // Días promedio para cerrar (respondido_at - fecha)
+        $diasPromCerrarRaw = DB::connection('compras')->table('auditorias_receta')
+            ->whereDate('fecha', '>=', $desde)
+            ->whereDate('fecha', '<=', $hasta)
+            ->where('tipo', 'calidad')
+            ->whereNotNull('respondido_at')
+            ->when($sucursalId,  fn ($q) => $q->where('sucursal_id', $sucursalId))
+            ->when($sucursalIds, fn ($q) => $q->whereIn('sucursal_id', $sucursalIds))
+            ->selectRaw("ROUND(AVG(DATE_PART('day', respondido_at - fecha::timestamp))::numeric, 1) as prom")
+            ->value('prom');
+        $diasPromCerrar = $diasPromCerrarRaw !== null ? (float) $diasPromCerrarRaw : null;
+
+        // Cumplimiento del programa del mes (siempre sobre el mes de $hasta)
+        $mesProg       = \Carbon\Carbon::parse($hasta)->startOfMonth();
+        $ultimoDiaMes  = $mesProg->copy()->endOfMonth()->day;
+        $periodosProg  = [
+            ['desde' => $mesProg->format('Y-m') . '-01', 'hasta' => $mesProg->format('Y-m') . '-15'],
+            ['desde' => $mesProg->format('Y-m') . '-16', 'hasta' => $mesProg->format('Y-m') . "-{$ultimoDiaMes}"],
+        ];
+        $totalSucsOp = DB::connection('pgsql')->table('sucursales as s')
+            ->join('tipos_sucursal as ts', 'ts.id', '=', 's.tipo_sucursal_id')
+            ->where('s.activa', true)
+            ->where('ts.codigo', 'operativa')
+            ->count();
+        $completadasProg = 0;
+        foreach ($periodosProg as $per) {
+            $completadasProg += DB::connection('compras')->table('auditorias_receta')
+                ->where('tipo', 'calidad')
+                ->whereDate('fecha', '>=', $per['desde'])
+                ->whereDate('fecha', '<=', $per['hasta'])
+                ->whereIn('estado', ['pendiente_respuesta', 'respondida', 'cerrada'])
+                ->distinct()
+                ->count('sucursal_id');
+        }
+        $programadasProg  = $totalSucsOp * 2;
+        $porcentajeProg   = $programadasProg > 0 ? round($completadasProg / $programadasProg * 100) : 0;
+        $cumplimientoProg = [
+            'completadas' => $completadasProg,
+            'programadas' => $programadasProg,
+            'porcentaje'  => $porcentajeProg,
+            'mes_label'   => \Carbon\Carbon::parse($hasta)->locale('es')->isoFormat('MMMM YYYY'),
+        ];
+
         // Por evaluador
         $porEvaluador = (clone $base)
             ->select('evaluador_nombre', DB::raw('COUNT(*) as total'))
@@ -328,14 +403,18 @@ class AuditoriaRecetasController extends Controller
                 'desde'       => $desde,
                 'hasta'       => $hasta,
             ],
-            'por_sucursal'      => $porSucursalFmt,
-            'por_estado'        => $porEstado,
-            'por_clasificacion' => $porClasificacion,
-            'top_recetas'       => $topRecetasFmt,
-            'tendencia'         => $tendencia,
-            'por_evaluador'     => $porEvaluador,
-            'ultimas'           => $ultimasFmt,
-            'alertas_pendientes' => $alertasPendientes,
+            'por_sucursal'        => $porSucursalFmt,
+            'por_estado'          => $porEstado,
+            'por_clasificacion'   => $porClasificacion,
+            'top_recetas'         => $topRecetasFmt,
+            'tendencia'           => $tendencia,
+            'tendencia_mensual'   => $tendenciaMensual,
+            'sparklines'          => $sparklines,
+            'dias_prom_cerrar'    => $diasPromCerrar,
+            'cumplimiento_prog'   => $cumplimientoProg,
+            'por_evaluador'       => $porEvaluador,
+            'ultimas'             => $ultimasFmt,
+            'alertas_pendientes'  => $alertasPendientes,
         ]);
     }
 
