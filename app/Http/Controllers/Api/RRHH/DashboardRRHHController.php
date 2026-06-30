@@ -519,35 +519,44 @@ class DashboardRRHHController extends RRHHBaseController
             if (isset($estudios[$nivel])) $estudios[$nivel]++;
         }
 
-        // ── Antigüedad laboral ────────────────────────────────────────────────
-        // Se lee fecha_ingreso de empleados activos. Agrupamos en PHP.
+        // ── Antigüedad laboral (total + desglose por tipo) ───────────────────
         $antiguedadOrden = ['<1', '1-3', '3-5', '5-10', '+10'];
-        $antiguedad = array_fill_keys($antiguedadOrden, 0);
+        $antiguedad      = array_fill_keys($antiguedadOrden, 0);
+        $antiguedadAdm   = array_fill_keys($antiguedadOrden, 0);
+        $antiguedadOp    = array_fill_keys($antiguedadOrden, 0);
 
         $ingresosQuery = DB::connection('pgsql')
-            ->table('empleados')
-            ->where('activo', true)
-            ->whereNotNull('fecha_ingreso');
+            ->table('empleados as e')
+            ->leftJoin('departamentos as d', 'd.id', '=', 'e.departamento_id')
+            ->where('e.activo', true)
+            ->whereNotNull('e.fecha_ingreso')
+            ->select('e.fecha_ingreso', DB::raw("d.codigo as dept_codigo"));
         if ($subordinadosIds !== null) {
-            $ingresosQuery->whereIn('id', $subordinadosIds);
+            $ingresosQuery->whereIn('e.id', $subordinadosIds);
         }
-        $ingresos = $ingresosQuery->pluck('fecha_ingreso');
+        $ingresos = $ingresosQuery->get();
 
-        foreach ($ingresos as $fi) {
-            $anios = (int) Carbon::parse($fi)->diffInYears(now());
+        foreach ($ingresos as $row) {
+            $anios = (int) Carbon::parse($row->fecha_ingreso)->diffInYears(now());
             $rango = match(true) {
-                $anios < 1  => '<1',
-                $anios <= 3 => '1-3',
-                $anios <= 5 => '3-5',
+                $anios < 1   => '<1',
+                $anios <= 3  => '1-3',
+                $anios <= 5  => '3-5',
                 $anios <= 10 => '5-10',
-                default     => '+10',
+                default      => '+10',
             };
             $antiguedad[$rango]++;
+            $esRestaurante = $row->dept_codigo && str_starts_with($row->dept_codigo, 'RES_');
+            if ($esRestaurante) {
+                $antiguedadOp[$rango]++;
+            } else {
+                $antiguedadAdm[$rango]++;
+            }
         }
 
         return response()->json([
             'success' => true,
-            'data'    => compact('genero', 'edades', 'estudios', 'antiguedad'),
+            'data'    => compact('genero', 'edades', 'estudios', 'antiguedad', 'antiguedadAdm', 'antiguedadOp'),
         ]);
     }
 
