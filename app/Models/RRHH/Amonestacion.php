@@ -17,6 +17,7 @@ class Amonestacion extends Model
         'estado', 'aprobado_por_id', 'aprobado_en', 'rechazo_motivo',
         'invalidada', 'invalidada_por', 'invalidada_en', 'motivo_invalidacion',
         'archivo_nombre', 'archivo_ruta',
+        'token_aceptacion', 'acepta_empleado', 'fecha_aceptacion', 'comentario_empleado',
         'aud_usuario', 'creado_por',
     ];
 
@@ -27,6 +28,8 @@ class Amonestacion extends Model
         'dias_suspension_propina'   => 'array',
         'invalidada'                => 'boolean',
         'invalidada_en'             => 'datetime',
+        'acepta_empleado'           => 'boolean',
+        'fecha_aceptacion'          => 'datetime',
     ];
 
     public function tipoFalta()

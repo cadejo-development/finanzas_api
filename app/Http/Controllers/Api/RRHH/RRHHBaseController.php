@@ -658,8 +658,10 @@ abstract class RRHHBaseController extends Controller
         string  $mensaje,
         array   $detalles,
         string  $rutaFrontend,
-        ?string $pdfContent = null,
-        ?string $pdfNombre  = null,
+        ?string $pdfContent   = null,
+        ?string $pdfNombre    = null,
+        ?string $confirmUrl   = null,
+        ?string $confirmLabel = null,
     ): void {
         $destinatarioEmail = null;
         $mailable          = null;
@@ -687,6 +689,8 @@ abstract class RRHHBaseController extends Controller
                 destinatarioNombre: $empleadoNombre,
                 pdfContent:         $pdfContent,
                 pdfNombre:          $pdfNombre,
+                confirmUrl:         $confirmUrl,
+                confirmLabel:       $confirmLabel,
             );
 
             Mail::to($destinatarioEmail)->send($mailable);

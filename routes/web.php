@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\RRHH\SolicitudEmailController;
+use App\Http\Controllers\RRHH\ConfirmarAmonestacionController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -16,3 +17,9 @@ Route::get('/rrhh/email/solicitud/{tipo}/{id}/rechazar', [SolicitudEmailControll
 
 Route::post('/rrhh/email/rechazar-con-motivo/{tipo}/{id}', [SolicitudEmailController::class, 'rechazarConMotivo'])
     ->name('rrhh.email.rechazar.motivo');
+
+// ── Confirmación de amonestación por el empleado (sin auth) ───────────────
+Route::get('/rrhh/amonestacion/confirmar/{token}',  [ConfirmarAmonestacionController::class, 'show'])
+    ->name('rrhh.amonestacion.confirmar');
+Route::post('/rrhh/amonestacion/confirmar/{token}', [ConfirmarAmonestacionController::class, 'confirmar'])
+    ->name('rrhh.amonestacion.confirmar.post');

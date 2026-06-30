@@ -24,8 +24,10 @@ class NotificacionAlEmpleado extends Mailable
         public readonly array   $detalles,
         public readonly string  $linkUrl,
         public readonly string  $destinatarioNombre,
-        public readonly ?string $pdfContent = null,
-        public readonly ?string $pdfNombre  = null,
+        public readonly ?string $pdfContent   = null,
+        public readonly ?string $pdfNombre    = null,
+        public readonly ?string $confirmUrl   = null,
+        public readonly ?string $confirmLabel = null,
     ) {}
 
     public function attachments(): array

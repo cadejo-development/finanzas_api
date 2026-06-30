@@ -11,6 +11,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class AmonestacionesController extends RRHHBaseController
 {
@@ -117,6 +118,7 @@ class AmonestacionesController extends RRHHBaseController
             'estado'                    => $requiereAprobacionRrhh ? 'pendiente_rrhh' : ($requiereAprobacionPropina ? 'pendiente_gerencia_ops' : 'aprobado'),
             'archivo_nombre'            => $archivoNombre,
             'archivo_ruta'              => $archivoRuta,
+            'token_aceptacion'          => Str::uuid()->toString(),
             'aud_usuario'               => Auth::user()->email,
             'creado_por'                => $this->creadoPor(),
         ]);
@@ -184,14 +186,17 @@ class AmonestacionesController extends RRHHBaseController
                 tipoModelo:     'amonestacion',
             );
         } else {
+            $confirmUrl = route('rrhh.amonestacion.confirmar', $amonestacion->token_aceptacion);
             $this->notificarAlEmpleado(
                 empleadoId:   $validated['empleado_id'],
                 tipo:         'Amonestación',
-                mensaje:      "Tu jefe inmediato ha registrado una amonestacion en tu expediente. A continuacion encontraras los detalles del registro.",
+                mensaje:      "Tu jefe inmediato ha registrado una amonestacion en tu expediente. A continuacion encontraras los detalles. Por favor, confirma el recibo usando el boton a continuacion.",
                 detalles:     $detallesEmail,
                 rutaFrontend: 'mi-expediente',
                 pdfContent:   $pdfContent,
                 pdfNombre:    $pdfNombre,
+                confirmUrl:   $confirmUrl,
+                confirmLabel: 'Confirmar recibo de amonestación',
             );
 
             if ($esDeRestaurante) {

@@ -133,8 +133,26 @@
         <td class="card-bg" style="background:#ffffff;padding:0 40px 36px;text-align:center;">
           <table cellpadding="0" cellspacing="0" align="center">
             <tr>
-              <td style="background:#f59e0b;border-radius:8px;padding:12px 32px;">
-                <a href="{{ $linkUrl }}" style="color:#1a1a1a;font-size:14px;font-weight:700;text-decoration:none;display:inline-block;letter-spacing:0.3px;">Ver en el sistema</a>
+              @if(!empty($confirmUrl))
+              {{-- Botón principal: confirmar recibo (amonestaciones) --}}
+              <td style="padding-right:12px;">
+                <table cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="background:#dc2626;border-radius:8px;padding:12px 28px;">
+                      <a href="{{ $confirmUrl }}" style="color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;display:inline-block;letter-spacing:0.3px;">{{ $confirmLabel ?? 'Confirmar recibo' }}</a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+              @endif
+              <td>
+                <table cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="background:#f59e0b;border-radius:8px;padding:12px 32px;">
+                      <a href="{{ $linkUrl }}" style="color:#1a1a1a;font-size:14px;font-weight:700;text-decoration:none;display:inline-block;letter-spacing:0.3px;">Ver en el sistema</a>
+                    </td>
+                  </tr>
+                </table>
               </td>
             </tr>
           </table>
