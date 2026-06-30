@@ -438,6 +438,24 @@ async function main() {
 
     // ── 4e. Corregir sub_receta_id ───────────────────────────────
     log('\n  [4e] Reconectando sub_receta_id...');
+
+    // Primero borrar las filas producto_id donde ya existe la fila sub_receta_id equivalente
+    // (evita violar el constraint único uq_receta_ing_subreceta al hacer el UPDATE)
+    const preDelRes = await pg.query(`
+      DELETE FROM receta_ingredientes ri
+      USING productos p
+      JOIN recetas sr ON sr.codigo_origen = p.codigo AND sr.tipo_receta = 'sub_receta'
+      WHERE ri.producto_id = p.id
+        AND ri.sub_receta_id IS NULL
+        AND EXISTS (
+          SELECT 1 FROM receta_ingredientes ri2
+          WHERE ri2.receta_id = ri.receta_id
+            AND ri2.sub_receta_id = sr.id
+        )
+    `);
+    if (preDelRes.rowCount > 0) log(`  Duplicados producto_id previos eliminados: ${preDelRes.rowCount}`);
+
+    // Ahora hacer el UPDATE para los que no tienen duplicado
     const fixRes = await pg.query(`
       UPDATE receta_ingredientes ri
       SET sub_receta_id = sr.id,
@@ -449,21 +467,6 @@ async function main() {
         AND ri.sub_receta_id IS NULL
     `, [NOW]);
     log(`  sub_receta_id reconectados: ${fixRes.rowCount}`);
-
-    // Eliminar duplicados (sub_receta_id) que pudo haber creado la reconexión
-    // Causa: si ya existía (receta_id, sub_receta_id=X) de un sync anterior, la fase 4b
-    // re-insertó el mismo ingrediente como producto_id y 4e lo convirtió de nuevo, creando un duplicado.
-    const dedupRes = await pg.query(`
-      DELETE FROM receta_ingredientes
-      WHERE id NOT IN (
-        SELECT MIN(id)
-        FROM receta_ingredientes
-        GROUP BY receta_id,
-                 COALESCE(producto_id::text, ''),
-                 COALESCE(sub_receta_id::text, '')
-      )
-    `);
-    if (dedupRes.rowCount > 0) log(`  Duplicados eliminados: ${dedupRes.rowCount}`);
 
     // ── 4f. Sincronizar menú (receta_sucursal) — SOLO para recetas NUEVAS ───────
     // Las recetas que ya existían en RDS conservan sus asignaciones de sucursal.
