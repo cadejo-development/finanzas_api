@@ -137,7 +137,7 @@ async function main() {
       SELECT mx.proId AS rec_proId, mx.proIdMaterial AS mat_proId,
              TRIM(mat.proCodigo) AS ing_codigo, mat.proNombre AS ing_nombre,
              cpr.cprCodigo AS ing_cat_codigo, cpr.cprNombre AS ing_cat_nombre,
-             mx.mxprCantidad AS cantidad,
+             mx.mxprCantUnidad AS cantidad,
              ISNULL(uni.uniNombre, 'u') AS unidad
       FROM olComun.dbo.MaterialesXProducto mx WITH(NOLOCK)
       JOIN olComun.dbo.Productos mat WITH(NOLOCK) ON mat.proId = mx.proIdMaterial
@@ -145,7 +145,7 @@ async function main() {
       LEFT JOIN olComun.dbo.Unidades uni WITH(NOLOCK) ON uni.uniId = mx.uniId
       WHERE mx.proId IN (${proIds})
         AND mx.mxprActivo = 1 AND mx.mxprEliminado = 0
-        AND mx.mxprCantidad > 0
+        AND mx.mxprCantUnidad > 0
         AND mat.proCodigo IS NOT NULL
       ORDER BY mx.proId, mx.mxprId
     `)).recordset;
