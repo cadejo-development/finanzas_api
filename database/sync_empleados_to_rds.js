@@ -23,6 +23,7 @@ const MSSQL_CFG = {
   user: 'olimporeader', password: 'olimporeader',
   server: '10.0.4.20', port: 2033, database: 'olcomun',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 15000 },
+  requestTimeout: 180000,
 };
 
 // ── RDS PostgreSQL core_db ────────────────────────────────────────────────────
@@ -32,7 +33,10 @@ const PG_CFG = {
   password: 'Holamundo#3..',
   ssl: { rejectUnauthorized: false },
   connectionTimeoutMillis: 30000,
-  idleTimeoutMillis: 90000,
+  idleTimeoutMillis: 600000,
+  query_timeout: 60000,
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
 };
 
 // ── Mapeo depCodigo → codigo sucursal ─────────────────────────────────────────
@@ -195,8 +199,9 @@ async function run() {
     log(`Cargos en RDS:     ${cargoRes.rows.length}`);
 
     // ── 3. Precargar empleados existentes en RDS (por codigo) ─────────────────
-    const existRes = await pg.query('SELECT codigo FROM empleados');
-    const existentes = new Set(existRes.rows.map(r => r.codigo));
+    const existRes = await pg.query('SELECT codigo, sync_excluido FROM empleados');
+    const existentes    = new Set(existRes.rows.map(r => r.codigo));
+    const excluidos     = new Set(existRes.rows.filter(r => r.sync_excluido).map(r => r.codigo));
     log(`Empleados ya en RDS: ${existentes.size}\n`);
 
     // ── 4. Consultar empleados SQL Server ─────────────────────────────────────
@@ -215,6 +220,7 @@ async function run() {
       const departamentoId = DEP_DEPARTAMENTO_MAP[r.dep_codigo] ?? null;
 
       if (existentes.has(codigo)) {
+        if (excluidos.has(codigo)) continue; // sync_excluido=true → no tocar
         const fechaIngreso  = r.fecha_ingreso ? new Date(r.fecha_ingreso) : null;
         const cargoId       = cargoByCode[r.cargo_codigo] ?? null;
         const salarioBase   = r.salario_mes != null ? parseFloat(r.salario_mes) : null;
@@ -249,6 +255,7 @@ async function run() {
 
     log(`  Para insertar (nuevos):          ${paraInsertar.length}`);
     log(`  Para actualizar activo (exist.): ${paraActualizar.length}`);
+    if (excluidos.size) log(`  Excluidos del sync (duplicados):  ${excluidos.size}`);
     if (sinDepMap) log(`  AVISO: ${sinDepMap} nuevos sin mapeo de sucursal`);
 
     if (!DRY_RUN) {

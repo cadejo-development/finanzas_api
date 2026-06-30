@@ -323,6 +323,7 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::post('empleados/{empleadoId}/vincular/{userId}',      [AdminController::class, 'vincularUsuario']);
     Route::delete('empleados/{empleadoId}/vincular',             [AdminController::class, 'desvincularUsuario']);
     Route::patch('empleados/{id}',                      [AdminController::class, 'updateEmpleado']);
+    Route::post('empleados/{id}/inactivar-duplicado',   [AdminController::class, 'inactivarDuplicado']);
     Route::patch('users/{userId}/toggle',               [AdminController::class, 'toggleUser']);
     Route::patch('users/{userId}/password',             [AdminController::class, 'cambiarPassword']);
     Route::patch('users/{userId}',                      [AdminController::class, 'updateUser']);

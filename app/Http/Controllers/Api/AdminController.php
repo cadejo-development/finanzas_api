@@ -177,6 +177,30 @@ class AdminController extends Controller
     }
 
     /**
+     * POST /api/admin/empleados/{id}/inactivar-duplicado
+     *
+     * Marca el empleado como inactivo y sync_excluido=true para que el
+     * sync diario no lo reactive. Usar para códigos duplicados donde el
+     * registro más reciente es el activo correcto.
+     */
+    public function inactivarDuplicado(int $id): JsonResponse
+    {
+        $emp = $this->db()->table('empleados')->where('id', $id)->first();
+        abort_unless((bool) $emp, 404);
+
+        $this->db()->table('empleados')->where('id', $id)->update([
+            'activo'         => false,
+            'sync_excluido'  => true,
+            'updated_at'     => now(),
+        ]);
+
+        return response()->json([
+            'message' => "Empleado #{$emp->codigo} marcado como inactivo y excluido del sync.",
+            'codigo'  => $emp->codigo,
+        ]);
+    }
+
+    /**
      * PATCH /api/admin/users/{id}
      */
     public function updateUser(Request $request, int $id): JsonResponse
