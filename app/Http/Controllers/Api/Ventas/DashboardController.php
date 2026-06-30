@@ -85,13 +85,13 @@ class DashboardController extends Controller
 
         $creditosVivos = VentaOrden::where('tipo_venta', 'credito')
             ->whereIn('estado', ['aprobada', 'despachada'])
-            ->selectRaw('id, total, created_at, plazo_solicitado,
-                DATEDIFF(CURDATE(), DATE_ADD(DATE(created_at), INTERVAL plazo_solicitado DAY)) as dias_vencido')
-            ->get();
+            ->get(['id', 'total', 'created_at', 'plazo_solicitado']);
 
         $aging = ['corriente' => 0, 'vencido_30' => 0, 'vencido_60' => 0, 'vencido_mas' => 0];
+        $today = now()->startOfDay();
         foreach ($creditosVivos as $o) {
-            $dv = $o->dias_vencido ?? 0;
+            $vence = \Carbon\Carbon::parse($o->created_at)->addDays((int)($o->plazo_solicitado ?? 0))->startOfDay();
+            $dv    = $today->diffInDays($vence, false) * -1; // negativo = corriente, positivo = vencido
             if ($dv <= 0)       $aging['corriente']   += $o->total;
             elseif ($dv <= 30)  $aging['vencido_30']  += $o->total;
             elseif ($dv <= 60)  $aging['vencido_60']  += $o->total;
