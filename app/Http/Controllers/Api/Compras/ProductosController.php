@@ -86,11 +86,12 @@ class ProductosController extends Controller
             $query->where('origen', $origen);
         }
 
-        // solo_mp=1: excluye sub-recetas (PL20/SUBR) y productos de fábrica de cerveza (categoría MP-xx)
+        // solo_mp=1: excluye platos del menú (PL-xx), sub-recetas y materiales de fábrica de cerveza (MP-xx)
         if ($request->boolean('solo_mp')) {
-            $query->where('codigo', 'not ilike', 'PL20%')
-                  ->where('codigo', 'not ilike', 'SUBR%')
-                  ->whereDoesntHave('categoria', fn ($q) => $q->where('key', 'ilike', 'MP-%'));
+            $query->whereDoesntHave('categoria', fn ($q) =>
+                $q->where('key', 'ilike', 'PL-%')
+                  ->orWhere('key', 'ilike', 'MP-%')
+            );
         }
 
         // para_inventario=1: excluye platos del menú (categorías cuyo nombre contiene "plato")
