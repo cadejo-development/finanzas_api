@@ -41,6 +41,7 @@ class AmonestacionesController extends RRHHBaseController
         $validated = $request->validate([
             'empleado_id'               => 'required|integer',
             'tipo_falta_id'             => 'required|exists:rrhh.tipos_falta,id',
+            'catalogo_falta'            => 'nullable|string|max:255',
             'fecha_amonestacion'        => 'required|date',
             'descripcion'               => 'required|string|max:1000',
             'observacion'               => 'nullable|string|max:1000',
@@ -107,6 +108,7 @@ class AmonestacionesController extends RRHHBaseController
             'empleado_id'               => $validated['empleado_id'],
             'jefe_id'                   => $jefe->id,
             'tipo_falta_id'             => $validated['tipo_falta_id'],
+            'catalogo_falta'            => $validated['catalogo_falta'] ?? null,
             'fecha_amonestacion'        => $validated['fecha_amonestacion'],
             'descripcion'               => $validated['descripcion'],
             'observacion'               => $validated['observacion'] ?? null,
