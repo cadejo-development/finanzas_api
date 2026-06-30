@@ -631,9 +631,10 @@ Route::prefix('cadejo-ventas')->group(function () {
     Route::patch('ordenes/{id}/facturar',     [\App\Http\Controllers\Api\Ventas\OrdenesController::class, 'marcarFacturado']);
 
     // Pagos de órdenes
-    Route::get('ordenes/{id}/pagos',          [\App\Http\Controllers\Api\Ventas\PagosController::class, 'index']);
-    Route::post('ordenes/{id}/pagos',         [\App\Http\Controllers\Api\Ventas\PagosController::class, 'store']);
-    Route::delete('ordenes/{id}/pagos/{pid}', [\App\Http\Controllers\Api\Ventas\PagosController::class, 'destroy']);
+    Route::get('ordenes/{id}/pagos',                        [\App\Http\Controllers\Api\Ventas\PagosController::class, 'index']);
+    Route::post('ordenes/{id}/pagos',                       [\App\Http\Controllers\Api\Ventas\PagosController::class, 'store']);
+    Route::get('ordenes/{id}/pagos/{pid}/comprobante',      [\App\Http\Controllers\Api\Ventas\PagosController::class, 'downloadComprobante']);
+    Route::delete('ordenes/{id}/pagos/{pid}',               [\App\Http\Controllers\Api\Ventas\PagosController::class, 'destroy']);
 
     // Aprobaciones
     Route::get('aprobaciones',               [\App\Http\Controllers\Api\Ventas\AprobacionesController::class, 'index']);

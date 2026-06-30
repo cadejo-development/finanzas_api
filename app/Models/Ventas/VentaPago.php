@@ -10,7 +10,7 @@ class VentaPago extends Model
     protected $table = 'ventas_pagos';
 
     protected $fillable = [
-        'orden_id', 'fecha', 'forma_pago', 'monto', 'comprobante', 'registrado_por', 'notas',
+        'orden_id', 'fecha', 'forma_pago', 'monto', 'comprobante', 'comprobante_ruta', 'comprobante_nombre', 'registrado_por', 'notas',
     ];
 
     protected $casts = [
