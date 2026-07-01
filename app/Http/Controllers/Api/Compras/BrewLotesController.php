@@ -134,7 +134,13 @@ class BrewLotesController extends Controller
             'temp_transfer' => 'nullable|numeric',
             'num_corridas'  => 'nullable|integer|min:1',
             'notas'         => 'nullable|string',
-            'corridas'      => 'array',
+            'corridas'               => 'array',
+            'corridas.*.vol_litros'  => 'nullable|numeric|min:0',
+            'corridas.*.tierra_blanca' => 'nullable|numeric|min:0',
+            'corridas.*.tierra_roja'   => 'nullable|numeric|min:0',
+            'corridas.*.densidad'    => 'nullable|numeric',
+            'corridas.*.hora'        => 'nullable|string|max:8',
+            'corridas.*.notas'       => 'nullable|string',
         ]);
 
         DB::connection('compras')->transaction(function () use ($lote, $data) {
@@ -146,12 +152,16 @@ class BrewLotesController extends Controller
             if (isset($data['corridas'])) {
                 $lote->filtracionCorridas()->delete();
                 foreach ($data['corridas'] as $i => $row) {
-                    $lote->filtracionCorridas()->create(array_merge($row, ['numero_corrida' => $i + 1]));
+                    $lote->filtracionCorridas()->create(array_merge(
+                        collect($row)->only(['vol_litros', 'tierra_blanca', 'tierra_roja', 'densidad', 'hora', 'notas'])->toArray(),
+                        ['numero_corrida' => $i + 1]
+                    ));
                 }
             }
 
+                // Nuevo orden: filtracion → llenado
             if ($lote->estado === 'filtracion') {
-                $lote->update(['estado' => 'seguimiento']);
+                $lote->update(['estado' => 'llenado']);
             }
         });
 
@@ -173,8 +183,9 @@ class BrewLotesController extends Controller
 
         $lote->fermentacion()->updateOrCreate(['brew_lote_id' => $lote->id], $data);
 
+        // Nuevo orden: fermentacion → seguimiento
         if ($lote->estado === 'fermentacion') {
-            $lote->update(['estado' => 'filtracion']);
+            $lote->update(['estado' => 'seguimiento']);
         }
 
         return response()->json(['ok' => true]);
@@ -197,12 +208,16 @@ class BrewLotesController extends Controller
             foreach ($data['dias'] as $dia) {
                 $lote->fermSeguimiento()->updateOrCreate(
                     ['brew_lote_id' => $lote->id, 'dia' => $dia['dia']],
-                    $dia
+                    collect($dia)->only(['dia', 'fecha', 'gravedad', 'temp', 'ph', 'notas'])->toArray()
                 );
+            }
+            // Nuevo orden: seguimiento → filtracion
+            if ($lote->estado === 'seguimiento') {
+                $lote->update(['estado' => 'filtracion']);
             }
         });
 
-        return response()->json(['ok' => true]);
+        return response()->json(['ok' => true, 'estado' => $lote->fresh()->estado]);
     }
 
     public function guardarLlenado(Request $request, $id)
