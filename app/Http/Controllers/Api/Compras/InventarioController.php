@@ -787,4 +787,198 @@ class InventarioController extends Controller
 
         return response()->json(['success' => true]);
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET /api/compras/inventario/estadisticas?sucursal_id=X
+    // Dashboard de estadísticas: top negativos, excedentes, comparación mes,
+    // pérdida monetaria y ranking por sucursal (admin).
+    // ─────────────────────────────────────────────────────────────────────────
+    public function estadisticas(Request $request): JsonResponse
+    {
+        $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
+
+        // ── Stock actual por producto (base units) ──────────────────────────
+        // stock_actual_base = cantidad_inicial_base + SUM(movimientos.cantidad_base)
+        $stockQuery = DB::connection('compras')
+            ->table('inventarios as inv')
+            ->leftJoin('movimientos_inventario as mov', function ($j) {
+                $j->on('mov.producto_id', '=', 'inv.producto_id')
+                  ->on('mov.sucursal_id', '=', 'inv.sucursal_id');
+            })
+            ->join('productos as p', 'p.id', '=', 'inv.producto_id')
+            ->where('inv.activo', true)
+            ->when($sucursalId, fn ($q) => $q->where('inv.sucursal_id', $sucursalId))
+            ->groupBy('inv.id', 'inv.sucursal_id', 'inv.producto_id', 'inv.cantidad_inicial_base',
+                      'inv.unidad', 'inv.stock_minimo', 'p.nombre', 'p.codigo', 'p.costo')
+            ->selectRaw("
+                inv.id,
+                inv.sucursal_id,
+                inv.producto_id,
+                p.nombre   AS producto_nombre,
+                p.codigo   AS producto_codigo,
+                p.costo    AS costo_unitario,
+                inv.unidad,
+                inv.stock_minimo,
+                inv.cantidad_inicial_base + COALESCE(SUM(mov.cantidad_base), 0) AS stock_base
+            ");
+
+        $items = $stockQuery->get();
+
+        // ── Resumen general ─────────────────────────────────────────────────
+        $total    = $items->count();
+        $agotados = $items->filter(fn ($r) => (float)$r->stock_base <= 0)->count();
+        $bajos    = $items->filter(fn ($r) => (float)$r->stock_base > 0 && $r->stock_minimo !== null && (float)$r->stock_base < (float)$r->stock_minimo)->count();
+        $ok       = $total - $agotados - $bajos;
+
+        $perdidaTotal = $items
+            ->filter(fn ($r) => (float)$r->stock_base < 0 && (float)$r->costo_unitario > 0)
+            ->sum(fn ($r) => abs((float)$r->stock_base) * (float)$r->costo_unitario);
+
+        $valorExcedenteTotal = $items
+            ->filter(fn ($r) => $r->stock_minimo !== null && (float)$r->stock_base > (float)$r->stock_minimo * 3 && (float)$r->costo_unitario > 0)
+            ->sum(fn ($r) => ((float)$r->stock_base - (float)$r->stock_minimo) * (float)$r->costo_unitario);
+
+        // ── Top 10 negativos ────────────────────────────────────────────────
+        $topNegativos = $items
+            ->filter(fn ($r) => (float)$r->stock_base < 0)
+            ->sortBy('stock_base')
+            ->take(10)
+            ->map(fn ($r) => [
+                'producto'        => $r->producto_nombre,
+                'codigo'          => $r->producto_codigo,
+                'stock'           => round((float)$r->stock_base, 3),
+                'unidad'          => $r->unidad,
+                'costo_unitario'  => (float)$r->costo_unitario,
+                'perdida'         => (float)$r->costo_unitario > 0
+                    ? round(abs((float)$r->stock_base) * (float)$r->costo_unitario, 2) : null,
+            ])
+            ->values();
+
+        // ── Top 10 excedentes (stock > 3× mínimo) ──────────────────────────
+        $topExcedentes = $items
+            ->filter(fn ($r) => $r->stock_minimo !== null && (float)$r->stock_minimo > 0
+                && (float)$r->stock_base > (float)$r->stock_minimo * 2)
+            ->map(fn ($r) => [
+                'producto'        => $r->producto_nombre,
+                'codigo'          => $r->producto_codigo,
+                'stock'           => round((float)$r->stock_base, 3),
+                'stock_minimo'    => (float)$r->stock_minimo,
+                'exceso'          => round((float)$r->stock_base - (float)$r->stock_minimo, 3),
+                'ratio'           => round((float)$r->stock_base / (float)$r->stock_minimo, 1),
+                'unidad'          => $r->unidad,
+                'valor_excedente' => (float)$r->costo_unitario > 0
+                    ? round(((float)$r->stock_base - (float)$r->stock_minimo) * (float)$r->costo_unitario, 2) : null,
+            ])
+            ->sortByDesc('ratio')
+            ->take(10)
+            ->values();
+
+        // ── Comparación mes actual vs mes anterior ──────────────────────────
+        $mesActual   = now()->startOfMonth()->toDateString();
+        $mesAnterior = now()->subMonth()->startOfMonth()->toDateString();
+        $finMesAnt   = now()->subMonth()->endOfMonth()->toDateString();
+
+        $conteosQuery = DB::connection('compras')
+            ->table('movimientos_inventario as m')
+            ->join('productos as p', 'p.id', '=', 'm.producto_id')
+            ->where('m.tipo', 'conteo_fisico')
+            ->when($sucursalId, fn ($q) => $q->where('m.sucursal_id', $sucursalId))
+            ->whereDate('m.fecha', '>=', $mesAnterior)
+            ->selectRaw("
+                m.producto_id,
+                p.nombre AS producto_nombre,
+                p.codigo AS producto_codigo,
+                p.costo  AS costo_unitario,
+                m.unidad,
+                SUM(CASE WHEN m.fecha >= ? THEN m.cantidad_base ELSE 0 END) AS delta_actual,
+                SUM(CASE WHEN m.fecha < ?  THEN m.cantidad_base ELSE 0 END) AS delta_anterior
+            ", [$mesActual, $mesActual])
+            ->groupBy('m.producto_id', 'p.nombre', 'p.codigo', 'p.costo', 'm.unidad')
+            ->get();
+
+        $topMayoresCambios = $conteosQuery
+            ->map(fn ($r) => [
+                'producto'   => $r->producto_nombre,
+                'codigo'     => $r->producto_codigo,
+                'unidad'     => $r->unidad,
+                'actual'     => round((float)$r->delta_actual, 3),
+                'anterior'   => round((float)$r->delta_anterior, 3),
+                'diferencia' => round((float)$r->delta_actual - (float)$r->delta_anterior, 3),
+            ])
+            ->filter(fn ($r) => abs($r['diferencia']) > 0.001)
+            ->sortByDesc(fn ($r) => abs($r['diferencia']))
+            ->take(10)
+            ->values();
+
+        // ── Ranking por sucursal (admin: sin filtro de sucursal) ────────────
+        $rankingSucursales = [];
+        if (!$sucursalId) {
+            $porSucursal = DB::connection('compras')
+                ->table('inventarios as inv')
+                ->leftJoin('movimientos_inventario as mov', function ($j) {
+                    $j->on('mov.producto_id', '=', 'inv.producto_id')
+                      ->on('mov.sucursal_id', '=', 'inv.sucursal_id');
+                })
+                ->where('inv.activo', true)
+                ->groupBy('inv.sucursal_id')
+                ->selectRaw("
+                    inv.sucursal_id,
+                    COUNT(DISTINCT inv.producto_id) AS total_items,
+                    COUNT(DISTINCT CASE WHEN inv.cantidad_inicial_base + COALESCE(SUM(mov.cantidad_base) OVER (PARTITION BY inv.id), 0) <= 0 THEN inv.producto_id END) AS agotados,
+                    SUM(CASE WHEN inv.cantidad_inicial_base + COALESCE(SUM(mov.cantidad_base) OVER (PARTITION BY inv.id), 0) < 0 THEN 1 ELSE 0 END) AS negativos
+                ")
+                ->get();
+
+            // Simplificado: contar agotados directamente
+            $stockPorSucursal = DB::connection('compras')
+                ->table('inventarios as inv')
+                ->leftJoin('movimientos_inventario as mov', function ($j) {
+                    $j->on('mov.producto_id', '=', 'inv.producto_id')
+                      ->on('mov.sucursal_id', '=', 'inv.sucursal_id');
+                })
+                ->where('inv.activo', true)
+                ->groupBy('inv.sucursal_id', 'inv.producto_id', 'inv.cantidad_inicial_base', 'inv.stock_minimo')
+                ->selectRaw("
+                    inv.sucursal_id,
+                    inv.producto_id,
+                    inv.stock_minimo,
+                    inv.cantidad_inicial_base + COALESCE(SUM(mov.cantidad_base), 0) AS stock_base
+                ")
+                ->get()
+                ->groupBy('sucursal_id');
+
+            $sucursalesNombres = DB::connection('pgsql')
+                ->table('sucursales')
+                ->pluck('nombre', 'id');
+
+            foreach ($stockPorSucursal as $sucId => $items2) {
+                $tot = $items2->count();
+                $ago = $items2->filter(fn ($r) => (float)$r->stock_base <= 0)->count();
+                $rankingSucursales[] = [
+                    'sucursal_id' => $sucId,
+                    'sucursal'    => $sucursalesNombres[$sucId] ?? "Sucursal $sucId",
+                    'total'       => $tot,
+                    'agotados'    => $ago,
+                    'pct_agotado' => $tot > 0 ? round($ago / $tot * 100, 1) : 0,
+                ];
+            }
+            usort($rankingSucursales, fn ($a, $b) => $b['pct_agotado'] <=> $a['pct_agotado']);
+        }
+
+        return response()->json([
+            'resumen' => [
+                'total'                 => $total,
+                'agotados'              => $agotados,
+                'bajos'                 => $bajos,
+                'ok'                    => $ok,
+                'pct_agotado'           => $total > 0 ? round($agotados / $total * 100, 1) : 0,
+                'perdida_monetaria'     => round($perdidaTotal, 2),
+                'valor_excedente'       => round($valorExcedenteTotal, 2),
+            ],
+            'top_negativos'      => $topNegativos,
+            'top_excedentes'     => $topExcedentes,
+            'comparacion_mes'    => $topMayoresCambios,
+            'ranking_sucursales' => $rankingSucursales,
+        ]);
+    }
 }

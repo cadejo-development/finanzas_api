@@ -256,6 +256,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::patch('solicitudes-carga/{id}', [SolicitudCargaRecetasController::class, 'update']);
 
     // Inventario
+    Route::get('inventario/estadisticas',       [InventarioController::class, 'estadisticas']);
     Route::get('inventario/pedido-sugerido',    [InventarioController::class, 'pedidoSugerido']);
     Route::get('inventario/consumo',            [InventarioController::class, 'consumo']);
     Route::get('inventario/movimientos',        [InventarioController::class, 'movimientos']);
