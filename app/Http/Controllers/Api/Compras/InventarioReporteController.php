@@ -168,7 +168,7 @@ class InventarioReporteController extends Controller
     ): void {
         $ws = $ss->getActiveSheet();
         $ws->setTitle('Resumen Ejecutivo');
-        $ws->getSheetView()->setShowGridLines(false);
+        $ws->setShowGridlines(false);
         $ws->getTabColor()->setRGB(self::C['amber']);
         $ws->getDefaultRowDimension()->setRowHeight(18);
 
@@ -275,7 +275,7 @@ class InventarioReporteController extends Controller
     {
         $ws = $ss->createSheet();
         $ws->setTitle('Detalle vs BRILO');
-        $ws->getSheetView()->setShowGridLines(false);
+        $ws->setShowGridlines(false);
         $ws->getTabColor()->setRGB('EF5350');
         $ws->getDefaultRowDimension()->setRowHeight(17);
         $ws->freezePane('D3');
@@ -353,7 +353,7 @@ class InventarioReporteController extends Controller
     ): void {
         $ws = $ss->createSheet();
         $ws->setTitle('Estadísticas');
-        $ws->getSheetView()->setShowGridLines(false);
+        $ws->setShowGridlines(false);
         $ws->getTabColor()->setRGB(self::C['blue']);
         $ws->getDefaultRowDimension()->setRowHeight(18);
 
