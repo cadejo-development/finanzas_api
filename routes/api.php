@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\Compras\RecetasController;
 use App\Http\Controllers\Api\Compras\RecetaCategoriasController;
 use App\Http\Controllers\Api\Compras\AuditoriaRecetasController;
 use App\Http\Controllers\Api\Compras\InventarioController;
+use App\Http\Controllers\Api\Compras\InventarioReporteController;
 use App\Http\Controllers\Api\Compras\ExportBriloController;
 use App\Http\Controllers\Api\Compras\SolicitudCargaRecetasController;
 use App\Http\Controllers\Api\Compras\BrewRecetasController;
@@ -257,6 +258,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
 
     // Inventario
     Route::get('inventario/estadisticas',       [InventarioController::class, 'estadisticas']);
+    Route::get('inventario/reporte-conteo',     [InventarioReporteController::class, 'generar']);
     Route::get('inventario/pedido-sugerido',    [InventarioController::class, 'pedidoSugerido']);
     Route::get('inventario/consumo',            [InventarioController::class, 'consumo']);
     Route::get('inventario/movimientos',        [InventarioController::class, 'movimientos']);
