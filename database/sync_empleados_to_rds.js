@@ -18,6 +18,15 @@
 const sql      = require('mssql');
 const { Pool } = require('pg');
 
+// SQL Server devuelve dates como Date JS en UTC midnight; pasarlo como string
+// evita que el driver de pg lo convierta a timezone local (El Salvador UTC-6)
+// y reste un día.
+function fmtDate(d) {
+  if (!d) return null;
+  if (d instanceof Date) return d.toISOString().split('T')[0];
+  return String(d).split('T')[0];
+}
+
 // ── SQL Server ────────────────────────────────────────────────────────────────
 const MSSQL_CFG = {
   user: 'olimporeader', password: 'olimporeader',
@@ -221,7 +230,7 @@ async function run() {
 
       if (existentes.has(codigo)) {
         if (excluidos.has(codigo)) continue; // sync_excluido=true → no tocar
-        const fechaIngreso  = r.fecha_ingreso ? new Date(r.fecha_ingreso) : null;
+        const fechaIngreso  = fmtDate(r.fecha_ingreso);
         const cargoId       = cargoByCode[r.cargo_codigo] ?? null;
         const salarioBase   = r.salario_mes != null ? parseFloat(r.salario_mes) : null;
         const emailVal      = clean(r.email, 150);
@@ -243,7 +252,7 @@ async function run() {
           sucursalId,
           departamentoId,
           activo,
-          r.fecha_ingreso ? new Date(r.fecha_ingreso) : null,
+          fmtDate(r.fecha_ingreso),
           r.salario_mes != null ? parseFloat(r.salario_mes) : null,
           AUD,
           NOW,
@@ -254,7 +263,7 @@ async function run() {
     }
 
     log(`  Para insertar (nuevos):          ${paraInsertar.length}`);
-    log(`  Para actualizar activo (exist.): ${paraActualizar.length}`);
+    log(`  Para actualizar (existentes):    ${paraActualizar.length}`);
     if (excluidos.size) log(`  Excluidos del sync (duplicados):  ${excluidos.size}`);
     if (sinDepMap) log(`  AVISO: ${sinDepMap} nuevos sin mapeo de sucursal`);
 
@@ -266,32 +275,25 @@ async function run() {
           const batch = paraActualizar.slice(i, i + BATCH);
           for (const [activo, departamentoId, fechaIngreso, cargoId, salarioBase, emailVal, codigo] of batch) {
             await pg.query(
-              // activo: siempre sincronizado.
+              // activo: NO se toca — las bajas se registran desde el módulo RRHH.
               // departamento_id, fecha_ingreso, salario_base, email: COALESCE (solo si aún está vacío).
               // cargo_id: siempre actualizado (refleja ascensos/cambios de puesto).
-              // Protección: no reactivar si fue inactivado por desvinculación.
               `UPDATE empleados
-               SET activo          = $1,
-                   departamento_id = COALESCE(departamento_id, $2),
-                   fecha_ingreso   = COALESCE(fecha_ingreso, $3),
-                   cargo_id        = COALESCE($4, cargo_id),
-                   salario_base    = COALESCE(salario_base, $5),
-                   email           = COALESCE(NULLIF(email, ''), $6),
-                   updated_at      = $7
-               WHERE codigo = $8
-                 AND NOT (
-                   activo = false
-                   AND $1 = true
-                   AND aud_usuario IN ('sistema:desvinculacion', 'sistema:inactivar-desvinculados')
-                 )`,
-              [activo, departamentoId, fechaIngreso, cargoId, salarioBase, emailVal, NOW, codigo]
+               SET departamento_id = COALESCE(departamento_id, $1),
+                   fecha_ingreso   = COALESCE(fecha_ingreso, $2),
+                   cargo_id        = COALESCE($3, cargo_id),
+                   salario_base    = COALESCE(salario_base, $4),
+                   email           = COALESCE(NULLIF(email, ''), $5),
+                   updated_at      = $6
+               WHERE codigo = $7`,
+              [departamentoId, fechaIngreso, cargoId, salarioBase, emailVal, NOW, codigo]
             );
             updOk++;
           }
           process.stdout.write(`\r  Actualizados: ${updOk}/${paraActualizar.length}  `);
         }
         console.log();
-        log(`Activo actualizado en ${updOk} empleados existentes.`);
+        log(`Datos actualizados en ${updOk} empleados existentes.`);
       }
 
       // ── Insertar empleados nuevos ─────────────────────────────────────────
