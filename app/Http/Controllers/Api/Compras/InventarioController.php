@@ -802,56 +802,56 @@ class InventarioController extends Controller
         // stock_actual = (cantidad_inicial_base + SUM(mov excl. carga_inicial)) / factor_conversion
         $items = $this->calcularStockItems($sucursalId);
 
-        // ── Resumen general ─────────────────────────────────────────────────
-        $total     = $items->count();
-        $faltantes = $items->filter(fn ($r) => $r->stock_minimo !== null && $r->stock_actual < $r->stock_minimo)->count();
-        $ok        = $total - $faltantes;
+        // ── Resumen: compara stock_actual vs brilo_stock (igual que el Excel de resultado) ──
+        // Solo se consideran items donde brilo_stock tiene valor (BRILO los conoce)
+        $itemsConBrilo = $items->filter(fn ($r) => $r->brilo_stock !== null);
+        $total         = $items->count();
+        $conBrilo      = $itemsConBrilo->count();
+        $faltantes     = $itemsConBrilo->filter(fn ($r) => $r->stock_actual < $r->brilo_stock)->count();
+        $sobrantes     = $itemsConBrilo->filter(fn ($r) => $r->stock_actual > $r->brilo_stock)->count();
+        $ok            = $conBrilo - $faltantes - $sobrantes;
 
-        // Pérdida monetaria: costo de reponer cada faltante hasta su mínimo
-        $perdidaTotal = $items
-            ->filter(fn ($r) => $r->stock_minimo !== null && $r->stock_actual < $r->stock_minimo && $r->costo > 0)
-            ->sum(fn ($r) => ($r->stock_minimo - $r->stock_actual) * $r->costo);
+        // Pérdida monetaria: (brilo - contado) × costo para faltantes
+        $perdidaTotal = $itemsConBrilo
+            ->filter(fn ($r) => $r->stock_actual < $r->brilo_stock && $r->costo > 0)
+            ->sum(fn ($r) => ($r->brilo_stock - $r->stock_actual) * $r->costo);
 
-        // Valor sobrantes: exceso sobre mínimo en items con stock > 2× mínimo
-        $valorExcedenteTotal = $items
-            ->filter(fn ($r) => $r->stock_minimo !== null && $r->stock_minimo > 0
-                && $r->stock_actual > $r->stock_minimo * 2 && $r->costo > 0)
-            ->sum(fn ($r) => ($r->stock_actual - $r->stock_minimo) * $r->costo);
+        // Valor sobrantes: (contado - brilo) × costo para sobrantes
+        $valorSobranteTotal = $itemsConBrilo
+            ->filter(fn ($r) => $r->stock_actual > $r->brilo_stock && $r->costo > 0)
+            ->sum(fn ($r) => ($r->stock_actual - $r->brilo_stock) * $r->costo);
 
-        // ── Top 10 faltantes (stock < mínimo, mayor déficit primero) ────────
-        $topFaltantes = $items
-            ->filter(fn ($r) => $r->stock_minimo !== null && $r->stock_minimo > 0
-                && $r->stock_actual < $r->stock_minimo)
+        // ── Top 10 faltantes (contado < brilo, mayor déficit primero) ────────
+        $topFaltantes = $itemsConBrilo
+            ->filter(fn ($r) => $r->stock_actual < $r->brilo_stock)
             ->map(fn ($r) => [
                 'producto'      => $r->producto_nombre,
                 'codigo'        => $r->producto_codigo,
                 'stock'         => round($r->stock_actual, 3),
-                'stock_minimo'  => $r->stock_minimo,
-                'deficit'       => round($r->stock_minimo - $r->stock_actual, 3),
+                'brilo_stock'   => round($r->brilo_stock, 3),
+                'deficit'       => round($r->brilo_stock - $r->stock_actual, 3),
                 'unidad'        => $r->unidad,
                 'costo_reponer' => $r->costo > 0
-                    ? round(($r->stock_minimo - $r->stock_actual) * $r->costo, 2) : null,
+                    ? round(($r->brilo_stock - $r->stock_actual) * $r->costo, 2) : null,
             ])
             ->sortByDesc('deficit')
             ->take(10)
             ->values();
 
-        // ── Top 10 sobrantes (stock > 2× mínimo, mayor ratio primero) ───────
-        $topSobrantes = $items
-            ->filter(fn ($r) => $r->stock_minimo !== null && $r->stock_minimo > 0
-                && $r->stock_actual > $r->stock_minimo * 2)
+        // ── Top 10 sobrantes (contado > brilo, mayor diferencia primero) ────
+        $topSobrantes = $itemsConBrilo
+            ->filter(fn ($r) => $r->stock_actual > $r->brilo_stock)
             ->map(fn ($r) => [
                 'producto'      => $r->producto_nombre,
                 'codigo'        => $r->producto_codigo,
                 'stock'         => round($r->stock_actual, 3),
-                'stock_minimo'  => $r->stock_minimo,
-                'sobrante'      => round($r->stock_actual - $r->stock_minimo, 3),
-                'ratio'         => round($r->stock_actual / $r->stock_minimo, 1),
+                'brilo_stock'   => round($r->brilo_stock, 3),
+                'sobrante'      => round($r->stock_actual - $r->brilo_stock, 3),
                 'unidad'        => $r->unidad,
                 'valor_sobrante'=> $r->costo > 0
-                    ? round(($r->stock_actual - $r->stock_minimo) * $r->costo, 2) : null,
+                    ? round(($r->stock_actual - $r->brilo_stock) * $r->costo, 2) : null,
             ])
-            ->sortByDesc('ratio')
+            ->sortByDesc('sobrante')
             ->take(10)
             ->values();
 
@@ -904,9 +904,10 @@ class InventarioController extends Controller
                 ->pluck('nombre', 'id');
 
             foreach ($sucursalesIds as $sucId) {
-                $items2 = $this->calcularStockItems($sucId);
-                $tot  = $items2->count();
-                $falt = $items2->filter(fn ($r) => $r->stock_minimo !== null && $r->stock_actual < $r->stock_minimo)->count();
+                $items2     = $this->calcularStockItems($sucId);
+                $c2         = $items2->filter(fn ($r) => $r->brilo_stock !== null);
+                $tot        = $c2->count();
+                $falt       = $c2->filter(fn ($r) => $r->stock_actual < $r->brilo_stock)->count();
                 $rankingSucursales[] = [
                     'sucursal_id'  => $sucId,
                     'sucursal'     => $sucursalesNombres[$sucId] ?? "Sucursal $sucId",
@@ -921,11 +922,13 @@ class InventarioController extends Controller
         return response()->json([
             'resumen' => [
                 'total'             => $total,
+                'con_brilo'         => $conBrilo,
                 'faltantes'         => $faltantes,
+                'sobrantes'         => $sobrantes,
                 'ok'                => $ok,
-                'pct_faltante'      => $total > 0 ? round($faltantes / $total * 100, 1) : 0,
+                'pct_faltante'      => $conBrilo > 0 ? round($faltantes / $conBrilo * 100, 1) : 0,
                 'perdida_monetaria' => round($perdidaTotal, 2),
-                'valor_sobrante'    => round($valorExcedenteTotal, 2),
+                'valor_sobrante'    => round($valorSobranteTotal, 2),
             ],
             'top_faltantes'      => $topFaltantes,
             'top_sobrantes'      => $topSobrantes,
@@ -974,6 +977,7 @@ class InventarioController extends Controller
                 'producto_codigo'=> $inv->producto?->codigo,
                 'unidad'         => $inv->unidad ?: ($inv->producto?->unidad ?? ''),
                 'stock_minimo'   => $inv->stock_minimo !== null ? (float) $inv->stock_minimo : null,
+                'brilo_stock'    => $inv->brilo_stock !== null ? (float) $inv->brilo_stock : null,
                 'costo'          => (float) ($inv->producto?->costo ?? 0),
                 'stock_actual'   => round($stockActual, 4),
             ];
