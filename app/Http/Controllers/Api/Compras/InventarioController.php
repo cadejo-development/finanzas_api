@@ -790,72 +790,47 @@ class InventarioController extends Controller
 
     // ─────────────────────────────────────────────────────────────────────────
     // GET /api/compras/inventario/estadisticas?sucursal_id=X
-    // Dashboard de estadísticas: top negativos, excedentes, comparación mes,
+    // Dashboard de estadísticas: top faltantes, sobrantes, comparación mes,
     // pérdida monetaria y ranking por sucursal (admin).
+    // Usa el mismo cálculo de stock que index(): factor_conversion, excluye carga_inicial.
     // ─────────────────────────────────────────────────────────────────────────
     public function estadisticas(Request $request): JsonResponse
     {
         $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
 
-        // ── Stock actual por producto (base units) ──────────────────────────
-        // stock_actual_base = cantidad_inicial_base + SUM(movimientos.cantidad_base)
-        $stockQuery = DB::connection('compras')
-            ->table('inventarios as inv')
-            ->leftJoin('movimientos_inventario as mov', function ($j) {
-                $j->on('mov.producto_id', '=', 'inv.producto_id')
-                  ->on('mov.sucursal_id', '=', 'inv.sucursal_id');
-            })
-            ->join('productos as p', 'p.id', '=', 'inv.producto_id')
-            ->where('inv.activo', true)
-            ->when($sucursalId, fn ($q) => $q->where('inv.sucursal_id', $sucursalId))
-            ->groupBy('inv.id', 'inv.sucursal_id', 'inv.producto_id', 'inv.cantidad_inicial_base',
-                      'inv.unidad', 'inv.stock_minimo', 'p.nombre', 'p.codigo', 'p.costo')
-            ->selectRaw("
-                inv.id,
-                inv.sucursal_id,
-                inv.producto_id,
-                p.nombre   AS producto_nombre,
-                p.codigo   AS producto_codigo,
-                p.costo    AS costo_unitario,
-                inv.unidad,
-                inv.stock_minimo,
-                inv.cantidad_inicial_base + COALESCE(SUM(mov.cantidad_base), 0) AS stock_base
-            ");
-
-        $items = $stockQuery->get();
+        // ── Calcular stock por sucursal usando el mismo método que index() ──
+        // stock_actual = (cantidad_inicial_base + SUM(mov excl. carga_inicial)) / factor_conversion
+        $items = $this->calcularStockItems($sucursalId);
 
         // ── Resumen general ─────────────────────────────────────────────────
         $total     = $items->count();
-        $faltantes = $items->filter(fn ($r) => $r->stock_minimo !== null && (float)$r->stock_base < (float)$r->stock_minimo)->count();
+        $faltantes = $items->filter(fn ($r) => $r->stock_minimo !== null && $r->stock_actual < $r->stock_minimo)->count();
         $ok        = $total - $faltantes;
 
         // Pérdida monetaria: costo de reponer cada faltante hasta su mínimo
         $perdidaTotal = $items
-            ->filter(fn ($r) => $r->stock_minimo !== null
-                && (float)$r->stock_base < (float)$r->stock_minimo
-                && (float)$r->costo_unitario > 0)
-            ->sum(fn ($r) => ((float)$r->stock_minimo - (float)$r->stock_base) * (float)$r->costo_unitario);
+            ->filter(fn ($r) => $r->stock_minimo !== null && $r->stock_actual < $r->stock_minimo && $r->costo > 0)
+            ->sum(fn ($r) => ($r->stock_minimo - $r->stock_actual) * $r->costo);
 
-        // Valor sobrantes: lo que excede al mínimo en items con stock > 2× mínimo
+        // Valor sobrantes: exceso sobre mínimo en items con stock > 2× mínimo
         $valorExcedenteTotal = $items
-            ->filter(fn ($r) => $r->stock_minimo !== null && (float)$r->stock_minimo > 0
-                && (float)$r->stock_base > (float)$r->stock_minimo * 2
-                && (float)$r->costo_unitario > 0)
-            ->sum(fn ($r) => ((float)$r->stock_base - (float)$r->stock_minimo) * (float)$r->costo_unitario);
+            ->filter(fn ($r) => $r->stock_minimo !== null && $r->stock_minimo > 0
+                && $r->stock_actual > $r->stock_minimo * 2 && $r->costo > 0)
+            ->sum(fn ($r) => ($r->stock_actual - $r->stock_minimo) * $r->costo);
 
         // ── Top 10 faltantes (stock < mínimo, mayor déficit primero) ────────
         $topFaltantes = $items
-            ->filter(fn ($r) => $r->stock_minimo !== null && (float)$r->stock_minimo > 0
-                && (float)$r->stock_base < (float)$r->stock_minimo)
+            ->filter(fn ($r) => $r->stock_minimo !== null && $r->stock_minimo > 0
+                && $r->stock_actual < $r->stock_minimo)
             ->map(fn ($r) => [
-                'producto'       => $r->producto_nombre,
-                'codigo'         => $r->producto_codigo,
-                'stock'          => round((float)$r->stock_base, 3),
-                'stock_minimo'   => (float)$r->stock_minimo,
-                'deficit'        => round((float)$r->stock_minimo - (float)$r->stock_base, 3),
-                'unidad'         => $r->unidad,
-                'costo_reponer'  => (float)$r->costo_unitario > 0
-                    ? round(((float)$r->stock_minimo - (float)$r->stock_base) * (float)$r->costo_unitario, 2) : null,
+                'producto'      => $r->producto_nombre,
+                'codigo'        => $r->producto_codigo,
+                'stock'         => round($r->stock_actual, 3),
+                'stock_minimo'  => $r->stock_minimo,
+                'deficit'       => round($r->stock_minimo - $r->stock_actual, 3),
+                'unidad'        => $r->unidad,
+                'costo_reponer' => $r->costo > 0
+                    ? round(($r->stock_minimo - $r->stock_actual) * $r->costo, 2) : null,
             ])
             ->sortByDesc('deficit')
             ->take(10)
@@ -863,18 +838,18 @@ class InventarioController extends Controller
 
         // ── Top 10 sobrantes (stock > 2× mínimo, mayor ratio primero) ───────
         $topSobrantes = $items
-            ->filter(fn ($r) => $r->stock_minimo !== null && (float)$r->stock_minimo > 0
-                && (float)$r->stock_base > (float)$r->stock_minimo * 2)
+            ->filter(fn ($r) => $r->stock_minimo !== null && $r->stock_minimo > 0
+                && $r->stock_actual > $r->stock_minimo * 2)
             ->map(fn ($r) => [
-                'producto'        => $r->producto_nombre,
-                'codigo'          => $r->producto_codigo,
-                'stock'           => round((float)$r->stock_base, 3),
-                'stock_minimo'    => (float)$r->stock_minimo,
-                'sobrante'        => round((float)$r->stock_base - (float)$r->stock_minimo, 3),
-                'ratio'           => round((float)$r->stock_base / (float)$r->stock_minimo, 1),
-                'unidad'          => $r->unidad,
-                'valor_sobrante'  => (float)$r->costo_unitario > 0
-                    ? round(((float)$r->stock_base - (float)$r->stock_minimo) * (float)$r->costo_unitario, 2) : null,
+                'producto'      => $r->producto_nombre,
+                'codigo'        => $r->producto_codigo,
+                'stock'         => round($r->stock_actual, 3),
+                'stock_minimo'  => $r->stock_minimo,
+                'sobrante'      => round($r->stock_actual - $r->stock_minimo, 3),
+                'ratio'         => round($r->stock_actual / $r->stock_minimo, 1),
+                'unidad'        => $r->unidad,
+                'valor_sobrante'=> $r->costo > 0
+                    ? round(($r->stock_actual - $r->stock_minimo) * $r->costo, 2) : null,
             ])
             ->sortByDesc('ratio')
             ->take(10)
@@ -883,7 +858,6 @@ class InventarioController extends Controller
         // ── Comparación mes actual vs mes anterior ──────────────────────────
         $mesActual   = now()->startOfMonth()->toDateString();
         $mesAnterior = now()->subMonth()->startOfMonth()->toDateString();
-        $finMesAnt   = now()->subMonth()->endOfMonth()->toDateString();
 
         $conteosQuery = DB::connection('compras')
             ->table('movimientos_inventario as m')
@@ -895,12 +869,11 @@ class InventarioController extends Controller
                 m.producto_id,
                 p.nombre AS producto_nombre,
                 p.codigo AS producto_codigo,
-                p.costo  AS costo_unitario,
                 m.unidad,
                 SUM(CASE WHEN m.fecha >= ? THEN m.cantidad_base ELSE 0 END) AS delta_actual,
                 SUM(CASE WHEN m.fecha < ?  THEN m.cantidad_base ELSE 0 END) AS delta_anterior
             ", [$mesActual, $mesActual])
-            ->groupBy('m.producto_id', 'p.nombre', 'p.codigo', 'p.costo', 'm.unidad')
+            ->groupBy('m.producto_id', 'p.nombre', 'p.codigo', 'm.unidad')
             ->get();
 
         $topMayoresCambios = $conteosQuery
@@ -920,47 +893,20 @@ class InventarioController extends Controller
         // ── Ranking por sucursal (admin: sin filtro de sucursal) ────────────
         $rankingSucursales = [];
         if (!$sucursalId) {
-            $porSucursal = DB::connection('compras')
-                ->table('inventarios as inv')
-                ->leftJoin('movimientos_inventario as mov', function ($j) {
-                    $j->on('mov.producto_id', '=', 'inv.producto_id')
-                      ->on('mov.sucursal_id', '=', 'inv.sucursal_id');
-                })
-                ->where('inv.activo', true)
-                ->groupBy('inv.sucursal_id')
-                ->selectRaw("
-                    inv.sucursal_id,
-                    COUNT(DISTINCT inv.producto_id) AS total_items,
-                    COUNT(DISTINCT CASE WHEN inv.cantidad_inicial_base + COALESCE(SUM(mov.cantidad_base) OVER (PARTITION BY inv.id), 0) <= 0 THEN inv.producto_id END) AS agotados,
-                    SUM(CASE WHEN inv.cantidad_inicial_base + COALESCE(SUM(mov.cantidad_base) OVER (PARTITION BY inv.id), 0) < 0 THEN 1 ELSE 0 END) AS negativos
-                ")
-                ->get();
-
-            // Simplificado: contar agotados directamente
-            $stockPorSucursal = DB::connection('compras')
-                ->table('inventarios as inv')
-                ->leftJoin('movimientos_inventario as mov', function ($j) {
-                    $j->on('mov.producto_id', '=', 'inv.producto_id')
-                      ->on('mov.sucursal_id', '=', 'inv.sucursal_id');
-                })
-                ->where('inv.activo', true)
-                ->groupBy('inv.sucursal_id', 'inv.producto_id', 'inv.cantidad_inicial_base', 'inv.stock_minimo')
-                ->selectRaw("
-                    inv.sucursal_id,
-                    inv.producto_id,
-                    inv.stock_minimo,
-                    inv.cantidad_inicial_base + COALESCE(SUM(mov.cantidad_base), 0) AS stock_base
-                ")
-                ->get()
-                ->groupBy('sucursal_id');
+            $sucursalesIds = DB::connection('compras')
+                ->table('inventarios')
+                ->where('activo', true)
+                ->distinct()
+                ->pluck('sucursal_id');
 
             $sucursalesNombres = DB::connection('pgsql')
                 ->table('sucursales')
                 ->pluck('nombre', 'id');
 
-            foreach ($stockPorSucursal as $sucId => $items2) {
-                $tot = $items2->count();
-                $falt = $items2->filter(fn ($r) => $r->stock_minimo !== null && (float)$r->stock_base < (float)$r->stock_minimo)->count();
+            foreach ($sucursalesIds as $sucId) {
+                $items2 = $this->calcularStockItems($sucId);
+                $tot  = $items2->count();
+                $falt = $items2->filter(fn ($r) => $r->stock_minimo !== null && $r->stock_actual < $r->stock_minimo)->count();
                 $rankingSucursales[] = [
                     'sucursal_id'  => $sucId,
                     'sucursal'     => $sucursalesNombres[$sucId] ?? "Sucursal $sucId",
@@ -986,5 +932,51 @@ class InventarioController extends Controller
             'comparacion_mes'    => $topMayoresCambios,
             'ranking_sucursales' => $rankingSucursales,
         ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Calcula stock_actual usando el mismo método que index():
+    // (cantidad_inicial_base + SUM(movimientos excl. carga_inicial)) / factor_conversion
+    // ─────────────────────────────────────────────────────────────────────────
+    private function calcularStockItems(?int $sucursalId): \Illuminate\Support\Collection
+    {
+        $inventarios = Inventario::with('producto')
+            ->where('activo', true)
+            ->when($sucursalId, fn ($q) => $q->where('sucursal_id', $sucursalId))
+            ->get();
+
+        if ($inventarios->isEmpty()) return collect();
+
+        $productoIds = $inventarios->pluck('producto_id')->unique()->all();
+        $sucIds      = $inventarios->pluck('sucursal_id')->unique()->all();
+
+        $movimientos = DB::connection('compras')
+            ->table('movimientos_inventario')
+            ->where('tipo', '!=', 'carga_inicial')
+            ->whereIn('sucursal_id', $sucIds)
+            ->whereIn('producto_id', $productoIds)
+            ->selectRaw('sucursal_id, producto_id, SUM(cantidad_base) as total_base')
+            ->groupBy('sucursal_id', 'producto_id')
+            ->get()
+            ->keyBy(fn ($r) => $r->sucursal_id . '_' . $r->producto_id);
+
+        return $inventarios->map(function ($inv) use ($movimientos) {
+            $factor          = max((float) ($inv->producto?->factor_conversion ?? 1), 0.0001);
+            $key             = $inv->sucursal_id . '_' . $inv->producto_id;
+            $movBase         = (float) ($movimientos[$key]?->total_base ?? 0);
+            $stockActualBase = $inv->cantidad_inicial_base + $movBase;
+            $stockActual     = $stockActualBase / $factor;
+
+            return (object) [
+                'sucursal_id'    => $inv->sucursal_id,
+                'producto_id'    => $inv->producto_id,
+                'producto_nombre'=> $inv->producto?->nombre,
+                'producto_codigo'=> $inv->producto?->codigo,
+                'unidad'         => $inv->unidad ?: ($inv->producto?->unidad ?? ''),
+                'stock_minimo'   => $inv->stock_minimo !== null ? (float) $inv->stock_minimo : null,
+                'costo'          => (float) ($inv->producto?->costo ?? 0),
+                'stock_actual'   => round($stockActual, 4),
+            ];
+        });
     }
 }
