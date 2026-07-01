@@ -825,37 +825,44 @@ class InventarioController extends Controller
         $items = $stockQuery->get();
 
         // ── Resumen general ─────────────────────────────────────────────────
-        $total    = $items->count();
-        $agotados = $items->filter(fn ($r) => (float)$r->stock_base <= 0)->count();
-        $bajos    = $items->filter(fn ($r) => (float)$r->stock_base > 0 && $r->stock_minimo !== null && (float)$r->stock_base < (float)$r->stock_minimo)->count();
-        $ok       = $total - $agotados - $bajos;
+        $total     = $items->count();
+        $faltantes = $items->filter(fn ($r) => $r->stock_minimo !== null && (float)$r->stock_base < (float)$r->stock_minimo)->count();
+        $ok        = $total - $faltantes;
 
+        // Pérdida monetaria: costo de reponer cada faltante hasta su mínimo
         $perdidaTotal = $items
-            ->filter(fn ($r) => (float)$r->stock_base < 0 && (float)$r->costo_unitario > 0)
-            ->sum(fn ($r) => abs((float)$r->stock_base) * (float)$r->costo_unitario);
+            ->filter(fn ($r) => $r->stock_minimo !== null
+                && (float)$r->stock_base < (float)$r->stock_minimo
+                && (float)$r->costo_unitario > 0)
+            ->sum(fn ($r) => ((float)$r->stock_minimo - (float)$r->stock_base) * (float)$r->costo_unitario);
 
+        // Valor sobrantes: lo que excede al mínimo en items con stock > 2× mínimo
         $valorExcedenteTotal = $items
-            ->filter(fn ($r) => $r->stock_minimo !== null && (float)$r->stock_base > (float)$r->stock_minimo * 3 && (float)$r->costo_unitario > 0)
+            ->filter(fn ($r) => $r->stock_minimo !== null && (float)$r->stock_minimo > 0
+                && (float)$r->stock_base > (float)$r->stock_minimo * 2
+                && (float)$r->costo_unitario > 0)
             ->sum(fn ($r) => ((float)$r->stock_base - (float)$r->stock_minimo) * (float)$r->costo_unitario);
 
-        // ── Top 10 negativos ────────────────────────────────────────────────
-        $topNegativos = $items
-            ->filter(fn ($r) => (float)$r->stock_base < 0)
-            ->sortBy('stock_base')
-            ->take(10)
+        // ── Top 10 faltantes (stock < mínimo, mayor déficit primero) ────────
+        $topFaltantes = $items
+            ->filter(fn ($r) => $r->stock_minimo !== null && (float)$r->stock_minimo > 0
+                && (float)$r->stock_base < (float)$r->stock_minimo)
             ->map(fn ($r) => [
-                'producto'        => $r->producto_nombre,
-                'codigo'          => $r->producto_codigo,
-                'stock'           => round((float)$r->stock_base, 3),
-                'unidad'          => $r->unidad,
-                'costo_unitario'  => (float)$r->costo_unitario,
-                'perdida'         => (float)$r->costo_unitario > 0
-                    ? round(abs((float)$r->stock_base) * (float)$r->costo_unitario, 2) : null,
+                'producto'       => $r->producto_nombre,
+                'codigo'         => $r->producto_codigo,
+                'stock'          => round((float)$r->stock_base, 3),
+                'stock_minimo'   => (float)$r->stock_minimo,
+                'deficit'        => round((float)$r->stock_minimo - (float)$r->stock_base, 3),
+                'unidad'         => $r->unidad,
+                'costo_reponer'  => (float)$r->costo_unitario > 0
+                    ? round(((float)$r->stock_minimo - (float)$r->stock_base) * (float)$r->costo_unitario, 2) : null,
             ])
+            ->sortByDesc('deficit')
+            ->take(10)
             ->values();
 
-        // ── Top 10 excedentes (stock > 3× mínimo) ──────────────────────────
-        $topExcedentes = $items
+        // ── Top 10 sobrantes (stock > 2× mínimo, mayor ratio primero) ───────
+        $topSobrantes = $items
             ->filter(fn ($r) => $r->stock_minimo !== null && (float)$r->stock_minimo > 0
                 && (float)$r->stock_base > (float)$r->stock_minimo * 2)
             ->map(fn ($r) => [
@@ -863,10 +870,10 @@ class InventarioController extends Controller
                 'codigo'          => $r->producto_codigo,
                 'stock'           => round((float)$r->stock_base, 3),
                 'stock_minimo'    => (float)$r->stock_minimo,
-                'exceso'          => round((float)$r->stock_base - (float)$r->stock_minimo, 3),
+                'sobrante'        => round((float)$r->stock_base - (float)$r->stock_minimo, 3),
                 'ratio'           => round((float)$r->stock_base / (float)$r->stock_minimo, 1),
                 'unidad'          => $r->unidad,
-                'valor_excedente' => (float)$r->costo_unitario > 0
+                'valor_sobrante'  => (float)$r->costo_unitario > 0
                     ? round(((float)$r->stock_base - (float)$r->stock_minimo) * (float)$r->costo_unitario, 2) : null,
             ])
             ->sortByDesc('ratio')
@@ -953,30 +960,29 @@ class InventarioController extends Controller
 
             foreach ($stockPorSucursal as $sucId => $items2) {
                 $tot = $items2->count();
-                $ago = $items2->filter(fn ($r) => (float)$r->stock_base <= 0)->count();
+                $falt = $items2->filter(fn ($r) => $r->stock_minimo !== null && (float)$r->stock_base < (float)$r->stock_minimo)->count();
                 $rankingSucursales[] = [
-                    'sucursal_id' => $sucId,
-                    'sucursal'    => $sucursalesNombres[$sucId] ?? "Sucursal $sucId",
-                    'total'       => $tot,
-                    'agotados'    => $ago,
-                    'pct_agotado' => $tot > 0 ? round($ago / $tot * 100, 1) : 0,
+                    'sucursal_id'  => $sucId,
+                    'sucursal'     => $sucursalesNombres[$sucId] ?? "Sucursal $sucId",
+                    'total'        => $tot,
+                    'faltantes'    => $falt,
+                    'pct_faltante' => $tot > 0 ? round($falt / $tot * 100, 1) : 0,
                 ];
             }
-            usort($rankingSucursales, fn ($a, $b) => $b['pct_agotado'] <=> $a['pct_agotado']);
+            usort($rankingSucursales, fn ($a, $b) => $b['pct_faltante'] <=> $a['pct_faltante']);
         }
 
         return response()->json([
             'resumen' => [
-                'total'                 => $total,
-                'agotados'              => $agotados,
-                'bajos'                 => $bajos,
-                'ok'                    => $ok,
-                'pct_agotado'           => $total > 0 ? round($agotados / $total * 100, 1) : 0,
-                'perdida_monetaria'     => round($perdidaTotal, 2),
-                'valor_excedente'       => round($valorExcedenteTotal, 2),
+                'total'             => $total,
+                'faltantes'         => $faltantes,
+                'ok'                => $ok,
+                'pct_faltante'      => $total > 0 ? round($faltantes / $total * 100, 1) : 0,
+                'perdida_monetaria' => round($perdidaTotal, 2),
+                'valor_sobrante'    => round($valorExcedenteTotal, 2),
             ],
-            'top_negativos'      => $topNegativos,
-            'top_excedentes'     => $topExcedentes,
+            'top_faltantes'      => $topFaltantes,
+            'top_sobrantes'      => $topSobrantes,
             'comparacion_mes'    => $topMayoresCambios,
             'ranking_sucursales' => $rankingSucursales,
         ]);
