@@ -44,10 +44,13 @@ WORKDIR /var/www/html
 COPY --from=vendor /app/vendor ./vendor
 COPY . .
 
+# Verify no PHP syntax errors in key files (fail the build early if broken)
+RUN php -l routes/api.php && php -l app/Http/Controllers/Api/Compras/InventarioReporteController.php
+
 # Generate an APP_KEY at image-build time so the app can boot.
 # In production (App Runner) the real APP_KEY env var always takes precedence.
 RUN cp .env.example .env && php artisan key:generate --force
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "php artisan migrate --force || true && php artisan migrate --path=database/migrations_rrhh --force || true && php artisan route:clear && php artisan optimize && php artisan schedule:work >> storage/logs/scheduler.log 2>&1 & php artisan serve --host=0.0.0.0 --port=8080"]
+CMD ["sh", "-c", "php artisan migrate --force || true && php artisan migrate --path=database/migrations_rrhh --force || true && php artisan route:clear || true && php artisan optimize || true && php artisan schedule:work >> storage/logs/scheduler.log 2>&1 & php artisan serve --host=0.0.0.0 --port=8080"]
