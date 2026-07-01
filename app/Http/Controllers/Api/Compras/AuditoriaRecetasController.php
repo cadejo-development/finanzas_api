@@ -13,6 +13,7 @@ use App\Models\Estacion;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 class AuditoriaRecetasController extends Controller
@@ -600,8 +601,36 @@ class AuditoriaRecetasController extends Controller
                     );
                     Mail::to($destinatarios)->send($mailable);
                 }
-            } catch (\Throwable) {
-                // El correo es secundario — no romper la respuesta si falla
+            } catch (\Throwable $e) {
+                // El correo es secundario — no rompemos la respuesta, pero sí registramos el error
+                Log::error('AuditoriaCalidad: fallo al enviar notificación por correo', [
+                    'auditoria_id' => $auditoria->id,
+                    'sucursal_id'  => $auditoria->sucursal_id,
+                    'error'        => $e->getMessage(),
+                    'file'         => $e->getFile(),
+                    'line'         => $e->getLine(),
+                ]);
+                try {
+                    DB::connection('rrhh')->table('error_logs')->insert([
+                        'sistema'        => 'compras',
+                        'controlador'    => static::class,
+                        'funcion'        => 'itemsSave — envío email',
+                        'metodo_http'    => 'POST',
+                        'url'            => request()->fullUrl(),
+                        'tipo_excepcion' => get_class($e),
+                        'codigo_http'    => 500,
+                        'mensaje'        => $e->getMessage(),
+                        'trace'          => substr($e->getTraceAsString(), 0, 5000),
+                        'request_data'   => json_encode(['auditoria_id' => $auditoria->id, 'destinatarios' => $destinatarios ?? []]),
+                        'ip'             => request()->ip(),
+                        'user_agent'     => request()->userAgent(),
+                        'usuario_email'  => request()->user()?->email,
+                        'usuario_id'     => request()->user()?->id,
+                        'severidad'      => 'error',
+                        'resuelto'       => false,
+                        'created_at'     => now(),
+                    ]);
+                } catch (\Throwable) {}
             }
         }
 
@@ -645,11 +674,12 @@ class AuditoriaRecetasController extends Controller
             'sucursales' => $sucursales,
         ]);
         } catch (\Throwable $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-                'file'    => $e->getFile(),
-                'line'    => $e->getLine(),
-            ], 500);
+            Log::error('AuditoriaCalidad: error en catalogos()', [
+                'error' => $e->getMessage(),
+                'file'  => $e->getFile(),
+                'line'  => $e->getLine(),
+            ]);
+            return response()->json(['message' => 'Error al cargar catálogos. Intente de nuevo.'], 500);
         }
     }
 
@@ -752,7 +782,11 @@ class AuditoriaRecetasController extends Controller
             }
             $cmd = $s3Client->getCommand('GetObject', ['Bucket' => $bucket, 'Key' => $key]);
             return (string) $s3Client->createPresignedRequest($cmd, '+2 hours')->getUri();
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            Log::warning('AuditoriaCalidad: no se pudo generar URL pre-firmada de S3', [
+                'url'   => $url,
+                'error' => $e->getMessage(),
+            ]);
             return $url;
         }
     }
