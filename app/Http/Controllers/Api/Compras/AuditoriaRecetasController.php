@@ -570,13 +570,19 @@ class AuditoriaRecetasController extends Controller
                     ->where('id', $auditoria->sucursal_id)
                     ->value('nombre') ?? 'Sucursal';
 
-                // Gerente de sucursal y jefe de cocina activos en esa sucursal
-                $destinatarios = Empleado::where('sucursal_id', $auditoria->sucursal_id)
-                    ->where('activo', true)
-                    ->whereNotNull('email')
-                    ->whereHas('cargo', fn ($q) => $q->whereRaw("LOWER(nombre) LIKE '%gerente%' OR LOWER(nombre) LIKE '%jefe de cocina%' OR LOWER(nombre) LIKE '%chef ejecutivo%'"))
-                    ->pluck('email')
-                    ->filter()
+                // Gerente de sucursal y jefe de cocina activos en esa sucursal.
+                // Preferimos users.email (correo institucional con el que acceden al sistema)
+                // y solo si no tiene cuenta registrada caemos al email personal de empleados.
+                $destinatarios = DB::connection('pgsql')
+                    ->table('empleados as e')
+                    ->join('cargos as c', 'e.cargo_id', '=', 'c.id')
+                    ->leftJoin('users as u', 'u.id', '=', 'e.user_id')
+                    ->where('e.sucursal_id', $auditoria->sucursal_id)
+                    ->where('e.activo', true)
+                    ->whereRaw("LOWER(c.nombre) LIKE '%gerente%' OR LOWER(c.nombre) LIKE '%jefe de cocina%' OR LOWER(c.nombre) LIKE '%chef ejecutivo%'")
+                    ->selectRaw('COALESCE(NULLIF(u.email, \'\'), e.email) AS email_destino')
+                    ->pluck('email_destino')
+                    ->filter(fn ($e) => $e && filter_var($e, FILTER_VALIDATE_EMAIL))
                     ->unique()
                     ->values()
                     ->toArray();
