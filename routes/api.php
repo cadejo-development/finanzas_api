@@ -676,4 +676,12 @@ Route::prefix('cadejo-ventas')->group(function () {
     Route::get('catalogos-precio/{id}/para-orden',          [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'paraOrden']);
     Route::post('catalogos-precio/{id}/ajuste-masivo',      [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'ajusteMasivo']);
     Route::patch('catalogos-precio/{id}/lineas/batch',      [\App\Http\Controllers\Api\Ventas\CatalogosPrecioController::class, 'batchUpdate']);
+
+    // Promociones de venta
+    Route::get('promociones-venta',               [\App\Http\Controllers\Api\Ventas\PromocionesVentaController::class, 'index']);
+    Route::get('promociones-venta/activas',        [\App\Http\Controllers\Api\Ventas\PromocionesVentaController::class, 'activas']);
+    Route::post('promociones-venta',               [\App\Http\Controllers\Api\Ventas\PromocionesVentaController::class, 'store']);
+    Route::patch('promociones-venta/{id}',         [\App\Http\Controllers\Api\Ventas\PromocionesVentaController::class, 'update']);
+    Route::patch('promociones-venta/{id}/toggle',  [\App\Http\Controllers\Api\Ventas\PromocionesVentaController::class, 'toggle']);
+    Route::delete('promociones-venta/{id}',        [\App\Http\Controllers\Api\Ventas\PromocionesVentaController::class, 'destroy']);
 });
