@@ -23,6 +23,6 @@ class VentaCatalogoPrecioLinea extends Model
 
     public function producto()
     {
-        return $this->belongsTo(VentaProducto::class, 'producto_id');
+        return $this->belongsTo(\App\Models\Producto::class, 'producto_id');
     }
 }

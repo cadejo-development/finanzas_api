@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api\Ventas;
 use App\Http\Controllers\Controller;
 use App\Models\Ventas\VentaCatalogoPrecio;
 use App\Models\Ventas\VentaCatalogoPrecioLinea;
-use App\Models\Ventas\VentaProducto;
+use App\Models\Producto;
 use Illuminate\Http\Request;
 
 class CatalogosPrecioController extends Controller
@@ -88,7 +88,7 @@ class CatalogosPrecioController extends Controller
         VentaCatalogoPrecio::findOrFail($id);
 
         $data = $request->validate([
-            'producto_id'   => 'required|integer|exists:compras.ventas_productos,id',
+            'producto_id'   => 'required|integer|exists:compras.productos,id',
             'precio_sin_iva' => 'required|numeric|min:0',
             'precio_con_iva' => 'required|numeric|min:0',
         ]);
@@ -216,14 +216,14 @@ class CatalogosPrecioController extends Controller
     private function formatLinea(VentaCatalogoPrecioLinea $l): array
     {
         return [
-            'id'             => $l->id,
-            'catalogo_id'    => $l->catalogo_id,
-            'producto_id'    => $l->producto_id,
-            'codigo'         => $l->producto?->codigo,
+            'id'              => $l->id,
+            'catalogo_id'     => $l->catalogo_id,
+            'producto_id'     => $l->producto_id,
+            'codigo'          => $l->producto?->codigo,
             'nombre_producto' => $l->producto?->nombre,
-            'bodega'         => $l->producto?->bodega,
-            'precio_sin_iva' => $l->precio_sin_iva,
-            'precio_con_iva' => $l->precio_con_iva,
+            'unidad'          => $l->producto?->unidad,
+            'precio_sin_iva'  => $l->precio_sin_iva,
+            'precio_con_iva'  => $l->precio_con_iva,
         ];
     }
 }
