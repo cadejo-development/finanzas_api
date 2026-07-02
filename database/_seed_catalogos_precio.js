@@ -15,40 +15,57 @@ const IVA = 0.13;
 const sin = (x) => +x;
 const con = (x) => +(x * (1 + IVA)).toFixed(4);
 
+// ── Cervezas de línea en formato BOX/CAJA 24 unidades ────────────────────────
+// Incluye: Roja, WAPA, Negra, Mera Belga, Hija de Pooh, Suegra, Nacional.
+// Skyhopper va por separado (precio $41 propio). WAPA barril va en Barril.
+const LINEA_BOX = [
+  { codigo: 'PT0205021', comment: 'CERVEZA DE LINEA CAJA 24 UN. (genérico/mix)' },
+  { codigo: 'PT0206001', comment: 'CERVEZA ROJA BOX 24 U.' },
+  { codigo: 'PT0206002', comment: 'CERVEZA WAPA BOX 24 U.' },
+  { codigo: 'PT0206003', comment: 'CERVEZA NEGRA BOX 24 U.' },
+  { codigo: 'PT0206004', comment: 'CERVEZA MERA BELGA BOX 24 U.' },
+  { codigo: 'PT0206005', comment: 'CERVEZA HIJA DE POOH BOX 24 U.' },
+  { codigo: 'PT0206006', comment: 'CERVEZA SUEGRA CAJA 24 U.' },
+  { codigo: 'PT0206016', comment: 'CERVEZA LA NACIONAL BOX 24 U.' },
+];
+const SKYHOPPER = { codigo: 'PT0206012', comment: 'CERVEZA SKYHOPPER BOX 24 U.' };
+
 // ── Mapeo catálogo → productos con precios del Excel ─────────────────────────
 // Formato: { catalogoNombre, lineas: [{ codigoProducto, sin_iva }] }
 const SEEDS = [
   {
-    catalogo: 'Estándar',          // tarifa on-premise general, $36/caja
+    catalogo: 'Estándar',          // tarifa on-premise general
     lineas: [
-      { codigo: 'PT0205021', sin_iva: 36.00 },   // CERVEZA DE LINEA CAJA 24 UN.
-      { codigo: 'PT0206005', sin_iva: 36.00 },   // CERVEZA HIJA DE POOH BOX 24 U.
-      { codigo: 'PT0206015', sin_iva: 41.50 },   // CERVEZA CINCUEYUCA BOX 24 U. (especial)
+      ...LINEA_BOX.map(p => ({ ...p, sin_iva: 36.00 })),            // línea: $36/caja
+      { ...SKYHOPPER, sin_iva: 41.00 },                              // skyhopper: $41/caja
+      { codigo: 'PT0206015', sin_iva: 41.50, comment: 'CERVEZA CINCUEYUCA BOX 24 U.' },
     ],
   },
   {
-    catalogo: 'Skyhopper',         // $41/caja para Skyhopper
+    catalogo: 'Skyhopper',         // catálogo exclusivo canal Skyhopper
     lineas: [
-      { codigo: 'PT0206012', sin_iva: 41.00 },   // CERVEZA SKYHOPPER BOX 24 U. 330ML
+      { ...SKYHOPPER, sin_iva: 41.00 },
     ],
   },
   {
-    catalogo: 'Temporada Bot',     // precio temporada = $41/caja para línea
+    catalogo: 'Temporada Bot',     // precio temporada = $41/caja para todo
     lineas: [
-      { codigo: 'PT0205021', sin_iva: 41.00 },   // CERVEZA DE LINEA CAJA 24 UN.
-      { codigo: 'PT0206012', sin_iva: 41.00 },   // CERVEZA SKYHOPPER BOX 24 U.
+      ...LINEA_BOX.map(p => ({ ...p, sin_iva: 41.00 })),
+      { ...SKYHOPPER, sin_iva: 41.00 },
     ],
   },
   {
-    catalogo: 'Pedidos Ya',        // $38.40/caja exclusivo PedidosYa
+    catalogo: 'Pedidos Ya',        // $38.40 línea, $41 Skyhopper
     lineas: [
-      { codigo: 'PT0205021', sin_iva: 38.40 },   // CERVEZA DE LINEA CAJA 24 UN.
+      ...LINEA_BOX.map(p => ({ ...p, sin_iva: 38.40 })),
+      { ...SKYHOPPER, sin_iva: 41.00 },
     ],
   },
   {
     catalogo: 'Republik',          // 2 cajas por $45.20 → $22.60 c/u, mínimo 2 cajas
     lineas: [
-      { codigo: 'PT0205021', sin_iva: 22.60, cantidad_minima: 2 },   // CERVEZA DE LINEA CAJA 24 UN.
+      ...LINEA_BOX.map(p => ({ ...p, sin_iva: 22.60, cantidad_minima: 2 })),
+      { ...SKYHOPPER, sin_iva: 41.00 },
     ],
   },
   {
