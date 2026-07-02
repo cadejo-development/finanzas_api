@@ -17,18 +17,23 @@ class PeriodoPrueba extends Model
         'fecha_inicio', 'fecha_fin_estimada', 'responsable_id',
         'estado', 'comentarios',
         'evaluado_en', 'evaluado_por_id',
-        'alerta_15_enviada', 'alerta_7_enviada', 'alerta_3_enviada', 'alerta_sin_eval_enviada',
+        'alerta_15_enviada', 'alerta_7_enviada', 'alerta_3_enviada',
+        'alerta_sin_eval_enviada', 'alerta_1_enviada',
+        'puntaje_evaluacion', 'respuestas_evaluacion',
         'aud_usuario',
     ];
 
     protected $casts = [
-        'fecha_inicio'           => 'date',
-        'fecha_fin_estimada'     => 'date',
-        'evaluado_en'            => 'datetime',
-        'alerta_15_enviada'      => 'boolean',
-        'alerta_7_enviada'       => 'boolean',
-        'alerta_3_enviada'       => 'boolean',
-        'alerta_sin_eval_enviada'=> 'boolean',
+        'fecha_inicio'            => 'date',
+        'fecha_fin_estimada'      => 'date',
+        'evaluado_en'             => 'datetime',
+        'alerta_15_enviada'       => 'boolean',
+        'alerta_7_enviada'        => 'boolean',
+        'alerta_3_enviada'        => 'boolean',
+        'alerta_sin_eval_enviada' => 'boolean',
+        'alerta_1_enviada'        => 'boolean',
+        'puntaje_evaluacion'      => 'float',
+        'respuestas_evaluacion'   => 'array',
     ];
 
     public function ingreso()

@@ -407,6 +407,7 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::patch('amonestaciones/{id}/invalidar',   [AmonestacionesController::class, 'invalidar']);
 
     // Ingreso de Personal y Período de Prueba
+    Route::get('ingresos/criterios-evaluacion',             [IngresoPersonalController::class, 'criteriosEvaluacion']);
     Route::get('ingresos',                                  [IngresoPersonalController::class, 'index']);
     Route::post('ingresos',                                 [IngresoPersonalController::class, 'store']);
     Route::get('ingresos/{id}',                             [IngresoPersonalController::class, 'show']);

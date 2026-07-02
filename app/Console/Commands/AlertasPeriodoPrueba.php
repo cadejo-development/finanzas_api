@@ -14,10 +14,9 @@ use App\Mail\RRHH\AccionPersonalNotificacion;
  * php artisan rrhh:alertas-periodo-prueba
  *
  * Revisa todos los períodos de prueba activos y envía alertas cuando:
- *  - Faltan 15 días para el vencimiento
- *  - Faltan 7 días para el vencimiento
- *  - El período ya venció y no tiene evaluación registrada
- *  - También detecta ingresos pendientes de confirmación del primer día (No Show)
+ *  - Falta 1 día para el vencimiento → a Admins RRHH y al Jefe/Gerente directo
+ *  - El período ya venció y no tiene evaluación registrada → a Admins RRHH
+ *  - Ingresos pendientes de confirmación del primer día → a Admins RRHH
  *
  * Se programa para correr diariamente a las 07:00.
  */
@@ -34,67 +33,23 @@ class AlertasPeriodoPrueba extends Command
         $dryRun = $this->option('dry-run');
         $total  = 0;
 
-        // ── 1. Alerta 15 días antes ──────────────────────────────────────────
-        $en15 = now()->addDays(15)->toDateString();
-        $periodos15 = PeriodoPrueba::where('estado', 'en_prueba')
-            ->where('fecha_fin_estimada', $en15)
-            ->where('alerta_15_enviada', false)
+        // ── 1. Alerta 1 día antes → Admins RRHH + Jefe/Gerente ──────────────
+        $manana   = now()->addDay()->toDateString();
+        $periodos1 = PeriodoPrueba::where('estado', 'en_prueba')
+            ->where('fecha_fin_estimada', $manana)
+            ->where('alerta_1_enviada', false)
             ->get();
 
-        foreach ($periodos15 as $p) {
-            $this->line("  [15d] Empleado #{$p->empleado_id} — vence {$p->fecha_fin_estimada}");
+        foreach ($periodos1 as $p) {
+            $this->line("  [1d] Empleado #{$p->empleado_id} — vence {$p->fecha_fin_estimada}");
             if (!$dryRun) {
-                $this->enviarAlertaAdmins(
-                    $p,
-                    'Periodo de Prueba — Vence en 15 dias',
-                    "El período de prueba del colaborador vence en 15 días. Registra la evaluación a tiempo."
-                );
-                $p->update(['alerta_15_enviada' => true]);
+                $this->enviarAlertaVencimiento($p);
+                $p->update(['alerta_1_enviada' => true]);
             }
             $total++;
         }
 
-        // ── 2. Alerta 7 días antes ───────────────────────────────────────────
-        $en7 = now()->addDays(7)->toDateString();
-        $periodos7 = PeriodoPrueba::where('estado', 'en_prueba')
-            ->where('fecha_fin_estimada', $en7)
-            ->where('alerta_7_enviada', false)
-            ->get();
-
-        foreach ($periodos7 as $p) {
-            $this->line("  [7d] Empleado #{$p->empleado_id} — vence {$p->fecha_fin_estimada}");
-            if (!$dryRun) {
-                $this->enviarAlertaAdmins(
-                    $p,
-                    'Periodo de Prueba — Vence en 7 dias',
-                    "El período de prueba del colaborador vence en 7 días. Registra la evaluación urgente."
-                );
-                $p->update(['alerta_7_enviada' => true]);
-            }
-            $total++;
-        }
-
-        // ── 2b. Alerta 3 días antes — decisión de contratación ───────────────
-        $en3 = now()->addDays(3)->toDateString();
-        $periodos3 = PeriodoPrueba::where('estado', 'en_prueba')
-            ->where('fecha_fin_estimada', $en3)
-            ->where('alerta_3_enviada', false)
-            ->get();
-
-        foreach ($periodos3 as $p) {
-            $this->line("  [3d] Empleado #{$p->empleado_id} — vence {$p->fecha_fin_estimada}");
-            if (!$dryRun) {
-                $this->enviarAlertaAdmins(
-                    $p,
-                    'Periodo de Prueba — Decision de Contratacion (3 dias)',
-                    "El período de prueba vence en 3 días. Confirma si el colaborador será contratado (contrato indefinido) o si no continuará. Ingresa al sistema para registrar tu decisión."
-                );
-                $p->update(['alerta_3_enviada' => true]);
-            }
-            $total++;
-        }
-
-        // ── 3. Sin evaluación al vencer ──────────────────────────────────────
+        // ── 2. Sin evaluación al vencer ──────────────────────────────────────
         $vencidos = PeriodoPrueba::where('estado', 'en_prueba')
             ->where('fecha_fin_estimada', '<', $hoy)
             ->where('alerta_sin_eval_enviada', false)
@@ -113,7 +68,7 @@ class AlertasPeriodoPrueba extends Command
             $total++;
         }
 
-        // ── 4. Ingresos pendientes de confirmación de primer día (más de 1 día) ──
+        // ── 3. Ingresos pendientes de confirmación de primer día (más de 1 día) ──
         $ayer = now()->subDay()->toDateString();
         $sinConfirmar = IngresoPersonal::where('confirmacion', 'pendiente')
             ->where('fecha_ingreso', '<=', $ayer)
@@ -136,6 +91,8 @@ class AlertasPeriodoPrueba extends Command
         return 0;
     }
 
+    // ── Helpers ──────────────────────────────────────────────────────────────────
+
     private function adminsRrhhEmails(): array
     {
         return DB::connection('pgsql')
@@ -149,10 +106,96 @@ class AlertasPeriodoPrueba extends Command
             ->all();
     }
 
+    /**
+     * Obtiene el email del jefe/gerente responsable del empleado.
+     * Busca en este orden:
+     *  1. Jefes asignados vía empleado_jefaturas por sucursal del empleado
+     *  2. Jefes asignados vía empleado_jefaturas por departamento del empleado
+     *  3. El responsable_id del mismo período de prueba (user que lo registró)
+     */
+    private function emailsJefePorEmpleado(PeriodoPrueba $periodo): array
+    {
+        $empleado = DB::connection('pgsql')
+            ->table('empleados')
+            ->where('id', $periodo->empleado_id)
+            ->select('sucursal_id', 'departamento_id')
+            ->first();
+
+        if (!$empleado) return [];
+
+        // Usuarios con jefatura sobre la sucursal o departamento
+        $query = DB::connection('pgsql')
+            ->table('empleado_jefaturas as ej')
+            ->join('users as u', 'u.id', '=', 'ej.user_id')
+            ->whereNotNull('u.email')
+            ->where(function ($q) use ($empleado) {
+                if ($empleado->sucursal_id) {
+                    $q->where('ej.sucursal_id', $empleado->sucursal_id);
+                }
+                if ($empleado->departamento_id) {
+                    $q->orWhere('ej.departamento_id', $empleado->departamento_id);
+                }
+            })
+            ->pluck('u.email')
+            ->unique()
+            ->all();
+
+        // Fallback: responsable_id del período
+        if (empty($query) && $periodo->responsable_id) {
+            $email = DB::connection('pgsql')
+                ->table('users')
+                ->where('id', $periodo->responsable_id)
+                ->value('email');
+            if ($email) $query[] = $email;
+        }
+
+        return $query;
+    }
+
     private function frontendUrl(string $ruta): string
     {
         $base = rtrim(config('app.frontend_rrhh_url', env('FRONTEND_RRHH_URL', '')), '/');
         return $base ? "{$base}/{$ruta}" : $ruta;
+    }
+
+    private function enviarAlertaVencimiento(PeriodoPrueba $periodo): void
+    {
+        try {
+            $ingreso  = $periodo->ingreso;
+            $nombre   = $ingreso?->empleado_nombre ?? "Empleado #{$periodo->empleado_id}";
+            $detalles = array_filter([
+                'Cargo'          => $ingreso?->cargo_nombre,
+                'Sucursal'       => $ingreso?->sucursal_nombre,
+                'Inicio periodo' => $periodo->fecha_inicio?->toDateString(),
+                'Fin estimado'   => $periodo->fecha_fin_estimada?->toDateString(),
+                'Acción'         => 'El período vence mañana. Ingresa al sistema para registrar la evaluación y tomar la decisión de contratación.',
+            ]);
+            $linkUrl = $this->frontendUrl("ingresos-personal?ver={$ingreso?->id}");
+
+            $emailsAdmin  = $this->adminsRrhhEmails();
+            $emailsJefe   = $this->emailsJefePorEmpleado($periodo);
+            $destinatarios = array_unique(array_merge($emailsAdmin, $emailsJefe));
+
+            foreach ($destinatarios as $email) {
+                Mail::to($email)->send(new AccionPersonalNotificacion(
+                    'Periodo de Prueba — Vence Mañana',
+                    $nombre,
+                    'Recursos Humanos',
+                    $detalles,
+                    $linkUrl
+                ));
+            }
+
+            Log::info('rrhh:alertas-periodo-prueba [1d]', [
+                'empleado_id'   => $periodo->empleado_id,
+                'periodo_id'    => $periodo->id,
+                'destinatarios' => $destinatarios,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('rrhh:alertas-periodo-prueba error [1d]', [
+                'error' => $e->getMessage(), 'periodo_id' => $periodo->id,
+            ]);
+        }
     }
 
     private function enviarAlertaAdmins(PeriodoPrueba $periodo, string $tipo, string $mensaje): void
@@ -207,7 +250,7 @@ class AlertasPeriodoPrueba extends Command
                 ));
             }
         } catch (\Throwable $e) {
-            Log::error("rrhh:alertas-periodo-prueba error confirmacion", [
+            Log::error('rrhh:alertas-periodo-prueba error confirmacion', [
                 'error' => $e->getMessage(), 'ingreso_id' => $ingreso->id,
             ]);
         }
