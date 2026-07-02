@@ -88,9 +88,10 @@ class CatalogosPrecioController extends Controller
         VentaCatalogoPrecio::findOrFail($id);
 
         $data = $request->validate([
-            'producto_id'   => 'required|integer|exists:compras.productos,id',
+            'producto_id'    => 'required|integer|exists:compras.productos,id',
             'precio_sin_iva' => 'required|numeric|min:0',
             'precio_con_iva' => 'required|numeric|min:0',
+            'cantidad_minima' => 'nullable|integer|min:1',
         ]);
 
         $linea = VentaCatalogoPrecioLinea::updateOrCreate(
@@ -110,8 +111,9 @@ class CatalogosPrecioController extends Controller
         $linea = VentaCatalogoPrecioLinea::where('catalogo_id', $id)->findOrFail($lineaId);
 
         $data = $request->validate([
-            'precio_sin_iva' => 'required|numeric|min:0',
-            'precio_con_iva' => 'required|numeric|min:0',
+            'precio_sin_iva'  => 'required|numeric|min:0',
+            'precio_con_iva'  => 'required|numeric|min:0',
+            'cantidad_minima' => 'nullable|integer|min:1',
         ]);
 
         $linea->update($data);
@@ -190,8 +192,9 @@ class CatalogosPrecioController extends Controller
     {
         $lineas = VentaCatalogoPrecioLinea::where('catalogo_id', $id)->get();
         $index = $lineas->keyBy('producto_id')->map(fn($l) => [
-            'precio_sin_iva' => $l->precio_sin_iva,
-            'precio_con_iva' => $l->precio_con_iva,
+            'precio_sin_iva'  => $l->precio_sin_iva,
+            'precio_con_iva'  => $l->precio_con_iva,
+            'cantidad_minima' => $l->cantidad_minima ?? 1,
         ]);
         return response()->json(['data' => $index]);
     }
@@ -224,6 +227,7 @@ class CatalogosPrecioController extends Controller
             'unidad'          => $l->producto?->unidad,
             'precio_sin_iva'  => $l->precio_sin_iva,
             'precio_con_iva'  => $l->precio_con_iva,
+            'cantidad_minima' => $l->cantidad_minima ?? 1,
         ];
     }
 }

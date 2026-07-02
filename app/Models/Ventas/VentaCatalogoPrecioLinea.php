@@ -9,11 +9,12 @@ class VentaCatalogoPrecioLinea extends Model
     protected $connection = 'compras';
     protected $table = 'ventas_catalogo_precio_lineas';
 
-    protected $fillable = ['catalogo_id', 'producto_id', 'precio_sin_iva', 'precio_con_iva'];
+    protected $fillable = ['catalogo_id', 'producto_id', 'precio_sin_iva', 'precio_con_iva', 'cantidad_minima'];
 
     protected $casts = [
-        'precio_sin_iva' => 'float',
-        'precio_con_iva' => 'float',
+        'precio_sin_iva'  => 'float',
+        'precio_con_iva'  => 'float',
+        'cantidad_minima' => 'integer',
     ];
 
     public function catalogo()
