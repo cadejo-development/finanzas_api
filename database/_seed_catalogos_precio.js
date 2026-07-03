@@ -16,12 +16,11 @@ const sin = (x) => +x;
 const con = (x) => +(x * (1 + IVA)).toFixed(4);
 
 // ── Cervezas de línea en formato BOX/CAJA 24 unidades ────────────────────────
-// Incluye: Roja, WAPA, Negra, Mera Belga, Hija de Pooh, Suegra, Nacional.
-// Skyhopper va por separado (precio $41 propio). WAPA barril va en Barril.
+// Incluye: Roja, Negra, Mera Belga, Hija de Pooh, Suegra, Nacional.
+// WAPA = solo barril (confirmado por Rodrigo). SKU genérico PT0205021 excluido.
+// Skyhopper va por separado (precio $41 propio).
 const LINEA_BOX = [
-  { codigo: 'PT0205021', comment: 'CERVEZA DE LINEA CAJA 24 UN. (genérico/mix)' },
   { codigo: 'PT0206001', comment: 'CERVEZA ROJA BOX 24 U.' },
-  { codigo: 'PT0206002', comment: 'CERVEZA WAPA BOX 24 U.' },
   { codigo: 'PT0206003', comment: 'CERVEZA NEGRA BOX 24 U.' },
   { codigo: 'PT0206004', comment: 'CERVEZA MERA BELGA BOX 24 U.' },
   { codigo: 'PT0206005', comment: 'CERVEZA HIJA DE POOH BOX 24 U.' },
