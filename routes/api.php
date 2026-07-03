@@ -209,6 +209,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
 
     // Recetas (CRUD + calculo de ingredientes + platos por sucursal + upload fotos)
     Route::post('recetas/calcular',                    [RecetasController::class, 'calcular']);
+    Route::post('recetas/simular',                     [RecetasController::class, 'simular']);
     Route::get('recetas/dashboard',                    [RecetasController::class, 'dashboard']);
     Route::get('recetas/costos',                       [RecetasController::class, 'costos']);
     Route::get('recetas/tipos',                        [RecetasController::class, 'tipos']);

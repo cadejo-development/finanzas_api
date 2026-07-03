@@ -1020,6 +1020,74 @@ class RecetasController extends Controller
     }
 
     // ----------------------------------------------------------------------
+    // POST /api/compras/recetas/simular
+    // Calcula el costo de una lista hipotética de ingredientes sin guardar nada.
+    // Útil para el simulador de recetas del frontend.
+    // Body: { ingredientes: [{ producto_id?, sub_receta_id?, cantidad_por_plato, unidad }] }
+    // ----------------------------------------------------------------------
+    public function simular(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'ingredientes'                          => 'required|array',
+            'ingredientes.*.producto_id'            => 'nullable|integer',
+            'ingredientes.*.sub_receta_id'          => 'nullable|integer',
+            'ingredientes.*.cantidad_por_plato'     => 'required|numeric|min:0',
+            'ingredientes.*.unidad'                 => 'required|string|max:20',
+        ]);
+
+        $costoTotal = 0.0;
+        $resultados = [];
+
+        foreach ($data['ingredientes'] as $ing) {
+            $costoUnit   = 0.0;
+            $nombre      = '';
+            $codigo      = '';
+            $esSubReceta = false;
+
+            if (!empty($ing['producto_id'])) {
+                $prod = \App\Models\Producto::find($ing['producto_id']);
+                if ($prod) {
+                    $nombre    = $prod->nombre;
+                    $codigo    = $prod->codigo;
+                    $costoUnit = $this->costoPorUnidadReceta($prod, $ing['unidad']);
+                }
+            } elseif (!empty($ing['sub_receta_id'])) {
+                $sub = Receta::with([
+                    'productoAsociado',
+                    'ingredientes.producto',
+                    'ingredientes.subReceta.productoAsociado',
+                    'ingredientes.subReceta.ingredientes.producto',
+                ])->find($ing['sub_receta_id']);
+                if ($sub) {
+                    $nombre      = $sub->nombre;
+                    $esSubReceta = true;
+                    $costoUnit   = $this->calcularCostoSubReceta($sub, $ing['unidad']);
+                }
+            }
+
+            $costoIng    = round($costoUnit * (float) $ing['cantidad_por_plato'], 6);
+            $costoTotal += $costoIng;
+
+            $resultados[] = [
+                'producto_id'        => $ing['producto_id'] ?? null,
+                'sub_receta_id'      => $ing['sub_receta_id'] ?? null,
+                'es_sub_receta'      => $esSubReceta,
+                'nombre'             => $nombre,
+                'codigo'             => $codigo,
+                'cantidad_por_plato' => (float) $ing['cantidad_por_plato'],
+                'unidad'             => $ing['unidad'],
+                'costo_unitario'     => round($costoUnit, 6),
+                'costo_ingrediente'  => $costoIng,
+            ];
+        }
+
+        return response()->json([
+            'costo_plato'  => round($costoTotal, 4),
+            'ingredientes' => $resultados,
+        ]);
+    }
+
+    // ----------------------------------------------------------------------
     // Helpers
     // ----------------------------------------------------------------------
 
