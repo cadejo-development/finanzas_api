@@ -23,8 +23,8 @@ class DesvinculacionesController extends RRHHBaseController
     {
         $query = Desvinculacion::with('motivo')->orderByDesc('id');
 
-        if ($this->esAdminRrhh()) {
-            // Admin ve todo, opcionalmente filtrable
+        if ($this->esAdminRrhh() || $this->esGerenciaOps()) {
+            // Admin y gerencia_ops ven todo
         } else {
             // Jefatura: solo las que él mismo procesó
             $jefe = $this->getJefeEmpleado();
