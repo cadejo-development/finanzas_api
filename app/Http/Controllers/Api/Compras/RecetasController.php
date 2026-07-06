@@ -87,7 +87,7 @@ class RecetasController extends Controller
             // Sin filtro de tipo_receta: excluir sub-recetas por defecto.
             // incluir_todo_tipos=1 bypasea esto (usado por dashboard de recetas pendientes).
             $query->where(function ($q) {
-                $q->where('tipo_receta', '!=', 'sub_receta')
+                $q->whereNotIn('tipo_receta', ['sub_receta', 'simulacion'])
                   ->orWhereNull('tipo_receta');
             })->whereRaw("lower(coalesce(tipo,'')) NOT LIKE '%sub%receta%'");
         }
@@ -264,7 +264,7 @@ class RecetasController extends Controller
             'instrucciones'       => 'nullable|string',
             'tipo'                => 'nullable|string|max:80',
             'categoria_id'        => 'nullable|integer|exists:compras.receta_categorias,id',
-            'tipo_receta'         => 'nullable|in:plato,sub_receta',
+            'tipo_receta'         => 'nullable|in:plato,sub_receta,simulacion',
             'platos_semana'       => 'required|integer|min:0',
             'precio'              => 'nullable|numeric|min:0',
             'rendimiento'         => 'nullable|numeric|min:0',
@@ -404,7 +404,7 @@ class RecetasController extends Controller
             'instrucciones'       => 'nullable|string',
             'tipo'                => 'nullable|string|max:80',
             'categoria_id'        => 'nullable|integer|exists:compras.receta_categorias,id',
-            'tipo_receta'         => 'nullable|in:plato,sub_receta',
+            'tipo_receta'         => 'nullable|in:plato,sub_receta,simulacion',
             'platos_semana'       => 'sometimes|integer|min:0',
             'precio'              => 'nullable|numeric|min:0',
             'rendimiento'         => 'nullable|numeric|min:0',
