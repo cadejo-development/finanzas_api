@@ -21,4 +21,9 @@ class Cargo extends Model
     {
         return $this->hasMany(Empleado::class);
     }
+
+    public function plazas()
+    {
+        return $this->hasMany(\App\Models\RRHH\Plaza::class);
+    }
 }

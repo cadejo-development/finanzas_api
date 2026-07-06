@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\RRHH\Plaza;
 use Illuminate\Database\Eloquent\Model;
 
 class Empleado extends Model
@@ -11,7 +12,7 @@ class Empleado extends Model
 
     protected $fillable = [
         'codigo', 'nombres', 'apellidos', 'email',
-        'cargo_id', 'sucursal_id', 'departamento_id', 'activo', 'aud_usuario',
+        'cargo_id', 'plaza_id', 'sucursal_id', 'departamento_id', 'activo', 'aud_usuario',
         'salario_base',
     ];
 
@@ -24,6 +25,11 @@ class Empleado extends Model
     public function cargo()
     {
         return $this->belongsTo(Cargo::class);
+    }
+
+    public function plaza()
+    {
+        return $this->belongsTo(Plaza::class);
     }
 
     public function sucursal()
