@@ -471,6 +471,14 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::get('horarios',                        [HorariosController::class, 'index']);
     Route::post('horarios/bulk',                  [HorariosController::class, 'bulk']);
     Route::delete('horarios/{empleadoId}/{fecha}/{parte}', [HorariosController::class, 'destroy']);
+
+    // ── Órdenes de descuento (empleado ve las suyas) ──────────────────────────
+    Route::get('ordenes-descuento/mis-ordenes', [\App\Http\Controllers\Api\RRHH\OrdenesDescuentoController::class, 'misOrdenes']);
+
+    // ── Bonificaciones (jefe solicita; empleado ve las suyas) ─────────────────
+    Route::get('bonificaciones/mis-bonificaciones', [\App\Http\Controllers\Api\RRHH\BonificacionesController::class, 'misBonificaciones']);
+    Route::post('bonificaciones',                   [\App\Http\Controllers\Api\RRHH\BonificacionesController::class, 'store']);
+    Route::get('bonificaciones/tipos',              [\App\Http\Controllers\Api\RRHH\BonificacionesController::class, 'tipos']);
 });
 
 // ─── RRHH Expediente Digital ────────────────────────────────────────────────
@@ -622,6 +630,38 @@ Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh
     Route::put('plazas/{id}',           [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'update']);
     Route::patch('plazas/{id}/toggle',  [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'toggleActivo']);
     Route::delete('plazas/{id}',        [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'destroy']);
+
+    // ── Tipos de acreedor ─────────────────────────────────────────────────────
+    Route::get('tipos-acreedor',               [\App\Http\Controllers\Api\RRHH\AcreedoresController::class, 'tiposIndex']);
+    Route::post('tipos-acreedor',              [\App\Http\Controllers\Api\RRHH\AcreedoresController::class, 'tiposStore']);
+    Route::put('tipos-acreedor/{id}',          [\App\Http\Controllers\Api\RRHH\AcreedoresController::class, 'tiposUpdate']);
+    Route::patch('tipos-acreedor/{id}/toggle', [\App\Http\Controllers\Api\RRHH\AcreedoresController::class, 'tiposToggle']);
+
+    // ── Catálogo de acreedores ────────────────────────────────────────────────
+    Route::get('acreedores',               [\App\Http\Controllers\Api\RRHH\AcreedoresController::class, 'index']);
+    Route::post('acreedores',              [\App\Http\Controllers\Api\RRHH\AcreedoresController::class, 'store']);
+    Route::put('acreedores/{id}',          [\App\Http\Controllers\Api\RRHH\AcreedoresController::class, 'update']);
+    Route::patch('acreedores/{id}/toggle', [\App\Http\Controllers\Api\RRHH\AcreedoresController::class, 'toggleActivo']);
+
+    // ── Órdenes de descuento (gestión admin) ──────────────────────────────────
+    Route::get('ordenes-descuento/estados',         [\App\Http\Controllers\Api\RRHH\OrdenesDescuentoController::class, 'estados']);
+    Route::get('ordenes-descuento',                 [\App\Http\Controllers\Api\RRHH\OrdenesDescuentoController::class, 'index']);
+    Route::post('ordenes-descuento',                [\App\Http\Controllers\Api\RRHH\OrdenesDescuentoController::class, 'store']);
+    Route::put('ordenes-descuento/{id}',            [\App\Http\Controllers\Api\RRHH\OrdenesDescuentoController::class, 'update']);
+    Route::patch('ordenes-descuento/{id}/estado',   [\App\Http\Controllers\Api\RRHH\OrdenesDescuentoController::class, 'cambiarEstado']);
+
+    // ── Tipos de bonificación ─────────────────────────────────────────────────
+    Route::get('tipos-bonificacion',               [\App\Http\Controllers\Api\RRHH\BonificacionesController::class, 'tipos']);
+    Route::post('tipos-bonificacion',              [\App\Http\Controllers\Api\RRHH\BonificacionesController::class, 'tiposStore']);
+    Route::put('tipos-bonificacion/{id}',          [\App\Http\Controllers\Api\RRHH\BonificacionesController::class, 'tiposUpdate']);
+    Route::patch('tipos-bonificacion/{id}/toggle', [\App\Http\Controllers\Api\RRHH\BonificacionesController::class, 'tiposToggle']);
+
+    // ── Bonificaciones (gestión admin: aprobar / rechazar / aplicar) ──────────
+    Route::get('bonificaciones/estados',          [\App\Http\Controllers\Api\RRHH\BonificacionesController::class, 'estados']);
+    Route::get('bonificaciones',                  [\App\Http\Controllers\Api\RRHH\BonificacionesController::class, 'index']);
+    Route::patch('bonificaciones/{id}/aprobar',   [\App\Http\Controllers\Api\RRHH\BonificacionesController::class, 'aprobar']);
+    Route::patch('bonificaciones/{id}/rechazar',  [\App\Http\Controllers\Api\RRHH\BonificacionesController::class, 'rechazar']);
+    Route::patch('bonificaciones/{id}/aplicar',   [\App\Http\Controllers\Api\RRHH\BonificacionesController::class, 'aplicar']);
 });
 
 // ─── CADEJO VENTAS ───────────────────────────────────────────────────────────
