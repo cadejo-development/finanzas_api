@@ -63,10 +63,11 @@ class HorariosController extends RRHHBaseController
             ->table('empleados as e')
             ->leftJoin('cargos as c', 'e.cargo_id', '=', 'c.id')
             ->leftJoin('departamentos as d', 'e.departamento_id', '=', 'd.id')
+            ->leftJoin('sucursales as s', 's.id', '=', 'e.sucursal_id')
             ->whereIn('e.id', $empleadoIds)
             ->where('e.activo', true)
             ->orderBy('e.nombres')
-            ->select('e.id', 'e.nombres', 'e.apellidos', 'c.nombre as cargo', 'd.nombre as departamento', 'e.sucursal_id')
+            ->select('e.id', 'e.nombres', 'e.apellidos', 'c.nombre as cargo', 'd.nombre as departamento', 'e.sucursal_id', 's.nombre as sucursal')
             ->get();
 
         // ── Horarios de la semana ─────────────────────────────────────────────
@@ -106,8 +107,9 @@ class HorariosController extends RRHHBaseController
             return [
                 'id'          => $emp->id,
                 'nombre'      => trim($emp->nombres . ' ' . $emp->apellidos),
-                'cargo'       => $emp->cargo   ?? '',
+                'cargo'       => $emp->cargo        ?? '',
                 'departamento'=> $emp->departamento ?? '',
+                'sucursal'    => $emp->sucursal     ?? '',
                 'dias'        => $dias,
             ];
         });
@@ -251,9 +253,9 @@ class HorariosController extends RRHHBaseController
     private function resolverEmpleadosIds(Request $request): array
     {
         $esAdminOGerencia = $this->esAdminRrhh() || $this->esGerenciaOps();
+        $sucursalId = $request->query('sucursal_id');
 
         if ($esAdminOGerencia) {
-            $sucursalId = $request->query('sucursal_id');
             if ($sucursalId) {
                 return DB::connection('pgsql')
                     ->table('empleados')
@@ -264,30 +266,58 @@ class HorariosController extends RRHHBaseController
                     ->all();
             }
             if ($this->esAdminRrhh()) return $this->todosEmpleadosActivos();
-            // gerencia_ops sin filtro: todos los empleados bajo su árbol
             return array_map('intval', $this->getSubordinadosIds());
         }
 
-        return array_map('intval', $this->getSubordinadosIds());
+        $todos = array_map('intval', $this->getSubordinadosIds());
+        if ($sucursalId && !empty($todos)) {
+            return DB::connection('pgsql')
+                ->table('empleados')
+                ->whereIn('id', $todos)
+                ->where('sucursal_id', (int)$sucursalId)
+                ->where('activo', true)
+                ->pluck('id')
+                ->map(fn($id) => (int)$id)
+                ->all();
+        }
+        return $todos;
     }
 
     /**
-     * Lista de sucursales: para rrhh_admin y gerencia_ops (para el selector del frontend).
-     * Jefatura recibe null.
+     * Lista de sucursales para el selector del frontend.
+     * Admin/gerencia_ops: todas las sucursales operativas.
+     * Jefatura: sucursales distintas de su equipo (null si solo tiene una).
      */
     private function getSucursalesParaSelector(): ?array
     {
-        if (!$this->esAdminRrhh() && !$this->esGerenciaOps()) return null;
+        if ($this->esAdminRrhh() || $this->esGerenciaOps()) {
+            return DB::connection('pgsql')
+                ->table('sucursales as s')
+                ->leftJoin('tipos_sucursal as t', 't.id', 's.tipo_sucursal_id')
+                ->where('s.activa', true)
+                ->where('t.codigo', 'operativa')
+                ->orderBy('s.nombre')
+                ->select('s.id', 's.nombre')
+                ->get()
+                ->toArray();
+        }
 
-        return DB::connection('pgsql')
-            ->table('sucursales as s')
-            ->leftJoin('tipos_sucursal as t', 't.id', 's.tipo_sucursal_id')
-            ->where('s.activa', true)
-            ->where('t.codigo', 'operativa')
+        $ids = $this->getSubordinadosIds();
+        if (empty($ids)) return null;
+
+        $sucursales = DB::connection('pgsql')
+            ->table('empleados as e')
+            ->join('sucursales as s', 's.id', '=', 'e.sucursal_id')
+            ->whereIn('e.id', $ids)
+            ->where('e.activo', true)
+            ->whereNotNull('e.sucursal_id')
             ->orderBy('s.nombre')
             ->select('s.id', 's.nombre')
+            ->distinct()
             ->get()
             ->toArray();
+
+        return count($sucursales) > 1 ? $sucursales : null;
     }
 
     /**
