@@ -82,6 +82,20 @@ class AlertasPeriodoPrueba extends Command
             $total++;
         }
 
+        // ── 4. Ingresos auto-creados por sync pendientes de notificación ─────
+        $autoSinNotificar = IngresoPersonal::whereNull('registrado_por_id')
+            ->whereNull('notificado_admin_en')
+            ->get();
+
+        foreach ($autoSinNotificar as $ingreso) {
+            $this->line("  [AUTO-SYNC] {$ingreso->empleado_nombre} — ingresó {$ingreso->fecha_ingreso}");
+            if (!$dryRun) {
+                $this->enviarNotificacionAutoSync($ingreso);
+                $ingreso->update(['notificado_admin_en' => now()]);
+            }
+            $total++;
+        }
+
         if ($dryRun) {
             $this->warn("Modo --dry-run: {$total} alertas detectadas, no se enviaron emails.");
         } else {
@@ -251,6 +265,38 @@ class AlertasPeriodoPrueba extends Command
             }
         } catch (\Throwable $e) {
             Log::error('rrhh:alertas-periodo-prueba error confirmacion', [
+                'error' => $e->getMessage(), 'ingreso_id' => $ingreso->id,
+            ]);
+        }
+    }
+
+    private function enviarNotificacionAutoSync(IngresoPersonal $ingreso): void
+    {
+        try {
+            $detalles = array_filter([
+                'Cargo'            => $ingreso->cargo_nombre,
+                'Sucursal'         => $ingreso->sucursal_nombre,
+                'Fecha de ingreso' => $ingreso->fecha_ingreso?->toDateString(),
+                'Origen'           => 'Ingreso registrado automáticamente vía sincronización desde SQL Server.',
+            ]);
+            $linkUrl = $this->frontendUrl("ingresos-personal?ver={$ingreso->id}");
+
+            foreach ($this->adminsRrhhEmails() as $email) {
+                Mail::to($email)->send(new AccionPersonalNotificacion(
+                    'Nuevo Ingreso de Personal (Sync Automatico)',
+                    $ingreso->empleado_nombre,
+                    'Recursos Humanos',
+                    $detalles,
+                    $linkUrl
+                ));
+            }
+
+            Log::info('rrhh:alertas-periodo-prueba [auto-sync]', [
+                'ingreso_id'  => $ingreso->id,
+                'empleado_id' => $ingreso->empleado_id,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('rrhh:alertas-periodo-prueba error auto-sync', [
                 'error' => $e->getMessage(), 'ingreso_id' => $ingreso->id,
             ]);
         }

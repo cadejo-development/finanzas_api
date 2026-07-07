@@ -110,6 +110,7 @@ class IngresoPersonalController extends RRHHBaseController
                 ]),
                 rutaFrontend: 'ingresos-personal',
             );
+            $ingreso->update(['notificado_admin_en' => now()]);
         } catch (\Throwable $e) {
             Log::warning('IngresoPersonal: error notificando admins', ['error' => $e->getMessage()]);
         }
