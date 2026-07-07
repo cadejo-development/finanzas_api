@@ -9,7 +9,6 @@ use App\Models\RRHH\Incapacidad;
 use App\Models\RRHH\Permiso;
 use App\Models\RRHH\Planilla;
 use App\Models\RRHH\PlanillaLinea;
-use App\Models\RRHH\PlanillaOrdenDescuento;
 use App\Models\RRHH\Vacacion;
 use App\Services\RRHH\PlanillaCalculatorService;
 use Carbon\Carbon;
@@ -186,7 +185,8 @@ class PlanillasController extends RRHHBaseController
             $suspensiones  = $this->getSuspensiones($empIds, $fechaInicio, $fechaFin);
 
             // Cargar órdenes de descuento activas del período
-            $ordenesMap = $this->getOrdenesActivasMap($empIds, $fechaInicio->toDateString());
+            $ordenesMap      = $this->getOrdenesActivasMap($empIds, $fechaInicio->toDateString(), $quincena);
+            $bonificacionesMap = $this->getBonificacionesMap($empIds, $fechaInicio, $fechaFin);
 
             $lineasCalc = [];
 
@@ -219,12 +219,13 @@ class PlanillasController extends RRHHBaseController
                     // Cap a diasQuincena: en meses con 31 días no se pagan días extra
                     $diasLab = min($diasQuincena, max(0, $diasEfectivos - $diasNoTrab));
 
-                    // Órdenes de descuento del empleado
-                    $ordenes = $ordenesMap[$eid] ?? [];
+                    // Órdenes de descuento y bonificaciones del empleado
+                    $ordenes       = $ordenesMap[$eid]        ?? [];
+                    $bonificEmp    = $bonificacionesMap[$eid] ?? [];
 
                     // Calcular
                     $resultado = $this->calc->calcularPlanillaEmpleado(
-                        $salBase, (float) $diasLab, $diasQuincena, $ordenes
+                        $salBase, (float) $diasLab, $diasQuincena, $ordenes, $bonificEmp
                     );
 
                     // Anotar días de suspensión en detalle para trazabilidad
@@ -301,6 +302,28 @@ class PlanillasController extends RRHHBaseController
         }
 
         $planilla->update(['estado' => 'aprobada']);
+
+        // Marcar bonificaciones incluidas en esta planilla como "Aplicada"
+        $bonificIds = [];
+        foreach ($planilla->lineas as $linea) {
+            foreach ($linea->detalle_descuentos ?? [] as $item) {
+                if (($item['tipo'] ?? '') === 'bonificacion' && !empty($item['id'])) {
+                    $bonificIds[] = (int) $item['id'];
+                }
+            }
+        }
+        if (!empty($bonificIds)) {
+            $estadoAplicadaId = DB::connection('pgsql')
+                ->table('estados_bonificacion')
+                ->where('nombre', 'Aplicada')
+                ->value('id');
+            if ($estadoAplicadaId) {
+                DB::connection('pgsql')
+                    ->table('bonificaciones')
+                    ->whereIn('id', array_unique($bonificIds))
+                    ->update(['estado_id' => $estadoAplicadaId, 'updated_at' => now()]);
+            }
+        }
 
         return response()->json([
             'success' => true,
@@ -435,29 +458,73 @@ class PlanillasController extends RRHHBaseController
 
     /**
      * Retorna mapa empleado_id → array de órdenes activas.
+     * Lee de la nueva tabla pgsql.ordenes_descuento con monto por quincena.
      */
-    private function getOrdenesActivasMap(array $empIds, string $fecha): array
+    private function getOrdenesActivasMap(array $empIds, string $fecha, int $quincena = 1): array
     {
         if (empty($empIds)) return [];
 
-        $ordenes = PlanillaOrdenDescuento::with('acreedor')
-            ->whereIn('empleado_id', $empIds)
-            ->where('activo', true)
-            ->where('fecha_inicio', '<=', $fecha)
+        $montoCol = $quincena === 1 ? 'monto_q1' : 'monto_q2';
+
+        $rows = DB::connection('pgsql')
+            ->table('ordenes_descuento as od')
+            ->join('estados_orden_descuento as e', 'e.id', '=', 'od.estado_id')
+            ->join('acreedores as a', 'a.id', '=', 'od.acreedor_id')
+            ->whereIn('od.empleado_id', $empIds)
+            ->where('e.nombre', 'Activa')
+            ->where('od.fecha_inicio', '<=', $fecha)
             ->where(function ($q) use ($fecha) {
-                $q->whereNull('fecha_fin')
-                  ->orWhere('fecha_fin', '>=', $fecha);
+                $q->whereNull('od.fecha_fin')
+                  ->orWhere('od.fecha_fin', '>=', $fecha);
             })
+            ->select(
+                'od.empleado_id',
+                'od.referencia',
+                DB::raw("od.{$montoCol} as monto_quincenal"),
+                'a.nombre as acreedor_nombre'
+            )
             ->get();
 
         $map = [];
-        foreach ($ordenes as $o) {
-            $eid = (int) $o->empleado_id;
+        foreach ($rows as $o) {
+            $eid   = (int) $o->empleado_id;
+            $monto = (float) $o->monto_quincenal;
+            if ($monto <= 0) continue;
             if (!isset($map[$eid])) $map[$eid] = [];
             $map[$eid][] = [
-                'concepto'        => $o->concepto,
-                'monto_quincenal' => (float) $o->monto_quincenal,
-                'acreedor_nombre' => $o->acreedor?->nombre,
+                'concepto'        => $o->referencia ?? 'Orden de descuento',
+                'monto_quincenal' => $monto,
+                'acreedor_nombre' => $o->acreedor_nombre,
+            ];
+        }
+        return $map;
+    }
+
+    /**
+     * Retorna mapa empleado_id → array de bonificaciones aprobadas en el período.
+     */
+    private function getBonificacionesMap(array $empIds, Carbon $desde, Carbon $hasta): array
+    {
+        if (empty($empIds)) return [];
+
+        $rows = DB::connection('pgsql')
+            ->table('bonificaciones as b')
+            ->join('estados_bonificacion as e', 'e.id', '=', 'b.estado_id')
+            ->join('tipos_bonificacion as t', 't.id', '=', 'b.tipo_bonificacion_id')
+            ->whereIn('b.empleado_id', $empIds)
+            ->where('e.nombre', 'Aprobada')
+            ->whereBetween('b.fecha_aplicar', [$desde->toDateString(), $hasta->toDateString()])
+            ->select('b.id', 'b.empleado_id', 'b.monto', 'b.descripcion', 't.nombre as tipo_nombre')
+            ->get();
+
+        $map = [];
+        foreach ($rows as $b) {
+            $eid = (int) $b->empleado_id;
+            if (!isset($map[$eid])) $map[$eid] = [];
+            $map[$eid][] = [
+                'id'       => $b->id,
+                'concepto' => $b->descripcion ?: $b->tipo_nombre,
+                'monto'    => (float) $b->monto,
             ];
         }
         return $map;

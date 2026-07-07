@@ -13,7 +13,7 @@ class PlanillaLinea extends Model
     protected $fillable = [
         'planilla_id', 'empleado_id',
         'salario_base', 'dias_quincena', 'dias_laborados', 'salario_proporcional',
-        'afp_empleado', 'isss_empleado', 'renta', 'otros_descuentos',
+        'afp_empleado', 'isss_empleado', 'renta', 'otros_descuentos', 'bonificaciones',
         'total_descuentos_empleado', 'salario_neto',
         'afp_patronal', 'isss_patronal', 'insaforp_patronal', 'total_patronal',
         'costo_total', 'detalle_descuentos', 'notas',
@@ -27,6 +27,7 @@ class PlanillaLinea extends Model
         'isss_empleado'             => 'decimal:2',
         'renta'                     => 'decimal:2',
         'otros_descuentos'          => 'decimal:2',
+        'bonificaciones'            => 'decimal:2',
         'total_descuentos_empleado' => 'decimal:2',
         'salario_neto'              => 'decimal:2',
         'afp_patronal'              => 'decimal:2',

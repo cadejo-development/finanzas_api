@@ -209,14 +209,16 @@ class PlanillaCalculatorService
      * @param float $salarioMensual    Salario mensual del empleado (empleados.salario_base)
      * @param float $diasLaborados     Días realmente trabajados (máx DIAS_QUINCENA = 15)
      * @param int   $diasQuincena      Siempre 15 (estándar 30 días/mes, El Salvador)
-     * @param array $ordenes           Órdenes de descuento activas [{concepto, monto_quincenal}]
+     * @param array $ordenes           Órdenes de descuento activas [{concepto, monto_quincenal, acreedor_nombre}]
+     * @param array $bonificaciones    Bonificaciones aprobadas [{id, concepto, monto}]
      * @return array
      */
     public function calcularPlanillaEmpleado(
         float $salarioMensual,
         float $diasLaborados,
         int   $diasQuincena,
-        array $ordenes = []
+        array $ordenes = [],
+        array $bonificaciones = []
     ): array {
         // Quincenal = mensual / 2 (estándar 30 días/mes)
         $salarioBase = round($salarioMensual / 2, 2);
@@ -249,7 +251,24 @@ class PlanillaCalculatorService
         $otrosDesc = round($otrosDesc, 2);
 
         $totalDescEmp = round($afpEmp + $isssEmp + $renta + $otrosDesc, 2);
-        $salarioNeto  = round($salarioProp - $totalDescEmp, 2);
+
+        // Bonificaciones (adición al neto — no afectan AFP/ISSS/Renta)
+        $totalBonif     = 0.0;
+        $detalleBonif   = [];
+        foreach ($bonificaciones as $bonif) {
+            $monto = round((float) ($bonif['monto'] ?? 0), 2);
+            if ($monto > 0) {
+                $totalBonif   += $monto;
+                $detalleBonif[] = [
+                    'tipo'     => 'bonificacion',
+                    'id'       => $bonif['id'] ?? null,
+                    'concepto' => $bonif['concepto'] ?? 'Bonificación',
+                    'monto'    => $monto,
+                ];
+            }
+        }
+        $totalBonif  = round($totalBonif, 2);
+        $salarioNeto = round($salarioProp - $totalDescEmp + $totalBonif, 2);
 
         // Cargas patronales
         $afpPat      = $this->calcularAFPPatronal($salarioProp);
@@ -267,6 +286,7 @@ class PlanillaCalculatorService
             'isss_empleado'            => $isssEmp,
             'renta'                    => $renta,
             'otros_descuentos'         => $otrosDesc,
+            'bonificaciones'           => $totalBonif,
             'total_descuentos_empleado'=> $totalDescEmp,
             'salario_neto'             => $salarioNeto,
             'afp_patronal'             => $afpPat,
@@ -274,7 +294,7 @@ class PlanillaCalculatorService
             'insaforp_patronal'        => $insaforpPat,
             'total_patronal'           => $totalPat,
             'costo_total'              => $costoTotal,
-            'detalle_descuentos'       => $detalleOrden,
+            'detalle_descuentos'       => array_merge($detalleOrden, $detalleBonif),
             'base_renta'               => $baseRenta,
         ];
     }
@@ -292,18 +312,21 @@ class PlanillaCalculatorService
         $totalPatronal   = 0.0;
         $totalNeto       = 0.0;
 
+        $totalBonificaciones = 0.0;
         foreach ($lineas as $linea) {
-            $totalSalarios   += (float) ($linea['salario_proporcional']      ?? 0);
-            $totalDescuentos += (float) ($linea['total_descuentos_empleado'] ?? 0);
-            $totalPatronal   += (float) ($linea['total_patronal']            ?? 0);
-            $totalNeto       += (float) ($linea['salario_neto']              ?? 0);
+            $totalSalarios      += (float) ($linea['salario_proporcional']      ?? 0);
+            $totalDescuentos    += (float) ($linea['total_descuentos_empleado'] ?? 0);
+            $totalPatronal      += (float) ($linea['total_patronal']            ?? 0);
+            $totalNeto          += (float) ($linea['salario_neto']              ?? 0);
+            $totalBonificaciones += (float) ($linea['bonificaciones']           ?? 0);
         }
 
         return [
-            'total_salarios'   => round($totalSalarios,   2),
-            'total_descuentos' => round($totalDescuentos, 2),
-            'total_patronal'   => round($totalPatronal,   2),
-            'total_neto'       => round($totalNeto,       2),
+            'total_salarios'       => round($totalSalarios,       2),
+            'total_descuentos'     => round($totalDescuentos,     2),
+            'total_patronal'       => round($totalPatronal,       2),
+            'total_neto'           => round($totalNeto,           2),
+            'total_bonificaciones' => round($totalBonificaciones, 2),
         ];
     }
 }
