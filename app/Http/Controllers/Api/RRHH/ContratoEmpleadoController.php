@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\RRHH;
 
 use App\Models\RRHH\ContratoEmpleado;
 use App\Models\RRHH\IngresoPersonal;
+use App\Models\RRHH\PlantillaContrato;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -14,6 +15,83 @@ use Illuminate\Support\Facades\DB;
 
 class ContratoEmpleadoController extends RRHHBaseController
 {
+    /**
+     * GET /api/rrhh/empleados/{empleadoId}/validar-contrato?plantilla_id=X
+     * Devuelve las variables de la plantilla que están vacías en el expediente del empleado.
+     */
+    public function validarDatos(Request $request, int $empleadoId): JsonResponse
+    {
+        $plantillaId = $request->query('plantilla_id');
+
+        if (!$plantillaId) {
+            return response()->json(['success' => true, 'faltantes' => []]);
+        }
+
+        $plantilla = PlantillaContrato::find($plantillaId);
+        if (!$plantilla) {
+            return response()->json(['success' => true, 'faltantes' => []]);
+        }
+
+        // Extraer todas las {{variables}} usadas en la plantilla
+        preg_match_all('/\{\{(\w+)\}\}/', $plantilla->contenido, $matches);
+        $usedVars = array_unique(array_map(fn($v) => '{{'.$v.'}}', $matches[1]));
+
+        // Resolver variables con un contrato ficticio (sin persistir)
+        $fakeContrato          = new ContratoEmpleado();
+        $fakeContrato->empleado_id = $empleadoId;
+        $vars = $this->buildVars($fakeContrato);
+
+        // Metadatos: qué label y dónde se completa cada variable
+        $meta = [
+            '{{genero}}'          => ['label' => 'Género',                   'fuente' => 'Datos Personales'],
+            '{{estado_civil}}'    => ['label' => 'Estado civil',              'fuente' => 'Datos Personales'],
+            '{{edad}}'            => ['label' => 'Edad / Fecha de nacimiento','fuente' => 'Datos Personales'],
+            '{{nacionalidad}}'    => ['label' => 'Nacionalidad',              'fuente' => 'Datos Personales'],
+            '{{profesion}}'       => ['label' => 'Profesión u Oficio',        'fuente' => 'Datos Personales'],
+            '{{domicilio}}'       => ['label' => 'Domicilio',                 'fuente' => 'Datos Personales'],
+            '{{dui}}'             => ['label' => 'Número de DUI',             'fuente' => 'Documentos'],
+            '{{dui_expedido_en}}' => ['label' => 'Lugar de expedición DUI',   'fuente' => 'Documentos'],
+            '{{dui_fecha_exp}}'   => ['label' => 'Fecha de expedición DUI',   'fuente' => 'Documentos'],
+            '{{isss}}'            => ['label' => 'Número de ISSS',            'fuente' => 'Documentos'],
+            '{{afp}}'             => ['label' => 'Número de AFP/NUP',         'fuente' => 'Documentos'],
+            '{{salario}}'         => ['label' => 'Salario base',              'fuente' => 'Datos de empleado'],
+            '{{cargo}}'           => ['label' => 'Cargo',                     'fuente' => 'Datos de empleado'],
+            '{{sucursal}}'        => ['label' => 'Sucursal',                  'fuente' => 'Datos de empleado'],
+        ];
+
+        // Variables que el usuario llena en el formulario — no validar aquí
+        $formVars = ['{{funciones}}', '{{horario}}', '{{fecha_inicio}}', '{{fecha_fin}}',
+                     '{{fecha_inicio_letras}}', '{{fecha_fin_letras}}', '{{notas}}',
+                     '{{nombres}}', '{{apellidos}}', '{{tipo_contrato}}',
+                     '{{fecha_firma}}', '{{fecha_firma_letras}}', '{{anio}}', '{{ciudad_firma}}',
+                     '{{patrono}}', '{{nit_patrono}}', '{{nombre}}',
+                     '{{salario_letras}}', '{{departamento}}'];
+
+        $faltantes = [];
+        foreach ($usedVars as $var) {
+            if (in_array($var, $formVars) || !isset($meta[$var])) continue;
+            if (trim($vars[$var] ?? '') === '') {
+                $faltantes[] = [
+                    'variable' => $var,
+                    'label'    => $meta[$var]['label'],
+                    'fuente'   => $meta[$var]['fuente'],
+                ];
+            }
+        }
+
+        // Agrupar por fuente para el frontend
+        $agrupados = [];
+        foreach ($faltantes as $f) {
+            $agrupados[$f['fuente']][] = $f['label'];
+        }
+
+        return response()->json([
+            'success'   => true,
+            'faltantes' => $faltantes,
+            'agrupados' => $agrupados,
+        ]);
+    }
+
     /** GET /api/rrhh/empleados/{empleadoId}/contratos */
     public function porEmpleado(int $empleadoId): JsonResponse
     {
@@ -169,6 +247,17 @@ class ContratoEmpleadoController extends RRHHBaseController
     private function renderPlantilla(string $contenido, ContratoEmpleado $contrato): string
     {
         $vars = $this->buildVars($contrato);
+
+        // Evaluar ternarios: {{variable ? 'texto si' : 'texto no'}}
+        $contenido = preg_replace_callback(
+            "/\{\{(\w+)\s*\?\s*'(.*?)'\s*:\s*'(.*?)'\}\}/u",
+            function ($m) use ($vars) {
+                $valor = $vars['{{'.$m[1].'}}'] ?? '';
+                return trim($valor) !== '' ? $m[2] : $m[3];
+            },
+            $contenido
+        );
+
         return str_replace(array_keys($vars), array_values($vars), $contenido);
     }
 
