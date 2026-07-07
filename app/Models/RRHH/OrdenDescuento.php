@@ -11,14 +11,15 @@ class OrdenDescuento extends Model
     protected $table      = 'ordenes_descuento';
     protected $fillable   = [
         'empleado_id', 'acreedor_id', 'estado_id',
-        'monto', 'referencia', 'fecha_inicio', 'fecha_fin',
+        'monto_q1', 'monto_q2', 'referencia', 'fecha_inicio', 'fecha_fin',
         'notas', 'aud_usuario',
     ];
 
     protected $casts = [
-        'fecha_inicio' => 'date',
-        'fecha_fin'    => 'date',
-        'monto'        => 'decimal:2',
+        'fecha_inicio' => 'date:Y-m-d',
+        'fecha_fin'    => 'date:Y-m-d',
+        'monto_q1'     => 'decimal:2',
+        'monto_q2'     => 'decimal:2',
     ];
 
     public function empleado()  { return $this->belongsTo(Empleado::class); }

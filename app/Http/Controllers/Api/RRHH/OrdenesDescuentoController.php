@@ -58,12 +58,14 @@ class OrdenesDescuentoController extends Controller
             'empleado_id' => 'required|exists:pgsql.empleados,id',
             'acreedor_id' => 'required|exists:pgsql.acreedores,id',
             'estado_id'   => 'required|exists:pgsql.estados_orden_descuento,id',
-            'monto'       => 'required|numeric|min:0.01',
+            'monto_q1'    => 'required|numeric|min:0',
+            'monto_q2'    => 'required|numeric|min:0',
             'referencia'  => 'nullable|string|max:100',
             'fecha_inicio'=> 'required|date',
             'fecha_fin'   => 'nullable|date|after_or_equal:fecha_inicio',
             'notas'       => 'nullable|string',
         ]);
+        $this->validarMontos($data);
         $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
         $orden = OrdenDescuento::create($data);
         return response()->json($this->baseQuery()->find($orden->id), 201);
@@ -76,15 +78,24 @@ class OrdenesDescuentoController extends Controller
             'empleado_id' => 'required|exists:pgsql.empleados,id',
             'acreedor_id' => 'required|exists:pgsql.acreedores,id',
             'estado_id'   => 'required|exists:pgsql.estados_orden_descuento,id',
-            'monto'       => 'required|numeric|min:0.01',
+            'monto_q1'    => 'required|numeric|min:0',
+            'monto_q2'    => 'required|numeric|min:0',
             'referencia'  => 'nullable|string|max:100',
             'fecha_inicio'=> 'required|date',
             'fecha_fin'   => 'nullable|date|after_or_equal:fecha_inicio',
             'notas'       => 'nullable|string',
         ]);
+        $this->validarMontos($data);
         $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
         $orden->update($data);
         return response()->json($this->baseQuery()->find($orden->id));
+    }
+
+    private function validarMontos(array $data): void
+    {
+        if (($data['monto_q1'] + $data['monto_q2']) <= 0) {
+            abort(422, 'El monto total debe ser mayor a cero.');
+        }
     }
 
     public function cambiarEstado(Request $request, int $id)
