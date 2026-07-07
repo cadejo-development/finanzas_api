@@ -48,6 +48,9 @@ const PG_CFG = {
   keepAliveInitialDelayMillis: 10000,
 };
 
+// ── RDS PostgreSQL rrhh_db (ingresos_personal) ────────────────────────────────
+const PG_RRHH_CFG = { ...PG_CFG, database: 'rrhh_db' };
+
 // ── Mapeo depCodigo → codigo sucursal ─────────────────────────────────────────
 const DEP_SUCURSAL_MAP = {
   'C_Administración': 'SUC-CM',
@@ -147,14 +150,14 @@ async function run() {
   log('SQL Server OK.');
 
   // ── Conectar PostgreSQL (con reintentos) ──────────────────────────────────
-  log('Conectando a PostgreSQL RDS...');
+  log('Conectando a PostgreSQL RDS (core_db)...');
   let pg;
   for (let attempt = 1; attempt <= 8; attempt++) {
     const p = new Pool(PG_CFG);
     try {
       await p.query('SELECT 1');
       pg = p;
-      log('PostgreSQL OK.\n');
+      log('PostgreSQL core_db OK.');
       break;
     } catch (e) {
       await p.end().catch(() => {});
@@ -163,6 +166,11 @@ async function run() {
       await new Promise(r => setTimeout(r, 10000));
     }
   }
+
+  log('Conectando a PostgreSQL RDS (rrhh_db)...');
+  const pgRrhh = new Pool(PG_RRHH_CFG);
+  await pgRrhh.query('SELECT 1');
+  log('PostgreSQL rrhh_db OK.\n');
 
   try {
     // ── 1. Sincronizar cargos (upsert completo — son catálogo) ───────────────
@@ -321,6 +329,57 @@ async function run() {
         log(`${insOk} empleados nuevos insertados.`);
       }
 
+      // ── Crear ingresos_personal para empleados nuevos ─────────────────────
+      if (paraInsertar.length) {
+        try {
+          const codigos = paraInsertar.map(r => r[0]); // r[0] = codigo
+          const empRes  = await pg.query(
+            `SELECT e.id, e.nombres, e.apellidos, e.fecha_ingreso,
+                    c.nombre AS cargo_nombre, s.nombre AS sucursal_nombre
+             FROM empleados e
+             LEFT JOIN cargos c     ON c.id = e.cargo_id
+             LEFT JOIN sucursales s ON s.id = e.sucursal_id
+             WHERE e.codigo = ANY($1)`,
+            [codigos]
+          );
+
+          if (empRes.rows.length) {
+            const empIds = empRes.rows.map(r => r.id);
+            const yaExistenRes = await pgRrhh.query(
+              `SELECT DISTINCT empleado_id FROM ingresos_personal WHERE empleado_id = ANY($1)`,
+              [empIds]
+            );
+            const yaExisten = new Set(yaExistenRes.rows.map(r => r.empleado_id));
+
+            const sinIngreso = empRes.rows.filter(r => !yaExisten.has(r.id));
+            if (sinIngreso.length) {
+              const params = [];
+              const rowParts = sinIngreso.map(r => {
+                const nombre = `${r.nombres} ${r.apellidos}`.trim();
+                params.push(
+                  r.id, nombre, r.cargo_nombre, r.sucursal_nombre,
+                  fmtDate(r.fecha_ingreso), 'pendiente', AUD, NOW, NOW
+                );
+                const n = params.length;
+                return `($${n-8},$${n-7},$${n-6},$${n-5},$${n-4},$${n-3},$${n-2},$${n-1},$${n})`;
+              });
+              await pgRrhh.query(
+                `INSERT INTO ingresos_personal
+                   (empleado_id, empleado_nombre, cargo_nombre, sucursal_nombre,
+                    fecha_ingreso, confirmacion, aud_usuario, created_at, updated_at)
+                 VALUES ${rowParts.join(',')}`,
+                params
+              );
+              log(`${sinIngreso.length} registro(s) de ingreso creados en ingresos_personal.`);
+            } else {
+              log('Todos los empleados nuevos ya tenían registro de ingreso.');
+            }
+          }
+        } catch (e) {
+          log(`AVISO: No se pudieron crear ingresos_personal automáticos: ${e.message}`);
+        }
+      }
+
       // ── Resumen final ─────────────────────────────────────────────────────
       const total = await pg.query('SELECT COUNT(*) FROM empleados');
       const activos = await pg.query('SELECT COUNT(*) FROM empleados WHERE activo = true');
@@ -336,7 +395,7 @@ async function run() {
     }
 
   } finally {
-    await Promise.all([mssqlPool.close(), pg.end()]).catch(() => {});
+    await Promise.all([mssqlPool.close(), pg.end(), pgRrhh.end()]).catch(() => {});
     log('Conexiones cerradas.');
   }
 }
