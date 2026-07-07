@@ -33,15 +33,15 @@ class AlertasPeriodoPrueba extends Command
         $dryRun = $this->option('dry-run');
         $total  = 0;
 
-        // ── 1. Alerta 1 día antes → Admins RRHH + Jefe/Gerente ──────────────
-        $manana   = now()->addDay()->toDateString();
+        // ── 1. Alerta 3 días antes → Admins RRHH + Jefe/Gerente ──────────────
+        $en3Dias  = now()->addDays(3)->toDateString();
         $periodos1 = PeriodoPrueba::where('estado', 'en_prueba')
-            ->where('fecha_fin_estimada', $manana)
+            ->where('fecha_fin_estimada', $en3Dias)
             ->where('alerta_1_enviada', false)
             ->get();
 
         foreach ($periodos1 as $p) {
-            $this->line("  [1d] Empleado #{$p->empleado_id} — vence {$p->fecha_fin_estimada}");
+            $this->line("  [3d] Empleado #{$p->empleado_id} — vence {$p->fecha_fin_estimada}");
             if (!$dryRun) {
                 $this->enviarAlertaVencimiento($p);
                 $p->update(['alerta_1_enviada' => true]);
@@ -182,7 +182,7 @@ class AlertasPeriodoPrueba extends Command
                 'Sucursal'       => $ingreso?->sucursal_nombre,
                 'Inicio periodo' => $periodo->fecha_inicio?->toDateString(),
                 'Fin estimado'   => $periodo->fecha_fin_estimada?->toDateString(),
-                'Acción'         => 'El período vence mañana. Ingresa al sistema para registrar la evaluación y tomar la decisión de contratación.',
+                'Acción'         => 'El período vence en 3 días. Ingresa al sistema para registrar la evaluación y tomar la decisión de contratación.',
             ]);
             $linkUrl = $this->frontendUrl("ingresos-personal?ver={$ingreso?->id}");
 
@@ -192,7 +192,7 @@ class AlertasPeriodoPrueba extends Command
 
             foreach ($destinatarios as $email) {
                 Mail::to($email)->send(new AccionPersonalNotificacion(
-                    'Periodo de Prueba — Vence Mañana',
+                    'Periodo de Prueba — Vence en 3 Días',
                     $nombre,
                     'Recursos Humanos',
                     $detalles,
