@@ -24,12 +24,24 @@ class CargosController extends Controller
             $q->where('activo', filter_var($request->activo, FILTER_VALIDATE_BOOLEAN));
         }
 
-        $cargos = $q->withCount(['empleados as total_empleados' => function ($query) {
-                        $query->where('activo', true);
-                    }])
+        $cargos = $q->with(['plazas' => fn($q) =>
+                        $q->select('id', 'cargo_id', 'departamento_id', 'activo')
+                          ->with('departamento:id,nombre')
+                    ])
+                    ->withCount(['empleados as total_empleados' => fn($q) => $q->where('activo', true)])
                     ->withCount('plazas as total_plazas')
                     ->orderBy('nombre')
-                    ->get();
+                    ->get()
+                    ->map(function ($c) {
+                        $c->departamentos = $c->plazas
+                            ->whereNotNull('departamento_id')
+                            ->map(fn($p) => ['id' => $p->departamento_id, 'nombre' => $p->departamento?->nombre])
+                            ->filter(fn($d) => $d['nombre'])
+                            ->unique('id')
+                            ->values();
+                        unset($c->plazas);
+                        return $c;
+                    });
 
         return response()->json($cargos);
     }
