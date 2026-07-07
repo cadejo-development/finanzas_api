@@ -648,7 +648,11 @@ Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh
     Route::get('ordenes-descuento',                 [\App\Http\Controllers\Api\RRHH\OrdenesDescuentoController::class, 'index']);
     Route::post('ordenes-descuento',                [\App\Http\Controllers\Api\RRHH\OrdenesDescuentoController::class, 'store']);
     Route::put('ordenes-descuento/{id}',            [\App\Http\Controllers\Api\RRHH\OrdenesDescuentoController::class, 'update']);
-    Route::patch('ordenes-descuento/{id}/estado',   [\App\Http\Controllers\Api\RRHH\OrdenesDescuentoController::class, 'cambiarEstado']);
+    Route::patch('ordenes-descuento/{id}/estado',            [\App\Http\Controllers\Api\RRHH\OrdenesDescuentoController::class, 'cambiarEstado']);
+    Route::post('ordenes-descuento/{id}/documento',          [\App\Http\Controllers\Api\RRHH\OrdenesDescuentoController::class, 'subirDocumento']);
+    Route::get('ordenes-descuento/{id}/documento',           [\App\Http\Controllers\Api\RRHH\OrdenesDescuentoController::class, 'descargarDocumento']);
+    Route::post('ordenes-descuento/{id}/finiquitar',         [\App\Http\Controllers\Api\RRHH\OrdenesDescuentoController::class, 'finiquitar']);
+    Route::get('ordenes-descuento/{id}/documento-finiquito', [\App\Http\Controllers\Api\RRHH\OrdenesDescuentoController::class, 'descargarFiniquito']);
 
     // ── Tipos de bonificación ─────────────────────────────────────────────────
     Route::get('tipos-bonificacion',               [\App\Http\Controllers\Api\RRHH\BonificacionesController::class, 'tipos']);

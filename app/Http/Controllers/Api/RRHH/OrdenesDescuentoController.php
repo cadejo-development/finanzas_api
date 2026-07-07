@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\RRHH\EstadoOrdenDescuento;
 use App\Models\RRHH\OrdenDescuento;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class OrdenesDescuentoController extends Controller
 {
@@ -105,5 +106,83 @@ class OrdenesDescuentoController extends Controller
         $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
         $orden->update($data);
         return response()->json($this->baseQuery()->find($orden->id));
+    }
+
+    // ── Subir documento original ──────────────────────────────────────────────
+    public function subirDocumento(Request $request, int $id)
+    {
+        $orden = OrdenDescuento::findOrFail($id);
+        $request->validate(['documento' => 'required|file|mimes:pdf,jpg,jpeg,png|max:20480']);
+
+        if ($orden->documento_path) {
+            Storage::disk('local')->delete($orden->documento_path);
+        }
+
+        $file = $request->file('documento');
+        $path = $file->store("rrhh/descuentos/{$id}", 'local');
+
+        $orden->update([
+            'documento_path'   => $path,
+            'documento_nombre' => $file->getClientOriginalName(),
+            'aud_usuario'      => auth()->user()?->name ?? 'sistema',
+        ]);
+
+        return response()->json($this->baseQuery()->find($orden->id));
+    }
+
+    // ── Descargar documento original ──────────────────────────────────────────
+    public function descargarDocumento(int $id)
+    {
+        $orden = OrdenDescuento::findOrFail($id);
+        abort_unless(
+            $orden->documento_path && Storage::disk('local')->exists($orden->documento_path),
+            404, 'Documento no encontrado'
+        );
+        return Storage::disk('local')->download($orden->documento_path, $orden->documento_nombre ?? 'documento.pdf');
+    }
+
+    // ── Registrar finiquito ───────────────────────────────────────────────────
+    public function finiquitar(Request $request, int $id)
+    {
+        $orden = OrdenDescuento::findOrFail($id);
+        $request->validate([
+            'fecha_finiquito'     => 'required|date',
+            'documento_finiquito' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:20480',
+        ]);
+
+        $update = [
+            'fecha_finiquito'   => $request->fecha_finiquito,
+            'finiquito_usuario' => auth()->user()?->name ?? 'sistema',
+            'aud_usuario'       => auth()->user()?->name ?? 'sistema',
+        ];
+
+        if ($request->hasFile('documento_finiquito')) {
+            if ($orden->documento_finiquito_path) {
+                Storage::disk('local')->delete($orden->documento_finiquito_path);
+            }
+            $file  = $request->file('documento_finiquito');
+            $path  = $file->store("rrhh/descuentos/{$id}/finiquito", 'local');
+            $update['documento_finiquito_path']   = $path;
+            $update['documento_finiquito_nombre'] = $file->getClientOriginalName();
+        }
+
+        $estadoFiniquitada = EstadoOrdenDescuento::where('nombre', 'Finiquitada')->first();
+        if ($estadoFiniquitada) {
+            $update['estado_id'] = $estadoFiniquitada->id;
+        }
+
+        $orden->update($update);
+        return response()->json($this->baseQuery()->find($orden->id));
+    }
+
+    // ── Descargar documento finiquito ─────────────────────────────────────────
+    public function descargarFiniquito(int $id)
+    {
+        $orden = OrdenDescuento::findOrFail($id);
+        abort_unless(
+            $orden->documento_finiquito_path && Storage::disk('local')->exists($orden->documento_finiquito_path),
+            404, 'Documento de finiquito no encontrado'
+        );
+        return Storage::disk('local')->download($orden->documento_finiquito_path, $orden->documento_finiquito_nombre ?? 'finiquito.pdf');
     }
 }
