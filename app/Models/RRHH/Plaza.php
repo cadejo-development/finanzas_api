@@ -35,6 +35,11 @@ class Plaza extends Model
         return $this->hasOne(Empleado::class);
     }
 
+    public function historial()
+    {
+        return $this->hasMany(PlazaHistorial::class)->orderByDesc('fecha_inicio');
+    }
+
     public function estaOcupada(): bool
     {
         return $this->empleado()->where('activo', true)->exists();

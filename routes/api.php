@@ -629,6 +629,7 @@ Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh
     Route::post('plazas',               [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'store']);
     Route::put('plazas/{id}',           [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'update']);
     Route::patch('plazas/{id}/toggle',  [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'toggleActivo']);
+    Route::get('plazas/{id}/historial', [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'historial']);
     Route::delete('plazas/{id}',        [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'destroy']);
 
     // ── Tipos de acreedor ─────────────────────────────────────────────────────

@@ -94,6 +94,38 @@ class PlazasController extends Controller
         return response()->json($plaza);
     }
 
+    public function historial(int $id)
+    {
+        $plaza = Plaza::findOrFail($id);
+
+        $historial = $plaza->historial()
+            ->with('empleado:id,nombres,apellidos,codigo')
+            ->get()
+            ->map(fn($h) => [
+                'id'             => $h->id,
+                'empleado_id'    => $h->empleado_id,
+                'empleado'       => $h->empleado
+                    ? trim("{$h->empleado->nombres} {$h->empleado->apellidos}")
+                    : '—',
+                'codigo_emp'     => $h->empleado?->codigo,
+                'motivo_entrada' => $h->motivo_entrada,
+                'fecha_inicio'   => $h->fecha_inicio?->format('Y-m-d'),
+                'fecha_fin'      => $h->fecha_fin?->format('Y-m-d'),
+                'motivo_salida'  => $h->motivo_salida,
+                'notas'          => $h->notas,
+                'actual'         => is_null($h->fecha_fin),
+            ]);
+
+        return response()->json([
+            'plaza'    => [
+                'id'     => $plaza->id,
+                'codigo' => $plaza->codigo,
+                'puesto' => $plaza->puesto,
+            ],
+            'historial' => $historial,
+        ]);
+    }
+
     public function destroy(int $id)
     {
         $plaza = Plaza::findOrFail($id);
