@@ -100,26 +100,33 @@ class CargosController extends Controller
     {
         Cargo::findOrFail($id);
 
-        // Departamentos donde hay empleados activos O autorización definida para este cargo
+        // Departamentos donde el cargo tiene empleados activos O plazas activas
         $rows = DB::connection('pgsql')->select("
             SELECT
-                d.id                                    AS departamento_id,
-                d.nombre                                AS departamento,
-                COALESCE(emp.n, 0)::int                 AS empleados,
-                COALESCE(emp.n, 0)::int                 AS plazas_reales,
-                COALESCE(auth.cantidad, 0)::int         AS autorizado
+                d.id                            AS departamento_id,
+                d.nombre                        AS departamento,
+                COALESCE(emp.n, 0)::int         AS empleados,
+                COALESCE(auth.cantidad, 0)::int AS autorizado
             FROM (
+                SELECT departamento_id FROM empleados
+                WHERE cargo_id = :cid1 AND activo = true AND departamento_id IS NOT NULL
+                GROUP BY departamento_id
+                UNION
+                SELECT departamento_id FROM plazas
+                WHERE cargo_id = :cid2 AND activo = true AND departamento_id IS NOT NULL
+                GROUP BY departamento_id
+            ) rel
+            JOIN departamentos d ON d.id = rel.departamento_id
+            LEFT JOIN (
                 SELECT departamento_id, COUNT(*)::int AS n
                 FROM empleados
-                WHERE cargo_id = :cargo_id AND activo = true AND departamento_id IS NOT NULL
+                WHERE cargo_id = :cid3 AND activo = true AND departamento_id IS NOT NULL
                 GROUP BY departamento_id
-            ) emp
-            FULL OUTER JOIN cargo_plazas_autorizadas auth
-                ON auth.departamento_id = emp.departamento_id AND auth.cargo_id = :cargo_id2
-            JOIN departamentos d
-                ON d.id = COALESCE(emp.departamento_id, auth.departamento_id)
+            ) emp ON emp.departamento_id = rel.departamento_id
+            LEFT JOIN cargo_plazas_autorizadas auth
+                ON auth.departamento_id = rel.departamento_id AND auth.cargo_id = :cid4
             ORDER BY d.nombre
-        ", ['cargo_id' => $id, 'cargo_id2' => $id]);
+        ", ['cid1' => $id, 'cid2' => $id, 'cid3' => $id, 'cid4' => $id]);
 
         return response()->json($rows);
     }
