@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api\RRHH;
 
 use App\Http\Controllers\Controller;
 use App\Models\Cargo;
+use App\Models\CargoPlazaAutorizada;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CargosController extends Controller
 {
@@ -92,6 +94,54 @@ class CargosController extends Controller
         $cargo->update($data);
 
         return response()->json($cargo);
+    }
+
+    public function headcount(int $id)
+    {
+        Cargo::findOrFail($id);
+
+        // Departamentos donde hay empleados activos O autorización definida para este cargo
+        $rows = DB::connection('pgsql')->select("
+            SELECT
+                d.id                                    AS departamento_id,
+                d.nombre                                AS departamento,
+                COALESCE(emp.n, 0)::int                 AS empleados,
+                COALESCE(emp.n, 0)::int                 AS plazas_reales,
+                COALESCE(auth.cantidad, 0)::int         AS autorizado
+            FROM (
+                SELECT departamento_id, COUNT(*)::int AS n
+                FROM empleados
+                WHERE cargo_id = :cargo_id AND activo = true AND departamento_id IS NOT NULL
+                GROUP BY departamento_id
+            ) emp
+            FULL OUTER JOIN cargo_plazas_autorizadas auth
+                ON auth.departamento_id = emp.departamento_id AND auth.cargo_id = :cargo_id2
+            JOIN departamentos d
+                ON d.id = COALESCE(emp.departamento_id, auth.departamento_id)
+            ORDER BY d.nombre
+        ", ['cargo_id' => $id, 'cargo_id2' => $id]);
+
+        return response()->json($rows);
+    }
+
+    public function updateHeadcount(Request $request, int $id)
+    {
+        Cargo::findOrFail($id);
+
+        $data = $request->validate([
+            'items'                   => 'required|array',
+            'items.*.departamento_id' => 'required|integer|exists:pgsql.departamentos,id',
+            'items.*.cantidad'        => 'required|integer|min:0',
+        ]);
+
+        foreach ($data['items'] as $item) {
+            CargoPlazaAutorizada::updateOrCreate(
+                ['cargo_id' => $id, 'departamento_id' => $item['departamento_id']],
+                ['cantidad' => $item['cantidad']]
+            );
+        }
+
+        return response()->json(['ok' => true]);
     }
 
     private function normalizarNombre(string $nombre): string

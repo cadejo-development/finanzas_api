@@ -138,35 +138,34 @@ class PlazasController extends Controller
             ORDER BY cantidad DESC
         ");
 
-        // Departamentos con exceso: más empleados activos que plazas activas (por cargo+dpto)
+        // Departamentos con exceso: más empleados activos que lo autorizado (cargo_plazas_autorizadas)
         $excesoRows = DB::connection('pgsql')->select("
             WITH
-            plz AS (
-                SELECT departamento_id, cargo_id, COUNT(*)::int AS n
-                FROM plazas WHERE activo = true
-                GROUP BY departamento_id, cargo_id
+            auth AS (
+                SELECT departamento_id, cargo_id, cantidad AS n
+                FROM cargo_plazas_autorizadas
             ),
             emp AS (
                 SELECT departamento_id, cargo_id, COUNT(*)::int AS n
-                FROM empleados WHERE activo = true
+                FROM empleados WHERE activo = true AND departamento_id IS NOT NULL
                 GROUP BY departamento_id, cargo_id
             ),
             diff AS (
                 SELECT
-                    COALESCE(plz.departamento_id, emp.departamento_id) AS dpto_id,
-                    COALESCE(plz.cargo_id,        emp.cargo_id)        AS cargo_id,
-                    COALESCE(plz.n, 0)                                  AS n_plazas,
-                    COALESCE(emp.n, 0)                                  AS n_emp,
-                    COALESCE(emp.n, 0) - COALESCE(plz.n, 0)            AS diferencia
-                FROM plz
+                    COALESCE(auth.departamento_id, emp.departamento_id) AS dpto_id,
+                    COALESCE(auth.cargo_id,        emp.cargo_id)        AS cargo_id,
+                    COALESCE(auth.n, 0)                                  AS n_autorizado,
+                    COALESCE(emp.n, 0)                                   AS n_emp,
+                    COALESCE(emp.n, 0) - COALESCE(auth.n, 0)            AS diferencia
+                FROM auth
                 FULL OUTER JOIN emp
-                  ON emp.departamento_id IS NOT DISTINCT FROM plz.departamento_id
-                 AND emp.cargo_id = plz.cargo_id
-                WHERE COALESCE(emp.n, 0) > COALESCE(plz.n, 0)
+                  ON emp.departamento_id = auth.departamento_id
+                 AND emp.cargo_id        = auth.cargo_id
+                WHERE COALESCE(emp.n, 0) > COALESCE(auth.n, 0)
             ),
             plz_totals AS (
                 SELECT p2.departamento_id,
-                       COUNT(*)::int   AS total_plazas,
+                       COUNT(*)::int    AS total_plazas,
                        COUNT(e.id)::int AS total_ocupadas
                 FROM plazas p2
                 LEFT JOIN empleados e ON e.plaza_id = p2.id AND e.activo = true

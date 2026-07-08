@@ -623,6 +623,8 @@ Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh
     Route::post('cargos',               [\App\Http\Controllers\Api\RRHH\CargosController::class, 'store']);
     Route::put('cargos/{id}',           [\App\Http\Controllers\Api\RRHH\CargosController::class, 'update']);
     Route::patch('cargos/{id}/toggle',  [\App\Http\Controllers\Api\RRHH\CargosController::class, 'toggleActivo']);
+    Route::get('cargos/{id}/headcount', [\App\Http\Controllers\Api\RRHH\CargosController::class, 'headcount']);
+    Route::put('cargos/{id}/headcount', [\App\Http\Controllers\Api\RRHH\CargosController::class, 'updateHeadcount']);
 
     // ── Catálogo de plazas ────────────────────────────────────────────────────
     Route::get('plazas/stats',          [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'stats']);
