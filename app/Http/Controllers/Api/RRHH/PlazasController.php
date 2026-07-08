@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\RRHH;
 use App\Http\Controllers\Controller;
 use App\Models\RRHH\Plaza;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PlazasController extends Controller
 {
@@ -92,6 +93,74 @@ class PlazasController extends Controller
         ]);
 
         return response()->json($plaza);
+    }
+
+    public function stats()
+    {
+        $global = DB::connection('pgsql')->selectOne("
+            SELECT
+                COUNT(p.id)::int                              AS total,
+                COUNT(e.id)::int                              AS ocupadas,
+                (COUNT(p.id) - COUNT(e.id))::int              AS vacantes
+            FROM plazas p
+            LEFT JOIN empleados e ON e.plaza_id = p.id AND e.activo = true
+            WHERE p.activo = true
+        ");
+
+        $porDpto = DB::connection('pgsql')->select("
+            SELECT
+                d.id                                          AS departamento_id,
+                COALESCE(d.nombre, 'Sin departamento')        AS departamento,
+                COUNT(p.id)::int                              AS total,
+                COUNT(e.id)::int                              AS ocupadas,
+                (COUNT(p.id) - COUNT(e.id))::int              AS vacantes
+            FROM plazas p
+            LEFT JOIN departamentos d ON d.id = p.departamento_id
+            LEFT JOIN empleados e ON e.plaza_id = p.id AND e.activo = true
+            WHERE p.activo = true
+            GROUP BY d.id, d.nombre
+            HAVING COUNT(p.id) - COUNT(e.id) > 0
+            ORDER BY vacantes DESC, d.nombre
+        ");
+
+        $detalle = DB::connection('pgsql')->select("
+            SELECT
+                p.departamento_id,
+                COALESCE(c.nombre, 'Sin puesto')              AS cargo,
+                COUNT(*)::int                                  AS cantidad
+            FROM plazas p
+            LEFT JOIN cargos c ON c.id = p.cargo_id
+            LEFT JOIN empleados e ON e.plaza_id = p.id AND e.activo = true
+            WHERE p.activo = true AND e.id IS NULL
+            GROUP BY p.departamento_id, c.nombre
+            ORDER BY cantidad DESC
+        ");
+
+        $detallePorDpto = collect($detalle)->groupBy('departamento_id');
+
+        $porDptoConDetalle = collect($porDpto)->map(fn($d) => [
+            'departamento_id' => $d->departamento_id,
+            'departamento'    => $d->departamento,
+            'total'           => $d->total,
+            'ocupadas'        => $d->ocupadas,
+            'vacantes'        => $d->vacantes,
+            'pct'             => $d->total > 0 ? round($d->ocupadas / $d->total * 100, 1) : 0,
+            'cargos_vacantes' => $detallePorDpto->get($d->departamento_id, collect())
+                ->map(fn($c) => ['cargo' => $c->cargo, 'cantidad' => $c->cantidad])
+                ->values(),
+        ]);
+
+        return response()->json([
+            'resumen'          => [
+                'total'         => (int) $global->total,
+                'ocupadas'      => (int) $global->ocupadas,
+                'vacantes'      => (int) $global->vacantes,
+                'pct_cobertura' => $global->total > 0
+                    ? round($global->ocupadas / $global->total * 100, 1)
+                    : 0,
+            ],
+            'por_departamento' => $porDptoConDetalle,
+        ]);
     }
 
     public function historial(int $id)
