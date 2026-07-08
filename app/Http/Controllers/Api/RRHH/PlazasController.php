@@ -13,8 +13,13 @@ class PlazasController extends Controller
         $q = Plaza::with(['cargo:id,nombre,codigo', 'departamento:id,nombre', 'empleado:id,nombres,apellidos,plaza_id'])
                   ->withExists(['empleado as ocupada' => fn($q) => $q->where('activo', true)]);
 
-        if ($request->filled('departamento_id')) {
-            $q->where('departamento_id', $request->departamento_id);
+        if ($request->has('departamento_id') && $request->departamento_id !== '') {
+            $val = $request->departamento_id;
+            if ($val === 'NULL' || $val === 'null') {
+                $q->whereNull('departamento_id');
+            } else {
+                $q->where('departamento_id', $val);
+            }
         }
         if ($request->filled('cargo_id')) {
             $q->where('cargo_id', $request->cargo_id);
