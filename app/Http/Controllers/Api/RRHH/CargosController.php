@@ -10,6 +10,8 @@ class CargosController extends Controller
 {
     public function index(Request $request)
     {
+        $dptoId = $request->filled('departamento_id') ? (int) $request->departamento_id : null;
+
         $q = Cargo::query();
 
         if ($request->filled('search')) {
@@ -24,16 +26,30 @@ class CargosController extends Controller
             $q->where('activo', filter_var($request->activo, FILTER_VALIDATE_BOOLEAN));
         }
 
+        // Filtrar sólo cargos con plazas en el departamento dado
+        if ($dptoId) {
+            $q->whereHas('plazas', fn($p) => $p->where('departamento_id', $dptoId));
+        }
+
         $cargos = $q->with(['plazas' => fn($q) =>
                         $q->select('id', 'cargo_id', 'departamento_id', 'activo')
                           ->with('departamento:id,nombre')
                     ])
-                    ->withCount(['empleados as total_empleados' => fn($q) => $q->where('activo', true)])
-                    ->withCount('plazas as total_plazas')
+                    ->withCount(['empleados as total_empleados' => fn($q) =>
+                        $q->where('activo', true)
+                          ->when($dptoId, fn($q) => $q->where('departamento_id', $dptoId))
+                    ])
+                    ->withCount(['plazas as total_plazas' => fn($q) =>
+                        $q->when($dptoId, fn($q) => $q->where('departamento_id', $dptoId))
+                    ])
                     ->orderBy('nombre')
                     ->get()
-                    ->map(function ($c) {
-                        $c->departamentos = $c->plazas
+                    ->map(function ($c) use ($dptoId) {
+                        $plazas = $dptoId
+                            ? $c->plazas->where('departamento_id', $dptoId)
+                            : $c->plazas;
+
+                        $c->departamentos = $plazas
                             ->whereNotNull('departamento_id')
                             ->map(fn($p) => ['id' => $p->departamento_id, 'nombre' => $p->departamento?->nombre])
                             ->filter(fn($d) => $d['nombre'])
@@ -54,6 +70,7 @@ class CargosController extends Controller
             'activo' => 'boolean',
         ]);
 
+        $data['nombre']      = $this->normalizarNombre($data['nombre']);
         $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
         $cargo = Cargo::create($data);
 
@@ -69,10 +86,26 @@ class CargosController extends Controller
             'nombre' => 'required|string|max:120',
         ]);
 
+        $data['nombre']      = $this->normalizarNombre($data['nombre']);
         $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
         $cargo->update($data);
 
         return response()->json($cargo);
+    }
+
+    private function normalizarNombre(string $nombre): string
+    {
+        $preps  = ['de', 'del', 'la', 'el', 'los', 'las', 'en', 'y', 'a', 'por', 'para', 'con', 'al'];
+        $words  = preg_split('/\s+/', mb_strtolower(trim($nombre), 'UTF-8'));
+        $result = [];
+        foreach ($words as $i => $word) {
+            if ($i > 0 && in_array($word, $preps)) {
+                $result[] = $word;
+            } else {
+                $result[] = mb_strtoupper(mb_substr($word, 0, 1, 'UTF-8'), 'UTF-8') . mb_substr($word, 1, null, 'UTF-8');
+            }
+        }
+        return implode(' ', $result);
     }
 
     public function toggleActivo(int $id)

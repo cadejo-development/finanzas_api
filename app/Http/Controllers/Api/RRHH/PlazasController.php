@@ -107,7 +107,8 @@ class PlazasController extends Controller
             WHERE p.activo = true
         ");
 
-        $porDpto = DB::connection('pgsql')->select("
+        // Departamentos con vacantes (plazas sin empleado asignado)
+        $porDptoVacantes = DB::connection('pgsql')->select("
             SELECT
                 d.id                                          AS departamento_id,
                 COALESCE(d.nombre, 'Sin departamento')        AS departamento,
@@ -123,7 +124,8 @@ class PlazasController extends Controller
             ORDER BY vacantes DESC, d.nombre
         ");
 
-        $detalle = DB::connection('pgsql')->select("
+        // Cargos vacantes por departamento (plazas activas sin empleado)
+        $detalleVacantes = DB::connection('pgsql')->select("
             SELECT
                 p.departamento_id,
                 COALESCE(c.nombre, 'Sin puesto')              AS cargo,
@@ -136,30 +138,110 @@ class PlazasController extends Controller
             ORDER BY cantidad DESC
         ");
 
-        $detallePorDpto = collect($detalle)->groupBy('departamento_id');
+        // Departamentos con exceso: más empleados activos que plazas activas (por cargo+dpto)
+        $excesoRows = DB::connection('pgsql')->select("
+            WITH
+            plz AS (
+                SELECT departamento_id, cargo_id, COUNT(*)::int AS n
+                FROM plazas WHERE activo = true
+                GROUP BY departamento_id, cargo_id
+            ),
+            emp AS (
+                SELECT departamento_id, cargo_id, COUNT(*)::int AS n
+                FROM empleados WHERE activo = true
+                GROUP BY departamento_id, cargo_id
+            ),
+            diff AS (
+                SELECT
+                    COALESCE(plz.departamento_id, emp.departamento_id) AS dpto_id,
+                    COALESCE(plz.cargo_id,        emp.cargo_id)        AS cargo_id,
+                    COALESCE(plz.n, 0)                                  AS n_plazas,
+                    COALESCE(emp.n, 0)                                  AS n_emp,
+                    COALESCE(emp.n, 0) - COALESCE(plz.n, 0)            AS diferencia
+                FROM plz
+                FULL OUTER JOIN emp
+                  ON emp.departamento_id IS NOT DISTINCT FROM plz.departamento_id
+                 AND emp.cargo_id = plz.cargo_id
+                WHERE COALESCE(emp.n, 0) > COALESCE(plz.n, 0)
+            ),
+            plz_totals AS (
+                SELECT departamento_id,
+                       COUNT(*)::int AS total_plazas,
+                       COUNT(e.id)::int AS total_ocupadas
+                FROM plazas p2
+                LEFT JOIN empleados e ON e.plaza_id = p2.id AND e.activo = true
+                WHERE p2.activo = true
+                GROUP BY departamento_id
+            )
+            SELECT
+                diff.dpto_id                                   AS departamento_id,
+                COALESCE(d.nombre, 'Sin departamento')         AS departamento,
+                SUM(diff.diferencia)::int                      AS exceso,
+                COALESCE(pt.total_plazas,   0)                 AS total_plazas,
+                COALESCE(pt.total_ocupadas, 0)                 AS total_ocupadas,
+                json_agg(
+                    json_build_object('cargo', c.nombre, 'cantidad', diff.diferencia)
+                    ORDER BY diff.diferencia DESC
+                )::text                                        AS cargos_exceso_json
+            FROM diff
+            JOIN  cargos       c  ON c.id = diff.cargo_id
+            LEFT JOIN departamentos d  ON d.id = diff.dpto_id
+            LEFT JOIN plz_totals   pt ON pt.departamento_id = diff.dpto_id
+            GROUP BY diff.dpto_id, d.nombre, pt.total_plazas, pt.total_ocupadas
+            ORDER BY exceso DESC
+        ");
 
-        $porDptoConDetalle = collect($porDpto)->map(fn($d) => [
+        $totalExceso        = (int) collect($excesoRows)->sum('exceso');
+        $excesoMap          = collect($excesoRows)->keyBy('departamento_id');
+        $detalleVacantesPorDpto = collect($detalleVacantes)->groupBy('departamento_id');
+
+        // Merge: vacantes + exceso por departamento
+        $porDptoConDetalle = collect($porDptoVacantes)->map(fn($d) => [
             'departamento_id' => $d->departamento_id,
             'departamento'    => $d->departamento,
             'total'           => $d->total,
             'ocupadas'        => $d->ocupadas,
             'vacantes'        => $d->vacantes,
+            'exceso'          => (int) ($excesoMap->get($d->departamento_id)?->exceso ?? 0),
             'pct'             => $d->total > 0 ? round($d->ocupadas / $d->total * 100, 1) : 0,
-            'cargos_vacantes' => $detallePorDpto->get($d->departamento_id, collect())
+            'cargos_vacantes' => $detalleVacantesPorDpto->get($d->departamento_id, collect())
                 ->map(fn($c) => ['cargo' => $c->cargo, 'cantidad' => $c->cantidad])
-                ->values(),
+                ->values()
+                ->toArray(),
+            'cargos_exceso'   => json_decode($excesoMap->get($d->departamento_id)?->cargos_exceso_json ?? '[]', true) ?? [],
         ]);
+
+        // Departamentos con SOLO exceso (no están en la lista de vacantes)
+        $dptoIdsConVacantes = $porDptoConDetalle->pluck('departamento_id')->flip();
+        $soloExceso = collect($excesoRows)
+            ->filter(fn($e) => !$dptoIdsConVacantes->has($e->departamento_id))
+            ->map(fn($e) => [
+                'departamento_id' => $e->departamento_id,
+                'departamento'    => $e->departamento,
+                'total'           => (int) $e->total_plazas,
+                'ocupadas'        => (int) $e->total_ocupadas,
+                'vacantes'        => 0,
+                'exceso'          => (int) $e->exceso,
+                'pct'             => $e->total_plazas > 0
+                    ? round($e->total_ocupadas / $e->total_plazas * 100, 1)
+                    : 100,
+                'cargos_vacantes' => [],
+                'cargos_exceso'   => json_decode($e->cargos_exceso_json, true) ?? [],
+            ]);
+
+        $allDptos = $porDptoConDetalle->concat($soloExceso)->values();
 
         return response()->json([
             'resumen'          => [
                 'total'         => (int) $global->total,
                 'ocupadas'      => (int) $global->ocupadas,
                 'vacantes'      => (int) $global->vacantes,
+                'exceso'        => $totalExceso,
                 'pct_cobertura' => $global->total > 0
                     ? round($global->ocupadas / $global->total * 100, 1)
                     : 0,
             ],
-            'por_departamento' => $porDptoConDetalle,
+            'por_departamento' => $allDptos,
         ]);
     }
 
