@@ -396,6 +396,12 @@ class AuditoriaRecetasController extends Controller
             }
         }
 
+        $porTipo = (clone $base)
+            ->select('tipo', DB::raw('COUNT(*) as total'))
+            ->groupBy('tipo')
+            ->get()
+            ->mapWithKeys(fn ($r) => [$r->tipo ?? 'operaciones' => (int) $r->total]);
+
         return response()->json([
             'resumen' => [
                 'total'       => $total,
@@ -404,6 +410,7 @@ class AuditoriaRecetasController extends Controller
                 'desde'       => $desde,
                 'hasta'       => $hasta,
             ],
+            'por_tipo'            => $porTipo,
             'por_sucursal'        => $porSucursalFmt,
             'por_estado'          => $porEstado,
             'por_clasificacion'   => $porClasificacion,
