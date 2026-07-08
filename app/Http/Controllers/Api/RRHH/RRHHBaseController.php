@@ -29,6 +29,32 @@ abstract class RRHHBaseController extends Controller
     // ID del sistema RRHH en la tabla systems/roles
     private const RRHH_SYSTEM_ID = 5;
 
+    /**
+     * Devuelve el usuario "efectivo" para filtrar datos:
+     *  - En GETs con X-View-As (y el auth real es rrhh_admin): devuelve el usuario inspeccionado.
+     *  - En cualquier otro caso: devuelve el usuario autenticado real.
+     *
+     * Esto asegura que ViewAs solo afecta lecturas, nunca escrituras,
+     * y que el header solo puede usarlo un rrhh_admin.
+     */
+    protected function getEffectiveUser(): \App\Models\User
+    {
+        if (
+            request()->isMethod('GET')
+            && Auth::user()->hasRole('rrhh_admin', self::RRHH_SYSTEM_ID)
+        ) {
+            $viewAsId = request()->header('X-View-As');
+            if ($viewAsId) {
+                $viewAsUser = \App\Models\User::find((int) $viewAsId);
+                if ($viewAsUser) {
+                    return $viewAsUser;
+                }
+            }
+        }
+
+        return Auth::user();
+    }
+
     /** Devuelve el nombre de usuario (parte antes del @) del usuario autenticado. */
     protected function creadoPor(): string
     {
@@ -47,29 +73,27 @@ abstract class RRHHBaseController extends Controller
     }
 
     /**
-     * Indica si el usuario autenticado tiene rol rrhh_admin (scoped al sistema RRHH).
+     * Indica si el usuario EFECTIVO tiene rol rrhh_admin (scoped al sistema RRHH).
      */
     protected function esAdminRrhh(): bool
     {
-        return Auth::user()->hasRole('rrhh_admin', self::RRHH_SYSTEM_ID);
+        return $this->getEffectiveUser()->hasRole('rrhh_admin', self::RRHH_SYSTEM_ID);
     }
 
     /**
-     * Indica si el usuario autenticado tiene rol gerencia_ops (scoped al sistema RRHH).
-     * Acceso de visibilidad completa sobre sucursales operativas bajo su departamento.
+     * Indica si el usuario EFECTIVO tiene rol gerencia_ops (scoped al sistema RRHH).
      */
     protected function esGerenciaOps(): bool
     {
-        return Auth::user()->hasRole('gerencia_ops', self::RRHH_SYSTEM_ID);
+        return $this->getEffectiveUser()->hasRole('gerencia_ops', self::RRHH_SYSTEM_ID);
     }
 
     /**
-     * Indica si el usuario autenticado es empleado-solo en el sistema RRHH.
-     * Solo chequea roles del sistema RRHH — roles de otros sistemas (portal_admin, etc.) son irrelevantes.
+     * Indica si el usuario EFECTIVO es empleado-solo en el sistema RRHH.
      */
     protected function esEmpleado(): bool
     {
-        $user = Auth::user();
+        $user = $this->getEffectiveUser();
         return $user->hasRole('empleado', self::RRHH_SYSTEM_ID)
             && ! $user->hasRole('rrhh_admin', self::RRHH_SYSTEM_ID)
             && ! $user->hasRole('jefatura', self::RRHH_SYSTEM_ID)
@@ -77,12 +101,12 @@ abstract class RRHHBaseController extends Controller
     }
 
     /**
-     * Retorna el registro Empleado del usuario autenticado.
+     * Retorna el registro Empleado del usuario EFECTIVO.
      * Para rrhh_admin no es obligatorio tener empleado vinculado (retorna null).
      */
     protected function getJefeEmpleado(): Empleado
     {
-        $empleado = Empleado::where('user_id', Auth::id())->first();
+        $empleado = Empleado::where('user_id', $this->getEffectiveUser()->id)->first();
 
         if (!$empleado) {
             abort(403, 'El usuario autenticado no tiene un empleado vinculado.');
@@ -115,12 +139,12 @@ abstract class RRHHBaseController extends Controller
         if ($this->esEmpleado()) {
             $ownId = DB::connection('pgsql')
                 ->table('empleados')
-                ->where('user_id', Auth::id())
+                ->where('user_id', $this->getEffectiveUser()->id)
                 ->value('id');
             return $ownId ? [(int) $ownId] : [];
         }
 
-        $user = Auth::user();
+        $user = $this->getEffectiveUser();
 
         $jefeEmpleadoId = DB::connection('pgsql')
             ->table('empleados')
@@ -209,7 +233,7 @@ abstract class RRHHBaseController extends Controller
             }
         }
 
-        // ── 3. Fallback legacy: sucursal propia del usuario ───────────────────
+        // ── 3. Fallback legacy: sucursal propia del usuario efectivo ─────────
         $sucursalTipo = DB::connection('pgsql')
             ->table('sucursales as s')
             ->join('tipos_sucursal as ts', 'ts.id', '=', 's.tipo_sucursal_id')
@@ -237,7 +261,7 @@ abstract class RRHHBaseController extends Controller
      */
     protected function getSubordinadosGerenciaOps(): array
     {
-        $user = Auth::user();
+        $user = $this->getEffectiveUser();
 
         $jefeEmpleadoId = DB::connection('pgsql')
             ->table('empleados')
