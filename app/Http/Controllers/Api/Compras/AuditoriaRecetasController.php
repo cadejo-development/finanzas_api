@@ -86,7 +86,7 @@ class AuditoriaRecetasController extends Controller
         $user    = $request->user();
 
         $tipoAuditoria = $validated['tipo'] ?? 'operaciones';
-        $estadoInicial = $tipoAuditoria === 'calidad' ? 'borrador' : 'completada';
+        $estadoInicial = 'borrador';
 
         $auditoria = DB::connection('compras')->transaction(function () use ($validated, $usuario, $user, $tipoAuditoria, $estadoInicial): AuditoriaReceta {
             $auditoria = AuditoriaReceta::create([
@@ -551,7 +551,8 @@ class AuditoriaRecetasController extends Controller
             $nuevoEstado = match(true) {
                 $auditoria->tipo === 'calidad' && $submit => 'pendiente_respuesta',
                 $auditoria->tipo === 'calidad'             => 'borrador',
-                default                                    => 'evaluada',
+                $submit                                    => 'evaluada',
+                default                                    => 'borrador',
             };
 
             $auditoria->update([
