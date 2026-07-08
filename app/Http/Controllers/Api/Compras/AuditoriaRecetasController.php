@@ -545,13 +545,23 @@ class AuditoriaRecetasController extends Controller
                 ? round(($pesoObtenido / $totalPeso) * 100, 1)
                 : null;
 
-            // Clasificación según umbrales del formato oficial
+            // Clasificación según umbrales por tipo de auditoría
             $clasificacion = null;
             if ($calificacion !== null) {
-                if ($calificacion >= 90)      $clasificacion = 'Excelente';
-                elseif ($calificacion >= 75)  $clasificacion = 'Bueno';
-                elseif ($calificacion >= 60)  $clasificacion = 'Aceptable';
-                else                          $clasificacion = 'Deficiente';
+                if ($auditoria->tipo === 'operaciones') {
+                    // Escala oficial Lourdes: 20+30+20+20+10 = 100 pts
+                    if ($calificacion >= 98)      $clasificacion = 'Excelente';
+                    elseif ($calificacion >= 90)  $clasificacion = 'Muy Bueno';
+                    elseif ($calificacion >= 80)  $clasificacion = 'Bueno';
+                    elseif ($calificacion >= 70)  $clasificacion = 'Aceptable';
+                    else                          $clasificacion = 'Deficiente';
+                } else {
+                    // Escala calidad
+                    if ($calificacion >= 90)      $clasificacion = 'Excelente';
+                    elseif ($calificacion >= 75)  $clasificacion = 'Bueno';
+                    elseif ($calificacion >= 60)  $clasificacion = 'Aceptable';
+                    else                          $clasificacion = 'Deficiente';
+                }
             }
 
             // Estado según tipo: calidad usa borrador/pendiente_respuesta; operaciones usa evaluada
