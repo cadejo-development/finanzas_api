@@ -165,13 +165,13 @@ class PlazasController extends Controller
                 WHERE COALESCE(emp.n, 0) > COALESCE(plz.n, 0)
             ),
             plz_totals AS (
-                SELECT departamento_id,
-                       COUNT(*)::int AS total_plazas,
+                SELECT p2.departamento_id,
+                       COUNT(*)::int   AS total_plazas,
                        COUNT(e.id)::int AS total_ocupadas
                 FROM plazas p2
                 LEFT JOIN empleados e ON e.plaza_id = p2.id AND e.activo = true
                 WHERE p2.activo = true
-                GROUP BY departamento_id
+                GROUP BY p2.departamento_id
             )
             SELECT
                 diff.dpto_id                                   AS departamento_id,

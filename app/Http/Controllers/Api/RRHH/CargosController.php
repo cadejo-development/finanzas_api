@@ -40,7 +40,8 @@ class CargosController extends Controller
                           ->when($dptoId, fn($q) => $q->where('departamento_id', $dptoId))
                     ])
                     ->withCount(['plazas as total_plazas' => fn($q) =>
-                        $q->when($dptoId, fn($q) => $q->where('departamento_id', $dptoId))
+                        $q->where('activo', true)
+                          ->when($dptoId, fn($q) => $q->where('departamento_id', $dptoId))
                     ])
                     ->orderBy('nombre')
                     ->get()
