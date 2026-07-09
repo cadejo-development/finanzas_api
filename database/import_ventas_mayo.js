@@ -224,7 +224,7 @@ async function main() {
   log(`Fechas a importar: ${fechas.join(', ')}\n`);
 
   log('Conectando Brilo SQL Server...');
-  const poolRst = await sql.connect(cfgRst);
+  const poolRst = await new sql.ConnectionPool(cfgRst).connect();
   log('   OK');
   log('Ejecutando query batch (todas las sucursales, todo el rango)...');
   const dataPorSuc = await getAllVentas(poolRst, DESDE, HASTA);

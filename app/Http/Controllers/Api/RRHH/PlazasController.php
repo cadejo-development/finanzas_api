@@ -107,21 +107,21 @@ class PlazasController extends Controller
             WHERE p.activo = true
         ");
 
-        // Departamentos con vacantes (plazas sin empleado asignado)
+        // Todos los departamentos con plazas activas
         $porDptoVacantes = DB::connection('pgsql')->select("
             SELECT
                 d.id                                          AS departamento_id,
                 COALESCE(d.nombre, 'Sin departamento')        AS departamento,
                 COUNT(p.id)::int                              AS total,
                 COUNT(e.id)::int                              AS ocupadas,
-                (COUNT(p.id) - COUNT(e.id))::int              AS vacantes
+                (COUNT(p.id) - COUNT(e.id))::int              AS vacantes,
+                CASE WHEN d.nombre ILIKE 'RESTAURANTE%' THEN 'operaciones' ELSE 'administrativo' END AS tipo
             FROM plazas p
             LEFT JOIN departamentos d ON d.id = p.departamento_id
             LEFT JOIN empleados e ON e.plaza_id = p.id AND e.activo = true
             WHERE p.activo = true
             GROUP BY d.id, d.nombre
-            HAVING COUNT(p.id) - COUNT(e.id) > 0
-            ORDER BY vacantes DESC, d.nombre
+            ORDER BY d.nombre
         ");
 
         // Cargos vacantes por departamento (plazas activas sin empleado)
@@ -194,10 +194,11 @@ class PlazasController extends Controller
         $excesoMap          = collect($excesoRows)->keyBy('departamento_id');
         $detalleVacantesPorDpto = collect($detalleVacantes)->groupBy('departamento_id');
 
-        // Merge: vacantes + exceso por departamento
+        // Merge: todos los departamentos + exceso
         $porDptoConDetalle = collect($porDptoVacantes)->map(fn($d) => [
             'departamento_id' => $d->departamento_id,
             'departamento'    => $d->departamento,
+            'tipo'            => $d->tipo,
             'total'           => $d->total,
             'ocupadas'        => $d->ocupadas,
             'vacantes'        => $d->vacantes,
@@ -210,13 +211,14 @@ class PlazasController extends Controller
             'cargos_exceso'   => json_decode($excesoMap->get($d->departamento_id)?->cargos_exceso_json ?? '[]', true) ?? [],
         ]);
 
-        // Departamentos con SOLO exceso (no están en la lista de vacantes)
-        $dptoIdsConVacantes = $porDptoConDetalle->pluck('departamento_id')->flip();
+        // Departamentos con SOLO exceso sin plazas registradas
+        $dptoIdsYaIncluidos = $porDptoConDetalle->pluck('departamento_id')->flip();
         $soloExceso = collect($excesoRows)
-            ->filter(fn($e) => !$dptoIdsConVacantes->has($e->departamento_id))
+            ->filter(fn($e) => !$dptoIdsYaIncluidos->has($e->departamento_id))
             ->map(fn($e) => [
                 'departamento_id' => $e->departamento_id,
                 'departamento'    => $e->departamento,
+                'tipo'            => str_starts_with(strtoupper($e->departamento ?? ''), 'RESTAURANTE') ? 'operaciones' : 'administrativo',
                 'total'           => (int) $e->total_plazas,
                 'ocupadas'        => (int) $e->total_ocupadas,
                 'vacantes'        => 0,
