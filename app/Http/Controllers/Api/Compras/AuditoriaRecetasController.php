@@ -859,19 +859,20 @@ class AuditoriaRecetasController extends Controller
         try {
             static $s3Client = null;
             if (!$s3Client) {
-                $s3Client = new \Aws\S3\S3Client([
-                    'region'      => $region,
-                    'version'     => 'latest',
-                    'credentials' => [
-                        'key'    => config('filesystems.disks.s3.key'),
-                        'secret' => config('filesystems.disks.s3.secret'),
-                    ],
-                ]);
+                $cfg = ['region' => $region, 'version' => 'latest'];
+                $awsKey    = config('filesystems.disks.s3.key');
+                $awsSecret = config('filesystems.disks.s3.secret');
+                // Solo pasar credenciales explícitas si están configuradas.
+                // En App Runner/EC2 sin credenciales env, el SDK usa el rol IAM de la instancia.
+                if (!empty($awsKey) && !empty($awsSecret)) {
+                    $cfg['credentials'] = ['key' => $awsKey, 'secret' => $awsSecret];
+                }
+                $s3Client = new \Aws\S3\S3Client($cfg);
             }
             $cmd = $s3Client->getCommand('GetObject', ['Bucket' => $bucket, 'Key' => $key]);
             return (string) $s3Client->createPresignedRequest($cmd, '+2 hours')->getUri();
         } catch (\Throwable $e) {
-            Log::warning('AuditoriaCalidad: no se pudo generar URL pre-firmada de S3', [
+            Log::warning('presignS3Url (auditorias): fallo al generar URL pre-firmada', [
                 'url'   => $url,
                 'error' => $e->getMessage(),
             ]);

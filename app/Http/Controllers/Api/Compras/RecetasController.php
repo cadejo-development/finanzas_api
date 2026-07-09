@@ -1250,14 +1250,13 @@ class RecetasController extends Controller
         try {
             static $s3Client = null;
             if (!$s3Client) {
-                $s3Client = new \Aws\S3\S3Client([
-                    'region'      => $region,
-                    'version'     => 'latest',
-                    'credentials' => [
-                        'key'    => config('filesystems.disks.s3.key'),
-                        'secret' => config('filesystems.disks.s3.secret'),
-                    ],
-                ]);
+                $cfg = ['region' => $region, 'version' => 'latest'];
+                $awsKey    = config('filesystems.disks.s3.key');
+                $awsSecret = config('filesystems.disks.s3.secret');
+                if (!empty($awsKey) && !empty($awsSecret)) {
+                    $cfg['credentials'] = ['key' => $awsKey, 'secret' => $awsSecret];
+                }
+                $s3Client = new \Aws\S3\S3Client($cfg);
             }
             $cmd = $s3Client->getCommand('GetObject', [
                 'Bucket' => $bucket,
@@ -1265,7 +1264,7 @@ class RecetasController extends Controller
             ]);
             return (string) $s3Client->createPresignedRequest($cmd, '+2 hours')->getUri();
         } catch (\Throwable $e) {
-            return $url; // Si falla, devolver la URL original
+            return $url;
         }
     }
 
