@@ -212,7 +212,7 @@ class PlazasController extends Controller
         ]);
 
         // Departamentos con SOLO exceso sin plazas registradas
-        $dptoIdsYaIncluidos = $porDptoConDetalle->pluck('departamento_id')->flip();
+        $dptoIdsYaIncluidos = $porDptoConDetalle->pluck('departamento_id')->filter()->flip();
         $soloExceso = collect($excesoRows)
             ->filter(fn($e) => !$dptoIdsYaIncluidos->has($e->departamento_id))
             ->map(fn($e) => [
