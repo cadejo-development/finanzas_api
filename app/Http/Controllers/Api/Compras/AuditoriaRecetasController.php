@@ -10,8 +10,10 @@ use App\Models\AuditoriaCriterio;
 use App\Models\AuditoriaReceta;
 use App\Models\Empleado;
 use App\Models\Estacion;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -653,6 +655,74 @@ class AuditoriaRecetasController extends Controller
         }
 
         return response()->json(['message' => 'Auditoría finalizada.']);
+    }
+
+    // ── POST /api/compras/auditorias/{id}/pdf ───────────────────────
+    // Body JSON: { fotos_b64: { "Nombre Sección": ["data:image/jpeg;base64,..."] } }
+    // El browser convierte las fotos de sección a base64 antes de enviar
+    // (App Runner no puede descargar desde S3 directamente).
+    public function pdf(Request $request, int $id): Response|JsonResponse
+    {
+        $auditoria = AuditoriaReceta::with(['estacion', 'receta', 'fotos'])->findOrFail($id);
+
+        $sucursalNombre = DB::connection('pgsql')
+            ->table('sucursales')
+            ->where('id', $auditoria->sucursal_id)
+            ->value('nombre') ?? 'Cadejo Brewing Company';
+
+        $data = $this->formatAuditoria($auditoria, collect([$auditoria->sucursal_id => $sucursalNombre]));
+
+        // Cargar criterios agrupados por categoría
+        $tipo = $auditoria->tipo ?? 'operaciones';
+        $criterios = AuditoriaCriterio::where('activo', true)
+            ->where('tipo', $tipo)
+            ->orderBy('categoria_orden')
+            ->orderBy('orden')
+            ->get(['id', 'categoria', 'nombre', 'peso']);
+
+        // Cargar items evaluados
+        $itemsMap = AuditoriaItem::where('auditoria_id', $auditoria->id)
+            ->get()
+            ->keyBy('criterio_id');
+
+        // Fotos base64 recibidas del frontend: { "Seccion": ["data:image/...", ...] }
+        $fotosB64 = $request->input('fotos_b64', []);
+
+        // Construir secciones con criterios + resultados + fotos
+        $secciones = $criterios->groupBy('categoria')->map(function ($items, $categoria) use ($itemsMap, $fotosB64) {
+            return [
+                'categoria' => $categoria,
+                'fotos'     => $fotosB64[$categoria] ?? [],
+                'items'     => $items->map(function ($c) use ($itemsMap) {
+                    $item = $itemsMap->get($c->id);
+                    return [
+                        'criterio_id'  => $c->id,
+                        'nombre'       => $c->nombre,
+                        'resultado'    => $item?->resultado,
+                        'observaciones'=> $item?->observaciones,
+                    ];
+                })->values()->toArray(),
+            ];
+        })->values()->toArray();
+
+        try {
+            $pdf = Pdf::loadView('pdf.auditoria', [
+                'auditoria' => $data,
+                'secciones' => $secciones,
+            ])->setPaper('letter', 'portrait');
+
+            $tipo_label = $tipo === 'calidad' ? 'calidad' : 'operaciones';
+            $sucursal_slug = preg_replace('/[^A-Za-z0-9_\-]/', '_', $sucursalNombre);
+            $nombre = "auditoria_{$tipo_label}_{$sucursal_slug}_{$auditoria->fecha?->format('Y-m-d')}.pdf";
+
+            return $pdf->download($nombre);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'file'    => $e->getFile() . ':' . $e->getLine(),
+                'trace'   => collect(explode("\n", $e->getTraceAsString()))->take(10)->implode("\n"),
+            ], 500);
+        }
     }
 
     // ── GET /api/compras/auditorias/catalogos ────────────────────────

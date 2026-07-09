@@ -236,6 +236,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('auditorias/{id}/items',      [AuditoriaRecetasController::class, 'itemsShow']);
     Route::post('auditorias/{id}/items',     [AuditoriaRecetasController::class, 'itemsSave']);
     Route::post('auditorias/{id}/responder', [AuditoriaRecetasController::class, 'responder']);
+    Route::post('auditorias/{id}/pdf',      [AuditoriaRecetasController::class, 'pdf']);
 
     // Ventas semanales
     Route::get('ventas',              [VentasController::class, 'index']);
