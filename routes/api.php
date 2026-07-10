@@ -288,11 +288,12 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
         Route::put('recetas/{id}',     [BrewRecetasController::class, 'update']);
         Route::delete('recetas/{id}',  [BrewRecetasController::class, 'destroy']);
 
-        // Lotes
-        Route::get('lotes',            [BrewLotesController::class, 'index']);
-        Route::get('lotes/{id}',       [BrewLotesController::class, 'show']);
-        Route::post('lotes',           [BrewLotesController::class, 'store']);
-        Route::get('lotes/{id}/reporte', [BrewLotesController::class, 'reporte']);
+        // Lotes — rutas fijas primero para evitar que {id} las capture
+        Route::get('lotes/siguiente-codigo',   [BrewLotesController::class, 'siguienteCodigo']);
+        Route::get('lotes',                    [BrewLotesController::class, 'index']);
+        Route::post('lotes',                   [BrewLotesController::class, 'store']);
+        Route::get('lotes/{id}',               [BrewLotesController::class, 'show']);
+        Route::get('lotes/{id}/reporte',       [BrewLotesController::class, 'reporte']);
 
         // Etapas del wizard
         Route::put('lotes/{id}/coccion',       [BrewLotesController::class, 'guardarCoccion']);
@@ -302,7 +303,6 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
         Route::put('lotes/{id}/llenado',       [BrewLotesController::class, 'guardarLlenado']);
 
         // Utilidades
-        Route::get('lotes/siguiente-codigo',   [BrewLotesController::class, 'siguienteCodigo']);
         Route::get('empleados-planta',         [BrewLotesController::class, 'empleadosPlanta']);
         Route::get('estadisticas',             [BrewLotesController::class, 'estadisticas']);
 
