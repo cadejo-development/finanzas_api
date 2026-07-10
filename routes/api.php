@@ -33,6 +33,7 @@ use App\Http\Controllers\Api\RRHH\VacacionesController;
 use App\Http\Controllers\Api\RRHH\IncapacidadesController;
 use App\Http\Controllers\Api\RRHH\AmonestacionesController;
 use App\Http\Controllers\Api\RRHH\DesvinculacionesController;
+use App\Http\Controllers\Api\RRHH\RetractacionesController;
 use App\Http\Controllers\Api\RRHH\TrasladosController;
 use App\Http\Controllers\Api\RRHH\CambiosSalarialesController;
 use App\Http\Controllers\Api\RRHH\DepartamentosController;
@@ -438,6 +439,13 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::put('desvinculaciones/{id}',             [DesvinculacionesController::class, 'update']);
     Route::delete('desvinculaciones/{id}',          [DesvinculacionesController::class, 'destroy']);
     Route::get('desvinculaciones/{id}/descargar',   [DesvinculacionesController::class, 'descargar']);
+
+    // Retractaciones de renuncia
+    Route::get ('retractaciones',                    [RetractacionesController::class, 'index']);
+    Route::post ('retractaciones',                   [RetractacionesController::class, 'store']);
+    Route::post ('retractaciones/directa',           [RetractacionesController::class, 'directa']);
+    Route::post ('retractaciones/{id}/aprobar',      [RetractacionesController::class, 'aprobar']);
+    Route::post ('retractaciones/{id}/rechazar',     [RetractacionesController::class, 'rechazar']);
 
     // Traslados
     Route::get('traslados',         [TrasladosController::class, 'index']);

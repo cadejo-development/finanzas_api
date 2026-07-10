@@ -772,6 +772,7 @@ abstract class RRHHBaseController extends Controller
                 ->where('r.system_id', self::RRHH_SYSTEM_ID)
                 ->whereNotNull('u.email')
                 ->where('u.recibe_notif_rrhh', true)
+                ->where('u.email', '!=', 'david@cervezacadejo.com')
                 ->select('u.id', 'u.name', 'u.email')
                 ->get();
 
