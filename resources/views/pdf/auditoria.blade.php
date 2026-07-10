@@ -163,11 +163,11 @@ body {
 .obs  { color: #555; font-style: italic; font-size: 8.5px; }
 
 /* ── FOTOS POR SECCIÓN ───────────────────────────────────────── */
-.sec-fotos { border-top: 1px dashed #ccc; padding: 6px 8px; }
+.sec-fotos { border-top: 1px dashed #ccc; padding: 6px 8px; page-break-inside: avoid; }
 .sec-fotos-title { font-size: 8px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
-.foto-grid { display: table; width: 100%; border-collapse: collapse; }
-.foto-cell { display: table-cell; padding: 0 4px; text-align: center; vertical-align: top; width: 25%; }
-.foto-img  { max-width: 120px; max-height: 100px; object-fit: contain; border: 1px solid #ddd; }
+.foto-grid { width: 100%; border-collapse: collapse; }
+.foto-cell { padding: 2px 4px; text-align: center; vertical-align: top; width: 25%; }
+.foto-img  { width: 118px; height: 95px; object-fit: cover; border: 1px solid #ddd; }
 
 /* ── OBSERVACIONES / COMENTARIO ──────────────────────────────── */
 .obs-block { border-top: 1.5px solid #444; padding: 8px 14px; }
@@ -177,6 +177,12 @@ body {
 .resp-block .obs-title { font-size: 9px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #3b4fa0; margin-bottom: 4px; }
 .resp-block .obs-text  { font-size: 10px; color: #1a1a1a; line-height: 1.5; }
 .resp-meta { font-size: 8.5px; color: #666; margin-top: 5px; }
+
+/* ── PAGE BREAKS ────────────────────────────────────────────── */
+.sec-header { page-break-after: avoid; }
+.sec-table tr { page-break-inside: avoid; }
+.obs-block  { page-break-inside: avoid; }
+.resp-block { page-break-inside: avoid; }
 
 /* ── COLOR SCORE ────────────────────────────────────────────── */
 .score-excelente { color: #15803d; }
@@ -359,15 +365,23 @@ body {
 
     {{-- Fotos de sección --}}
     @if(!empty($sec['fotos']) && count($sec['fotos']) > 0)
+    @php $fotosChunks = array_chunk($sec['fotos'], 4); @endphp
     <div class="sec-fotos">
       <div class="sec-fotos-title">Evidencia fotográfica</div>
-      <div class="foto-grid">
-        @foreach($sec['fotos'] as $foto)
-        <div class="foto-cell">
-          <img src="{{ $foto }}" class="foto-img" alt="Foto" />
-        </div>
+      <table class="foto-grid" cellpadding="0" cellspacing="0">
+        @foreach($fotosChunks as $fila)
+        <tr style="page-break-inside: avoid;">
+          @foreach($fila as $foto)
+          <td class="foto-cell">
+            <img src="{{ $foto }}" class="foto-img" alt="Foto" />
+          </td>
+          @endforeach
+          @for($p = count($fila); $p < 4; $p++)
+          <td class="foto-cell"></td>
+          @endfor
+        </tr>
         @endforeach
-      </div>
+      </table>
     </div>
     @endif
   </div>
