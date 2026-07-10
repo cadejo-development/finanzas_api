@@ -83,14 +83,27 @@ class BrewLotesController extends Controller
     {
         $lote = BrewLote::findOrFail($id);
         $data = $request->validate([
-            'og_real'           => 'nullable|numeric',
-            'vol_preboil_real'  => 'nullable|numeric|min:0',
-            'vol_postboil_real' => 'nullable|numeric|min:0',
-            'temp_mash_real'    => 'nullable|numeric',
-            'tiempo_boil_min'   => 'nullable|integer|min:0',
-            'notas'             => 'nullable|string',
-            'macerado_pasos'    => 'array',
-            'boil_pasos'        => 'array',
+            'og_real'               => 'nullable|numeric',
+            'vol_preboil_real'      => 'nullable|numeric|min:0',
+            'vol_postboil_real'     => 'nullable|numeric|min:0',
+            'temp_mash_real'        => 'nullable|numeric',
+            'tiempo_boil_min'       => 'nullable|integer|min:0',
+            'notas'                 => 'nullable|string',
+            // proceso completo
+            'ph_mash_real'          => 'nullable|numeric|min:0|max:14',
+            'ph_postboil'           => 'nullable|numeric|min:0|max:14',
+            'molino_kg_real'        => 'nullable|numeric|min:0',
+            'molino_tiempo_min'     => 'nullable|integer|min:0',
+            'whirlpool_hora'        => 'nullable|string|max:8',
+            'whirlpool_temp'        => 'nullable|numeric',
+            'enf_temp_entrada'      => 'nullable|numeric',
+            'enf_temp_refrigerante' => 'nullable|numeric',
+            'enf_temp_salida'       => 'nullable|numeric',
+            'enf_tiempo_min'        => 'nullable|integer|min:0',
+            'oxig_temp'             => 'nullable|numeric',
+            'oxig_nivel'            => 'nullable|string|max:30',
+            'macerado_pasos'        => 'array',
+            'boil_pasos'            => 'array',
         ]);
 
         DB::connection('compras')->transaction(function () use ($lote, $data) {
@@ -105,6 +118,7 @@ class BrewLotesController extends Controller
                         'temp_real'   => $row['temp_real'] ?? null,
                         'hora_inicio' => $row['hora_inicio'] ?? null,
                         'hora_fin'    => $row['hora_fin'] ?? null,
+                        'ph_real'     => $row['ph_real'] ?? null,
                     ]);
                 }
             }
@@ -129,18 +143,21 @@ class BrewLotesController extends Controller
     {
         $lote = BrewLote::findOrFail($id);
         $data = $request->validate([
-            'vol_bbt_real'  => 'nullable|numeric|min:0',
-            'og_bbt'        => 'nullable|numeric',
-            'temp_transfer' => 'nullable|numeric',
-            'num_corridas'  => 'nullable|integer|min:1',
-            'notas'         => 'nullable|string',
-            'corridas'               => 'array',
-            'corridas.*.vol_litros'  => 'nullable|numeric|min:0',
-            'corridas.*.tierra_blanca' => 'nullable|numeric|min:0',
-            'corridas.*.tierra_roja'   => 'nullable|numeric|min:0',
-            'corridas.*.densidad'    => 'nullable|numeric',
-            'corridas.*.hora'        => 'nullable|string|max:8',
-            'corridas.*.notas'       => 'nullable|string',
+            'vol_bbt_real'                => 'nullable|numeric|min:0',
+            'og_bbt'                      => 'nullable|numeric',
+            'temp_transfer'               => 'nullable|numeric',
+            'num_corridas'                => 'nullable|integer|min:1',
+            'notas'                       => 'nullable|string',
+            'corridas'                    => 'array',
+            'corridas.*.vol_litros'       => 'nullable|numeric|min:0',
+            'corridas.*.vol_inicial'      => 'nullable|numeric|min:0',
+            'corridas.*.vol_final'        => 'nullable|numeric|min:0',
+            'corridas.*.tierra_blanca'    => 'nullable|numeric|min:0',
+            'corridas.*.tierra_roja'      => 'nullable|numeric|min:0',
+            'corridas.*.densidad'         => 'nullable|numeric',
+            'corridas.*.hora'             => 'nullable|string|max:8',
+            'corridas.*.timestamp_inicio' => 'nullable|string|max:20',
+            'corridas.*.notas'            => 'nullable|string',
         ]);
 
         DB::connection('compras')->transaction(function () use ($lote, $data) {
@@ -153,13 +170,16 @@ class BrewLotesController extends Controller
                 $lote->filtracionCorridas()->delete();
                 foreach ($data['corridas'] as $i => $row) {
                     $lote->filtracionCorridas()->create(array_merge(
-                        collect($row)->only(['vol_litros', 'tierra_blanca', 'tierra_roja', 'densidad', 'hora', 'notas'])->toArray(),
+                        collect($row)->only([
+                            'vol_litros', 'vol_inicial', 'vol_final',
+                            'tierra_blanca', 'tierra_roja',
+                            'densidad', 'hora', 'timestamp_inicio', 'notas',
+                        ])->toArray(),
                         ['numero_corrida' => $i + 1]
                     ));
                 }
             }
 
-                // Nuevo orden: filtracion → llenado
             if ($lote->estado === 'filtracion') {
                 $lote->update(['estado' => 'llenado']);
             }
@@ -179,11 +199,13 @@ class BrewLotesController extends Controller
             'levadura_nombre'     => 'nullable|string|max:100',
             'levadura_cantidad_g' => 'nullable|numeric',
             'notas'               => 'nullable|string',
+            'drest_inicio_dia'    => 'nullable|integer|min:1',
+            'drest_temp'          => 'nullable|numeric',
+            'drest_resultado'     => 'nullable|string|max:500',
         ]);
 
         $lote->fermentacion()->updateOrCreate(['brew_lote_id' => $lote->id], $data);
 
-        // Nuevo orden: fermentacion → seguimiento
         if ($lote->estado === 'fermentacion') {
             $lote->update(['estado' => 'seguimiento']);
         }
