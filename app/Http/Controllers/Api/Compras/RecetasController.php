@@ -1243,9 +1243,12 @@ class RecetasController extends Controller
         $region = config('filesystems.disks.s3.region');
         $prefix = "https://{$bucket}.s3.{$region}.amazonaws.com/";
 
-        if (!str_starts_with($url, $prefix)) return $url;
+        // Quitar query params en caso de que ya sea una URL presignada guardada por error
+        $cleanUrl = strtok($url, '?');
 
-        $key = substr($url, strlen($prefix));
+        if (!str_starts_with($cleanUrl, $prefix)) return $url;
+
+        $key = substr($cleanUrl, strlen($prefix));
 
         try {
             static $s3Client = null;
