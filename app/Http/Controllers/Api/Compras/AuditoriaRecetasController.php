@@ -140,6 +140,11 @@ class AuditoriaRecetasController extends Controller
     public function destroy(int $id): JsonResponse
     {
         $auditoria = AuditoriaReceta::findOrFail($id);
+
+        if ($auditoria->estado !== 'borrador') {
+            return response()->json(['message' => 'Solo se pueden eliminar auditorías en estado borrador.'], 422);
+        }
+
         $auditoria->fotos()->delete();
         $auditoria->delete();
         return response()->json(['message' => 'Auditoría eliminada.']);
