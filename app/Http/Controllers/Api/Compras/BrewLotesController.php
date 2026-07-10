@@ -41,7 +41,71 @@ class BrewLotesController extends Controller
             'llenadoBotellas', 'llenadoBarriles',
         ])->findOrFail($id);
 
+        $this->syncPasosDesdeReceta($lote);
+
         return array_merge($lote->toArray(), ['reporte' => $this->calcularReporte($lote)]);
+    }
+
+    /**
+     * Mantiene los pasos del lote sincronizados con la receta.
+     * Crea pasos que falten, actualiza config (nombre/temp/tiempo) sin tocar mediciones,
+     * y elimina pasos que ya no existan en la receta.
+     */
+    private function syncPasosDesdeReceta(BrewLote $lote): void
+    {
+        // ── Macerado ────────────────────────────────────────────────────────
+        $recetaPasos = $lote->receta->maceradoPasos->keyBy('orden');
+        $lotePasos   = $lote->maceradoPasos->keyBy('orden');
+
+        foreach ($recetaPasos as $orden => $rp) {
+            if ($lotePasos->has($orden)) {
+                $lotePasos[$orden]->update([
+                    'nombre'         => $rp->nombre,
+                    'temp_objetivo'  => $rp->temp_objetivo,
+                    'tiempo_min'     => $rp->tiempo_min,
+                ]);
+            } else {
+                $lote->maceradoPasos()->create([
+                    'orden'         => $orden,
+                    'nombre'        => $rp->nombre,
+                    'temp_objetivo' => $rp->temp_objetivo,
+                    'tiempo_min'    => $rp->tiempo_min,
+                ]);
+            }
+        }
+        // Eliminar pasos del lote que ya no existen en la receta
+        foreach ($lotePasos as $orden => $lp) {
+            if (!$recetaPasos->has($orden)) {
+                $lp->delete();
+            }
+        }
+
+        // ── Boil pasos ──────────────────────────────────────────────────────
+        $recetaBoil = $lote->receta->boilPasos->keyBy('orden');
+        $loteBoil   = $lote->boilPasos->keyBy('orden');
+
+        foreach ($recetaBoil as $orden => $rb) {
+            if ($loteBoil->has($orden)) {
+                $loteBoil[$orden]->update([
+                    'descripcion' => $rb->descripcion,
+                    'tiempo_min'  => $rb->tiempo_min,
+                ]);
+            } else {
+                $lote->boilPasos()->create([
+                    'orden'       => $orden,
+                    'descripcion' => $rb->descripcion,
+                    'tiempo_min'  => $rb->tiempo_min,
+                    'completado'  => false,
+                ]);
+            }
+        }
+        foreach ($loteBoil as $orden => $lb) {
+            if (!$recetaBoil->has($orden)) {
+                $lb->delete();
+            }
+        }
+
+        $lote->load('maceradoPasos', 'boilPasos');
     }
 
     public function store(Request $request)
@@ -233,8 +297,8 @@ class BrewLotesController extends Controller
                     collect($dia)->only(['dia', 'fecha', 'gravedad', 'temp', 'ph', 'notas'])->toArray()
                 );
             }
-            // Nuevo orden: seguimiento → filtracion
-            if ($lote->estado === 'seguimiento') {
+            // Solo avanza si el usuario cierra explícitamente el seguimiento
+            if ($lote->estado === 'seguimiento' && $request->boolean('cerrar_seguimiento', false)) {
                 $lote->update(['estado' => 'filtracion']);
             }
         });
