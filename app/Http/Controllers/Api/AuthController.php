@@ -8,6 +8,7 @@ use App\Models\CentroCosto;
 use App\Models\System;
 use App\Models\Sucursal;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -154,7 +155,7 @@ class AuthController extends Controller
 
             $user->update([
                 'reset_code'            => $code,
-                'reset_code_expires_at' => now()->addMinutes(60),
+                'reset_code_expires_at' => Carbon::now('UTC')->addMinutes(60),
             ]);
 
             $estado       = 'enviado';
@@ -211,7 +212,7 @@ class AuthController extends Controller
             return response()->json(['message' => 'El código ingresado es inválido.'], 422);
         }
 
-        if (! $user->reset_code_expires_at || now()->gt($user->reset_code_expires_at)) {
+        if (! $user->reset_code_expires_at || Carbon::now('UTC')->gt($user->reset_code_expires_at)) {
             return response()->json(['message' => 'El código ha expirado. Solicita uno nuevo.'], 422);
         }
 
@@ -237,7 +238,7 @@ class AuthController extends Controller
             return response()->json(['message' => 'El código ingresado es inválido.'], 422);
         }
 
-        if (! $user->reset_code_expires_at || now()->gt($user->reset_code_expires_at)) {
+        if (! $user->reset_code_expires_at || Carbon::now('UTC')->gt($user->reset_code_expires_at)) {
             return response()->json(['message' => 'El código ha expirado. Solicita uno nuevo.'], 422);
         }
 
