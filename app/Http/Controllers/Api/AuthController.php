@@ -154,7 +154,7 @@ class AuthController extends Controller
 
             $user->update([
                 'reset_code'            => $code,
-                'reset_code_expires_at' => now()->addMinutes(15),
+                'reset_code_expires_at' => now()->addMinutes(60),
             ]);
 
             $estado       = 'enviado';
