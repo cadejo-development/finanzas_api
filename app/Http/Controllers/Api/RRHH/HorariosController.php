@@ -270,6 +270,17 @@ class HorariosController extends RRHHBaseController
         }
 
         $todos = array_map('intval', $this->getSubordinadosIds());
+
+        // Incluir el propio empleado del jefe/gerente (getSubordinadosIds lo excluye)
+        $propioId = DB::connection('pgsql')
+            ->table('empleados')
+            ->where('user_id', $this->getEffectiveUser()->id)
+            ->where('activo', true)
+            ->value('id');
+        if ($propioId && !in_array((int) $propioId, $todos)) {
+            $todos[] = (int) $propioId;
+        }
+
         if ($sucursalId && !empty($todos)) {
             return DB::connection('pgsql')
                 ->table('empleados')
