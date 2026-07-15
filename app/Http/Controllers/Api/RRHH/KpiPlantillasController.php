@@ -167,13 +167,33 @@ class KpiPlantillasController extends Controller
         return response()->json(['message' => 'Plantilla de KPI eliminada.']);
     }
 
-    public function cargosDisponibles(): JsonResponse
+    public function cargosDisponibles(Request $request): JsonResponse
     {
-        $cargos = Cargo::where('activo', true)
-            ->orderBy('nombre')
-            ->get(['id', 'nombre', 'codigo']);
+        $sucursalId     = $request->input('sucursal_id');
+        $departamentoId = $request->input('departamento_id');
 
-        return response()->json($cargos);
+        $query = \Illuminate\Support\Facades\DB::connection('pgsql')
+            ->table('cargos as c')
+            ->where('c.activo', true)
+            ->orderBy('c.nombre')
+            ->select('c.id', 'c.nombre', 'c.codigo');
+
+        if ($sucursalId || $departamentoId) {
+            $query->whereExists(function ($sub) use ($sucursalId, $departamentoId) {
+                $sub->from('empleados as e')
+                    ->whereColumn('e.cargo_id', 'c.id')
+                    ->where('e.activo', true);
+
+                if ($sucursalId) {
+                    $sub->where('e.sucursal_id', (int) $sucursalId);
+                }
+                if ($departamentoId) {
+                    $sub->where('e.departamento_id', (int) $departamentoId);
+                }
+            });
+        }
+
+        return response()->json($query->distinct()->get());
     }
 
     private function format(KpiPlantilla $p): array
