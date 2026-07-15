@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api\RRHH;
 use App\Http\Controllers\Controller;
 use App\Models\KpiPlantilla;
 use App\Models\KpiEscalaBonificacion;
-use App\Models\Cargo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -183,17 +182,36 @@ class KpiPlantillasController extends Controller
             ->select('c.id', 'c.nombre', 'c.codigo');
 
         if ($sucursalId || $departamentoId) {
-            $query->whereExists(function ($sub) use ($sucursalId, $departamentoId) {
-                $sub->from('empleados as e')
-                    ->whereColumn('e.cargo_id', 'c.id')
-                    ->where('e.activo', true);
+            $query->where(function ($outer) use ($sucursalId, $departamentoId) {
+                // Empleados regulares que trabajan en la sucursal/departamento
+                $outer->whereExists(function ($sub) use ($sucursalId, $departamentoId) {
+                    $sub->from('empleados as e')
+                        ->whereColumn('e.cargo_id', 'c.id')
+                        ->where('e.activo', true);
 
-                if ($sucursalId) {
-                    $sub->where('e.sucursal_id', (int) $sucursalId);
-                }
-                if ($departamentoId) {
-                    $sub->where('e.departamento_id', (int) $departamentoId);
-                }
+                    if ($sucursalId) {
+                        $sub->where('e.sucursal_id', (int) $sucursalId);
+                    }
+                    if ($departamentoId) {
+                        $sub->where('e.departamento_id', (int) $departamentoId);
+                    }
+                });
+
+                // Jefes/gerentes vinculados al departamento vía departamentos.jefe_empleado_id
+                $outer->orWhereExists(function ($sub) use ($sucursalId, $departamentoId) {
+                    $sub->from('empleados as ej')
+                        ->join('departamentos as d', 'd.jefe_empleado_id', '=', 'ej.id')
+                        ->whereColumn('ej.cargo_id', 'c.id')
+                        ->where('ej.activo', true)
+                        ->where('d.activo', true);
+
+                    if ($sucursalId) {
+                        $sub->where('d.sucursal_id', (int) $sucursalId);
+                    }
+                    if ($departamentoId) {
+                        $sub->where('d.id', (int) $departamentoId);
+                    }
+                });
             });
         }
 
