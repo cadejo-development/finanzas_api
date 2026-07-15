@@ -16,6 +16,7 @@ class KpiPlantilla extends Model
         'nombre',
         'descripcion',
         'sucursal_id',
+        'departamento_id',
         'unidad_medida',
         'monto_objetivo',
         'activo',
@@ -26,11 +27,17 @@ class KpiPlantilla extends Model
         'activo'          => 'boolean',
         'monto_objetivo'  => 'float',
         'sucursal_id'     => 'integer',
+        'departamento_id' => 'integer',
     ];
 
     public function sucursal(): BelongsTo
     {
         return $this->belongsTo(Sucursal::class);
+    }
+
+    public function departamento(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Departamento::class);
     }
 
     public function escala(): HasMany

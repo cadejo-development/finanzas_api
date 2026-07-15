@@ -16,6 +16,7 @@ class KpiPlantillasController extends Controller
     {
         $plantillas = KpiPlantilla::with([
                 'sucursal:id,nombre',
+                'departamento:id,nombre',
                 'cargos:id,nombre,codigo',
                 'escala',
             ])
@@ -31,6 +32,7 @@ class KpiPlantillasController extends Controller
     {
         $plantilla = KpiPlantilla::with([
                 'sucursal:id,nombre',
+                'departamento:id,nombre',
                 'cargos:id,nombre,codigo',
                 'escala',
             ])->findOrFail($id);
@@ -44,6 +46,7 @@ class KpiPlantillasController extends Controller
             'nombre'          => 'required|string|max:150',
             'descripcion'     => 'nullable|string|max:1000',
             'sucursal_id'     => 'nullable|integer|exists:pgsql.sucursales,id',
+            'departamento_id' => 'nullable|integer|exists:pgsql.departamentos,id',
             'unidad_medida'   => 'required|string|max:80',
             'monto_objetivo'  => 'nullable|numeric|min:0',
             'cargo_ids'       => 'array',
@@ -57,12 +60,13 @@ class KpiPlantillasController extends Controller
         DB::connection('pgsql')->beginTransaction();
         try {
             $plantilla = KpiPlantilla::create([
-                'nombre'         => $data['nombre'],
-                'descripcion'    => $data['descripcion'] ?? null,
-                'sucursal_id'    => $data['sucursal_id'] ?? null,
-                'unidad_medida'  => $data['unidad_medida'],
-                'monto_objetivo' => $data['monto_objetivo'] ?? null,
-                'aud_usuario'    => $request->user()?->email ?? 'sistema',
+                'nombre'          => $data['nombre'],
+                'descripcion'     => $data['descripcion'] ?? null,
+                'sucursal_id'     => $data['sucursal_id'] ?? null,
+                'departamento_id' => $data['departamento_id'] ?? null,
+                'unidad_medida'   => $data['unidad_medida'],
+                'monto_objetivo'  => $data['monto_objetivo'] ?? null,
+                'aud_usuario'     => $request->user()?->email ?? 'sistema',
             ]);
 
             if (!empty($data['cargo_ids'])) {
@@ -99,6 +103,7 @@ class KpiPlantillasController extends Controller
             'nombre'          => 'required|string|max:150',
             'descripcion'     => 'nullable|string|max:1000',
             'sucursal_id'     => 'nullable|integer|exists:pgsql.sucursales,id',
+            'departamento_id' => 'nullable|integer|exists:pgsql.departamentos,id',
             'unidad_medida'   => 'required|string|max:80',
             'monto_objetivo'  => 'nullable|numeric|min:0',
             'cargo_ids'       => 'array',
@@ -112,12 +117,13 @@ class KpiPlantillasController extends Controller
         DB::connection('pgsql')->beginTransaction();
         try {
             $plantilla->update([
-                'nombre'         => $data['nombre'],
-                'descripcion'    => $data['descripcion'] ?? null,
-                'sucursal_id'    => $data['sucursal_id'] ?? null,
-                'unidad_medida'  => $data['unidad_medida'],
-                'monto_objetivo' => $data['monto_objetivo'] ?? null,
-                'aud_usuario'    => $request->user()?->email ?? 'sistema',
+                'nombre'          => $data['nombre'],
+                'descripcion'     => $data['descripcion'] ?? null,
+                'sucursal_id'     => $data['sucursal_id'] ?? null,
+                'departamento_id' => $data['departamento_id'] ?? null,
+                'unidad_medida'   => $data['unidad_medida'],
+                'monto_objetivo'  => $data['monto_objetivo'] ?? null,
+                'aud_usuario'     => $request->user()?->email ?? 'sistema',
             ]);
 
             $plantilla->cargos()->sync($data['cargo_ids'] ?? []);
@@ -149,7 +155,7 @@ class KpiPlantillasController extends Controller
     {
         $plantilla = KpiPlantilla::findOrFail($id);
         $plantilla->update(['activo' => !$plantilla->activo]);
-        $plantilla->load(['sucursal:id,nombre', 'cargos:id,nombre,codigo', 'escala']);
+        $plantilla->load(['sucursal:id,nombre', 'departamento:id,nombre', 'cargos:id,nombre,codigo', 'escala']);
         $plantilla->loadCount('cargos');
 
         return response()->json($this->format($plantilla));
@@ -173,13 +179,15 @@ class KpiPlantillasController extends Controller
     private function format(KpiPlantilla $p): array
     {
         return [
-            'id'             => $p->id,
-            'nombre'         => $p->nombre,
-            'descripcion'    => $p->descripcion,
-            'sucursal_id'    => $p->sucursal_id,
-            'sucursal_nombre'=> $p->sucursal?->nombre,
-            'unidad_medida'  => $p->unidad_medida,
-            'monto_objetivo' => $p->monto_objetivo,
+            'id'                  => $p->id,
+            'nombre'              => $p->nombre,
+            'descripcion'         => $p->descripcion,
+            'sucursal_id'         => $p->sucursal_id,
+            'sucursal_nombre'     => $p->sucursal?->nombre,
+            'departamento_id'     => $p->departamento_id,
+            'departamento_nombre' => $p->departamento?->nombre,
+            'unidad_medida'       => $p->unidad_medida,
+            'monto_objetivo'      => $p->monto_objetivo,
             'activo'         => $p->activo,
             'cargos_count'   => $p->cargos_count ?? $p->cargos->count(),
             'cargos'         => $p->cargos->map(fn($c) => [
