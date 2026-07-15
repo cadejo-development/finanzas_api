@@ -679,6 +679,15 @@ Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh
     Route::patch('bonificaciones/{id}/aprobar',   [\App\Http\Controllers\Api\RRHH\BonificacionesController::class, 'aprobar']);
     Route::patch('bonificaciones/{id}/rechazar',  [\App\Http\Controllers\Api\RRHH\BonificacionesController::class, 'rechazar']);
     Route::patch('bonificaciones/{id}/aplicar',   [\App\Http\Controllers\Api\RRHH\BonificacionesController::class, 'aplicar']);
+
+    // KPIs
+    Route::get('kpi-plantillas/cargos-disponibles', [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'cargosDisponibles']);
+    Route::get('kpi-plantillas',                    [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'index']);
+    Route::post('kpi-plantillas',                   [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'store']);
+    Route::get('kpi-plantillas/{id}',               [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'show']);
+    Route::put('kpi-plantillas/{id}',               [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'update']);
+    Route::patch('kpi-plantillas/{id}/toggle',      [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'toggleActivo']);
+    Route::delete('kpi-plantillas/{id}',            [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'destroy']);
 });
 
 // ─── CADEJO VENTAS ───────────────────────────────────────────────────────────
