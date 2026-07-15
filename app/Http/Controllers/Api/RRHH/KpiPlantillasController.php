@@ -49,6 +49,7 @@ class KpiPlantillasController extends Controller
             'departamento_id' => 'nullable|integer|exists:pgsql.departamentos,id',
             'unidad_medida'   => 'required|string|max:80',
             'monto_objetivo'  => 'nullable|numeric|min:0',
+            'activo'          => 'boolean',
             'cargo_ids'       => 'array',
             'cargo_ids.*'     => 'integer|exists:pgsql.cargos,id',
             'escala'          => 'array',
@@ -66,6 +67,7 @@ class KpiPlantillasController extends Controller
                 'departamento_id' => $data['departamento_id'] ?? null,
                 'unidad_medida'   => $data['unidad_medida'],
                 'monto_objetivo'  => $data['monto_objetivo'] ?? null,
+                'activo'          => $data['activo'] ?? true,
                 'aud_usuario'     => $request->user()?->email ?? 'sistema',
             ]);
 
@@ -106,6 +108,7 @@ class KpiPlantillasController extends Controller
             'departamento_id' => 'nullable|integer|exists:pgsql.departamentos,id',
             'unidad_medida'   => 'required|string|max:80',
             'monto_objetivo'  => 'nullable|numeric|min:0',
+            'activo'          => 'boolean',
             'cargo_ids'       => 'array',
             'cargo_ids.*'     => 'integer|exists:pgsql.cargos,id',
             'escala'          => 'array',
@@ -123,6 +126,7 @@ class KpiPlantillasController extends Controller
                 'departamento_id' => $data['departamento_id'] ?? null,
                 'unidad_medida'   => $data['unidad_medida'],
                 'monto_objetivo'  => $data['monto_objetivo'] ?? null,
+                'activo'          => $data['activo'] ?? $plantilla->activo,
                 'aud_usuario'     => $request->user()?->email ?? 'sistema',
             ]);
 
