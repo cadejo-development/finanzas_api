@@ -53,6 +53,7 @@ class KpiPlantillasController extends Controller
             'cargo_ids.*'     => 'integer|exists:pgsql.cargos,id',
             'escala'          => 'array',
             'escala.*.porcentaje_desde' => 'required|numeric|min:0|max:100',
+            'escala.*.operador'         => 'nullable|in:>=,>,<=,<',
             'escala.*.tipo'             => 'required|in:porcentaje_bono,monto_fijo',
             'escala.*.valor'            => 'required|numeric|min:0',
         ]);
@@ -78,6 +79,7 @@ class KpiPlantillasController extends Controller
                 KpiEscalaBonificacion::create([
                     'kpi_plantilla_id' => $plantilla->id,
                     'porcentaje_desde' => $fila['porcentaje_desde'],
+                    'operador'         => $fila['operador'] ?? '>=',
                     'tipo'             => $fila['tipo'],
                     'valor'            => $fila['valor'],
                     'orden'            => $i,
@@ -112,6 +114,7 @@ class KpiPlantillasController extends Controller
             'cargo_ids.*'     => 'integer|exists:pgsql.cargos,id',
             'escala'          => 'array',
             'escala.*.porcentaje_desde' => 'required|numeric|min:0|max:100',
+            'escala.*.operador'         => 'nullable|in:>=,>,<=,<',
             'escala.*.tipo'             => 'required|in:porcentaje_bono,monto_fijo',
             'escala.*.valor'            => 'required|numeric|min:0',
         ]);
@@ -136,6 +139,7 @@ class KpiPlantillasController extends Controller
                 KpiEscalaBonificacion::create([
                     'kpi_plantilla_id' => $plantilla->id,
                     'porcentaje_desde' => $fila['porcentaje_desde'],
+                    'operador'         => $fila['operador'] ?? '>=',
                     'tipo'             => $fila['tipo'],
                     'valor'            => $fila['valor'],
                     'orden'            => $i,
@@ -175,11 +179,26 @@ class KpiPlantillasController extends Controller
         $sucursalId     = $request->input('sucursal_id');
         $departamentoId = $request->input('departamento_id');
 
+        // Subquery para contar empleados activos de este cargo en el scope seleccionado
+        $countWhere  = 'e2.cargo_id = c.id AND e2.activo = true';
+        $countBindings = [];
+        if ($sucursalId) {
+            $countWhere .= ' AND e2.sucursal_id = ?';
+            $countBindings[] = (int) $sucursalId;
+        }
+        if ($departamentoId) {
+            $countWhere .= ' AND e2.departamento_id = ?';
+            $countBindings[] = (int) $departamentoId;
+        }
+
         $query = \Illuminate\Support\Facades\DB::connection('pgsql')
             ->table('cargos as c')
             ->where('c.activo', true)
             ->orderBy('c.nombre')
-            ->select('c.id', 'c.nombre', 'c.codigo');
+            ->selectRaw(
+                'c.id, c.nombre, c.codigo, (SELECT COUNT(*) FROM empleados e2 WHERE ' . $countWhere . ') as total_empleados',
+                $countBindings
+            );
 
         if ($sucursalId || $departamentoId) {
             $query->where(function ($outer) use ($sucursalId, $departamentoId) {
@@ -240,6 +259,7 @@ class KpiPlantillasController extends Controller
             'escala'         => $p->escala->map(fn($e) => [
                                     'id'                => $e->id,
                                     'porcentaje_desde'  => $e->porcentaje_desde,
+                                    'operador'          => $e->operador ?? '>=',
                                     'tipo'              => $e->tipo,
                                     'valor'             => $e->valor,
                                     'orden'             => $e->orden,
