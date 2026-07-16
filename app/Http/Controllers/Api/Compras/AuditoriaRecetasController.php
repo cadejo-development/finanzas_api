@@ -641,6 +641,32 @@ class AuditoriaRecetasController extends Controller
                         linkUrl:        $linkUrl,
                     );
                     Mail::to($destinatarios)->send($mailable);
+
+                    // Registrar envío exitoso en email_logs
+                    DB::connection('pgsql')->table('email_logs')->insert([
+                        'sistema'         => 'compras',
+                        'tipo'            => 'auditoria_calidad',
+                        'destinatario'    => implode(', ', $destinatarios),
+                        'asunto'          => $mailable->envelope()->subject,
+                        'estado'          => 'enviado',
+                        'enviado_por'     => request()->user()?->email ?? 'sistema',
+                        'referencia_id'   => $auditoria->id,
+                        'referencia_tipo' => 'auditoria',
+                        'created_at'      => now(),
+                    ]);
+                } else {
+                    // Sin destinatarios — registrar para trazabilidad
+                    DB::connection('pgsql')->table('email_logs')->insert([
+                        'sistema'         => 'compras',
+                        'tipo'            => 'auditoria_calidad',
+                        'destinatario'    => '',
+                        'asunto'          => "Auditoría calidad #{$auditoria->id} — {$sucursalNombre}",
+                        'estado'          => 'sin_destinatarios',
+                        'enviado_por'     => request()->user()?->email ?? 'sistema',
+                        'referencia_id'   => $auditoria->id,
+                        'referencia_tipo' => 'auditoria',
+                        'created_at'      => now(),
+                    ]);
                 }
             } catch (\Throwable $e) {
                 // El correo es secundario — no rompemos la respuesta, pero sí registramos el error
@@ -652,24 +678,17 @@ class AuditoriaRecetasController extends Controller
                     'line'         => $e->getLine(),
                 ]);
                 try {
-                    DB::connection('rrhh')->table('error_logs')->insert([
-                        'sistema'        => 'compras',
-                        'controlador'    => static::class,
-                        'funcion'        => 'itemsSave — envío email',
-                        'metodo_http'    => 'POST',
-                        'url'            => request()->fullUrl(),
-                        'tipo_excepcion' => get_class($e),
-                        'codigo_http'    => 500,
-                        'mensaje'        => $e->getMessage(),
-                        'trace'          => substr($e->getTraceAsString(), 0, 5000),
-                        'request_data'   => json_encode(['auditoria_id' => $auditoria->id, 'destinatarios' => $destinatarios ?? []]),
-                        'ip'             => request()->ip(),
-                        'user_agent'     => request()->userAgent(),
-                        'usuario_email'  => request()->user()?->email,
-                        'usuario_id'     => request()->user()?->id,
-                        'severidad'      => 'error',
-                        'resuelto'       => false,
-                        'created_at'     => now(),
+                    DB::connection('pgsql')->table('email_logs')->insert([
+                        'sistema'         => 'compras',
+                        'tipo'            => 'auditoria_calidad',
+                        'destinatario'    => implode(', ', $destinatarios ?? []),
+                        'asunto'          => "Auditoría calidad #{$auditoria->id} — " . ($sucursalNombre ?? ''),
+                        'estado'          => 'fallido',
+                        'enviado_por'     => request()->user()?->email ?? 'sistema',
+                        'referencia_id'   => $auditoria->id,
+                        'referencia_tipo' => 'auditoria',
+                        'error_mensaje'   => $e->getMessage(),
+                        'created_at'      => now(),
                     ]);
                 } catch (\Throwable) {}
             }
