@@ -100,11 +100,15 @@ class AuthController extends Controller
             ->table('empleados as e')
             ->leftJoin('departamentos as d', 'd.id', '=', 'e.departamento_id')
             ->where('e.user_id', $user->id)
-            ->select('e.id as emp_id', 'd.codigo as dept_codigo')
+            ->select('e.id as emp_id', 'e.sucursal_id as emp_sucursal_id', 'd.codigo as dept_codigo')
             ->first();
 
         $empleadoId         = $empRow?->emp_id;
         $departamentoCodigo = $empRow?->dept_codigo;
+        $sucursalIdEfectivo = $user->sucursal_id ?? $empRow?->emp_sucursal_id;
+        if (!$sucursalNombre && $sucursalIdEfectivo && $sucursalIdEfectivo !== $user->sucursal_id) {
+            $sucursalNombre = Sucursal::find($sucursalIdEfectivo)?->nombre;
+        }
 
         return response()->json([
             'success' => true,
@@ -114,7 +118,7 @@ class AuthController extends Controller
                 'name'                  => $user->name,
                 'email'                 => $user->email,
                 'activo'                => $user->activo,
-                'sucursal_id'           => $user->sucursal_id,
+                'sucursal_id'           => $sucursalIdEfectivo,
                 'sucursal'              => $sucursalNombre,
                 'sucursales_ids'        => $todasSucursalesIds,
                 'sucursales'            => $todasSucursales,
@@ -344,11 +348,15 @@ class AuthController extends Controller
             ->table('empleados as e')
             ->leftJoin('departamentos as d', 'd.id', '=', 'e.departamento_id')
             ->where('e.user_id', $user->id)
-            ->select('e.id as emp_id', 'd.codigo as dept_codigo')
+            ->select('e.id as emp_id', 'e.sucursal_id as emp_sucursal_id', 'd.codigo as dept_codigo')
             ->first();
 
         $empleadoId         = $empRow?->emp_id;
         $departamentoCodigo = $empRow?->dept_codigo;
+        $sucursalIdEfectivo = $user->sucursal_id ?? $empRow?->emp_sucursal_id;
+        if (!$sucursalNombre && $sucursalIdEfectivo && $sucursalIdEfectivo !== $user->sucursal_id) {
+            $sucursalNombre = Sucursal::find($sucursalIdEfectivo)?->nombre;
+        }
 
         return response()->json([
             'success' => true,
@@ -357,7 +365,7 @@ class AuthController extends Controller
                 'name'            => $user->name,
                 'email'           => $user->email,
                 'activo'          => $user->activo,
-                'sucursal_id'     => $user->sucursal_id,
+                'sucursal_id'     => $sucursalIdEfectivo,
                 'sucursal'        => $sucursalNombre,
                 'sucursales_ids'  => $todasSucursalesIds,
                 'sucursales'      => $todasSucursales,
