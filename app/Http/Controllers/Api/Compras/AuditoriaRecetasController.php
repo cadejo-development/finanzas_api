@@ -596,10 +596,8 @@ class AuditoriaRecetasController extends Controller
                     ->where('id', $auditoria->sucursal_id)
                     ->value('nombre') ?? 'Sucursal';
 
-                // Gerente de sucursal y jefe de cocina activos en esa sucursal.
-                // Preferimos users.email (correo institucional con el que acceden al sistema)
-                // y solo si no tiene cuenta registrada caemos al email personal de empleados.
-                $destinatarios = DB::connection('pgsql')
+                // 1. Por cargo: gerente/jefe de cocina/chef ejecutivo activos en esa sucursal.
+                $porCargo = DB::connection('pgsql')
                     ->table('empleados as e')
                     ->join('cargos as c', 'e.cargo_id', '=', 'c.id')
                     ->leftJoin('users as u', 'u.id', '=', 'e.user_id')
@@ -607,7 +605,25 @@ class AuditoriaRecetasController extends Controller
                     ->where('e.activo', true)
                     ->whereRaw("LOWER(c.nombre) LIKE '%gerente%' OR LOWER(c.nombre) LIKE '%jefe de cocina%' OR LOWER(c.nombre) LIKE '%chef ejecutivo%'")
                     ->selectRaw('COALESCE(NULLIF(u.email, \'\'), e.email) AS email_destino')
-                    ->pluck('email_destino')
+                    ->pluck('email_destino');
+
+                // 2. Por rol: usuarios con gerente_sucursal vinculados a esa sucursal
+                //    (via users.sucursal_id o via empleados.sucursal_id como fallback).
+                $porRol = DB::connection('pgsql')
+                    ->table('users as u')
+                    ->join('role_user as ru', 'ru.user_id', '=', 'u.id')
+                    ->join('roles as r', 'r.id', '=', 'ru.role_id')
+                    ->leftJoin('empleados as e', 'e.user_id', '=', 'u.id')
+                    ->where('r.codigo', 'gerente_sucursal')
+                    ->where('u.activo', true)
+                    ->where(function ($q) use ($auditoria) {
+                        $q->where('u.sucursal_id', $auditoria->sucursal_id)
+                          ->orWhere('e.sucursal_id', $auditoria->sucursal_id);
+                    })
+                    ->selectRaw('NULLIF(TRIM(u.email), \'\') AS email_destino')
+                    ->pluck('email_destino');
+
+                $destinatarios = $porCargo->merge($porRol)
                     ->filter(fn ($e) => $e && filter_var($e, FILTER_VALIDATE_EMAIL))
                     ->unique()
                     ->values()
