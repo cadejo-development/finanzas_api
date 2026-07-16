@@ -13,19 +13,10 @@ body {
 }
 
 @page {
-  margin: 15mm 10mm;
+  margin: 18mm 14mm;
 }
 
-.page-border {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  border: 1.5px solid #444;
-}
-
-.wrap { padding: 10mm 12mm 10mm 12mm; }
+.wrap { padding: 0; }
 
 /* ── HEADER ─────────────────────────────────────────────────── */
 .hdr { width: 100%; border-collapse: collapse; }
@@ -199,8 +190,6 @@ body {
 </style>
 </head>
 <body>
-
-<div class="page-border"></div>
 
 <div class="wrap">
 
