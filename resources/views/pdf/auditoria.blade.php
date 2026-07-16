@@ -12,6 +12,10 @@ body {
   line-height: 1.4;
 }
 
+@page {
+  margin: 18mm 22mm;
+}
+
 .page-border {
   position: fixed;
   top: 8mm;
@@ -21,7 +25,7 @@ body {
   border: 1.5px solid #444;
 }
 
-.wrap { padding: 10mm 12mm 10mm 12mm; }
+.wrap { padding: 0; }
 
 /* ── HEADER ─────────────────────────────────────────────────── */
 .hdr { width: 100%; border-collapse: collapse; }
@@ -179,10 +183,12 @@ body {
 .resp-meta { font-size: 8.5px; color: #666; margin-top: 5px; }
 
 /* ── PAGE BREAKS ────────────────────────────────────────────── */
-.sec-header { page-break-after: avoid; }
+.sec-header  { page-break-after: avoid; }
+.sec-table   { page-break-inside: auto; }
 .sec-table tr { page-break-inside: avoid; }
-.obs-block  { page-break-inside: avoid; }
-.resp-block { page-break-inside: avoid; }
+.sec-fotos   { page-break-inside: avoid; }
+.obs-block   { page-break-inside: avoid; }
+.resp-block  { page-break-inside: avoid; }
 
 /* ── COLOR SCORE ────────────────────────────────────────────── */
 .score-excelente { color: #15803d; }
