@@ -174,6 +174,35 @@ class KpiPlantillasController extends Controller
         return response()->json(['message' => 'Plantilla de KPI eliminada.']);
     }
 
+    public function empleadosAfectados(int $id): JsonResponse
+    {
+        $plantilla = KpiPlantilla::with('cargos:id')->findOrFail($id);
+        $cargoIds  = $plantilla->cargos->pluck('id')->toArray();
+
+        if (empty($cargoIds)) {
+            return response()->json([]);
+        }
+
+        $query = DB::connection('pgsql')
+            ->table('empleados as e')
+            ->join('cargos as c', 'e.cargo_id', '=', 'c.id')
+            ->leftJoin('sucursales as s', 'e.sucursal_id', '=', 's.id')
+            ->where('e.activo', true)
+            ->whereIn('e.cargo_id', $cargoIds)
+            ->orderBy('c.nombre')
+            ->orderByRaw("TRIM(e.nombres || ' ' || e.apellidos)")
+            ->selectRaw("TRIM(e.nombres || ' ' || e.apellidos) as nombre, c.nombre as cargo, COALESCE(s.nombre, 'Sin sucursal') as sucursal");
+
+        if ($plantilla->sucursal_id) {
+            $query->where('e.sucursal_id', $plantilla->sucursal_id);
+        }
+        if ($plantilla->departamento_id) {
+            $query->where('e.departamento_id', $plantilla->departamento_id);
+        }
+
+        return response()->json($query->get());
+    }
+
     public function cargosDisponibles(Request $request): JsonResponse
     {
         $sucursalId     = $request->input('sucursal_id');

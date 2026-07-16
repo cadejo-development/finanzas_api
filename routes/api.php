@@ -687,6 +687,7 @@ Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh
     Route::get('kpi-plantillas/{id}',               [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'show']);
     Route::put('kpi-plantillas/{id}',               [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'update']);
     Route::patch('kpi-plantillas/{id}/toggle',      [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'toggleActivo']);
+    Route::get('kpi-plantillas/{id}/empleados',     [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'empleadosAfectados']);
     Route::delete('kpi-plantillas/{id}',            [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'destroy']);
 });
 
