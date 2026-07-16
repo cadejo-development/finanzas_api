@@ -89,9 +89,9 @@ class DashboardRRHHController extends RRHHBaseController
             })->values();
         }
 
-        // Contrataciones del mes actual (solo rrhh_admin y gerencia_ops)
+        // Contrataciones del mes actual (rrhh_admin, gerencia_ops y analistas)
         $contratacionesMes = [];
-        if ($this->esAdminRrhh() || $this->esGerenciaOps()) {
+        if ($this->esAdminRrhh() || $this->esGerenciaOps() || $this->esAnalistaRrhh()) {
             $idsScope = ($this->esGerenciaOps() && !$this->esAdminRrhh()) ? $subordinadosIds : null;
 
             $query = DB::connection('pgsql')
@@ -118,7 +118,7 @@ class DashboardRRHHController extends RRHHBaseController
         return response()->json([
             'success' => true,
             'data'    => [
-                'es_admin'               => $this->esAdminRrhh() || $this->esGerenciaOps(),
+                'es_admin'               => $this->esAdminRrhh() || $this->esGerenciaOps() || $this->esAnalistaRrhh(),
                 'total_empleados'        => $totalEmpleados,
                 'permisos_pendientes'    => $permisosPendientes,
                 'vacaciones_pendientes'  => $vacacionesPendientes,
@@ -191,7 +191,7 @@ class DashboardRRHHController extends RRHHBaseController
         //      por departamento solo para empleados de Casa Matriz ──────────────
         $porSucursal     = [];
         $porDepartamento = [];
-        if (($this->esAdminRrhh() || $this->esGerenciaOps()) && $ids) {
+        if (($this->esAdminRrhh() || $this->esGerenciaOps() || $this->esAnalistaRrhh()) && $ids) {
             // Sucursales: excluir Casa Matriz (se muestra aparte por departamento)
             $sucs = DB::connection('pgsql')
                 ->table('sucursales as s')
@@ -395,12 +395,12 @@ class DashboardRRHHController extends RRHHBaseController
      */
     public function demograficos(): JsonResponse
     {
-        if (!$this->esAdminRrhh() && !$this->esGerenciaOps()) {
+        if (!$this->esAdminRrhh() && !$this->esGerenciaOps() && !$this->esAnalistaRrhh()) {
             return response()->json(['success' => false, 'message' => 'No autorizado.'], 403);
         }
 
-        // gerencia_ops ve solo sus subordinados (personal de restaurantes)
-        $esGerenciaOps = $this->esGerenciaOps();
+        // gerencia_ops ve solo sus subordinados; admin y analistas ven todos
+        $esGerenciaOps = $this->esGerenciaOps() && !$this->esAdminRrhh() && !$this->esAnalistaRrhh();
         $subordinadosIds = $esGerenciaOps ? $this->getSubordinadosIds() : null;
 
         // ── Género ────────────────────────────────────────────────────────────
