@@ -89,7 +89,19 @@ abstract class RRHHBaseController extends Controller
     }
 
     /**
+     * Indica si el usuario EFECTIVO es analista RRHH (senior o junior).
+     * Ambos niveles tienen acceso a todos los empleados, como rrhh_admin.
+     */
+    protected function esAnalistaRrhh(): bool
+    {
+        $user = $this->getEffectiveUser();
+        return $user->hasRole('rrhh_analista', self::RRHH_SYSTEM_ID)
+            || $user->hasRole('rrhh_analista_jr', self::RRHH_SYSTEM_ID);
+    }
+
+    /**
      * Indica si el usuario EFECTIVO es empleado-solo en el sistema RRHH.
+     * Un analista NO es empleado-solo aunque también tenga el rol empleado.
      */
     protected function esEmpleado(): bool
     {
@@ -97,7 +109,9 @@ abstract class RRHHBaseController extends Controller
         return $user->hasRole('empleado', self::RRHH_SYSTEM_ID)
             && ! $user->hasRole('rrhh_admin', self::RRHH_SYSTEM_ID)
             && ! $user->hasRole('jefatura', self::RRHH_SYSTEM_ID)
-            && ! $user->hasRole('gerencia_ops', self::RRHH_SYSTEM_ID);
+            && ! $user->hasRole('gerencia_ops', self::RRHH_SYSTEM_ID)
+            && ! $user->hasRole('rrhh_analista', self::RRHH_SYSTEM_ID)
+            && ! $user->hasRole('rrhh_analista_jr', self::RRHH_SYSTEM_ID);
     }
 
     /**
@@ -126,6 +140,11 @@ abstract class RRHHBaseController extends Controller
     protected function getSubordinadosIds(): array
     {
         if ($this->esAdminRrhh()) {
+            return $this->getTodosEmpleadosIds();
+        }
+
+        // Analistas RRHH: visibilidad total, igual que rrhh_admin
+        if ($this->esAnalistaRrhh()) {
             return $this->getTodosEmpleadosIds();
         }
 
@@ -348,7 +367,7 @@ abstract class RRHHBaseController extends Controller
      */
     protected function puedeGestionar(int $empleadoId): bool
     {
-        if ($this->esAdminRrhh()) {
+        if ($this->esAdminRrhh() || $this->esAnalistaRrhh()) {
             return DB::connection('pgsql')
                 ->table('empleados')
                 ->where('id', $empleadoId)
@@ -377,7 +396,7 @@ abstract class RRHHBaseController extends Controller
      */
     protected function estadoParaEmpleado(int $empleadoId, ?int $jefeId = null): string
     {
-        if ($this->esAdminRrhh()) return 'aprobado';
+        if ($this->esAdminRrhh() || $this->esAnalistaRrhh()) return 'aprobado';
         if ($this->esEmpleado()) return 'pendiente';
         $esPropio = $this->esEmpleadoPropio($empleadoId);
         if ($esPropio) return 'pendiente';
@@ -458,7 +477,7 @@ abstract class RRHHBaseController extends Controller
      */
     protected function esSubordinado(int $empleadoId): bool
     {
-        if ($this->esAdminRrhh()) {
+        if ($this->esAdminRrhh() || $this->esAnalistaRrhh()) {
             return DB::connection('pgsql')
                 ->table('empleados')
                 ->where('id', $empleadoId)
@@ -537,7 +556,7 @@ abstract class RRHHBaseController extends Controller
      */
     protected function debeNotificar(int $empleadoId): bool
     {
-        if ($this->esAdminRrhh()) return false;
+        if ($this->esAdminRrhh() || $this->esAnalistaRrhh()) return false;
         return $this->esEmpleadoPropio($empleadoId);
     }
 
