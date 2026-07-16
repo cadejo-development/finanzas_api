@@ -13,7 +13,7 @@ body {
 }
 
 @page {
-  margin: 8mm 10mm;
+  margin: 15mm 10mm;
 }
 
 .page-border {
