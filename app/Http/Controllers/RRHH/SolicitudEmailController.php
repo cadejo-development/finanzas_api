@@ -11,6 +11,7 @@ use App\Models\RRHH\Desvinculacion;
 use App\Models\RRHH\Permiso;
 use App\Models\RRHH\Vacacion;
 use App\Services\RRHH\AmonestacionPdfService;
+use App\Services\RRHH\SaldoCadejoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -142,6 +143,16 @@ class SolicitudEmailController extends Controller
             'estado'       => $nuevoEstado,
             'aprobado_en'  => now(),
         ]);
+
+        // Días Cadejo aprobados: descontar saldo (el flujo web lo hace en PermisosController::update)
+        if ($tipo === 'permiso' && $nuevoEstado === 'aprobado') {
+            $solicitud->load('tipoPermiso');
+            if ($solicitud->tipoPermiso?->codigo === 'dias_cadejo') {
+                $dias = (float) ($solicitud->dias ?? 1);
+                $anio = (int) \Carbon\Carbon::parse($solicitud->fecha)->year;
+                SaldoCadejoService::descontar($solicitud->empleado_id, $dias, $anio);
+            }
+        }
 
         // Para despidos aprobados: inactivar al empleado si la fecha efectiva ya llegó
         if ($tipo === 'despido' && $nuevoEstado === 'aprobado') {
