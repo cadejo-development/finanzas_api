@@ -191,7 +191,7 @@ class KpiPlantillasController extends Controller
             ->whereIn('e.cargo_id', $cargoIds)
             ->orderBy('c.nombre')
             ->orderByRaw("TRIM(e.nombres || ' ' || e.apellidos)")
-            ->selectRaw("TRIM(e.nombres || ' ' || e.apellidos) as nombre, c.nombre as cargo, COALESCE(s.nombre, 'Sin sucursal') as sucursal");
+            ->selectRaw("e.id, TRIM(e.nombres || ' ' || e.apellidos) as nombre, c.nombre as cargo, COALESCE(s.nombre, 'Sin sucursal') as sucursal");
 
         if ($plantilla->sucursal_id) {
             $query->where('e.sucursal_id', $plantilla->sucursal_id);
