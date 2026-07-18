@@ -139,11 +139,11 @@ class KpiResultadosController extends Controller
             ->first();
         if (!$tipoBono) {
             $tipoBonId = DB::connection('pgsql')->table('tipos_bonificacion')->insertGetId([
-                'nombre'      => 'Bonificación KPI',
-                'descripcion' => 'Generada automáticamente por cumplimiento de KPI',
-                'activo'      => true,
-                'created_at'  => now(),
-                'updated_at'  => now(),
+                'nombre'     => 'Bonificación KPI',
+                'gravado'    => false,
+                'activo'     => true,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         } else {
             $tipoBonId = $tipoBono->id;
