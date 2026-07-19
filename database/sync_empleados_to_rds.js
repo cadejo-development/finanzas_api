@@ -227,14 +227,16 @@ async function run() {
     log(`SQL Server: ${empRows.length} empleados (activos + inactivos)`);
 
     const paraInsertar = [];
-    const paraActualizar = [];  // [activo, departamento_id, fecha_ingreso, cargo_id, salario_base, email, codigo]
+    const paraActualizar = [];  // [departamento_id, sucursal_id, fecha_ingreso, cargo_id, salario_base, email, codigo]
 
     let sinDepMap = 0;
 
     for (const r of empRows) {
-      const codigo        = clean(r.codigo, 20);
-      const activo        = r.activo === 1 || r.activo === true;
+      const codigo         = clean(r.codigo, 20);
+      const activo         = r.activo === 1 || r.activo === true;
       const departamentoId = DEP_DEPARTAMENTO_MAP[r.dep_codigo] ?? null;
+      const sucCodigo      = DEP_SUCURSAL_MAP[r.dep_codigo] ?? null;
+      const sucursalId     = sucCodigo ? (sucByCode[sucCodigo] ?? null) : null;
 
       if (existentes.has(codigo)) {
         if (excluidos.has(codigo)) continue; // sync_excluido=true → no tocar
@@ -242,7 +244,7 @@ async function run() {
         const cargoId       = cargoByCode[r.cargo_codigo] ?? null;
         const salarioBase   = r.salario_mes != null ? parseFloat(r.salario_mes) : null;
         const emailVal      = clean(r.email, 150);
-        paraActualizar.push([activo, departamentoId, fechaIngreso, cargoId, salarioBase, emailVal, codigo]);
+        paraActualizar.push([departamentoId, sucursalId, fechaIngreso, cargoId, salarioBase, emailVal, codigo]);
       } else if (activo) {
         // NUEVO y activo en SQL Server → insertar completo
         const sucCodigo  = DEP_SUCURSAL_MAP[r.dep_codigo] ?? null;
@@ -281,20 +283,22 @@ async function run() {
         let updOk = 0;
         for (let i = 0; i < paraActualizar.length; i += BATCH) {
           const batch = paraActualizar.slice(i, i + BATCH);
-          for (const [activo, departamentoId, fechaIngreso, cargoId, salarioBase, emailVal, codigo] of batch) {
+          for (const [departamentoId, sucursalId, fechaIngreso, cargoId, salarioBase, emailVal, codigo] of batch) {
             await pg.query(
               // activo: NO se toca — las bajas se registran desde el módulo RRHH.
-              // departamento_id, fecha_ingreso, salario_base, email: COALESCE (solo si aún está vacío).
-              // cargo_id: siempre actualizado (refleja ascensos/cambios de puesto).
+              // cargo_id, sucursal_id, departamento_id: siempre actualizados si Brilo tiene mapeo.
+              //   Si Brilo no tiene mapeo para ese depto (ej: Mansión), se conserva el valor existente.
+              // fecha_ingreso, salario_base, email: COALESCE (solo rellena si está vacío).
               `UPDATE empleados
-               SET departamento_id = COALESCE(departamento_id, $1),
-                   fecha_ingreso   = COALESCE(fecha_ingreso, $2),
-                   cargo_id        = COALESCE($3, cargo_id),
-                   salario_base    = COALESCE(salario_base, $4),
-                   email           = COALESCE(NULLIF(email, ''), $5),
-                   updated_at      = $6
-               WHERE codigo = $7`,
-              [departamentoId, fechaIngreso, cargoId, salarioBase, emailVal, NOW, codigo]
+               SET departamento_id = COALESCE($1, departamento_id),
+                   sucursal_id     = COALESCE($2, sucursal_id),
+                   fecha_ingreso   = COALESCE(fecha_ingreso, $3),
+                   cargo_id        = COALESCE($4, cargo_id),
+                   salario_base    = COALESCE(salario_base, $5),
+                   email           = COALESCE(NULLIF(email, ''), $6),
+                   updated_at      = $7
+               WHERE codigo = $8`,
+              [departamentoId, sucursalId, fechaIngreso, cargoId, salarioBase, emailVal, NOW, codigo]
             );
             updOk++;
           }
