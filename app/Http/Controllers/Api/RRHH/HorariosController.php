@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Validator;
  */
 class HorariosController extends RRHHBaseController
 {
+    use \App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
     /**
      * GET /rrhh/horarios
      *
@@ -184,43 +185,45 @@ class HorariosController extends RRHHBaseController
      */
     public function bulk(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'registros'                => 'required|array|min:1',
-            'registros.*.empleado_id'  => 'required|integer',
-            'registros.*.fecha'        => 'required|date_format:Y-m-d',
-            'registros.*.parte'        => 'required|integer|min:1|max:3',
-            'registros.*.hora_inicio'  => 'nullable|date_format:H:i',
-            'registros.*.hora_fin'     => 'nullable|date_format:H:i',
-            'registros.*.tipo'         => 'required|in:normal,libre,vacacion,dia_cadejo,incapacidad',
-            'registros.*.notas'        => 'nullable|string|max:200',
-        ]);
+        return $this->captureAndRespond($request, function () use ($request) {
+            $validated = $request->validate([
+                'registros'                => 'required|array|min:1',
+                'registros.*.empleado_id'  => 'required|integer',
+                'registros.*.fecha'        => 'required|date_format:Y-m-d',
+                'registros.*.parte'        => 'required|integer|min:1|max:3',
+                'registros.*.hora_inicio'  => 'nullable|date_format:H:i',
+                'registros.*.hora_fin'     => 'nullable|date_format:H:i',
+                'registros.*.tipo'         => 'required|in:normal,libre,vacacion,dia_cadejo,incapacidad',
+                'registros.*.notas'        => 'nullable|string|max:200',
+            ]);
 
-        $allowedIds = $this->resolverEmpleadosIds($request);
-        $now        = now();
-        $audUsuario = Auth::user()?->name ?? 'sistema';
+            $allowedIds = $this->resolverEmpleadosIds($request);
+            $now        = now();
+            $audUsuario = Auth::user()?->name ?? 'sistema';
 
-        $upserted = [];
-        foreach ($validated['registros'] as $row) {
-            if (!in_array($row['empleado_id'], $allowedIds)) {
-                continue; // no tiene permisos sobre este empleado
+            $upserted = [];
+            foreach ($validated['registros'] as $row) {
+                if (!in_array($row['empleado_id'], $allowedIds)) {
+                    continue; // no tiene permisos sobre este empleado
+                }
+
+                $horario = HorarioEmpleado::updateOrCreate(
+                    ['empleado_id' => $row['empleado_id'], 'fecha' => $row['fecha'], 'parte' => $row['parte']],
+                    [
+                        'hora_inicio' => $row['hora_inicio'] ?? null,
+                        'hora_fin'    => $row['hora_fin']    ?? null,
+                        'tipo'        => $row['tipo'],
+                        'parte'       => $row['parte'],
+                        'notas'       => $row['notas'] ?? null,
+                        'aud_usuario' => $audUsuario,
+                        'updated_at'  => $now,
+                    ]
+                );
+                $upserted[] = $horario->id;
             }
 
-            $horario = HorarioEmpleado::updateOrCreate(
-                ['empleado_id' => $row['empleado_id'], 'fecha' => $row['fecha'], 'parte' => $row['parte']],
-                [
-                    'hora_inicio' => $row['hora_inicio'] ?? null,
-                    'hora_fin'    => $row['hora_fin']    ?? null,
-                    'tipo'        => $row['tipo'],
-                    'parte'       => $row['parte'],
-                    'notas'       => $row['notas'] ?? null,
-                    'aud_usuario' => $audUsuario,
-                    'updated_at'  => $now,
-                ]
-            );
-            $upserted[] = $horario->id;
-        }
-
-        return response()->json(['guardados' => count($upserted)]);
+            return response()->json(['guardados' => count($upserted)]);
+        });
     }
 
     /**
