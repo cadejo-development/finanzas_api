@@ -25,6 +25,8 @@ use Illuminate\Support\Facades\Storage;
 
 class ExpedienteController extends RRHHBaseController
 {
+    use \App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
+
     // ─────────────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
@@ -232,29 +234,31 @@ class ExpedienteController extends RRHHBaseController
     // ─────────────────────────────────────────────────────────────────────────
     public function upsertDatosPersonales(Request $request, int $empleadoId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId) {
+            $this->autorizarAcceso($empleadoId);
 
-        $data = $request->validate([
-            'fecha_nacimiento' => 'nullable|date',
-            'genero'           => 'nullable|in:masculino,femenino,otro',
-            'estado_civil'     => 'nullable|in:soltero,casado,divorciado,viudo,union_libre',
-            'nacionalidad'     => 'nullable|string|max:60',
-            'grupo_sanguineo'  => 'nullable|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
-            'lugar_nacimiento'        => 'nullable|string|max:150',
-            'nacimiento_municipio_id' => 'nullable|integer',
-            'profesion'               => 'nullable|string|max:100',
-            'domicilio'               => 'nullable|string|max:200',
-            'notas'                   => 'nullable|string|max:2000',
-        ]);
+            $data = $request->validate([
+                'fecha_nacimiento' => 'nullable|date',
+                'genero'           => 'nullable|in:masculino,femenino,otro',
+                'estado_civil'     => 'nullable|in:soltero,casado,divorciado,viudo,union_libre',
+                'nacionalidad'     => 'nullable|string|max:60',
+                'grupo_sanguineo'  => 'nullable|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
+                'lugar_nacimiento'        => 'nullable|string|max:150',
+                'nacimiento_municipio_id' => 'nullable|integer',
+                'profesion'               => 'nullable|string|max:100',
+                'domicilio'               => 'nullable|string|max:200',
+                'notas'                   => 'nullable|string|max:2000',
+            ]);
 
-        $data['aud_usuario'] = $request->user()?->email;
+            $data['aud_usuario'] = $request->user()?->email;
 
-        $registro = ExpedienteDatosPersonales::updateOrCreate(
-            ['empleado_id' => $empleadoId],
-            $data
-        );
+            $registro = ExpedienteDatosPersonales::updateOrCreate(
+                ['empleado_id' => $empleadoId],
+                $data
+            );
 
-        return response()->json(['success' => true, 'data' => $registro]);
+            return response()->json(['success' => true, 'data' => $registro]);
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -262,49 +266,55 @@ class ExpedienteController extends RRHHBaseController
     // ─────────────────────────────────────────────────────────────────────────
     public function storeContacto(Request $request, int $empleadoId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId) {
+            $this->autorizarAcceso($empleadoId);
 
-        $data = $request->validate([
-            'tipo'            => 'required|in:telefono,email,whatsapp,emergencia',
-            'etiqueta'        => 'nullable|string|max:60',
-            'valor'           => 'required|string|max:150',
-            'nombre_contacto' => 'nullable|string|max:120',
-            'relacion'        => 'nullable|string|max:80',
-            'es_emergencia'   => 'boolean',
-            'orden'           => 'integer|min:0',
-        ]);
+            $data = $request->validate([
+                'tipo'            => 'required|in:telefono,email,whatsapp,emergencia',
+                'etiqueta'        => 'nullable|string|max:60',
+                'valor'           => 'required|string|max:150',
+                'nombre_contacto' => 'nullable|string|max:120',
+                'relacion'        => 'nullable|string|max:80',
+                'es_emergencia'   => 'boolean',
+                'orden'           => 'integer|min:0',
+            ]);
 
-        $contacto = ExpedienteContacto::create(array_merge($data, ['empleado_id' => $empleadoId]));
+            $contacto = ExpedienteContacto::create(array_merge($data, ['empleado_id' => $empleadoId]));
 
-        return response()->json(['success' => true, 'data' => $contacto], 201);
+            return response()->json(['success' => true, 'data' => $contacto], 201);
+        });
     }
 
     public function updateContacto(Request $request, int $empleadoId, int $contactoId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId, $contactoId) {
+            $this->autorizarAcceso($empleadoId);
 
-        $contacto = ExpedienteContacto::where('empleado_id', $empleadoId)->findOrFail($contactoId);
+            $contacto = ExpedienteContacto::where('empleado_id', $empleadoId)->findOrFail($contactoId);
 
-        $data = $request->validate([
-            'tipo'            => 'sometimes|in:telefono,email,whatsapp,emergencia',
-            'etiqueta'        => 'nullable|string|max:60',
-            'valor'           => 'sometimes|string|max:150',
-            'nombre_contacto' => 'nullable|string|max:120',
-            'relacion'        => 'nullable|string|max:80',
-            'es_emergencia'   => 'boolean',
-            'orden'           => 'integer|min:0',
-        ]);
+            $data = $request->validate([
+                'tipo'            => 'sometimes|in:telefono,email,whatsapp,emergencia',
+                'etiqueta'        => 'nullable|string|max:60',
+                'valor'           => 'sometimes|string|max:150',
+                'nombre_contacto' => 'nullable|string|max:120',
+                'relacion'        => 'nullable|string|max:80',
+                'es_emergencia'   => 'boolean',
+                'orden'           => 'integer|min:0',
+            ]);
 
-        $contacto->update($data);
+            $contacto->update($data);
 
-        return response()->json(['success' => true, 'data' => $contacto]);
+            return response()->json(['success' => true, 'data' => $contacto]);
+        });
     }
 
     public function destroyContacto(int $empleadoId, int $contactoId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
-        ExpedienteContacto::where('empleado_id', $empleadoId)->findOrFail($contactoId)->delete();
-        return response()->json(['success' => true, 'message' => 'Contacto eliminado.']);
+        return $this->captureAndRespond(request(), function () use ($empleadoId, $contactoId) {
+            $this->autorizarAcceso($empleadoId);
+            ExpedienteContacto::where('empleado_id', $empleadoId)->findOrFail($contactoId)->delete();
+            return response()->json(['success' => true, 'message' => 'Contacto eliminado.']);
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -312,57 +322,63 @@ class ExpedienteController extends RRHHBaseController
     // ─────────────────────────────────────────────────────────────────────────
     public function storeDireccion(Request $request, int $empleadoId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId) {
+            $this->autorizarAcceso($empleadoId);
 
-        $data = $request->validate([
-            'tipo'            => 'required|in:residencia,trabajo',
-            'departamento_id' => 'nullable|integer',
-            'distrito_id'     => 'nullable|integer',
-            'municipio_id'    => 'nullable|integer',
-            'departamento_geo'=> 'nullable|string|max:80',
-            'municipio'       => 'nullable|string|max:80',
-            'direccion'       => 'required|string|max:255',
-            'referencia'      => 'nullable|string|max:255',
-            'es_principal'    => 'boolean',
-            'latitud'         => 'nullable|numeric|between:-90,90',
-            'longitud'        => 'nullable|numeric|between:-180,180',
-        ]);
+            $data = $request->validate([
+                'tipo'            => 'required|in:residencia,trabajo',
+                'departamento_id' => 'nullable|integer',
+                'distrito_id'     => 'nullable|integer',
+                'municipio_id'    => 'nullable|integer',
+                'departamento_geo'=> 'nullable|string|max:80',
+                'municipio'       => 'nullable|string|max:80',
+                'direccion'       => 'required|string|max:255',
+                'referencia'      => 'nullable|string|max:255',
+                'es_principal'    => 'boolean',
+                'latitud'         => 'nullable|numeric|between:-90,90',
+                'longitud'        => 'nullable|numeric|between:-180,180',
+            ]);
 
-        $direccion = ExpedienteDireccion::create(array_merge($data, ['empleado_id' => $empleadoId]));
+            $direccion = ExpedienteDireccion::create(array_merge($data, ['empleado_id' => $empleadoId]));
 
-        return response()->json(['success' => true, 'data' => $direccion], 201);
+            return response()->json(['success' => true, 'data' => $direccion], 201);
+        });
     }
 
     public function updateDireccion(Request $request, int $empleadoId, int $dirId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId, $dirId) {
+            $this->autorizarAcceso($empleadoId);
 
-        $dir = ExpedienteDireccion::where('empleado_id', $empleadoId)->findOrFail($dirId);
+            $dir = ExpedienteDireccion::where('empleado_id', $empleadoId)->findOrFail($dirId);
 
-        $data = $request->validate([
-            'tipo'            => 'sometimes|in:residencia,trabajo',
-            'departamento_id' => 'nullable|integer',
-            'distrito_id'     => 'nullable|integer',
-            'municipio_id'    => 'nullable|integer',
-            'departamento_geo'=> 'nullable|string|max:80',
-            'municipio'       => 'nullable|string|max:80',
-            'direccion'       => 'sometimes|string|max:255',
-            'referencia'      => 'nullable|string|max:255',
-            'es_principal'    => 'boolean',
-            'latitud'         => 'nullable|numeric|between:-90,90',
-            'longitud'        => 'nullable|numeric|between:-180,180',
-        ]);
+            $data = $request->validate([
+                'tipo'            => 'sometimes|in:residencia,trabajo',
+                'departamento_id' => 'nullable|integer',
+                'distrito_id'     => 'nullable|integer',
+                'municipio_id'    => 'nullable|integer',
+                'departamento_geo'=> 'nullable|string|max:80',
+                'municipio'       => 'nullable|string|max:80',
+                'direccion'       => 'sometimes|string|max:255',
+                'referencia'      => 'nullable|string|max:255',
+                'es_principal'    => 'boolean',
+                'latitud'         => 'nullable|numeric|between:-90,90',
+                'longitud'        => 'nullable|numeric|between:-180,180',
+            ]);
 
-        $dir->update($data);
+            $dir->update($data);
 
-        return response()->json(['success' => true, 'data' => $dir]);
+            return response()->json(['success' => true, 'data' => $dir]);
+        });
     }
 
     public function destroyDireccion(int $empleadoId, int $dirId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
-        ExpedienteDireccion::where('empleado_id', $empleadoId)->findOrFail($dirId)->delete();
-        return response()->json(['success' => true, 'message' => 'Dirección eliminada.']);
+        return $this->captureAndRespond(request(), function () use ($empleadoId, $dirId) {
+            $this->autorizarAcceso($empleadoId);
+            ExpedienteDireccion::where('empleado_id', $empleadoId)->findOrFail($dirId)->delete();
+            return response()->json(['success' => true, 'message' => 'Dirección eliminada.']);
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -370,60 +386,66 @@ class ExpedienteController extends RRHHBaseController
     // ─────────────────────────────────────────────────────────────────────────
     public function storeDocumento(Request $request, int $empleadoId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId) {
+            $this->autorizarAcceso($empleadoId);
 
-        $data = $request->validate([
-            'tipo'                  => 'required|in:dui,nit,isss,afp,pasaporte,licencia_conducir,otro',
-            'numero'                => 'nullable|string|max:60',
-            'entidad_emisora'       => 'nullable|string|max:60',
-            'fecha_emision'         => 'nullable|date',
-            'fecha_vencimiento'     => 'nullable|date',
-            'lugar_exp_municipio_id'=> 'nullable|integer',
-            'lugar_exp_texto'       => 'nullable|string|max:200',
-            'notas'                 => 'nullable|string|max:255',
-        ]);
+            $data = $request->validate([
+                'tipo'                  => 'required|in:dui,nit,isss,afp,pasaporte,licencia_conducir,otro',
+                'numero'                => 'nullable|string|max:60',
+                'entidad_emisora'       => 'nullable|string|max:60',
+                'fecha_emision'         => 'nullable|date',
+                'fecha_vencimiento'     => 'nullable|date',
+                'lugar_exp_municipio_id'=> 'nullable|integer',
+                'lugar_exp_texto'       => 'nullable|string|max:200',
+                'notas'                 => 'nullable|string|max:255',
+            ]);
 
-        if ($data['tipo'] !== 'otro') {
-            if (ExpedienteDocumento::where('empleado_id', $empleadoId)->where('tipo', $data['tipo'])->exists()) {
-                return response()->json([
-                    'message' => 'Ya existe un documento de ese tipo para este empleado.',
-                    'errors'  => ['tipo' => ['Ya existe un documento de este tipo.']],
-                ], 422);
+            if ($data['tipo'] !== 'otro') {
+                if (ExpedienteDocumento::where('empleado_id', $empleadoId)->where('tipo', $data['tipo'])->exists()) {
+                    return response()->json([
+                        'message' => 'Ya existe un documento de ese tipo para este empleado.',
+                        'errors'  => ['tipo' => ['Ya existe un documento de este tipo.']],
+                    ], 422);
+                }
             }
-        }
 
-        $doc = ExpedienteDocumento::create(array_merge($data, ['empleado_id' => $empleadoId]));
+            $doc = ExpedienteDocumento::create(array_merge($data, ['empleado_id' => $empleadoId]));
 
-        return response()->json(['success' => true, 'data' => $doc], 201);
+            return response()->json(['success' => true, 'data' => $doc], 201);
+        });
     }
 
     public function updateDocumento(Request $request, int $empleadoId, int $docId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId, $docId) {
+            $this->autorizarAcceso($empleadoId);
 
-        $doc = ExpedienteDocumento::where('empleado_id', $empleadoId)->findOrFail($docId);
+            $doc = ExpedienteDocumento::where('empleado_id', $empleadoId)->findOrFail($docId);
 
-        $data = $request->validate([
-            'tipo'                  => 'sometimes|in:dui,nit,isss,afp,pasaporte,licencia_conducir,otro',
-            'numero'                => 'nullable|string|max:60',
-            'entidad_emisora'       => 'nullable|string|max:60',
-            'fecha_emision'         => 'nullable|date',
-            'fecha_vencimiento'     => 'nullable|date',
-            'lugar_exp_municipio_id'=> 'nullable|integer',
-            'lugar_exp_texto'       => 'nullable|string|max:200',
-            'notas'                 => 'nullable|string|max:255',
-        ]);
+            $data = $request->validate([
+                'tipo'                  => 'sometimes|in:dui,nit,isss,afp,pasaporte,licencia_conducir,otro',
+                'numero'                => 'nullable|string|max:60',
+                'entidad_emisora'       => 'nullable|string|max:60',
+                'fecha_emision'         => 'nullable|date',
+                'fecha_vencimiento'     => 'nullable|date',
+                'lugar_exp_municipio_id'=> 'nullable|integer',
+                'lugar_exp_texto'       => 'nullable|string|max:200',
+                'notas'                 => 'nullable|string|max:255',
+            ]);
 
-        $doc->update($data);
+            $doc->update($data);
 
-        return response()->json(['success' => true, 'data' => $doc]);
+            return response()->json(['success' => true, 'data' => $doc]);
+        });
     }
 
     public function destroyDocumento(int $empleadoId, int $docId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
-        ExpedienteDocumento::where('empleado_id', $empleadoId)->findOrFail($docId)->delete();
-        return response()->json(['success' => true, 'message' => 'Documento eliminado.']);
+        return $this->captureAndRespond(request(), function () use ($empleadoId, $docId) {
+            $this->autorizarAcceso($empleadoId);
+            ExpedienteDocumento::where('empleado_id', $empleadoId)->findOrFail($docId)->delete();
+            return response()->json(['success' => true, 'message' => 'Documento eliminado.']);
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -431,55 +453,61 @@ class ExpedienteController extends RRHHBaseController
     // ─────────────────────────────────────────────────────────────────────────
     public function storeEstudio(Request $request, int $empleadoId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId) {
+            $this->autorizarAcceso($empleadoId);
 
-        $data = $request->validate([
-            'nivel'            => 'required|in:primaria,bachillerato,tecnico,universitario,posgrado,maestria,doctorado,diplomado,curso,otro',
-            'especializacion'  => 'nullable|string|max:60',
-            'titulo'           => 'required|string|max:200',
-            'institucion'      => 'required|string|max:200',
-            'pais'             => 'nullable|string|max:80',
-            'anio_inicio'      => 'nullable|integer|min:1950|max:2099',
-            'anio_graduacion'  => 'nullable|integer|min:1950|max:2099',
-            'graduado'         => 'boolean',
-            'notas'            => 'nullable|string|max:255',
-        ]);
+            $data = $request->validate([
+                'nivel'            => 'required|in:primaria,bachillerato,tecnico,universitario,posgrado,maestria,doctorado,diplomado,curso,otro',
+                'especializacion'  => 'nullable|string|max:60',
+                'titulo'           => 'required|string|max:200',
+                'institucion'      => 'required|string|max:200',
+                'pais'             => 'nullable|string|max:80',
+                'anio_inicio'      => 'nullable|integer|min:1950|max:2099',
+                'anio_graduacion'  => 'nullable|integer|min:1950|max:2099',
+                'graduado'         => 'boolean',
+                'notas'            => 'nullable|string|max:255',
+            ]);
 
-        $estudio = ExpedienteEstudio::create(array_merge($data, ['empleado_id' => $empleadoId]));
+            $estudio = ExpedienteEstudio::create(array_merge($data, ['empleado_id' => $empleadoId]));
 
-        return response()->json(['success' => true, 'data' => $estudio], 201);
+            return response()->json(['success' => true, 'data' => $estudio], 201);
+        });
     }
 
     public function updateEstudio(Request $request, int $empleadoId, int $estudioId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId, $estudioId) {
+            $this->autorizarAcceso($empleadoId);
 
-        $estudio = ExpedienteEstudio::where('empleado_id', $empleadoId)->findOrFail($estudioId);
+            $estudio = ExpedienteEstudio::where('empleado_id', $empleadoId)->findOrFail($estudioId);
 
-        $data = $request->validate([
-            'nivel'            => 'sometimes|in:primaria,bachillerato,tecnico,universitario,posgrado,maestria,doctorado,diplomado,curso,otro',
-            'especializacion'  => 'nullable|string|max:60',
-            'titulo'           => 'sometimes|string|max:200',
-            'institucion'      => 'sometimes|string|max:200',
-            'pais'             => 'nullable|string|max:80',
-            'anio_inicio'      => 'nullable|integer|min:1950|max:2099',
-            'anio_graduacion'  => 'nullable|integer|min:1950|max:2099',
-            'graduado'         => 'boolean',
-            'notas'            => 'nullable|string|max:255',
-        ]);
+            $data = $request->validate([
+                'nivel'            => 'sometimes|in:primaria,bachillerato,tecnico,universitario,posgrado,maestria,doctorado,diplomado,curso,otro',
+                'especializacion'  => 'nullable|string|max:60',
+                'titulo'           => 'sometimes|string|max:200',
+                'institucion'      => 'sometimes|string|max:200',
+                'pais'             => 'nullable|string|max:80',
+                'anio_inicio'      => 'nullable|integer|min:1950|max:2099',
+                'anio_graduacion'  => 'nullable|integer|min:1950|max:2099',
+                'graduado'         => 'boolean',
+                'notas'            => 'nullable|string|max:255',
+            ]);
 
-        $estudio->update($data);
+            $estudio->update($data);
 
-        return response()->json(['success' => true, 'data' => $estudio]);
+            return response()->json(['success' => true, 'data' => $estudio]);
+        });
     }
 
     public function destroyEstudio(int $empleadoId, int $estudioId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
-        $estudio = ExpedienteEstudio::where('empleado_id', $empleadoId)->findOrFail($estudioId);
-        if ($estudio->atestado_ruta) $this->s3Delete($estudio->atestado_ruta);
-        $estudio->delete();
-        return response()->json(['success' => true, 'message' => 'Estudio eliminado.']);
+        return $this->captureAndRespond(request(), function () use ($empleadoId, $estudioId) {
+            $this->autorizarAcceso($empleadoId);
+            $estudio = ExpedienteEstudio::where('empleado_id', $empleadoId)->findOrFail($estudioId);
+            if ($estudio->atestado_ruta) $this->s3Delete($estudio->atestado_ruta);
+            $estudio->delete();
+            return response()->json(['success' => true, 'message' => 'Estudio eliminado.']);
+        });
     }
 
     public function presignAtestadoEstudio(Request $request, int $empleadoId, int $estudioId): JsonResponse
@@ -493,16 +521,18 @@ class ExpedienteController extends RRHHBaseController
 
     public function subirAtestadoEstudio(Request $request, int $empleadoId, int $estudioId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
-        $data = $request->validate(['key' => 'required|string', 'mime' => 'nullable|string']);
-        $estudio = ExpedienteEstudio::where('empleado_id', $empleadoId)->findOrFail($estudioId);
-        if ($estudio->atestado_ruta) $this->s3Delete($estudio->atestado_ruta);
-        $estudio->update(['atestado_ruta' => $data['key'], 'atestado_mime' => $data['mime'] ?? null]);
-        return response()->json([
-            'success'       => true,
-            'atestado_url'  => $this->s3TemporaryUrl($data['key']),
-            'atestado_mime' => $data['mime'] ?? null,
-        ]);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId, $estudioId) {
+            $this->autorizarAcceso($empleadoId);
+            $data = $request->validate(['key' => 'required|string', 'mime' => 'nullable|string']);
+            $estudio = ExpedienteEstudio::where('empleado_id', $empleadoId)->findOrFail($estudioId);
+            if ($estudio->atestado_ruta) $this->s3Delete($estudio->atestado_ruta);
+            $estudio->update(['atestado_ruta' => $data['key'], 'atestado_mime' => $data['mime'] ?? null]);
+            return response()->json([
+                'success'       => true,
+                'atestado_url'  => $this->s3TemporaryUrl($data['key']),
+                'atestado_mime' => $data['mime'] ?? null,
+            ]);
+        });
     }
 
     public function verAtestadoEstudio(int $empleadoId, int $estudioId)
@@ -541,47 +571,49 @@ class ExpedienteController extends RRHHBaseController
 
     public function uploadArchivo(Request $request, int $empleadoId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId) {
+            $this->autorizarAcceso($empleadoId);
 
-        $data = $request->validate([
-            'key'         => 'required|string',
-            'tipo'        => 'required|in:foto_perfil,contrato,atestado,certificado,evaluacion,documento_identidad,otro',
-            'nombre'      => 'nullable|string|max:200',
-            'descripcion' => 'nullable|string|max:255',
-            'mime_type'   => 'nullable|string|max:100',
-            'tamano_kb'   => 'nullable|integer',
-        ]);
+            $data = $request->validate([
+                'key'         => 'required|string',
+                'tipo'        => 'required|in:foto_perfil,contrato,atestado,certificado,evaluacion,documento_identidad,otro',
+                'nombre'      => 'nullable|string|max:200',
+                'descripcion' => 'nullable|string|max:255',
+                'mime_type'   => 'nullable|string|max:100',
+                'tamano_kb'   => 'nullable|integer',
+            ]);
 
-        $tipo = $data['tipo'];
+            $tipo = $data['tipo'];
 
-        // Si es foto de perfil, eliminar la anterior
-        if ($tipo === 'foto_perfil') {
-            ExpedienteArchivo::where('empleado_id', $empleadoId)
-                ->where('tipo', 'foto_perfil')
-                ->get()
-                ->each(function ($a) {
-                    $this->s3Delete($a->archivo_ruta);
-                    $a->delete();
-                });
-        }
+            // Si es foto de perfil, eliminar la anterior
+            if ($tipo === 'foto_perfil') {
+                ExpedienteArchivo::where('empleado_id', $empleadoId)
+                    ->where('tipo', 'foto_perfil')
+                    ->get()
+                    ->each(function ($a) {
+                        $this->s3Delete($a->archivo_ruta);
+                        $a->delete();
+                    });
+            }
 
-        $archivo = ExpedienteArchivo::create([
-            'empleado_id'   => $empleadoId,
-            'tipo'          => $tipo,
-            'nombre'        => $data['nombre'] ?? basename($data['key']),
-            'descripcion'   => $data['descripcion'] ?? null,
-            'archivo_ruta'  => $data['key'],
-            'mime_type'     => $data['mime_type'] ?? null,
-            'tamano_kb'     => $data['tamano_kb'] ?? null,
-            'subido_por_id' => $request->user()?->id,
-        ]);
+            $archivo = ExpedienteArchivo::create([
+                'empleado_id'   => $empleadoId,
+                'tipo'          => $tipo,
+                'nombre'        => $data['nombre'] ?? basename($data['key']),
+                'descripcion'   => $data['descripcion'] ?? null,
+                'archivo_ruta'  => $data['key'],
+                'mime_type'     => $data['mime_type'] ?? null,
+                'tamano_kb'     => $data['tamano_kb'] ?? null,
+                'subido_por_id' => $request->user()?->id,
+            ]);
 
-        return response()->json([
-            'success' => true,
-            'data'    => array_merge($archivo->toArray(), [
-                'url' => $this->s3TemporaryUrl($archivo->archivo_ruta),
-            ]),
-        ], 201);
+            return response()->json([
+                'success' => true,
+                'data'    => array_merge($archivo->toArray(), [
+                    'url' => $this->s3TemporaryUrl($archivo->archivo_ruta),
+                ]),
+            ], 201);
+        });
     }
 
     public function descargarArchivo(int $empleadoId, int $archivoId)
@@ -595,13 +627,13 @@ class ExpedienteController extends RRHHBaseController
 
     public function destroyArchivo(int $empleadoId, int $archivoId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
-
-        $archivo = ExpedienteArchivo::where('empleado_id', $empleadoId)->findOrFail($archivoId);
-        $this->s3Delete($archivo->archivo_ruta);
-        $archivo->delete();
-
-        return response()->json(['success' => true, 'message' => 'Archivo eliminado.']);
+        return $this->captureAndRespond(request(), function () use ($empleadoId, $archivoId) {
+            $this->autorizarAcceso($empleadoId);
+            $archivo = ExpedienteArchivo::where('empleado_id', $empleadoId)->findOrFail($archivoId);
+            $this->s3Delete($archivo->archivo_ruta);
+            $archivo->delete();
+            return response()->json(['success' => true, 'message' => 'Archivo eliminado.']);
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -617,19 +649,21 @@ class ExpedienteController extends RRHHBaseController
         return $this->generarPresignUrl($key, $mime);
     }
 
-    public function subirFotoDocumento(Request $request, int $empleadoId, int $docId, string $campo)
+    public function subirFotoDocumento(Request $request, int $empleadoId, int $docId, string $campo): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
-        if (!in_array($campo, ['frente', 'reverso'])) abort(422, 'Campo inválido.');
-        $data    = $request->validate(['key' => 'required|string']);
-        $doc     = ExpedienteDocumento::where('empleado_id', $empleadoId)->findOrFail($docId);
-        $columna = "foto_{$campo}_ruta";
-        if ($doc->$columna) $this->s3Delete($doc->$columna);
-        $doc->update([$columna => $data['key']]);
-        return response()->json([
-            'success' => true,
-            'url'     => $this->s3TemporaryUrl($data['key']),
-        ]);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId, $docId, $campo) {
+            $this->autorizarAcceso($empleadoId);
+            if (!in_array($campo, ['frente', 'reverso'])) abort(422, 'Campo inválido.');
+            $data    = $request->validate(['key' => 'required|string']);
+            $doc     = ExpedienteDocumento::where('empleado_id', $empleadoId)->findOrFail($docId);
+            $columna = "foto_{$campo}_ruta";
+            if ($doc->$columna) $this->s3Delete($doc->$columna);
+            $doc->update([$columna => $data['key']]);
+            return response()->json([
+                'success' => true,
+                'url'     => $this->s3TemporaryUrl($data['key']),
+            ]);
+        });
     }
 
     public function verFotoDocumento(int $empleadoId, int $docId, string $campo)
@@ -649,48 +683,54 @@ class ExpedienteController extends RRHHBaseController
     // ─────────────────────────────────────────────────────────────────────────
     public function storeIdioma(Request $request, int $empleadoId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId) {
+            $this->autorizarAcceso($empleadoId);
 
-        $data = $request->validate([
-            'idioma'          => 'required|string|max:80',
-            'nivel_habla'     => 'integer|min:0|max:100',
-            'nivel_escucha'   => 'integer|min:0|max:100',
-            'nivel_lectura'   => 'integer|min:0|max:100',
-            'nivel_escritura' => 'integer|min:0|max:100',
-            'notas'           => 'nullable|string|max:500',
-        ]);
+            $data = $request->validate([
+                'idioma'          => 'required|string|max:80',
+                'nivel_habla'     => 'integer|min:0|max:100',
+                'nivel_escucha'   => 'integer|min:0|max:100',
+                'nivel_lectura'   => 'integer|min:0|max:100',
+                'nivel_escritura' => 'integer|min:0|max:100',
+                'notas'           => 'nullable|string|max:500',
+            ]);
 
-        $idioma = ExpedienteIdioma::create(array_merge($data, ['empleado_id' => $empleadoId]));
+            $idioma = ExpedienteIdioma::create(array_merge($data, ['empleado_id' => $empleadoId]));
 
-        return response()->json(['success' => true, 'data' => $idioma], 201);
+            return response()->json(['success' => true, 'data' => $idioma], 201);
+        });
     }
 
     public function updateIdioma(Request $request, int $empleadoId, int $idiomaId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
-        $idioma = ExpedienteIdioma::where('empleado_id', $empleadoId)->findOrFail($idiomaId);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId, $idiomaId) {
+            $this->autorizarAcceso($empleadoId);
+            $idioma = ExpedienteIdioma::where('empleado_id', $empleadoId)->findOrFail($idiomaId);
 
-        $data = $request->validate([
-            'idioma'          => 'sometimes|string|max:80',
-            'nivel_habla'     => 'integer|min:0|max:100',
-            'nivel_escucha'   => 'integer|min:0|max:100',
-            'nivel_lectura'   => 'integer|min:0|max:100',
-            'nivel_escritura' => 'integer|min:0|max:100',
-            'notas'           => 'nullable|string|max:500',
-        ]);
+            $data = $request->validate([
+                'idioma'          => 'sometimes|string|max:80',
+                'nivel_habla'     => 'integer|min:0|max:100',
+                'nivel_escucha'   => 'integer|min:0|max:100',
+                'nivel_lectura'   => 'integer|min:0|max:100',
+                'nivel_escritura' => 'integer|min:0|max:100',
+                'notas'           => 'nullable|string|max:500',
+            ]);
 
-        $idioma->update($data);
+            $idioma->update($data);
 
-        return response()->json(['success' => true, 'data' => $idioma]);
+            return response()->json(['success' => true, 'data' => $idioma]);
+        });
     }
 
     public function destroyIdioma(int $empleadoId, int $idiomaId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
-        $idioma = ExpedienteIdioma::where('empleado_id', $empleadoId)->findOrFail($idiomaId);
-        if ($idioma->atestado_ruta) $this->s3Delete($idioma->atestado_ruta);
-        $idioma->delete();
-        return response()->json(['success' => true]);
+        return $this->captureAndRespond(request(), function () use ($empleadoId, $idiomaId) {
+            $this->autorizarAcceso($empleadoId);
+            $idioma = ExpedienteIdioma::where('empleado_id', $empleadoId)->findOrFail($idiomaId);
+            if ($idioma->atestado_ruta) $this->s3Delete($idioma->atestado_ruta);
+            $idioma->delete();
+            return response()->json(['success' => true]);
+        });
     }
 
     public function presignAtestadoIdioma(Request $request, int $empleadoId, int $idiomaId): JsonResponse
@@ -704,18 +744,20 @@ class ExpedienteController extends RRHHBaseController
 
     public function subirAtestadoIdioma(Request $request, int $empleadoId, int $idiomaId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
-        $data   = $request->validate(['key' => 'required|string', 'mime' => 'nullable|string']);
-        $idioma = ExpedienteIdioma::where('empleado_id', $empleadoId)->findOrFail($idiomaId);
-        $path   = $data['key'];
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId, $idiomaId) {
+            $this->autorizarAcceso($empleadoId);
+            $data   = $request->validate(['key' => 'required|string', 'mime' => 'nullable|string']);
+            $idioma = ExpedienteIdioma::where('empleado_id', $empleadoId)->findOrFail($idiomaId);
+            $path   = $data['key'];
 
-        if ($idioma->atestado_ruta) $this->s3Delete($idioma->atestado_ruta);
-        $idioma->update(['atestado_ruta' => $path]);
+            if ($idioma->atestado_ruta) $this->s3Delete($idioma->atestado_ruta);
+            $idioma->update(['atestado_ruta' => $path]);
 
-        return response()->json([
-            'success'      => true,
-            'atestado_url' => $this->s3TemporaryUrl($path),
-        ]);
+            return response()->json([
+                'success'      => true,
+                'atestado_url' => $this->s3TemporaryUrl($path),
+            ]);
+        });
     }
 
     public function verAtestadoIdioma(int $empleadoId, int $idiomaId)
@@ -731,51 +773,57 @@ class ExpedienteController extends RRHHBaseController
     // ─────────────────────────────────────────────────────────────────────────
     public function storeExperiencia(Request $request, int $empleadoId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId) {
+            $this->autorizarAcceso($empleadoId);
 
-        $data = $request->validate([
-            'empresa'     => 'required|string|max:200',
-            'cargo'       => 'nullable|string|max:200',
-            'fecha_inicio'=> 'nullable|date',
-            'fecha_fin'   => 'nullable|date|after_or_equal:fecha_inicio',
-            'es_actual'   => 'boolean',
-            'descripcion' => 'nullable|string|max:2000',
-            'pais'        => 'nullable|string|max:80',
-        ]);
+            $data = $request->validate([
+                'empresa'     => 'required|string|max:200',
+                'cargo'       => 'nullable|string|max:200',
+                'fecha_inicio'=> 'nullable|date',
+                'fecha_fin'   => 'nullable|date|after_or_equal:fecha_inicio',
+                'es_actual'   => 'boolean',
+                'descripcion' => 'nullable|string|max:2000',
+                'pais'        => 'nullable|string|max:80',
+            ]);
 
-        if ($data['es_actual'] ?? false) $data['fecha_fin'] = null;
+            if ($data['es_actual'] ?? false) $data['fecha_fin'] = null;
 
-        $exp = ExpedienteExperienciaLaboral::create(array_merge($data, ['empleado_id' => $empleadoId]));
+            $exp = ExpedienteExperienciaLaboral::create(array_merge($data, ['empleado_id' => $empleadoId]));
 
-        return response()->json(['success' => true, 'data' => $exp], 201);
+            return response()->json(['success' => true, 'data' => $exp], 201);
+        });
     }
 
     public function updateExperiencia(Request $request, int $empleadoId, int $expId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
-        $exp = ExpedienteExperienciaLaboral::where('empleado_id', $empleadoId)->findOrFail($expId);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId, $expId) {
+            $this->autorizarAcceso($empleadoId);
+            $exp = ExpedienteExperienciaLaboral::where('empleado_id', $empleadoId)->findOrFail($expId);
 
-        $data = $request->validate([
-            'empresa'     => 'sometimes|string|max:200',
-            'cargo'       => 'nullable|string|max:200',
-            'fecha_inicio'=> 'nullable|date',
-            'fecha_fin'   => 'nullable|date',
-            'es_actual'   => 'boolean',
-            'descripcion' => 'nullable|string|max:2000',
-            'pais'        => 'nullable|string|max:80',
-        ]);
+            $data = $request->validate([
+                'empresa'     => 'sometimes|string|max:200',
+                'cargo'       => 'nullable|string|max:200',
+                'fecha_inicio'=> 'nullable|date',
+                'fecha_fin'   => 'nullable|date',
+                'es_actual'   => 'boolean',
+                'descripcion' => 'nullable|string|max:2000',
+                'pais'        => 'nullable|string|max:80',
+            ]);
 
-        if ($data['es_actual'] ?? false) $data['fecha_fin'] = null;
-        $exp->update($data);
+            if ($data['es_actual'] ?? false) $data['fecha_fin'] = null;
+            $exp->update($data);
 
-        return response()->json(['success' => true, 'data' => $exp]);
+            return response()->json(['success' => true, 'data' => $exp]);
+        });
     }
 
     public function destroyExperiencia(int $empleadoId, int $expId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
-        ExpedienteExperienciaLaboral::where('empleado_id', $empleadoId)->findOrFail($expId)->delete();
-        return response()->json(['success' => true]);
+        return $this->captureAndRespond(request(), function () use ($empleadoId, $expId) {
+            $this->autorizarAcceso($empleadoId);
+            ExpedienteExperienciaLaboral::where('empleado_id', $empleadoId)->findOrFail($expId)->delete();
+            return response()->json(['success' => true]);
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -783,58 +831,64 @@ class ExpedienteController extends RRHHBaseController
     // ─────────────────────────────────────────────────────────────────────────
     public function storeCuentaBanco(Request $request, int $empleadoId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId) {
+            $this->autorizarAcceso($empleadoId);
 
-        $data = $request->validate([
-            'banco'         => 'required|string|max:100',
-            'tipo_cuenta'   => 'required|in:ahorros,corriente',
-            'numero_cuenta' => 'required|string|max:40',
-            'titular'       => 'nullable|string|max:120',
-            'es_principal'  => 'boolean',
-        ]);
+            $data = $request->validate([
+                'banco'         => 'required|string|max:100',
+                'tipo_cuenta'   => 'required|in:ahorros,corriente',
+                'numero_cuenta' => 'required|string|max:40',
+                'titular'       => 'nullable|string|max:120',
+                'es_principal'  => 'boolean',
+            ]);
 
-        if (!empty($data['es_principal'])) {
-            ExpedienteCuentaBanco::where('empleado_id', $empleadoId)->update(['es_principal' => false]);
-        }
+            if (!empty($data['es_principal'])) {
+                ExpedienteCuentaBanco::where('empleado_id', $empleadoId)->update(['es_principal' => false]);
+            }
 
-        $cuenta = ExpedienteCuentaBanco::create(array_merge($data, [
-            'empleado_id' => $empleadoId,
-            'aud_usuario' => $request->user()?->email,
-        ]));
+            $cuenta = ExpedienteCuentaBanco::create(array_merge($data, [
+                'empleado_id' => $empleadoId,
+                'aud_usuario' => $request->user()?->email,
+            ]));
 
-        return response()->json(['success' => true, 'data' => $cuenta], 201);
+            return response()->json(['success' => true, 'data' => $cuenta], 201);
+        });
     }
 
     public function updateCuentaBanco(Request $request, int $empleadoId, int $cuentaId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId, $cuentaId) {
+            $this->autorizarAcceso($empleadoId);
 
-        $cuenta = ExpedienteCuentaBanco::where('empleado_id', $empleadoId)->findOrFail($cuentaId);
+            $cuenta = ExpedienteCuentaBanco::where('empleado_id', $empleadoId)->findOrFail($cuentaId);
 
-        $data = $request->validate([
-            'banco'         => 'sometimes|string|max:100',
-            'tipo_cuenta'   => 'sometimes|in:ahorros,corriente',
-            'numero_cuenta' => 'sometimes|string|max:40',
-            'titular'       => 'nullable|string|max:120',
-            'es_principal'  => 'boolean',
-        ]);
+            $data = $request->validate([
+                'banco'         => 'sometimes|string|max:100',
+                'tipo_cuenta'   => 'sometimes|in:ahorros,corriente',
+                'numero_cuenta' => 'sometimes|string|max:40',
+                'titular'       => 'nullable|string|max:120',
+                'es_principal'  => 'boolean',
+            ]);
 
-        if (!empty($data['es_principal'])) {
-            ExpedienteCuentaBanco::where('empleado_id', $empleadoId)
-                ->where('id', '!=', $cuentaId)
-                ->update(['es_principal' => false]);
-        }
+            if (!empty($data['es_principal'])) {
+                ExpedienteCuentaBanco::where('empleado_id', $empleadoId)
+                    ->where('id', '!=', $cuentaId)
+                    ->update(['es_principal' => false]);
+            }
 
-        $cuenta->update(array_merge($data, ['aud_usuario' => $request->user()?->email]));
+            $cuenta->update(array_merge($data, ['aud_usuario' => $request->user()?->email]));
 
-        return response()->json(['success' => true, 'data' => $cuenta]);
+            return response()->json(['success' => true, 'data' => $cuenta]);
+        });
     }
 
     public function destroyCuentaBanco(int $empleadoId, int $cuentaId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
-        ExpedienteCuentaBanco::where('empleado_id', $empleadoId)->findOrFail($cuentaId)->delete();
-        return response()->json(['success' => true, 'message' => 'Cuenta eliminada.']);
+        return $this->captureAndRespond(request(), function () use ($empleadoId, $cuentaId) {
+            $this->autorizarAcceso($empleadoId);
+            ExpedienteCuentaBanco::where('empleado_id', $empleadoId)->findOrFail($cuentaId)->delete();
+            return response()->json(['success' => true, 'message' => 'Cuenta eliminada.']);
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -843,17 +897,19 @@ class ExpedienteController extends RRHHBaseController
     // ─────────────────────────────────────────────────────────────────────────
     public function updateFechaIngreso(Request $request, int $empleadoId): JsonResponse
     {
-        $this->autorizarAcceso($empleadoId);
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId) {
+            $this->autorizarAcceso($empleadoId);
 
-        $data = $request->validate([
-            'fecha_ingreso' => 'required|date',
-        ]);
+            $data = $request->validate([
+                'fecha_ingreso' => 'required|date',
+            ]);
 
-        \DB::connection('pgsql')
-            ->table('empleados')
-            ->where('id', $empleadoId)
-            ->update(['fecha_ingreso' => $data['fecha_ingreso']]);
+            \DB::connection('pgsql')
+                ->table('empleados')
+                ->where('id', $empleadoId)
+                ->update(['fecha_ingreso' => $data['fecha_ingreso']]);
 
-        return response()->json(['success' => true, 'fecha_ingreso' => $data['fecha_ingreso']]);
+            return response()->json(['success' => true, 'fecha_ingreso' => $data['fecha_ingreso']]);
+        });
     }
 }

@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\DB;
 
 class ContratoEmpleadoController extends RRHHBaseController
 {
+    use \App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
+
     /**
      * GET /api/rrhh/empleados/{empleadoId}/validar-contrato?plantilla_id=X
      * Devuelve las variables de la plantilla que están vacías en el expediente del empleado.
@@ -106,36 +108,38 @@ class ContratoEmpleadoController extends RRHHBaseController
     /** POST /api/rrhh/empleados/{empleadoId}/contratos */
     public function storeParaEmpleado(Request $request, int $empleadoId): JsonResponse
     {
-        $emp = DB::connection('pgsql')
-            ->table('empleados')
-            ->where('id', $empleadoId)
-            ->select('nombres', 'apellidos')
-            ->first();
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId) {
+            $emp = DB::connection('pgsql')
+                ->table('empleados')
+                ->where('id', $empleadoId)
+                ->select('nombres', 'apellidos')
+                ->first();
 
-        abort_unless($emp, 404, 'Empleado no encontrado.');
+            abort_unless($emp, 404, 'Empleado no encontrado.');
 
-        $v = $request->validate([
-            'tipo_contrato_id' => 'required|integer|exists:rrhh.tipos_contrato,id',
-            'plantilla_id'     => 'nullable|integer|exists:rrhh.plantillas_contrato,id',
-            'fecha_inicio'     => 'required|date',
-            'fecha_fin'        => 'nullable|date|after:fecha_inicio',
-            'funciones'        => 'nullable|string|max:5000',
-            'horario'          => 'nullable|string|max:200',
-            'notas'            => 'nullable|string|max:2000',
-        ]);
+            $v = $request->validate([
+                'tipo_contrato_id' => 'required|integer|exists:rrhh.tipos_contrato,id',
+                'plantilla_id'     => 'nullable|integer|exists:rrhh.plantillas_contrato,id',
+                'fecha_inicio'     => 'required|date',
+                'fecha_fin'        => 'nullable|date|after:fecha_inicio',
+                'funciones'        => 'nullable|string|max:5000',
+                'horario'          => 'nullable|string|max:200',
+                'notas'            => 'nullable|string|max:2000',
+            ]);
 
-        $contrato = ContratoEmpleado::create([
-            ...$v,
-            'empleado_id'     => $empleadoId,
-            'empleado_nombre' => trim($emp->nombres . ' ' . $emp->apellidos),
-            'estado'          => 'activo',
-            'generado_por_id' => Auth::id(),
-            'aud_usuario'     => Auth::user()->email,
-        ]);
+            $contrato = ContratoEmpleado::create([
+                ...$v,
+                'empleado_id'     => $empleadoId,
+                'empleado_nombre' => trim($emp->nombres . ' ' . $emp->apellidos),
+                'estado'          => 'activo',
+                'generado_por_id' => Auth::id(),
+                'aud_usuario'     => Auth::user()->email,
+            ]);
 
-        $contrato->load('tipoContrato');
+            $contrato->load('tipoContrato');
 
-        return response()->json(['success' => true, 'data' => $contrato], 201);
+            return response()->json(['success' => true, 'data' => $contrato], 201);
+        });
     }
 
     /** GET /api/rrhh/ingresos/{ingresoId}/contratos */
@@ -154,46 +158,50 @@ class ContratoEmpleadoController extends RRHHBaseController
     /** POST /api/rrhh/ingresos/{ingresoId}/contratos */
     public function store(Request $request, int $ingresoId): JsonResponse
     {
-        $ingreso = IngresoPersonal::findOrFail($ingresoId);
+        return $this->captureAndRespond($request, function () use ($request, $ingresoId) {
+            $ingreso = IngresoPersonal::findOrFail($ingresoId);
 
-        $v = $request->validate([
-            'tipo_contrato_id' => 'required|integer|exists:rrhh.tipos_contrato,id',
-            'plantilla_id'     => 'nullable|integer|exists:rrhh.plantillas_contrato,id',
-            'fecha_inicio'     => 'required|date',
-            'fecha_fin'        => 'nullable|date|after:fecha_inicio',
-            'funciones'        => 'nullable|string|max:5000',
-            'horario'          => 'nullable|string|max:200',
-            'notas'            => 'nullable|string|max:2000',
-        ]);
+            $v = $request->validate([
+                'tipo_contrato_id' => 'required|integer|exists:rrhh.tipos_contrato,id',
+                'plantilla_id'     => 'nullable|integer|exists:rrhh.plantillas_contrato,id',
+                'fecha_inicio'     => 'required|date',
+                'fecha_fin'        => 'nullable|date|after:fecha_inicio',
+                'funciones'        => 'nullable|string|max:5000',
+                'horario'          => 'nullable|string|max:200',
+                'notas'            => 'nullable|string|max:2000',
+            ]);
 
-        $contrato = ContratoEmpleado::create([
-            ...$v,
-            'empleado_id'      => $ingreso->empleado_id,
-            'empleado_nombre'  => $ingreso->empleado_nombre,
-            'ingreso_id'       => $ingresoId,
-            'estado'           => 'activo',
-            'generado_por_id'  => Auth::id(),
-            'aud_usuario'      => Auth::user()->email,
-        ]);
+            $contrato = ContratoEmpleado::create([
+                ...$v,
+                'empleado_id'      => $ingreso->empleado_id,
+                'empleado_nombre'  => $ingreso->empleado_nombre,
+                'ingreso_id'       => $ingresoId,
+                'estado'           => 'activo',
+                'generado_por_id'  => Auth::id(),
+                'aud_usuario'      => Auth::user()->email,
+            ]);
 
-        $contrato->load('tipoContrato');
+            $contrato->load('tipoContrato');
 
-        return response()->json(['success' => true, 'data' => $contrato], 201);
+            return response()->json(['success' => true, 'data' => $contrato], 201);
+        });
     }
 
     /** PATCH /api/rrhh/contratos/{id}/estado */
     public function actualizarEstado(Request $request, int $id): JsonResponse
     {
-        $contrato = ContratoEmpleado::findOrFail($id);
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $contrato = ContratoEmpleado::findOrFail($id);
 
-        $v = $request->validate([
-            'estado' => 'required|in:' . implode(',', ContratoEmpleado::ESTADOS),
-            'notas'  => 'nullable|string|max:2000',
-        ]);
+            $v = $request->validate([
+                'estado' => 'required|in:' . implode(',', ContratoEmpleado::ESTADOS),
+                'notas'  => 'nullable|string|max:2000',
+            ]);
 
-        $contrato->update([...$v, 'aud_usuario' => Auth::user()->email]);
+            $contrato->update([...$v, 'aud_usuario' => Auth::user()->email]);
 
-        return response()->json(['success' => true, 'data' => $contrato]);
+            return response()->json(['success' => true, 'data' => $contrato]);
+        });
     }
 
     /**

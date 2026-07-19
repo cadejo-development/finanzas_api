@@ -232,19 +232,21 @@ class HorariosController extends RRHHBaseController
      */
     public function destroy(int $empleadoId, string $fecha, int $parte): JsonResponse
     {
-        $request = request();
-        $allowedIds = $this->resolverEmpleadosIds($request);
+        return $this->captureAndRespond(request(), function () use ($empleadoId, $fecha, $parte) {
+            $request = request();
+            $allowedIds = $this->resolverEmpleadosIds($request);
 
-        if (!in_array($empleadoId, $allowedIds)) {
-            abort(403, 'No tiene permisos sobre este empleado.');
-        }
+            if (!in_array($empleadoId, $allowedIds)) {
+                abort(403, 'No tiene permisos sobre este empleado.');
+            }
 
-        HorarioEmpleado::where('empleado_id', $empleadoId)
-            ->where('fecha', $fecha)
-            ->where('parte', $parte)
-            ->delete();
+            HorarioEmpleado::where('empleado_id', $empleadoId)
+                ->where('fecha', $fecha)
+                ->where('parte', $parte)
+                ->delete();
 
-        return response()->json(['ok' => true]);
+            return response()->json(['ok' => true]);
+        });
     }
 
     // ── Helpers privados ──────────────────────────────────────────────────────

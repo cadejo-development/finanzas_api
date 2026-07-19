@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\Mail;
 
 class RetractacionesController extends RRHHBaseController
 {
+    use \App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
+
     // Email del gerente general: nunca recibe notificaciones de RRHH
     private const EXCLUIR_EMAIL = 'david@cervezacadejo.com';
 
@@ -34,159 +36,38 @@ class RetractacionesController extends RRHHBaseController
     // Gerente solicita retractación de una renuncia de su equipo
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'desvinculacion_id' => 'required|integer',
-            'justificacion'     => 'required|string|min:10|max:1000',
-        ]);
-
-        $desvinculacion = Desvinculacion::findOrFail($validated['desvinculacion_id']);
-
-        if ($desvinculacion->tipo !== 'renuncia') {
-            return response()->json(['success' => false, 'message' => 'Solo se pueden retractar renuncias.'], 422);
-        }
-        if ($desvinculacion->estado === 'retractada') {
-            return response()->json(['success' => false, 'message' => 'Esta renuncia ya fue retractada.'], 422);
-        }
-
-        // Verificar que pertenece a su equipo (o es admin/gerencia_ops)
-        if (!$this->esAdminRrhh() && !$this->esGerenciaOps()) {
-            $jefe = $this->getJefeEmpleado();
-            if ($desvinculacion->procesado_por_id !== $jefe->id) {
-                return response()->json(['success' => false, 'message' => 'No tienes permiso sobre esta renuncia.'], 403);
-            }
-        }
-
-        // No permitir solicitud duplicada pendiente
-        $pendiente = SolicitudRetractacion::where('desvinculacion_id', $desvinculacion->id)
-            ->where('estado', 'pendiente')
-            ->exists();
-        if ($pendiente) {
-            return response()->json(['success' => false, 'message' => 'Ya existe una solicitud pendiente para esta renuncia.'], 422);
-        }
-
-        $jefe = $this->getJefeEmpleado();
-
-        $solicitud = SolicitudRetractacion::create([
-            'desvinculacion_id'          => $desvinculacion->id,
-            'empleado_id'                => $desvinculacion->empleado_id,
-            'empleado_nombre'            => $desvinculacion->empleado_nombre,
-            'sucursal_nombre'            => $desvinculacion->sucursal_nombre,
-            'cargo_nombre'               => $desvinculacion->cargo_nombre,
-            'solicitado_por_empleado_id' => $jefe->id,
-            'solicitado_por_nombre'      => trim($jefe->nombres . ' ' . $jefe->apellidos),
-            'justificacion'              => $validated['justificacion'],
-            'estado'                     => 'pendiente',
-            'aud_usuario'                => Auth::user()->email,
-        ]);
-
-        $this->notificarAdminsNuevaSolicitud($solicitud);
-
-        return response()->json(['success' => true, 'data' => $solicitud], 201);
-    }
-
-    // ── POST /api/rrhh/retractaciones/{id}/aprobar ─────────────────────────
-    public function aprobar(Request $request, int $id): JsonResponse
-    {
-        if (!$this->esAdminRrhh()) {
-            return response()->json(['success' => false, 'message' => 'Solo RRHH puede aprobar solicitudes.'], 403);
-        }
-
-        $solicitud = SolicitudRetractacion::findOrFail($id);
-
-        if ($solicitud->estado !== 'pendiente') {
-            return response()->json(['success' => false, 'message' => 'La solicitud ya fue procesada.'], 422);
-        }
-
-        $jefe = $this->getJefeEmpleado();
-
-        DB::transaction(function () use ($solicitud, $jefe) {
-            $solicitud->update([
-                'estado'                   => 'aprobada',
-                'revisado_por_empleado_id' => $jefe->id,
-                'revisado_por_nombre'      => trim($jefe->nombres . ' ' . $jefe->apellidos),
-                'revisado_en'              => now(),
-                'aud_usuario'              => Auth::user()->email,
+        return $this->captureAndRespond($request, function () use ($request) {
+            $validated = $request->validate([
+                'desvinculacion_id' => 'required|integer',
+                'justificacion'     => 'required|string|min:10|max:1000',
             ]);
 
-            // Marcar desvinculación como retractada
-            Desvinculacion::where('id', $solicitud->desvinculacion_id)
-                ->update([
-                    'estado'       => 'retractada',
-                    'aud_usuario'  => Auth::user()->email,
-                ]);
+            $desvinculacion = Desvinculacion::findOrFail($validated['desvinculacion_id']);
 
-            // Reactivar empleado en core
-            DB::connection('pgsql')
-                ->table('empleados')
-                ->where('id', $solicitud->empleado_id)
-                ->update(['activo' => true, 'aud_usuario' => 'sistema:retractacion', 'updated_at' => now()]);
-        });
+            if ($desvinculacion->tipo !== 'renuncia') {
+                return response()->json(['success' => false, 'message' => 'Solo se pueden retractar renuncias.'], 422);
+            }
+            if ($desvinculacion->estado === 'retractada') {
+                return response()->json(['success' => false, 'message' => 'Esta renuncia ya fue retractada.'], 422);
+            }
 
-        $this->notificarSolicitanteResolucion($solicitud, true, null);
+            if (!$this->esAdminRrhh() && !$this->esGerenciaOps()) {
+                $jefe = $this->getJefeEmpleado();
+                if ($desvinculacion->procesado_por_id !== $jefe->id) {
+                    return response()->json(['success' => false, 'message' => 'No tienes permiso sobre esta renuncia.'], 403);
+                }
+            }
 
-        return response()->json(['success' => true, 'message' => 'Solicitud aprobada. El empleado ha sido reactivado.']);
-    }
+            $pendiente = SolicitudRetractacion::where('desvinculacion_id', $desvinculacion->id)
+                ->where('estado', 'pendiente')
+                ->exists();
+            if ($pendiente) {
+                return response()->json(['success' => false, 'message' => 'Ya existe una solicitud pendiente para esta renuncia.'], 422);
+            }
 
-    // ── POST /api/rrhh/retractaciones/{id}/rechazar ────────────────────────
-    public function rechazar(Request $request, int $id): JsonResponse
-    {
-        if (!$this->esAdminRrhh()) {
-            return response()->json(['success' => false, 'message' => 'Solo RRHH puede rechazar solicitudes.'], 403);
-        }
+            $jefe = $this->getJefeEmpleado();
 
-        $validated = $request->validate([
-            'comentario' => 'required|string|min:5|max:500',
-        ]);
-
-        $solicitud = SolicitudRetractacion::findOrFail($id);
-
-        if ($solicitud->estado !== 'pendiente') {
-            return response()->json(['success' => false, 'message' => 'La solicitud ya fue procesada.'], 422);
-        }
-
-        $jefe = $this->getJefeEmpleado();
-
-        $solicitud->update([
-            'estado'                   => 'rechazada',
-            'revisado_por_empleado_id' => $jefe->id,
-            'revisado_por_nombre'      => trim($jefe->nombres . ' ' . $jefe->apellidos),
-            'revisado_en'              => now(),
-            'comentario_revision'      => $validated['comentario'],
-            'aud_usuario'              => Auth::user()->email,
-        ]);
-
-        $this->notificarSolicitanteResolucion($solicitud, false, $validated['comentario']);
-
-        return response()->json(['success' => true, 'message' => 'Solicitud rechazada.']);
-    }
-
-    // ── POST /api/rrhh/retractaciones/directa ─────────────────────────────
-    // RRHH retracta directamente sin solicitud
-    public function directa(Request $request): JsonResponse
-    {
-        if (!$this->esAdminRrhh()) {
-            return response()->json(['success' => false, 'message' => 'Solo RRHH puede hacer retractaciones directas.'], 403);
-        }
-
-        $validated = $request->validate([
-            'desvinculacion_id' => 'required|integer',
-            'justificacion'     => 'required|string|min:10|max:1000',
-        ]);
-
-        $desvinculacion = Desvinculacion::findOrFail($validated['desvinculacion_id']);
-
-        if ($desvinculacion->tipo !== 'renuncia') {
-            return response()->json(['success' => false, 'message' => 'Solo se pueden retractar renuncias.'], 422);
-        }
-        if ($desvinculacion->estado === 'retractada') {
-            return response()->json(['success' => false, 'message' => 'Esta renuncia ya fue retractada.'], 422);
-        }
-
-        $jefe = $this->getJefeEmpleado();
-
-        DB::transaction(function () use ($desvinculacion, $validated, $jefe) {
-            // Crear registro de solicitud aprobada automáticamente para trazabilidad
-            SolicitudRetractacion::create([
+            $solicitud = SolicitudRetractacion::create([
                 'desvinculacion_id'          => $desvinculacion->id,
                 'empleado_id'                => $desvinculacion->empleado_id,
                 'empleado_nombre'            => $desvinculacion->empleado_nombre,
@@ -195,24 +76,145 @@ class RetractacionesController extends RRHHBaseController
                 'solicitado_por_empleado_id' => $jefe->id,
                 'solicitado_por_nombre'      => trim($jefe->nombres . ' ' . $jefe->apellidos),
                 'justificacion'              => $validated['justificacion'],
-                'estado'                     => 'aprobada',
-                'revisado_por_empleado_id'   => $jefe->id,
-                'revisado_por_nombre'        => trim($jefe->nombres . ' ' . $jefe->apellidos),
-                'revisado_en'                => now(),
-                'comentario_revision'        => 'Retractación directa por RRHH.',
+                'estado'                     => 'pendiente',
                 'aud_usuario'                => Auth::user()->email,
             ]);
 
-            Desvinculacion::where('id', $desvinculacion->id)
-                ->update(['estado' => 'retractada', 'aud_usuario' => Auth::user()->email]);
+            $this->notificarAdminsNuevaSolicitud($solicitud);
 
-            DB::connection('pgsql')
-                ->table('empleados')
-                ->where('id', $desvinculacion->empleado_id)
-                ->update(['activo' => true, 'aud_usuario' => 'sistema:retractacion', 'updated_at' => now()]);
+            return response()->json(['success' => true, 'data' => $solicitud], 201);
         });
+    }
 
-        return response()->json(['success' => true, 'message' => 'Renuncia retractada. El empleado ha sido reactivado.']);
+    // ── POST /api/rrhh/retractaciones/{id}/aprobar ─────────────────────────
+    public function aprobar(Request $request, int $id): JsonResponse
+    {
+        return $this->captureAndRespond($request, function () use ($id) {
+            if (!$this->esAdminRrhh()) {
+                return response()->json(['success' => false, 'message' => 'Solo RRHH puede aprobar solicitudes.'], 403);
+            }
+
+            $solicitud = SolicitudRetractacion::findOrFail($id);
+
+            if ($solicitud->estado !== 'pendiente') {
+                return response()->json(['success' => false, 'message' => 'La solicitud ya fue procesada.'], 422);
+            }
+
+            $jefe = $this->getJefeEmpleado();
+
+            DB::transaction(function () use ($solicitud, $jefe) {
+                $solicitud->update([
+                    'estado'                   => 'aprobada',
+                    'revisado_por_empleado_id' => $jefe->id,
+                    'revisado_por_nombre'      => trim($jefe->nombres . ' ' . $jefe->apellidos),
+                    'revisado_en'              => now(),
+                    'aud_usuario'              => Auth::user()->email,
+                ]);
+
+                Desvinculacion::where('id', $solicitud->desvinculacion_id)
+                    ->update(['estado' => 'retractada', 'aud_usuario' => Auth::user()->email]);
+
+                DB::connection('pgsql')
+                    ->table('empleados')
+                    ->where('id', $solicitud->empleado_id)
+                    ->update(['activo' => true, 'aud_usuario' => 'sistema:retractacion', 'updated_at' => now()]);
+            });
+
+            $this->notificarSolicitanteResolucion($solicitud, true, null);
+
+            return response()->json(['success' => true, 'message' => 'Solicitud aprobada. El empleado ha sido reactivado.']);
+        });
+    }
+
+    // ── POST /api/rrhh/retractaciones/{id}/rechazar ────────────────────────
+    public function rechazar(Request $request, int $id): JsonResponse
+    {
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            if (!$this->esAdminRrhh()) {
+                return response()->json(['success' => false, 'message' => 'Solo RRHH puede rechazar solicitudes.'], 403);
+            }
+
+            $validated = $request->validate([
+                'comentario' => 'required|string|min:5|max:500',
+            ]);
+
+            $solicitud = SolicitudRetractacion::findOrFail($id);
+
+            if ($solicitud->estado !== 'pendiente') {
+                return response()->json(['success' => false, 'message' => 'La solicitud ya fue procesada.'], 422);
+            }
+
+            $jefe = $this->getJefeEmpleado();
+
+            $solicitud->update([
+                'estado'                   => 'rechazada',
+                'revisado_por_empleado_id' => $jefe->id,
+                'revisado_por_nombre'      => trim($jefe->nombres . ' ' . $jefe->apellidos),
+                'revisado_en'              => now(),
+                'comentario_revision'      => $validated['comentario'],
+                'aud_usuario'              => Auth::user()->email,
+            ]);
+
+            $this->notificarSolicitanteResolucion($solicitud, false, $validated['comentario']);
+
+            return response()->json(['success' => true, 'message' => 'Solicitud rechazada.']);
+        });
+    }
+
+    // ── POST /api/rrhh/retractaciones/directa ─────────────────────────────
+    // RRHH retracta directamente sin solicitud
+    public function directa(Request $request): JsonResponse
+    {
+        return $this->captureAndRespond($request, function () use ($request) {
+            if (!$this->esAdminRrhh()) {
+                return response()->json(['success' => false, 'message' => 'Solo RRHH puede hacer retractaciones directas.'], 403);
+            }
+
+            $validated = $request->validate([
+                'desvinculacion_id' => 'required|integer',
+                'justificacion'     => 'required|string|min:10|max:1000',
+            ]);
+
+            $desvinculacion = Desvinculacion::findOrFail($validated['desvinculacion_id']);
+
+            if ($desvinculacion->tipo !== 'renuncia') {
+                return response()->json(['success' => false, 'message' => 'Solo se pueden retractar renuncias.'], 422);
+            }
+            if ($desvinculacion->estado === 'retractada') {
+                return response()->json(['success' => false, 'message' => 'Esta renuncia ya fue retractada.'], 422);
+            }
+
+            $jefe = $this->getJefeEmpleado();
+
+            DB::transaction(function () use ($desvinculacion, $validated, $jefe) {
+                SolicitudRetractacion::create([
+                    'desvinculacion_id'          => $desvinculacion->id,
+                    'empleado_id'                => $desvinculacion->empleado_id,
+                    'empleado_nombre'            => $desvinculacion->empleado_nombre,
+                    'sucursal_nombre'            => $desvinculacion->sucursal_nombre,
+                    'cargo_nombre'               => $desvinculacion->cargo_nombre,
+                    'solicitado_por_empleado_id' => $jefe->id,
+                    'solicitado_por_nombre'      => trim($jefe->nombres . ' ' . $jefe->apellidos),
+                    'justificacion'              => $validated['justificacion'],
+                    'estado'                     => 'aprobada',
+                    'revisado_por_empleado_id'   => $jefe->id,
+                    'revisado_por_nombre'        => trim($jefe->nombres . ' ' . $jefe->apellidos),
+                    'revisado_en'                => now(),
+                    'comentario_revision'        => 'Retractación directa por RRHH.',
+                    'aud_usuario'                => Auth::user()->email,
+                ]);
+
+                Desvinculacion::where('id', $desvinculacion->id)
+                    ->update(['estado' => 'retractada', 'aud_usuario' => Auth::user()->email]);
+
+                DB::connection('pgsql')
+                    ->table('empleados')
+                    ->where('id', $desvinculacion->empleado_id)
+                    ->update(['activo' => true, 'aud_usuario' => 'sistema:retractacion', 'updated_at' => now()]);
+            });
+
+            return response()->json(['success' => true, 'message' => 'Renuncia retractada. El empleado ha sido reactivado.']);
+        });
     }
 
     // ── Notificaciones ───────────────────────────────────────────────────────

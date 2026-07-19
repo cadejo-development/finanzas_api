@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\Log;
 
 class MantenimientoPlanillaController extends RRHHBaseController
 {
+    use \App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
+
     public function __construct(private PlanillaCalculatorService $calc) {}
 
     // ─── Configuración ────────────────────────────────────────────────────────
@@ -33,7 +35,7 @@ class MantenimientoPlanillaController extends RRHHBaseController
      */
     public function updateConfig(Request $request): JsonResponse
     {
-        try {
+        return $this->captureAndRespond($request, function () use ($request) {
             $validated = $request->validate([
                 'configs'          => 'required|array',
                 'configs.*.id'     => 'required|integer|exists:rrhh.planilla_config,id',
@@ -41,14 +43,16 @@ class MantenimientoPlanillaController extends RRHHBaseController
             ]);
 
             DB::connection('rrhh')->beginTransaction();
-            foreach ($validated['configs'] as $item) {
-                PlanillaConfig::where('id', $item['id'])->update([
-                    'valor' => $item['valor'],
-                ]);
+            try {
+                foreach ($validated['configs'] as $item) {
+                    PlanillaConfig::where('id', $item['id'])->update(['valor' => $item['valor']]);
+                }
+                DB::connection('rrhh')->commit();
+            } catch (\Throwable $e) {
+                DB::connection('rrhh')->rollBack();
+                throw $e;
             }
-            DB::connection('rrhh')->commit();
 
-            // Limpiar caché
             $this->calc->clearCache();
 
             return response()->json([
@@ -56,10 +60,7 @@ class MantenimientoPlanillaController extends RRHHBaseController
                 'message' => 'Configuración actualizada.',
                 'data'    => PlanillaConfig::orderBy('clave')->get(),
             ]);
-        } catch (\Throwable $e) {
-            DB::connection('rrhh')->rollBack();
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
-        }
+        });
     }
 
     // ─── Tabla de Renta ───────────────────────────────────────────────────────
@@ -81,7 +82,7 @@ class MantenimientoPlanillaController extends RRHHBaseController
      */
     public function updateTablaRenta(Request $request): JsonResponse
     {
-        try {
+        return $this->captureAndRespond($request, function () use ($request) {
             $validated = $request->validate([
                 'tramos'                   => 'required|array|min:1',
                 'tramos.*.id'              => 'required|integer|exists:rrhh.planilla_tabla_renta,id',
@@ -91,14 +92,19 @@ class MantenimientoPlanillaController extends RRHHBaseController
             ]);
 
             DB::connection('rrhh')->beginTransaction();
-            foreach ($validated['tramos'] as $tramo) {
-                PlanillaTablaRenta::where('id', $tramo['id'])->update([
-                    'cuota_fija'      => $tramo['cuota_fija'],
-                    'porcentaje'      => $tramo['porcentaje'],
-                    'sobre_exceso_de' => $tramo['sobre_exceso_de'],
-                ]);
+            try {
+                foreach ($validated['tramos'] as $tramo) {
+                    PlanillaTablaRenta::where('id', $tramo['id'])->update([
+                        'cuota_fija'      => $tramo['cuota_fija'],
+                        'porcentaje'      => $tramo['porcentaje'],
+                        'sobre_exceso_de' => $tramo['sobre_exceso_de'],
+                    ]);
+                }
+                DB::connection('rrhh')->commit();
+            } catch (\Throwable $e) {
+                DB::connection('rrhh')->rollBack();
+                throw $e;
             }
-            DB::connection('rrhh')->commit();
 
             $this->calc->clearCache();
 
@@ -107,10 +113,7 @@ class MantenimientoPlanillaController extends RRHHBaseController
                 'message' => 'Tabla de renta actualizada.',
                 'data'    => PlanillaTablaRenta::where('activo', true)->orderBy('desde')->get(),
             ]);
-        } catch (\Throwable $e) {
-            DB::connection('rrhh')->rollBack();
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
-        }
+        });
     }
 
     // ─── Acreedores ───────────────────────────────────────────────────────────
@@ -129,7 +132,7 @@ class MantenimientoPlanillaController extends RRHHBaseController
      */
     public function storeAcreedor(Request $request): JsonResponse
     {
-        try {
+        return $this->captureAndRespond($request, function () use ($request) {
             $validated = $request->validate([
                 'nombre' => 'required|string|max:150',
                 'tipo'   => 'required|in:banco,comercio,judicial,otro',
@@ -138,9 +141,7 @@ class MantenimientoPlanillaController extends RRHHBaseController
             $acreedor = PlanillaAcreedor::create(array_merge($validated, ['activo' => true]));
 
             return response()->json(['success' => true, 'data' => $acreedor], 201);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json(['success' => false, 'message' => collect($e->errors())->flatten()->first(), 'errors' => $e->errors()], 422);
-        }
+        });
     }
 
     /**
@@ -148,16 +149,18 @@ class MantenimientoPlanillaController extends RRHHBaseController
      */
     public function updateAcreedor(Request $request, int $id): JsonResponse
     {
-        $acreedor = PlanillaAcreedor::findOrFail($id);
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $acreedor = PlanillaAcreedor::findOrFail($id);
 
-        $validated = $request->validate([
-            'nombre' => 'sometimes|string|max:150',
-            'tipo'   => 'sometimes|in:banco,comercio,judicial,otro',
-        ]);
+            $validated = $request->validate([
+                'nombre' => 'sometimes|string|max:150',
+                'tipo'   => 'sometimes|in:banco,comercio,judicial,otro',
+            ]);
 
-        $acreedor->update($validated);
+            $acreedor->update($validated);
 
-        return response()->json(['success' => true, 'data' => $acreedor]);
+            return response()->json(['success' => true, 'data' => $acreedor]);
+        });
     }
 
     /**
@@ -165,14 +168,16 @@ class MantenimientoPlanillaController extends RRHHBaseController
      */
     public function toggleAcreedor(int $id): JsonResponse
     {
-        $acreedor = PlanillaAcreedor::findOrFail($id);
-        $acreedor->update(['activo' => !$acreedor->activo]);
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $acreedor = PlanillaAcreedor::findOrFail($id);
+            $acreedor->update(['activo' => !$acreedor->activo]);
 
-        return response()->json([
-            'success' => true,
-            'data'    => $acreedor,
-            'message' => $acreedor->activo ? 'Acreedor activado.' : 'Acreedor desactivado.',
-        ]);
+            return response()->json([
+                'success' => true,
+                'data'    => $acreedor,
+                'message' => $acreedor->activo ? 'Acreedor activado.' : 'Acreedor desactivado.',
+            ]);
+        });
     }
 
     // ─── Órdenes de Descuento ─────────────────────────────────────────────────
@@ -225,7 +230,7 @@ class MantenimientoPlanillaController extends RRHHBaseController
      */
     public function storeOrden(Request $request): JsonResponse
     {
-        try {
+        return $this->captureAndRespond($request, function () use ($request) {
             $validated = $request->validate([
                 'empleado_id'     => 'required|integer|exists:pgsql.empleados,id',
                 'acreedor_id'     => 'nullable|integer|exists:rrhh.planilla_acreedores,id',
@@ -239,9 +244,7 @@ class MantenimientoPlanillaController extends RRHHBaseController
             $orden->load('acreedor');
 
             return response()->json(['success' => true, 'data' => $orden], 201);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json(['success' => false, 'message' => collect($e->errors())->flatten()->first(), 'errors' => $e->errors()], 422);
-        }
+        });
     }
 
     /**
@@ -249,21 +252,23 @@ class MantenimientoPlanillaController extends RRHHBaseController
      */
     public function updateOrden(Request $request, int $id): JsonResponse
     {
-        $orden = PlanillaOrdenDescuento::findOrFail($id);
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $orden = PlanillaOrdenDescuento::findOrFail($id);
 
-        $validated = $request->validate([
-            'acreedor_id'     => 'nullable|integer|exists:rrhh.planilla_acreedores,id',
-            'concepto'        => 'sometimes|string|max:200',
-            'monto_quincenal' => 'sometimes|numeric|min:0.01',
-            'fecha_inicio'    => 'sometimes|date',
-            'fecha_fin'       => 'nullable|date',
-            'activo'          => 'sometimes|boolean',
-        ]);
+            $validated = $request->validate([
+                'acreedor_id'     => 'nullable|integer|exists:rrhh.planilla_acreedores,id',
+                'concepto'        => 'sometimes|string|max:200',
+                'monto_quincenal' => 'sometimes|numeric|min:0.01',
+                'fecha_inicio'    => 'sometimes|date',
+                'fecha_fin'       => 'nullable|date',
+                'activo'          => 'sometimes|boolean',
+            ]);
 
-        $orden->update($validated);
-        $orden->load('acreedor');
+            $orden->update($validated);
+            $orden->load('acreedor');
 
-        return response()->json(['success' => true, 'data' => $orden]);
+            return response()->json(['success' => true, 'data' => $orden]);
+        });
     }
 
     /**
@@ -272,9 +277,11 @@ class MantenimientoPlanillaController extends RRHHBaseController
      */
     public function deleteOrden(int $id): JsonResponse
     {
-        $orden = PlanillaOrdenDescuento::findOrFail($id);
-        $orden->update(['activo' => false]);
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $orden = PlanillaOrdenDescuento::findOrFail($id);
+            $orden->update(['activo' => false]);
 
-        return response()->json(['success' => true, 'message' => 'Orden desactivada.']);
+            return response()->json(['success' => true, 'message' => 'Orden desactivada.']);
+        });
     }
 }

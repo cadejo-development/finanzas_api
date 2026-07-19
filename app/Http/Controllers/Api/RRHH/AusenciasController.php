@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Log;
 
 class AusenciasController extends RRHHBaseController
 {
+    use \App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
+
     /**
      * GET /api/rrhh/ausencias
      * Lista ausencias injustificadas del equipo (+ alertas).
@@ -52,69 +54,70 @@ class AusenciasController extends RRHHBaseController
      */
     public function store(Request $request): JsonResponse
     {
+        return $this->captureAndRespond($request, function () use ($request) {
+            $validated = $request->validate([
+                'empleado_id' => 'required|integer',
+                'fecha'       => 'required|date',
+                'descripcion' => 'nullable|string|max:500',
+            ]);
 
-        $validated = $request->validate([
-            'empleado_id' => 'required|integer',
-            'fecha'       => 'required|date',
-            'descripcion' => 'nullable|string|max:500',
-        ]);
+            $jefe = $this->getJefeEmpleado();
 
-        $jefe = $this->getJefeEmpleado();
+            if (!$this->puedeGestionar($validated['empleado_id'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El empleado no pertenece a tu equipo.',
+                ], 403);
+            }
 
-        if (!$this->puedeGestionar($validated['empleado_id'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'El empleado no pertenece a tu equipo.',
-            ], 403);
-        }
+            // Verificar duplicado
+            $existe = AusenciaInjustificada::where('empleado_id', $validated['empleado_id'])
+                ->where('fecha', $validated['fecha'])
+                ->exists();
 
-        // Verificar duplicado
-        $existe = AusenciaInjustificada::where('empleado_id', $validated['empleado_id'])
-            ->where('fecha', $validated['fecha'])
-            ->exists();
+            if ($existe) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Ya existe una ausencia registrada para este empleado en esa fecha.',
+                ], 422);
+            }
 
-        if ($existe) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ya existe una ausencia registrada para este empleado en esa fecha.',
-            ], 422);
-        }
+            $ausencia = AusenciaInjustificada::create([
+                'empleado_id'      => $validated['empleado_id'],
+                'registrado_por_id'=> $jefe->id,
+                'fecha'            => $validated['fecha'],
+                'descripcion'      => $validated['descripcion'] ?? null,
+                'aud_usuario'      => Auth::user()->email,
+                'creado_por'       => $this->creadoPor(),
+            ]);
 
-        $ausencia = AusenciaInjustificada::create([
-            'empleado_id'      => $validated['empleado_id'],
-            'registrado_por_id'=> $jefe->id,
-            'fecha'            => $validated['fecha'],
-            'descripcion'      => $validated['descripcion'] ?? null,
-            'aud_usuario'      => Auth::user()->email,
-            'creado_por'       => $this->creadoPor(),
-        ]);
+            $arr         = $this->enrichWithEmpleadoData([$ausencia->toArray()]);
+            $empNombre   = $arr[0]['empleado_nombre'] ?? "Empleado #{$validated['empleado_id']}";
+            $sucursal    = $arr[0]['sucursal_nombre']  ?? null;
 
-        $arr         = $this->enrichWithEmpleadoData([$ausencia->toArray()]);
-        $empNombre   = $arr[0]['empleado_nombre'] ?? "Empleado #{$validated['empleado_id']}";
-        $sucursal    = $arr[0]['sucursal_nombre']  ?? null;
+            // Notificar al empleado
+            try {
+                $this->notificarAlEmpleado(
+                    empleadoId:   $validated['empleado_id'],
+                    tipo:         'Ausencia Injustificada',
+                    mensaje:      "Se ha registrado una ausencia injustificada en tu expediente. Si consideras que este registro es incorrecto, comunicate con tu jefe inmediato.",
+                    detalles: array_filter([
+                        'Fecha'       => $validated['fecha'],
+                        'Descripcion' => $validated['descripcion'] ?? null,
+                    ]),
+                    rutaFrontend: 'mi-expediente',
+                    pdfContent:   null,
+                    pdfNombre:    null,
+                );
+            } catch (\Throwable $e) {
+                Log::warning('AusenciasController: error notificando al empleado', ['error' => $e->getMessage()]);
+            }
 
-        // Notificar al empleado
-        try {
-            $this->notificarAlEmpleado(
-                empleadoId:   $validated['empleado_id'],
-                tipo:         'Ausencia Injustificada',
-                mensaje:      "Se ha registrado una ausencia injustificada en tu expediente. Si consideras que este registro es incorrecto, comunicate con tu jefe inmediato.",
-                detalles: array_filter([
-                    'Fecha'       => $validated['fecha'],
-                    'Descripcion' => $validated['descripcion'] ?? null,
-                ]),
-                rutaFrontend: 'mi-expediente',
-                pdfContent:   null,
-                pdfNombre:    null,
-            );
-        } catch (\Throwable $e) {
-            Log::warning('AusenciasController: error notificando al empleado', ['error' => $e->getMessage()]);
-        }
+            // Verificar umbrales y notificar a jefatura + admins RRHH si se alcanzan
+            $this->verificarUmbralesYNotificar($validated['empleado_id'], $empNombre, $sucursal, $validated['fecha']);
 
-        // Verificar umbrales y notificar a jefatura + admins RRHH si se alcanzan
-        $this->verificarUmbralesYNotificar($validated['empleado_id'], $empNombre, $sucursal, $validated['fecha']);
-
-        return response()->json(['success' => true, 'data' => $arr[0]], 201);
+            return response()->json(['success' => true, 'data' => $arr[0]], 201);
+        });
     }
 
     /**
@@ -122,14 +125,16 @@ class AusenciasController extends RRHHBaseController
      */
     public function destroy(int $id): JsonResponse
     {
-        $ausencia = AusenciaInjustificada::findOrFail($id);
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $ausencia = AusenciaInjustificada::findOrFail($id);
 
-        if (!$this->puedeGestionar($ausencia->empleado_id)) {
-            return response()->json(['success' => false, 'message' => 'Sin permiso.'], 403);
-        }
+            if (!$this->puedeGestionar($ausencia->empleado_id)) {
+                return response()->json(['success' => false, 'message' => 'Sin permiso.'], 403);
+            }
 
-        $ausencia->delete();
-        return response()->json(['success' => true, 'message' => 'Ausencia eliminada.']);
+            $ausencia->delete();
+            return response()->json(['success' => true, 'message' => 'Ausencia eliminada.']);
+        });
     }
 
     /**
@@ -167,62 +172,64 @@ class AusenciasController extends RRHHBaseController
      */
     public function regularizar(Request $request, int $id): JsonResponse
     {
-        $ausencia = AusenciaInjustificada::findOrFail($id);
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $ausencia = AusenciaInjustificada::findOrFail($id);
 
-        if (!$this->puedeGestionar($ausencia->empleado_id)) {
-            return response()->json(['success' => false, 'message' => 'Sin permiso.'], 403);
-        }
-
-        $validated = $request->validate([
-            'tipo'         => 'required|in:permiso_personal,incapacidad',
-            'justificacion'=> 'required|string|min:10|max:1000',
-        ]);
-
-        $referenciaId = null;
-
-        if ($validated['tipo'] === 'permiso_personal') {
-            // Crear permiso personal real aprobado
-            $tipoPersonal = \App\Models\RRHH\TipoPermiso::where('codigo', 'PERSONAL')->first();
-            if ($tipoPersonal) {
-                $aprobadorId = $this->getAprobadorPara($ausencia->empleado_id);
-                $permiso = Permiso::create([
-                    'empleado_id'     => $ausencia->empleado_id,
-                    'jefe_id'         => $aprobadorId,
-                    'tipo_permiso_id' => $tipoPersonal->id,
-                    'fecha'           => $ausencia->fecha,
-                    'es_dia_completo' => true,
-                    'dias'            => 1,
-                    'motivo'          => "Regularización de ausencia: {$validated['justificacion']}",
-                    'estado'          => 'aprobado',
-                    'aud_usuario'     => Auth::user()->email,
-                    'creado_por'      => $this->creadoPor(),
-                ]);
-                $referenciaId = $permiso->id;
+            if (!$this->puedeGestionar($ausencia->empleado_id)) {
+                return response()->json(['success' => false, 'message' => 'Sin permiso.'], 403);
             }
-        } else {
-            // Buscar incapacidad existente que cubra esa fecha
-            $incapacidad = Incapacidad::where('empleado_id', $ausencia->empleado_id)
-                ->where('fecha_inicio', '<=', $ausencia->fecha)
-                ->where('fecha_fin', '>=', $ausencia->fecha)
-                ->first();
-            // -1 si no hay incapacidad aún (se presentará después), ID real si ya existe
-            $referenciaId = $incapacidad?->id ?? -1;
-        }
 
-        $ausencia->update([
-            'cubierta_por_incapacidad_id' => $referenciaId,
-            'descripcion' => ($ausencia->descripcion ? $ausencia->descripcion . ' | ' : '')
-                . "Regularizada ({$validated['tipo']}): {$validated['justificacion']}",
-            'aud_usuario' => Auth::user()->email,
-        ]);
+            $validated = $request->validate([
+                'tipo'         => 'required|in:permiso_personal,incapacidad',
+                'justificacion'=> 'required|string|min:10|max:1000',
+            ]);
 
-        $arr = $this->enrichWithEmpleadoData([$ausencia->toArray()]);
+            $referenciaId = null;
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Ausencia regularizada correctamente.',
-            'data'    => $arr[0],
-        ]);
+            if ($validated['tipo'] === 'permiso_personal') {
+                // Crear permiso personal real aprobado
+                $tipoPersonal = \App\Models\RRHH\TipoPermiso::where('codigo', 'PERSONAL')->first();
+                if ($tipoPersonal) {
+                    $aprobadorId = $this->getAprobadorPara($ausencia->empleado_id);
+                    $permiso = Permiso::create([
+                        'empleado_id'     => $ausencia->empleado_id,
+                        'jefe_id'         => $aprobadorId,
+                        'tipo_permiso_id' => $tipoPersonal->id,
+                        'fecha'           => $ausencia->fecha,
+                        'es_dia_completo' => true,
+                        'dias'            => 1,
+                        'motivo'          => "Regularización de ausencia: {$validated['justificacion']}",
+                        'estado'          => 'aprobado',
+                        'aud_usuario'     => Auth::user()->email,
+                        'creado_por'      => $this->creadoPor(),
+                    ]);
+                    $referenciaId = $permiso->id;
+                }
+            } else {
+                // Buscar incapacidad existente que cubra esa fecha
+                $incapacidad = Incapacidad::where('empleado_id', $ausencia->empleado_id)
+                    ->where('fecha_inicio', '<=', $ausencia->fecha)
+                    ->where('fecha_fin', '>=', $ausencia->fecha)
+                    ->first();
+                // -1 si no hay incapacidad aún (se presentará después), ID real si ya existe
+                $referenciaId = $incapacidad?->id ?? -1;
+            }
+
+            $ausencia->update([
+                'cubierta_por_incapacidad_id' => $referenciaId,
+                'descripcion' => ($ausencia->descripcion ? $ausencia->descripcion . ' | ' : '')
+                    . "Regularizada ({$validated['tipo']}): {$validated['justificacion']}",
+                'aud_usuario' => Auth::user()->email,
+            ]);
+
+            $arr = $this->enrichWithEmpleadoData([$ausencia->toArray()]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Ausencia regularizada correctamente.',
+                'data'    => $arr[0],
+            ]);
+        });
     }
 
     /**

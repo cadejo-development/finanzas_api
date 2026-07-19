@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\DB;
 
 class PlazasController extends Controller
 {
+    use \App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
+
     public function index(Request $request)
     {
         $q = Plaza::with(['cargo:id,nombre,codigo', 'departamento:id,nombre', 'empleado:id,nombres,apellidos,plaza_id'])
@@ -41,58 +43,64 @@ class PlazasController extends Controller
 
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'cargo_id'        => 'required|exists:pgsql.cargos,id',
-            'departamento_id' => 'nullable|exists:pgsql.departamentos,id',
-            'codigo'          => 'nullable|string|max:30',
-        ]);
+        return $this->captureAndRespond($request, function () use ($request) {
+            $data = $request->validate([
+                'cargo_id'        => 'required|exists:pgsql.cargos,id',
+                'departamento_id' => 'nullable|exists:pgsql.departamentos,id',
+                'codigo'          => 'nullable|string|max:30',
+            ]);
 
-        $data['activo']      = true;
-        $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
+            $data['activo']      = true;
+            $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
 
-        $plaza = Plaza::create($data);
-        $plaza->load(['cargo:id,nombre,codigo', 'departamento:id,nombre']);
+            $plaza = Plaza::create($data);
+            $plaza->load(['cargo:id,nombre,codigo', 'departamento:id,nombre']);
 
-        return response()->json($plaza, 201);
+            return response()->json($plaza, 201);
+        });
     }
 
     public function update(Request $request, int $id)
     {
-        $plaza = Plaza::findOrFail($id);
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $plaza = Plaza::findOrFail($id);
 
-        $data = $request->validate([
-            'cargo_id'        => 'required|exists:pgsql.cargos,id',
-            'departamento_id' => 'nullable|exists:pgsql.departamentos,id',
-            'codigo'          => 'nullable|string|max:30',
-        ]);
+            $data = $request->validate([
+                'cargo_id'        => 'required|exists:pgsql.cargos,id',
+                'departamento_id' => 'nullable|exists:pgsql.departamentos,id',
+                'codigo'          => 'nullable|string|max:30',
+            ]);
 
-        $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
-        $plaza->update($data);
-        $plaza->load(['cargo:id,nombre,codigo', 'departamento:id,nombre']);
+            $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
+            $plaza->update($data);
+            $plaza->load(['cargo:id,nombre,codigo', 'departamento:id,nombre']);
 
-        return response()->json($plaza);
+            return response()->json($plaza);
+        });
     }
 
     public function toggleActivo(int $id)
     {
-        $plaza = Plaza::findOrFail($id);
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $plaza = Plaza::findOrFail($id);
 
-        if ($plaza->activo) {
-            $ocupada = $plaza->empleado()->where('activo', true)->exists();
-            if ($ocupada) {
-                $emp = $plaza->empleado()->where('activo', true)->first();
-                return response()->json([
-                    'message' => "No se puede inactivar: la plaza está ocupada por {$emp->nombres} {$emp->apellidos}.",
-                ], 422);
+            if ($plaza->activo) {
+                $ocupada = $plaza->empleado()->where('activo', true)->exists();
+                if ($ocupada) {
+                    $emp = $plaza->empleado()->where('activo', true)->first();
+                    return response()->json([
+                        'message' => "No se puede inactivar: la plaza está ocupada por {$emp->nombres} {$emp->apellidos}.",
+                    ], 422);
+                }
             }
-        }
 
-        $plaza->update([
-            'activo'      => !$plaza->activo,
-            'aud_usuario' => auth()->user()?->name ?? 'sistema',
-        ]);
+            $plaza->update([
+                'activo'      => !$plaza->activo,
+                'aud_usuario' => auth()->user()?->name ?? 'sistema',
+            ]);
 
-        return response()->json($plaza);
+            return response()->json($plaza);
+        });
     }
 
     public function stats()
@@ -280,16 +288,18 @@ class PlazasController extends Controller
 
     public function destroy(int $id)
     {
-        $plaza = Plaza::findOrFail($id);
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $plaza = Plaza::findOrFail($id);
 
-        if ($plaza->empleado()->exists()) {
-            return response()->json([
-                'message' => 'No se puede eliminar: la plaza tiene un empleado asignado.',
-            ], 422);
-        }
+            if ($plaza->empleado()->exists()) {
+                return response()->json([
+                    'message' => 'No se puede eliminar: la plaza tiene un empleado asignado.',
+                ], 422);
+            }
 
-        $plaza->delete();
+            $plaza->delete();
 
-        return response()->json(null, 204);
+            return response()->json(null, 204);
+        });
     }
 }

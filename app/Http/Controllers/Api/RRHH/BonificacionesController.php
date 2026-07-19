@@ -10,6 +10,8 @@ use Illuminate\Http\Request;
 
 class BonificacionesController extends Controller
 {
+    use \App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
+
     private function baseQuery()
     {
         return Bonificacion::with([
@@ -29,31 +31,37 @@ class BonificacionesController extends Controller
 
     public function tiposStore(Request $request)
     {
-        $data = $request->validate([
-            'nombre'  => 'required|string|max:120|unique:pgsql.tipos_bonificacion,nombre',
-            'gravado' => 'boolean',
-        ]);
-        $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
-        return response()->json(TipoBonificacion::create($data), 201);
+        return $this->captureAndRespond($request, function () use ($request) {
+            $data = $request->validate([
+                'nombre'  => 'required|string|max:120|unique:pgsql.tipos_bonificacion,nombre',
+                'gravado' => 'boolean',
+            ]);
+            $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
+            return response()->json(TipoBonificacion::create($data), 201);
+        });
     }
 
     public function tiposUpdate(Request $request, int $id)
     {
-        $tipo = TipoBonificacion::findOrFail($id);
-        $data = $request->validate([
-            'nombre'  => 'required|string|max:120|unique:pgsql.tipos_bonificacion,nombre,' . $id,
-            'gravado' => 'boolean',
-        ]);
-        $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
-        $tipo->update($data);
-        return response()->json($tipo);
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $tipo = TipoBonificacion::findOrFail($id);
+            $data = $request->validate([
+                'nombre'  => 'required|string|max:120|unique:pgsql.tipos_bonificacion,nombre,' . $id,
+                'gravado' => 'boolean',
+            ]);
+            $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
+            $tipo->update($data);
+            return response()->json($tipo);
+        });
     }
 
     public function tiposToggle(int $id)
     {
-        $tipo = TipoBonificacion::findOrFail($id);
-        $tipo->update(['activo' => !$tipo->activo, 'aud_usuario' => auth()->user()?->name ?? 'sistema']);
-        return response()->json($tipo);
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $tipo = TipoBonificacion::findOrFail($id);
+            $tipo->update(['activo' => !$tipo->activo, 'aud_usuario' => auth()->user()?->name ?? 'sistema']);
+            return response()->json($tipo);
+        });
     }
 
     public function estados()
@@ -88,70 +96,78 @@ class BonificacionesController extends Controller
     // Solicitar bonificación (jefe de departamento)
     public function store(Request $request)
     {
-        $estadoPendiente = EstadoBonificacion::where('nombre', 'Pendiente')->firstOrFail();
+        return $this->captureAndRespond($request, function () use ($request) {
+            $estadoPendiente = EstadoBonificacion::where('nombre', 'Pendiente')->firstOrFail();
 
-        $data = $request->validate([
-            'empleado_id'         => 'required|exists:pgsql.empleados,id',
-            'tipo_bonificacion_id'=> 'required|exists:pgsql.tipos_bonificacion,id',
-            'monto'               => 'required|numeric|min:0.01',
-            'descripcion'         => 'nullable|string',
-            'fecha_aplicar'       => 'required|date',
-        ]);
+            $data = $request->validate([
+                'empleado_id'         => 'required|exists:pgsql.empleados,id',
+                'tipo_bonificacion_id'=> 'required|exists:pgsql.tipos_bonificacion,id',
+                'monto'               => 'required|numeric|min:0.01',
+                'descripcion'         => 'nullable|string',
+                'fecha_aplicar'       => 'required|date',
+            ]);
 
-        $solicitante = auth()->user()?->empleado;
+            $solicitante = auth()->user()?->empleado;
 
-        $data['estado_id']        = $estadoPendiente->id;
-        $data['solicitado_por_id']= $solicitante?->id ?? $data['empleado_id'];
-        $data['aud_usuario']      = auth()->user()?->name ?? 'sistema';
+            $data['estado_id']        = $estadoPendiente->id;
+            $data['solicitado_por_id']= $solicitante?->id ?? $data['empleado_id'];
+            $data['aud_usuario']      = auth()->user()?->name ?? 'sistema';
 
-        $bono = Bonificacion::create($data);
-        return response()->json($this->baseQuery()->find($bono->id), 201);
+            $bono = Bonificacion::create($data);
+            return response()->json($this->baseQuery()->find($bono->id), 201);
+        });
     }
 
     // Admin RRHH: aprobar
     public function aprobar(Request $request, int $id)
     {
-        $bono = Bonificacion::findOrFail($id);
-        $estadoAprobada = EstadoBonificacion::where('nombre', 'Aprobada')->firstOrFail();
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $bono = Bonificacion::findOrFail($id);
+            $estadoAprobada = EstadoBonificacion::where('nombre', 'Aprobada')->firstOrFail();
 
-        $data = $request->validate(['notas_aprobacion' => 'nullable|string']);
+            $data = $request->validate(['notas_aprobacion' => 'nullable|string']);
 
-        $bono->update([
-            'estado_id'        => $estadoAprobada->id,
-            'aprobado_por_id'  => auth()->user()?->empleado?->id,
-            'notas_aprobacion' => $data['notas_aprobacion'] ?? null,
-            'aud_usuario'      => auth()->user()?->name ?? 'sistema',
-        ]);
-        return response()->json($this->baseQuery()->find($bono->id));
+            $bono->update([
+                'estado_id'        => $estadoAprobada->id,
+                'aprobado_por_id'  => auth()->user()?->empleado?->id,
+                'notas_aprobacion' => $data['notas_aprobacion'] ?? null,
+                'aud_usuario'      => auth()->user()?->name ?? 'sistema',
+            ]);
+            return response()->json($this->baseQuery()->find($bono->id));
+        });
     }
 
     // Admin RRHH: rechazar
     public function rechazar(Request $request, int $id)
     {
-        $bono = Bonificacion::findOrFail($id);
-        $estadoRechazada = EstadoBonificacion::where('nombre', 'Rechazada')->firstOrFail();
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $bono = Bonificacion::findOrFail($id);
+            $estadoRechazada = EstadoBonificacion::where('nombre', 'Rechazada')->firstOrFail();
 
-        $data = $request->validate(['notas_aprobacion' => 'nullable|string']);
+            $data = $request->validate(['notas_aprobacion' => 'nullable|string']);
 
-        $bono->update([
-            'estado_id'        => $estadoRechazada->id,
-            'aprobado_por_id'  => auth()->user()?->empleado?->id,
-            'notas_aprobacion' => $data['notas_aprobacion'] ?? null,
-            'aud_usuario'      => auth()->user()?->name ?? 'sistema',
-        ]);
-        return response()->json($this->baseQuery()->find($bono->id));
+            $bono->update([
+                'estado_id'        => $estadoRechazada->id,
+                'aprobado_por_id'  => auth()->user()?->empleado?->id,
+                'notas_aprobacion' => $data['notas_aprobacion'] ?? null,
+                'aud_usuario'      => auth()->user()?->name ?? 'sistema',
+            ]);
+            return response()->json($this->baseQuery()->find($bono->id));
+        });
     }
 
     // Admin RRHH: marcar como aplicada en planilla
     public function aplicar(int $id)
     {
-        $bono = Bonificacion::findOrFail($id);
-        $estadoAplicada = EstadoBonificacion::where('nombre', 'Aplicada')->firstOrFail();
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $bono = Bonificacion::findOrFail($id);
+            $estadoAplicada = EstadoBonificacion::where('nombre', 'Aplicada')->firstOrFail();
 
-        $bono->update([
-            'estado_id'   => $estadoAplicada->id,
-            'aud_usuario' => auth()->user()?->name ?? 'sistema',
-        ]);
-        return response()->json($this->baseQuery()->find($bono->id));
+            $bono->update([
+                'estado_id'   => $estadoAplicada->id,
+                'aud_usuario' => auth()->user()?->name ?? 'sistema',
+            ]);
+            return response()->json($this->baseQuery()->find($bono->id));
+        });
     }
 }

@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 
 class AcreedoresController extends Controller
 {
+    use \App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
+
     // Catálogo de tipos (lectura + toggle simple)
     public function tiposIndex()
     {
@@ -17,25 +19,31 @@ class AcreedoresController extends Controller
 
     public function tiposStore(Request $request)
     {
-        $data = $request->validate(['nombre' => 'required|string|max:100|unique:pgsql.tipos_acreedor,nombre']);
-        $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
-        return response()->json(TipoAcreedor::create($data), 201);
+        return $this->captureAndRespond($request, function () use ($request) {
+            $data = $request->validate(['nombre' => 'required|string|max:100|unique:pgsql.tipos_acreedor,nombre']);
+            $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
+            return response()->json(TipoAcreedor::create($data), 201);
+        });
     }
 
     public function tiposUpdate(Request $request, int $id)
     {
-        $tipo = TipoAcreedor::findOrFail($id);
-        $data = $request->validate(['nombre' => 'required|string|max:100|unique:pgsql.tipos_acreedor,nombre,' . $id]);
-        $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
-        $tipo->update($data);
-        return response()->json($tipo);
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $tipo = TipoAcreedor::findOrFail($id);
+            $data = $request->validate(['nombre' => 'required|string|max:100|unique:pgsql.tipos_acreedor,nombre,' . $id]);
+            $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
+            $tipo->update($data);
+            return response()->json($tipo);
+        });
     }
 
     public function tiposToggle(int $id)
     {
-        $tipo = TipoAcreedor::findOrFail($id);
-        $tipo->update(['activo' => !$tipo->activo, 'aud_usuario' => auth()->user()?->name ?? 'sistema']);
-        return response()->json($tipo);
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $tipo = TipoAcreedor::findOrFail($id);
+            $tipo->update(['activo' => !$tipo->activo, 'aud_usuario' => auth()->user()?->name ?? 'sistema']);
+            return response()->json($tipo);
+        });
     }
 
     // Catálogo de acreedores
@@ -55,31 +63,37 @@ class AcreedoresController extends Controller
 
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'tipo_acreedor_id' => 'required|exists:pgsql.tipos_acreedor,id',
-            'nombre'           => 'required|string|max:150',
-        ]);
-        $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
-        $acreedor = Acreedor::create($data);
-        return response()->json($acreedor->load('tipo:id,nombre'), 201);
+        return $this->captureAndRespond($request, function () use ($request) {
+            $data = $request->validate([
+                'tipo_acreedor_id' => 'required|exists:pgsql.tipos_acreedor,id',
+                'nombre'           => 'required|string|max:150',
+            ]);
+            $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
+            $acreedor = Acreedor::create($data);
+            return response()->json($acreedor->load('tipo:id,nombre'), 201);
+        });
     }
 
     public function update(Request $request, int $id)
     {
-        $acreedor = Acreedor::findOrFail($id);
-        $data = $request->validate([
-            'tipo_acreedor_id' => 'required|exists:pgsql.tipos_acreedor,id',
-            'nombre'           => 'required|string|max:150',
-        ]);
-        $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
-        $acreedor->update($data);
-        return response()->json($acreedor->load('tipo:id,nombre'));
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $acreedor = Acreedor::findOrFail($id);
+            $data = $request->validate([
+                'tipo_acreedor_id' => 'required|exists:pgsql.tipos_acreedor,id',
+                'nombre'           => 'required|string|max:150',
+            ]);
+            $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
+            $acreedor->update($data);
+            return response()->json($acreedor->load('tipo:id,nombre'));
+        });
     }
 
     public function toggleActivo(int $id)
     {
-        $acreedor = Acreedor::findOrFail($id);
-        $acreedor->update(['activo' => !$acreedor->activo, 'aud_usuario' => auth()->user()?->name ?? 'sistema']);
-        return response()->json($acreedor->load('tipo:id,nombre'));
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $acreedor = Acreedor::findOrFail($id);
+            $acreedor->update(['activo' => !$acreedor->activo, 'aud_usuario' => auth()->user()?->name ?? 'sistema']);
+            return response()->json($acreedor->load('tipo:id,nombre'));
+        });
     }
 }

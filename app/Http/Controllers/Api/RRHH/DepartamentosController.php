@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\DB;
 
 class DepartamentosController extends Controller
 {
+    use \App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
+
     /**
      * Retorna el árbol de departamentos con jefe, empleados y sucursal.
      * GET /api/rrhh/admin/departamentos
@@ -30,64 +32,29 @@ class DepartamentosController extends Controller
         // Jefes
         $jefeIds = collect($depts)->pluck('jefe_empleado_id')->filter()->unique()->values()->all();
         $jefes = [];
-        $jefesInactivos = [];
         if (!empty($jefeIds)) {
-            $todosJefes = DB::connection('pgsql')
+            $jefes = DB::connection('pgsql')
                 ->table('empleados')
                 ->whereIn('id', $jefeIds)
-                ->select('id', 'nombres', 'apellidos', 'codigo', 'activo')
-                ->get();
-            foreach ($todosJefes as $j) {
-                if ($j->activo) {
-                    $jefes[$j->id] = $j;
-                } else {
-                    $jefesInactivos[$j->id] = true;
-                }
-            }
+                ->select('id', 'nombres', 'apellidos', 'codigo')
+                ->get()->keyBy('id')->toArray();
         }
 
         // Conteo de empleados por departamento
         $deptIds = collect($depts)->pluck('id')->all();
-        // IDs de todos los jefes de cualquier departamento (para excluirlos del preview/conteo)
-        $todosJefeIds = collect($depts)->pluck('jefe_empleado_id')->filter()->unique()->values()->all();
         $counts = [];
-        $preview = [];
         if (!empty($deptIds)) {
             $counts = DB::connection('pgsql')
                 ->table('empleados')
                 ->whereIn('departamento_id', $deptIds)
                 ->where('activo', true)
-                ->when(!empty($todosJefeIds), fn($q) => $q->whereNotIn('id', $todosJefeIds))
                 ->groupBy('departamento_id')
                 ->selectRaw('departamento_id, COUNT(*) as total')
                 ->get()->keyBy('departamento_id')->toArray();
-
-            // Preview: primeros 4 empleados por departamento, excluye a cualquier jefe de departamento
-            $allEmps = DB::connection('pgsql')
-                ->table('empleados')
-                ->whereIn('departamento_id', $deptIds)
-                ->where('activo', true)
-                ->when(!empty($todosJefeIds), fn($q) => $q->whereNotIn('id', $todosJefeIds))
-                ->select('id', 'nombres', 'apellidos', 'departamento_id')
-                ->orderBy('apellidos')
-                ->orderBy('nombres')
-                ->get();
-
-            foreach ($allEmps as $emp) {
-                $did = $emp->departamento_id;
-                if (!isset($preview[$did])) $preview[$did] = [];
-                if (count($preview[$did]) < 4) {
-                    $preview[$did][] = [
-                        'id'     => $emp->id,
-                        'nombre' => trim($emp->apellidos . ', ' . $emp->nombres),
-                        'inicial'=> mb_strtoupper(mb_substr(trim($emp->apellidos), 0, 1)),
-                    ];
-                }
-            }
         }
 
         // Enriquecer con jefe y conteo
-        $depts = collect($depts)->map(function ($d) use ($jefes, $jefesInactivos, $counts, $preview) {
+        $depts = collect($depts)->map(function ($d) use ($jefes, $counts) {
             $d = (array) $d;
             $jefe = $d['jefe_empleado_id'] ? ($jefes[$d['jefe_empleado_id']] ?? null) : null;
             $d['jefe_nombre'] = $jefe
@@ -97,14 +64,10 @@ class DepartamentosController extends Controller
             $d['jefe_codigo'] = $jefe
                 ? ($jefe instanceof \stdClass ? $jefe->codigo : $jefe['codigo'])
                 : null;
-            $d['jefe_inactivo'] = $d['jefe_empleado_id']
-                && !$jefe
-                && isset($jefesInactivos[$d['jefe_empleado_id']]);
             $countEntry = $counts[$d['id']] ?? null;
             $d['total_empleados'] = $countEntry
                 ? (int) ($countEntry instanceof \stdClass ? $countEntry->total : $countEntry['total'])
                 : 0;
-            $d['empleados_preview'] = $preview[$d['id']] ?? [];
             $d['children'] = [];
             return $d;
         })->all();
@@ -121,23 +84,25 @@ class DepartamentosController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'codigo'           => 'required|string|max:30|unique:pgsql.departamentos,codigo',
-            'nombre'           => 'required|string|max:150',
-            'descripcion'      => 'nullable|string',
-            'parent_id'        => 'nullable|integer|exists:pgsql.departamentos,id',
-            'sucursal_id'      => 'nullable|integer|exists:pgsql.sucursales,id',
-            'jefe_empleado_id' => 'nullable|integer|exists:pgsql.empleados,id',
-        ]);
+        return $this->captureAndRespond($request, function () use ($request) {
+            $validated = $request->validate([
+                'codigo'           => 'required|string|max:30|unique:pgsql.departamentos,codigo',
+                'nombre'           => 'required|string|max:150',
+                'descripcion'      => 'nullable|string',
+                'parent_id'        => 'nullable|integer|exists:pgsql.departamentos,id',
+                'sucursal_id'      => 'nullable|integer|exists:pgsql.sucursales,id',
+                'jefe_empleado_id' => 'nullable|integer|exists:pgsql.empleados,id',
+            ]);
 
-        $id = DB::connection('pgsql')->table('departamentos')->insertGetId(array_merge($validated, [
-            'activo'      => true,
-            'aud_usuario' => Auth::user()->email,
-            'created_at'  => now(),
-            'updated_at'  => now(),
-        ]));
+            $id = DB::connection('pgsql')->table('departamentos')->insertGetId(array_merge($validated, [
+                'activo'      => true,
+                'aud_usuario' => Auth::user()->email,
+                'created_at'  => now(),
+                'updated_at'  => now(),
+            ]));
 
-        return response()->json(['success' => true, 'data' => ['id' => $id] + $validated], 201);
+            return response()->json(['success' => true, 'data' => ['id' => $id] + $validated], 201);
+        });
     }
 
     /**
@@ -146,20 +111,22 @@ class DepartamentosController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
-        $validated = $request->validate([
-            'codigo'           => 'sometimes|string|max:30|unique:pgsql.departamentos,codigo,' . $id,
-            'nombre'           => 'sometimes|string|max:150',
-            'descripcion'      => 'nullable|string',
-            'parent_id'        => 'nullable|integer|exists:pgsql.departamentos,id',
-            'sucursal_id'      => 'nullable|integer|exists:pgsql.sucursales,id',
-            'jefe_empleado_id' => 'nullable|integer|exists:pgsql.empleados,id',
-        ]);
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $validated = $request->validate([
+                'codigo'           => 'sometimes|string|max:30|unique:pgsql.departamentos,codigo,' . $id,
+                'nombre'           => 'sometimes|string|max:150',
+                'descripcion'      => 'nullable|string',
+                'parent_id'        => 'nullable|integer|exists:pgsql.departamentos,id',
+                'sucursal_id'      => 'nullable|integer|exists:pgsql.sucursales,id',
+                'jefe_empleado_id' => 'nullable|integer|exists:pgsql.empleados,id',
+            ]);
 
-        DB::connection('pgsql')->table('departamentos')->where('id', $id)->update(
-            array_merge($validated, ['aud_usuario' => Auth::user()->email, 'updated_at' => now()])
-        );
+            DB::connection('pgsql')->table('departamentos')->where('id', $id)->update(
+                array_merge($validated, ['aud_usuario' => Auth::user()->email, 'updated_at' => now()])
+            );
 
-        return response()->json(['success' => true, 'message' => 'Departamento actualizado.']);
+            return response()->json(['success' => true, 'message' => 'Departamento actualizado.']);
+        });
     }
 
     /**
@@ -168,12 +135,14 @@ class DepartamentosController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
-        DB::connection('pgsql')->table('departamentos')->where('id', $id)->update([
-            'activo'     => false,
-            'updated_at' => now(),
-        ]);
+        return $this->captureAndRespond(request(), function () use ($id) {
+            DB::connection('pgsql')->table('departamentos')->where('id', $id)->update([
+                'activo'     => false,
+                'updated_at' => now(),
+            ]);
 
-        return response()->json(['success' => true, 'message' => 'Departamento eliminado.']);
+            return response()->json(['success' => true, 'message' => 'Departamento eliminado.']);
+        });
     }
 
     /**
@@ -184,8 +153,8 @@ class DepartamentosController extends Controller
     {
         $miembros = DB::connection('pgsql')
             ->table('empleados as e')
-            ->leftJoin('cargos as c', 'e.cargo_id', '=', 'c.id')
-            ->leftJoin('sucursales as s', 'e.sucursal_id', '=', 's.id')
+            ->join('cargos as c', 'e.cargo_id', '=', 'c.id')
+            ->join('sucursales as s', 'e.sucursal_id', '=', 's.id')
             ->where('e.departamento_id', $id)
             ->where('e.activo', true)
             ->select('e.id', 'e.codigo', 'e.nombres', 'e.apellidos',
@@ -223,12 +192,14 @@ class DepartamentosController extends Controller
      */
     public function asignarEmpleado(int $id, int $empId): JsonResponse
     {
-        DB::connection('pgsql')->table('empleados')->where('id', $empId)->update([
-            'departamento_id' => $id,
-            'updated_at'      => now(),
-        ]);
+        return $this->captureAndRespond(request(), function () use ($id, $empId) {
+            DB::connection('pgsql')->table('empleados')->where('id', $empId)->update([
+                'departamento_id' => $id,
+                'updated_at'      => now(),
+            ]);
 
-        return response()->json(['success' => true, 'message' => 'Empleado asignado al departamento.']);
+            return response()->json(['success' => true, 'message' => 'Empleado asignado al departamento.']);
+        });
     }
 
     /**
@@ -237,12 +208,14 @@ class DepartamentosController extends Controller
      */
     public function quitarEmpleado(int $id, int $empId): JsonResponse
     {
-        DB::connection('pgsql')->table('empleados')
-            ->where('id', $empId)
-            ->where('departamento_id', $id)
-            ->update(['departamento_id' => null, 'updated_at' => now()]);
+        return $this->captureAndRespond(request(), function () use ($id, $empId) {
+            DB::connection('pgsql')->table('empleados')
+                ->where('id', $empId)
+                ->where('departamento_id', $id)
+                ->update(['departamento_id' => null, 'updated_at' => now()]);
 
-        return response()->json(['success' => true, 'message' => 'Empleado removido del departamento.']);
+            return response()->json(['success' => true, 'message' => 'Empleado removido del departamento.']);
+        });
     }
 
     /**
@@ -251,12 +224,14 @@ class DepartamentosController extends Controller
      */
     public function asignarJefe(int $id, int $empId): JsonResponse
     {
-        DB::connection('pgsql')->table('departamentos')->where('id', $id)->update([
-            'jefe_empleado_id' => $empId,
-            'updated_at'       => now(),
-        ]);
+        return $this->captureAndRespond(request(), function () use ($id, $empId) {
+            DB::connection('pgsql')->table('departamentos')->where('id', $id)->update([
+                'jefe_empleado_id' => $empId,
+                'updated_at'       => now(),
+            ]);
 
-        return response()->json(['success' => true, 'message' => 'Jefe asignado al departamento.']);
+            return response()->json(['success' => true, 'message' => 'Jefe asignado al departamento.']);
+        });
     }
 
     /**
@@ -265,12 +240,14 @@ class DepartamentosController extends Controller
      */
     public function quitarJefe(int $id): JsonResponse
     {
-        DB::connection('pgsql')->table('departamentos')->where('id', $id)->update([
-            'jefe_empleado_id' => null,
-            'updated_at'       => now(),
-        ]);
+        return $this->captureAndRespond(request(), function () use ($id) {
+            DB::connection('pgsql')->table('departamentos')->where('id', $id)->update([
+                'jefe_empleado_id' => null,
+                'updated_at'       => now(),
+            ]);
 
-        return response()->json(['success' => true, 'message' => 'Jefe removido.']);
+            return response()->json(['success' => true, 'message' => 'Jefe removido.']);
+        });
     }
 
     // ─── Helpers ───────────────────────────────────────────────────────────────

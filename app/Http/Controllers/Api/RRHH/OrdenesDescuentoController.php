@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Storage;
 
 class OrdenesDescuentoController extends Controller
 {
+    use \App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
+
     private function baseQuery()
     {
         return OrdenDescuento::with([
@@ -55,41 +57,45 @@ class OrdenesDescuentoController extends Controller
 
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'empleado_id' => 'required|exists:pgsql.empleados,id',
-            'acreedor_id' => 'required|exists:pgsql.acreedores,id',
-            'estado_id'   => 'required|exists:pgsql.estados_orden_descuento,id',
-            'monto_q1'    => 'required|numeric|min:0',
-            'monto_q2'    => 'required|numeric|min:0',
-            'referencia'  => 'nullable|string|max:100',
-            'fecha_inicio'=> 'required|date',
-            'fecha_fin'   => 'nullable|date|after_or_equal:fecha_inicio',
-            'notas'       => 'nullable|string',
-        ]);
-        $this->validarMontos($data);
-        $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
-        $orden = OrdenDescuento::create($data);
-        return response()->json($this->baseQuery()->find($orden->id), 201);
+        return $this->captureAndRespond($request, function () use ($request) {
+            $data = $request->validate([
+                'empleado_id' => 'required|exists:pgsql.empleados,id',
+                'acreedor_id' => 'required|exists:pgsql.acreedores,id',
+                'estado_id'   => 'required|exists:pgsql.estados_orden_descuento,id',
+                'monto_q1'    => 'required|numeric|min:0',
+                'monto_q2'    => 'required|numeric|min:0',
+                'referencia'  => 'nullable|string|max:100',
+                'fecha_inicio'=> 'required|date',
+                'fecha_fin'   => 'nullable|date|after_or_equal:fecha_inicio',
+                'notas'       => 'nullable|string',
+            ]);
+            $this->validarMontos($data);
+            $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
+            $orden = OrdenDescuento::create($data);
+            return response()->json($this->baseQuery()->find($orden->id), 201);
+        });
     }
 
     public function update(Request $request, int $id)
     {
-        $orden = OrdenDescuento::findOrFail($id);
-        $data  = $request->validate([
-            'empleado_id' => 'required|exists:pgsql.empleados,id',
-            'acreedor_id' => 'required|exists:pgsql.acreedores,id',
-            'estado_id'   => 'required|exists:pgsql.estados_orden_descuento,id',
-            'monto_q1'    => 'required|numeric|min:0',
-            'monto_q2'    => 'required|numeric|min:0',
-            'referencia'  => 'nullable|string|max:100',
-            'fecha_inicio'=> 'required|date',
-            'fecha_fin'   => 'nullable|date|after_or_equal:fecha_inicio',
-            'notas'       => 'nullable|string',
-        ]);
-        $this->validarMontos($data);
-        $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
-        $orden->update($data);
-        return response()->json($this->baseQuery()->find($orden->id));
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $orden = OrdenDescuento::findOrFail($id);
+            $data  = $request->validate([
+                'empleado_id' => 'required|exists:pgsql.empleados,id',
+                'acreedor_id' => 'required|exists:pgsql.acreedores,id',
+                'estado_id'   => 'required|exists:pgsql.estados_orden_descuento,id',
+                'monto_q1'    => 'required|numeric|min:0',
+                'monto_q2'    => 'required|numeric|min:0',
+                'referencia'  => 'nullable|string|max:100',
+                'fecha_inicio'=> 'required|date',
+                'fecha_fin'   => 'nullable|date|after_or_equal:fecha_inicio',
+                'notas'       => 'nullable|string',
+            ]);
+            $this->validarMontos($data);
+            $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
+            $orden->update($data);
+            return response()->json($this->baseQuery()->find($orden->id));
+        });
     }
 
     private function validarMontos(array $data): void
@@ -101,33 +107,37 @@ class OrdenesDescuentoController extends Controller
 
     public function cambiarEstado(Request $request, int $id)
     {
-        $orden = OrdenDescuento::findOrFail($id);
-        $data  = $request->validate(['estado_id' => 'required|exists:pgsql.estados_orden_descuento,id']);
-        $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
-        $orden->update($data);
-        return response()->json($this->baseQuery()->find($orden->id));
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $orden = OrdenDescuento::findOrFail($id);
+            $data  = $request->validate(['estado_id' => 'required|exists:pgsql.estados_orden_descuento,id']);
+            $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
+            $orden->update($data);
+            return response()->json($this->baseQuery()->find($orden->id));
+        });
     }
 
     // ── Subir documento original ──────────────────────────────────────────────
     public function subirDocumento(Request $request, int $id)
     {
-        $orden = OrdenDescuento::findOrFail($id);
-        $request->validate(['documento' => 'required|file|mimes:pdf,jpg,jpeg,png|max:20480']);
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $orden = OrdenDescuento::findOrFail($id);
+            $request->validate(['documento' => 'required|file|mimes:pdf,jpg,jpeg,png|max:20480']);
 
-        if ($orden->documento_path) {
-            Storage::disk('local')->delete($orden->documento_path);
-        }
+            if ($orden->documento_path) {
+                Storage::disk('local')->delete($orden->documento_path);
+            }
 
-        $file = $request->file('documento');
-        $path = $file->store("rrhh/descuentos/{$id}", 'local');
+            $file = $request->file('documento');
+            $path = $file->store("rrhh/descuentos/{$id}", 'local');
 
-        $orden->update([
-            'documento_path'   => $path,
-            'documento_nombre' => $file->getClientOriginalName(),
-            'aud_usuario'      => auth()->user()?->name ?? 'sistema',
-        ]);
+            $orden->update([
+                'documento_path'   => $path,
+                'documento_nombre' => $file->getClientOriginalName(),
+                'aud_usuario'      => auth()->user()?->name ?? 'sistema',
+            ]);
 
-        return response()->json($this->baseQuery()->find($orden->id));
+            return response()->json($this->baseQuery()->find($orden->id));
+        });
     }
 
     // ── Descargar documento original ──────────────────────────────────────────
@@ -144,35 +154,37 @@ class OrdenesDescuentoController extends Controller
     // ── Registrar finiquito ───────────────────────────────────────────────────
     public function finiquitar(Request $request, int $id)
     {
-        $orden = OrdenDescuento::findOrFail($id);
-        $request->validate([
-            'fecha_finiquito'     => 'required|date',
-            'documento_finiquito' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:20480',
-        ]);
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $orden = OrdenDescuento::findOrFail($id);
+            $request->validate([
+                'fecha_finiquito'     => 'required|date',
+                'documento_finiquito' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:20480',
+            ]);
 
-        $update = [
-            'fecha_finiquito'   => $request->fecha_finiquito,
-            'finiquito_usuario' => auth()->user()?->name ?? 'sistema',
-            'aud_usuario'       => auth()->user()?->name ?? 'sistema',
-        ];
+            $update = [
+                'fecha_finiquito'   => $request->fecha_finiquito,
+                'finiquito_usuario' => auth()->user()?->name ?? 'sistema',
+                'aud_usuario'       => auth()->user()?->name ?? 'sistema',
+            ];
 
-        if ($request->hasFile('documento_finiquito')) {
-            if ($orden->documento_finiquito_path) {
-                Storage::disk('local')->delete($orden->documento_finiquito_path);
+            if ($request->hasFile('documento_finiquito')) {
+                if ($orden->documento_finiquito_path) {
+                    Storage::disk('local')->delete($orden->documento_finiquito_path);
+                }
+                $file  = $request->file('documento_finiquito');
+                $path  = $file->store("rrhh/descuentos/{$id}/finiquito", 'local');
+                $update['documento_finiquito_path']   = $path;
+                $update['documento_finiquito_nombre'] = $file->getClientOriginalName();
             }
-            $file  = $request->file('documento_finiquito');
-            $path  = $file->store("rrhh/descuentos/{$id}/finiquito", 'local');
-            $update['documento_finiquito_path']   = $path;
-            $update['documento_finiquito_nombre'] = $file->getClientOriginalName();
-        }
 
-        $estadoFiniquitada = EstadoOrdenDescuento::where('nombre', 'Finiquitada')->first();
-        if ($estadoFiniquitada) {
-            $update['estado_id'] = $estadoFiniquitada->id;
-        }
+            $estadoFiniquitada = EstadoOrdenDescuento::where('nombre', 'Finiquitada')->first();
+            if ($estadoFiniquitada) {
+                $update['estado_id'] = $estadoFiniquitada->id;
+            }
 
-        $orden->update($update);
-        return response()->json($this->baseQuery()->find($orden->id));
+            $orden->update($update);
+            return response()->json($this->baseQuery()->find($orden->id));
+        });
     }
 
     // ── Descargar documento finiquito ─────────────────────────────────────────

@@ -50,72 +50,74 @@ class IngresoPersonalController extends RRHHBaseController
      */
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'empleado_id'   => 'required|integer',
-            'fecha_ingreso' => 'required|date',
-            'observaciones' => 'nullable|string|max:1000',
-        ]);
+        return $this->captureAndRespond($request, function () use ($request) {
+            $validated = $request->validate([
+                'empleado_id'   => 'required|integer',
+                'fecha_ingreso' => 'required|date',
+                'observaciones' => 'nullable|string|max:1000',
+            ]);
 
-        if (!$this->puedeGestionar($validated['empleado_id'])) {
-            return response()->json(['success' => false, 'message' => 'El empleado no pertenece a tu equipo.'], 403);
-        }
+            if (!$this->puedeGestionar($validated['empleado_id'])) {
+                return response()->json(['success' => false, 'message' => 'El empleado no pertenece a tu equipo.'], 403);
+            }
 
-        $existe = IngresoPersonal::where('empleado_id', $validated['empleado_id'])
-            ->where('fecha_ingreso', $validated['fecha_ingreso'])
-            ->exists();
+            $existe = IngresoPersonal::where('empleado_id', $validated['empleado_id'])
+                ->where('fecha_ingreso', $validated['fecha_ingreso'])
+                ->exists();
 
-        if ($existe) {
-            return response()->json(['success' => false, 'message' => 'Ya existe un registro de ingreso para este empleado en esa fecha.'], 422);
-        }
+            if ($existe) {
+                return response()->json(['success' => false, 'message' => 'Ya existe un registro de ingreso para este empleado en esa fecha.'], 422);
+            }
 
-        $enriched       = $this->enrichWithEmpleadoData([['empleado_id' => $validated['empleado_id']]]);
-        $empleadoNombre = $enriched[0]['empleado_nombre'] ?? "Empleado #{$validated['empleado_id']}";
-        $cargoNombre    = $enriched[0]['cargo_nombre']    ?? null;
-        $sucursalNombre = $enriched[0]['sucursal_nombre'] ?? null;
+            $enriched       = $this->enrichWithEmpleadoData([['empleado_id' => $validated['empleado_id']]]);
+            $empleadoNombre = $enriched[0]['empleado_nombre'] ?? "Empleado #{$validated['empleado_id']}";
+            $cargoNombre    = $enriched[0]['cargo_nombre']    ?? null;
+            $sucursalNombre = $enriched[0]['sucursal_nombre'] ?? null;
 
-        $ingreso = IngresoPersonal::create([
-            'empleado_id'      => $validated['empleado_id'],
-            'registrado_por_id'=> Auth::id(),
-            'empleado_nombre'  => $empleadoNombre,
-            'cargo_nombre'     => $cargoNombre,
-            'sucursal_nombre'  => $sucursalNombre,
-            'fecha_ingreso'    => $validated['fecha_ingreso'],
-            'confirmacion'     => 'pendiente',
-            'observaciones'    => $validated['observaciones'] ?? null,
-            'aud_usuario'      => Auth::user()->email,
-        ]);
+            $ingreso = IngresoPersonal::create([
+                'empleado_id'      => $validated['empleado_id'],
+                'registrado_por_id'=> Auth::id(),
+                'empleado_nombre'  => $empleadoNombre,
+                'cargo_nombre'     => $cargoNombre,
+                'sucursal_nombre'  => $sucursalNombre,
+                'fecha_ingreso'    => $validated['fecha_ingreso'],
+                'confirmacion'     => 'pendiente',
+                'observaciones'    => $validated['observaciones'] ?? null,
+                'aud_usuario'      => Auth::user()->email,
+            ]);
 
-        $fechaInicio = \Carbon\Carbon::parse($validated['fecha_ingreso']);
-        PeriodoPrueba::create([
-            'ingreso_id'        => $ingreso->id,
-            'empleado_id'       => $validated['empleado_id'],
-            'fecha_inicio'      => $fechaInicio,
-            'fecha_fin_estimada'=> $fechaInicio->copy()->addDays(PeriodoPrueba::DIAS_DEFAULT),
-            'responsable_id'    => Auth::id(),
-            'estado'            => 'en_prueba',
-            'aud_usuario'       => Auth::user()->email,
-        ]);
+            $fechaInicio = \Carbon\Carbon::parse($validated['fecha_ingreso']);
+            PeriodoPrueba::create([
+                'ingreso_id'        => $ingreso->id,
+                'empleado_id'       => $validated['empleado_id'],
+                'fecha_inicio'      => $fechaInicio,
+                'fecha_fin_estimada'=> $fechaInicio->copy()->addDays(PeriodoPrueba::DIAS_DEFAULT),
+                'responsable_id'    => Auth::id(),
+                'estado'            => 'en_prueba',
+                'aud_usuario'       => Auth::user()->email,
+            ]);
 
-        $ingreso->load('periodoPrueba');
+            $ingreso->load('periodoPrueba');
 
-        try {
-            $this->notificarAdminsRrhh(
-                tipo:           'Nuevo Ingreso de Personal',
-                empleadoNombre: $empleadoNombre,
-                detalles: array_filter([
-                    'Cargo'                   => $cargoNombre,
-                    'Sucursal'                => $sucursalNombre,
-                    'Fecha de ingreso'        => $validated['fecha_ingreso'],
-                    'Período de prueba hasta' => $fechaInicio->copy()->addDays(PeriodoPrueba::DIAS_DEFAULT)->toDateString(),
-                ]),
-                rutaFrontend: 'ingresos-personal',
-            );
-            $ingreso->update(['notificado_admin_en' => now()]);
-        } catch (\Throwable $e) {
-            Log::warning('IngresoPersonal: error notificando admins', ['error' => $e->getMessage()]);
-        }
+            try {
+                $this->notificarAdminsRrhh(
+                    tipo:           'Nuevo Ingreso de Personal',
+                    empleadoNombre: $empleadoNombre,
+                    detalles: array_filter([
+                        'Cargo'                   => $cargoNombre,
+                        'Sucursal'                => $sucursalNombre,
+                        'Fecha de ingreso'        => $validated['fecha_ingreso'],
+                        'Período de prueba hasta' => $fechaInicio->copy()->addDays(PeriodoPrueba::DIAS_DEFAULT)->toDateString(),
+                    ]),
+                    rutaFrontend: 'ingresos-personal',
+                );
+                $ingreso->update(['notificado_admin_en' => now()]);
+            } catch (\Throwable $e) {
+                Log::warning('IngresoPersonal: error notificando admins', ['error' => $e->getMessage()]);
+            }
 
-        return response()->json(['success' => true, 'data' => $ingreso], 201);
+            return response()->json(['success' => true, 'data' => $ingreso], 201);
+        });
     }
 
     /**
@@ -132,13 +134,15 @@ class IngresoPersonalController extends RRHHBaseController
      */
     public function destroy(int $id): JsonResponse
     {
-        if (!$this->esAdminRrhh()) {
-            return response()->json(['success' => false, 'message' => 'Solo el administrador de RRHH puede eliminar registros de ingreso.'], 403);
-        }
+        return $this->captureAndRespond(request(), function () use ($id) {
+            if (!$this->esAdminRrhh()) {
+                return response()->json(['success' => false, 'message' => 'Solo el administrador de RRHH puede eliminar registros de ingreso.'], 403);
+            }
 
-        IngresoPersonal::findOrFail($id)->delete();
+            IngresoPersonal::findOrFail($id)->delete();
 
-        return response()->json(['success' => true, 'message' => 'Registro de ingreso eliminado.']);
+            return response()->json(['success' => true, 'message' => 'Registro de ingreso eliminado.']);
+        });
     }
 
     /**
@@ -148,65 +152,67 @@ class IngresoPersonalController extends RRHHBaseController
      */
     public function confirmar(Request $request, int $id): JsonResponse
     {
-        $ingreso = IngresoPersonal::with('periodoPrueba')->findOrFail($id);
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $ingreso = IngresoPersonal::with('periodoPrueba')->findOrFail($id);
 
-        $validated = $request->validate([
-            'confirmacion'       => 'required|in:se_presento,no_show,reprogramado',
-            'nueva_fecha_ingreso'=> 'required_if:confirmacion,reprogramado|nullable|date|after:today',
-            'observaciones'      => 'nullable|string|max:1000',
-        ]);
+            $validated = $request->validate([
+                'confirmacion'       => 'required|in:se_presento,no_show,reprogramado',
+                'nueva_fecha_ingreso'=> 'required_if:confirmacion,reprogramado|nullable|date|after:today',
+                'observaciones'      => 'nullable|string|max:1000',
+            ]);
 
-        $ingreso->update([
-            'confirmacion'       => $validated['confirmacion'],
-            'confirmado_en'      => now(),
-            'confirmado_por_id'  => Auth::id(),
-            'nueva_fecha_ingreso'=> $validated['nueva_fecha_ingreso'] ?? null,
-            'observaciones'      => $validated['observaciones'] ?? $ingreso->observaciones,
-            'aud_usuario'        => Auth::user()->email,
-        ]);
-
-        // No Show → notificar a admins RRHH
-        if ($validated['confirmacion'] === 'no_show') {
-            try {
-                $this->notificarAdminsRrhh(
-                    tipo:           'No Show — Primer Dia',
-                    empleadoNombre: $ingreso->empleado_nombre,
-                    detalles: array_filter([
-                        'Cargo'          => $ingreso->cargo_nombre,
-                        'Sucursal'       => $ingreso->sucursal_nombre,
-                        'Fecha esperada' => $ingreso->fecha_ingreso?->toDateString(),
-                        'Observaciones'  => $validated['observaciones'] ?? null,
-                    ]),
-                    rutaFrontend: "ingresos-personal?ver={$ingreso->id}",
-                );
-            } catch (\Throwable $e) {
-                Log::warning('IngresoPersonal: error notificando No Show', ['error' => $e->getMessage()]);
-            }
-        }
-
-        // Reprogramado → actualizar período de prueba
-        if ($validated['confirmacion'] === 'reprogramado' && !empty($validated['nueva_fecha_ingreso'])) {
-            $nuevaFecha = \Carbon\Carbon::parse($validated['nueva_fecha_ingreso']);
-            $ingreso->periodoPrueba?->update([
-                'fecha_inicio'       => $nuevaFecha,
-                'fecha_fin_estimada' => $nuevaFecha->copy()->addDays(PeriodoPrueba::DIAS_DEFAULT),
+            $ingreso->update([
+                'confirmacion'       => $validated['confirmacion'],
+                'confirmado_en'      => now(),
+                'confirmado_por_id'  => Auth::id(),
+                'nueva_fecha_ingreso'=> $validated['nueva_fecha_ingreso'] ?? null,
+                'observaciones'      => $validated['observaciones'] ?? $ingreso->observaciones,
                 'aud_usuario'        => Auth::user()->email,
             ]);
-        }
 
-        // Se presentó → generar contrato por servicio profesional automáticamente
-        $contratoPS = null;
-        if ($validated['confirmacion'] === 'se_presento') {
-            $contratoPS = $this->autoGenerarContratoPS($ingreso);
-        }
+            // No Show → notificar a admins RRHH
+            if ($validated['confirmacion'] === 'no_show') {
+                try {
+                    $this->notificarAdminsRrhh(
+                        tipo:           'No Show — Primer Dia',
+                        empleadoNombre: $ingreso->empleado_nombre,
+                        detalles: array_filter([
+                            'Cargo'          => $ingreso->cargo_nombre,
+                            'Sucursal'       => $ingreso->sucursal_nombre,
+                            'Fecha esperada' => $ingreso->fecha_ingreso?->toDateString(),
+                            'Observaciones'  => $validated['observaciones'] ?? null,
+                        ]),
+                        rutaFrontend: "ingresos-personal?ver={$ingreso->id}",
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('IngresoPersonal: error notificando No Show', ['error' => $e->getMessage()]);
+                }
+            }
 
-        $ingreso->load('periodoPrueba');
+            // Reprogramado → actualizar período de prueba
+            if ($validated['confirmacion'] === 'reprogramado' && !empty($validated['nueva_fecha_ingreso'])) {
+                $nuevaFecha = \Carbon\Carbon::parse($validated['nueva_fecha_ingreso']);
+                $ingreso->periodoPrueba?->update([
+                    'fecha_inicio'       => $nuevaFecha,
+                    'fecha_fin_estimada' => $nuevaFecha->copy()->addDays(PeriodoPrueba::DIAS_DEFAULT),
+                    'aud_usuario'        => Auth::user()->email,
+                ]);
+            }
 
-        return response()->json([
-            'success'    => true,
-            'data'       => $ingreso,
-            'contrato_ps'=> $contratoPS,
-        ]);
+            // Se presentó → generar contrato por servicio profesional automáticamente
+            $contratoPS = null;
+            if ($validated['confirmacion'] === 'se_presento') {
+                $contratoPS = $this->autoGenerarContratoPS($ingreso);
+            }
+
+            $ingreso->load('periodoPrueba');
+
+            return response()->json([
+                'success'    => true,
+                'data'       => $ingreso,
+                'contrato_ps'=> $contratoPS,
+            ]);
+        });
     }
 
     /**
@@ -216,106 +222,108 @@ class IngresoPersonalController extends RRHHBaseController
      */
     public function actualizarPeriodoPrueba(Request $request, int $id): JsonResponse
     {
-        $ingreso = IngresoPersonal::with('periodoPrueba')->findOrFail($id);
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $ingreso = IngresoPersonal::with('periodoPrueba')->findOrFail($id);
 
-        if (!$ingreso->periodoPrueba) {
-            return response()->json(['success' => false, 'message' => 'Este ingreso no tiene período de prueba registrado.'], 404);
-        }
-
-        $validated = $request->validate([
-            'estado'                => 'required|in:' . implode(',', PeriodoPrueba::ESTADOS),
-            'comentarios'           => 'nullable|string|max:2000',
-            'responsable_id'        => 'nullable|integer',
-            'puntaje_evaluacion'    => 'nullable|numeric|min:0|max:10',
-            'respuestas_evaluacion' => 'nullable|array',
-        ]);
-
-        // Validar que si quiere contratar, el puntaje sea >= 7
-        if ($validated['estado'] === 'aprobado') {
-            $puntaje = $validated['puntaje_evaluacion'] ?? null;
-            if ($puntaje === null || $puntaje < 7) {
-                return response()->json([
-                    'success' => false,
-                    'message' => "El puntaje de evaluación debe ser 7 o mayor para aprobar la contratación. Puntaje actual: {$puntaje}/10.",
-                ], 422);
+            if (!$ingreso->periodoPrueba) {
+                return response()->json(['success' => false, 'message' => 'Este ingreso no tiene período de prueba registrado.'], 404);
             }
-        }
 
-        $periodo = $ingreso->periodoPrueba;
-        $periodo->update([
-            'estado'                => $validated['estado'],
-            'comentarios'           => $validated['comentarios'] ?? $periodo->comentarios,
-            'responsable_id'        => $validated['responsable_id'] ?? $periodo->responsable_id,
-            'puntaje_evaluacion'    => $validated['puntaje_evaluacion'] ?? $periodo->puntaje_evaluacion,
-            'respuestas_evaluacion' => $validated['respuestas_evaluacion'] ?? $periodo->respuestas_evaluacion,
-            'evaluado_en'           => in_array($validated['estado'], ['aprobado', 'no_aprobado']) ? now() : $periodo->evaluado_en,
-            'evaluado_por_id'       => in_array($validated['estado'], ['aprobado', 'no_aprobado']) ? Auth::id() : $periodo->evaluado_por_id,
-            'aud_usuario'           => Auth::user()->email,
-        ]);
+            $validated = $request->validate([
+                'estado'                => 'required|in:' . implode(',', PeriodoPrueba::ESTADOS),
+                'comentarios'           => 'nullable|string|max:2000',
+                'responsable_id'        => 'nullable|integer',
+                'puntaje_evaluacion'    => 'nullable|numeric|min:0|max:10',
+                'respuestas_evaluacion' => 'nullable|array',
+            ]);
 
-        // AP → notificar a admins RRHH (sin notificar al empleado)
-        if (in_array($validated['estado'], ['aprobado', 'no_aprobado'])) {
-            try {
-                $tipoAP  = $validated['estado'] === 'aprobado'
-                    ? 'AP de Contratacion — Contrato Indefinido'
-                    : 'AP de No Contratacion — Fin de Periodo de Prueba';
-                $accion  = $validated['estado'] === 'aprobado'
-                    ? "Período aprobado (puntaje {$validated['puntaje_evaluacion']}/10). Proceder con la emisión del contrato indefinido."
-                    : "Período no aprobado. Proceder con la notificación formal al colaborador.";
-
-                $this->notificarAdminsRrhh(
-                    tipo:           $tipoAP,
-                    empleadoNombre: $ingreso->empleado_nombre,
-                    detalles: array_filter([
-                        'Cargo'          => $ingreso->cargo_nombre,
-                        'Sucursal'       => $ingreso->sucursal_nombre,
-                        'Puntaje'        => ($validated['puntaje_evaluacion'] ?? '—') . '/10',
-                        'Fin de periodo' => $periodo->fecha_fin_estimada?->toDateString(),
-                        'Comentarios'    => $validated['comentarios'] ?? null,
-                        'Acción'         => $accion,
-                    ]),
-                    rutaFrontend: "ingresos-personal?ver={$ingreso->id}",
-                );
-            } catch (\Throwable $e) {
-                Log::warning('IngresoPersonal: error notificando AP contratación', ['error' => $e->getMessage()]);
+            // Validar que si quiere contratar, el puntaje sea >= 7
+            if ($validated['estado'] === 'aprobado') {
+                $puntaje = $validated['puntaje_evaluacion'] ?? null;
+                if ($puntaje === null || $puntaje < 7) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "El puntaje de evaluación debe ser 7 o mayor para aprobar la contratación. Puntaje actual: {$puntaje}/10.",
+                    ], 422);
+                }
             }
-        }
 
-        // Renuncia / Desvinculado → notificar a admins RRHH (proceso interno)
-        if (in_array($validated['estado'], ['renuncia', 'desvinculado'])) {
-            try {
-                $labels = [
-                    'renuncia'     => 'Periodo de Prueba — Renuncia',
-                    'desvinculado' => 'Periodo de Prueba — Desvinculacion',
-                ];
-                $this->notificarAdminsRrhh(
-                    tipo:           $labels[$validated['estado']],
-                    empleadoNombre: $ingreso->empleado_nombre,
-                    detalles: array_filter([
-                        'Cargo'        => $ingreso->cargo_nombre,
-                        'Sucursal'     => $ingreso->sucursal_nombre,
-                        'Comentarios'  => $validated['comentarios'] ?? null,
-                    ]),
-                    rutaFrontend: "ingresos-personal?ver={$ingreso->id}",
-                );
-            } catch (\Throwable $e) {
-                Log::warning('IngresoPersonal: error notificando renuncia/desvinculación período', ['error' => $e->getMessage()]);
+            $periodo = $ingreso->periodoPrueba;
+            $periodo->update([
+                'estado'                => $validated['estado'],
+                'comentarios'           => $validated['comentarios'] ?? $periodo->comentarios,
+                'responsable_id'        => $validated['responsable_id'] ?? $periodo->responsable_id,
+                'puntaje_evaluacion'    => $validated['puntaje_evaluacion'] ?? $periodo->puntaje_evaluacion,
+                'respuestas_evaluacion' => $validated['respuestas_evaluacion'] ?? $periodo->respuestas_evaluacion,
+                'evaluado_en'           => in_array($validated['estado'], ['aprobado', 'no_aprobado']) ? now() : $periodo->evaluado_en,
+                'evaluado_por_id'       => in_array($validated['estado'], ['aprobado', 'no_aprobado']) ? Auth::id() : $periodo->evaluado_por_id,
+                'aud_usuario'           => Auth::user()->email,
+            ]);
+
+            // AP → notificar a admins RRHH (sin notificar al empleado)
+            if (in_array($validated['estado'], ['aprobado', 'no_aprobado'])) {
+                try {
+                    $tipoAP  = $validated['estado'] === 'aprobado'
+                        ? 'AP de Contratacion — Contrato Indefinido'
+                        : 'AP de No Contratacion — Fin de Periodo de Prueba';
+                    $accion  = $validated['estado'] === 'aprobado'
+                        ? "Período aprobado (puntaje {$validated['puntaje_evaluacion']}/10). Proceder con la emisión del contrato indefinido."
+                        : "Período no aprobado. Proceder con la notificación formal al colaborador.";
+
+                    $this->notificarAdminsRrhh(
+                        tipo:           $tipoAP,
+                        empleadoNombre: $ingreso->empleado_nombre,
+                        detalles: array_filter([
+                            'Cargo'          => $ingreso->cargo_nombre,
+                            'Sucursal'       => $ingreso->sucursal_nombre,
+                            'Puntaje'        => ($validated['puntaje_evaluacion'] ?? '—') . '/10',
+                            'Fin de periodo' => $periodo->fecha_fin_estimada?->toDateString(),
+                            'Comentarios'    => $validated['comentarios'] ?? null,
+                            'Acción'         => $accion,
+                        ]),
+                        rutaFrontend: "ingresos-personal?ver={$ingreso->id}",
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('IngresoPersonal: error notificando AP contratación', ['error' => $e->getMessage()]);
+                }
             }
-        }
 
-        // Aprobado → generar contrato indefinido automáticamente
-        $contratoIndefinido = null;
-        if ($validated['estado'] === 'aprobado') {
-            $contratoIndefinido = $this->autoGenerarContratoIndefinido($ingreso);
-        }
+            // Renuncia / Desvinculado → notificar a admins RRHH (proceso interno)
+            if (in_array($validated['estado'], ['renuncia', 'desvinculado'])) {
+                try {
+                    $labels = [
+                        'renuncia'     => 'Periodo de Prueba — Renuncia',
+                        'desvinculado' => 'Periodo de Prueba — Desvinculacion',
+                    ];
+                    $this->notificarAdminsRrhh(
+                        tipo:           $labels[$validated['estado']],
+                        empleadoNombre: $ingreso->empleado_nombre,
+                        detalles: array_filter([
+                            'Cargo'        => $ingreso->cargo_nombre,
+                            'Sucursal'     => $ingreso->sucursal_nombre,
+                            'Comentarios'  => $validated['comentarios'] ?? null,
+                        ]),
+                        rutaFrontend: "ingresos-personal?ver={$ingreso->id}",
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('IngresoPersonal: error notificando renuncia/desvinculación período', ['error' => $e->getMessage()]);
+                }
+            }
 
-        $ingreso->load('periodoPrueba');
+            // Aprobado → generar contrato indefinido automáticamente
+            $contratoIndefinido = null;
+            if ($validated['estado'] === 'aprobado') {
+                $contratoIndefinido = $this->autoGenerarContratoIndefinido($ingreso);
+            }
 
-        return response()->json([
-            'success'             => true,
-            'data'                => $ingreso,
-            'contrato_indefinido' => $contratoIndefinido,
-        ]);
+            $ingreso->load('periodoPrueba');
+
+            return response()->json([
+                'success'             => true,
+                'data'                => $ingreso,
+                'contrato_indefinido' => $contratoIndefinido,
+            ]);
+        });
     }
 
     // ── Helpers de contratos automáticos ────────────────────────────────────────

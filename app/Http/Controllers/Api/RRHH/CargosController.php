@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\DB;
 
 class CargosController extends Controller
 {
+    use \App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
+
     public function index(Request $request)
     {
         $dptoId = $request->filled('departamento_id') ? (int) $request->departamento_id : null;
@@ -67,33 +69,37 @@ class CargosController extends Controller
 
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'codigo' => 'required|string|max:30|unique:pgsql.cargos,codigo',
-            'nombre' => 'required|string|max:120',
-            'activo' => 'boolean',
-        ]);
+        return $this->captureAndRespond($request, function () use ($request) {
+            $data = $request->validate([
+                'codigo' => 'required|string|max:30|unique:pgsql.cargos,codigo',
+                'nombre' => 'required|string|max:120',
+                'activo' => 'boolean',
+            ]);
 
-        $data['nombre']      = $this->normalizarNombre($data['nombre']);
-        $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
-        $cargo = Cargo::create($data);
+            $data['nombre']      = $this->normalizarNombre($data['nombre']);
+            $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
+            $cargo = Cargo::create($data);
 
-        return response()->json($cargo, 201);
+            return response()->json($cargo, 201);
+        });
     }
 
     public function update(Request $request, int $id)
     {
-        $cargo = Cargo::findOrFail($id);
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $cargo = Cargo::findOrFail($id);
 
-        $data = $request->validate([
-            'codigo' => 'required|string|max:30|unique:pgsql.cargos,codigo,' . $id,
-            'nombre' => 'required|string|max:120',
-        ]);
+            $data = $request->validate([
+                'codigo' => 'required|string|max:30|unique:pgsql.cargos,codigo,' . $id,
+                'nombre' => 'required|string|max:120',
+            ]);
 
-        $data['nombre']      = $this->normalizarNombre($data['nombre']);
-        $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
-        $cargo->update($data);
+            $data['nombre']      = $this->normalizarNombre($data['nombre']);
+            $data['aud_usuario'] = auth()->user()?->name ?? 'sistema';
+            $cargo->update($data);
 
-        return response()->json($cargo);
+            return response()->json($cargo);
+        });
     }
 
     public function headcount(int $id)
@@ -133,22 +139,24 @@ class CargosController extends Controller
 
     public function updateHeadcount(Request $request, int $id)
     {
-        Cargo::findOrFail($id);
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            Cargo::findOrFail($id);
 
-        $data = $request->validate([
-            'items'                   => 'required|array',
-            'items.*.departamento_id' => 'required|integer|exists:pgsql.departamentos,id',
-            'items.*.cantidad'        => 'required|integer|min:0',
-        ]);
+            $data = $request->validate([
+                'items'                   => 'required|array',
+                'items.*.departamento_id' => 'required|integer|exists:pgsql.departamentos,id',
+                'items.*.cantidad'        => 'required|integer|min:0',
+            ]);
 
-        foreach ($data['items'] as $item) {
-            CargoPlazaAutorizada::updateOrCreate(
-                ['cargo_id' => $id, 'departamento_id' => $item['departamento_id']],
-                ['cantidad' => $item['cantidad']]
-            );
-        }
+            foreach ($data['items'] as $item) {
+                CargoPlazaAutorizada::updateOrCreate(
+                    ['cargo_id' => $id, 'departamento_id' => $item['departamento_id']],
+                    ['cantidad' => $item['cantidad']]
+                );
+            }
 
-        return response()->json(['ok' => true]);
+            return response()->json(['ok' => true]);
+        });
     }
 
     private function normalizarNombre(string $nombre): string
@@ -168,23 +176,25 @@ class CargosController extends Controller
 
     public function toggleActivo(int $id)
     {
-        $cargo = Cargo::findOrFail($id);
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $cargo = Cargo::findOrFail($id);
 
-        // No se puede inactivar si tiene plazas activas
-        if ($cargo->activo) {
-            $plazasActivas = $cargo->plazas()->where('activo', true)->count();
-            if ($plazasActivas > 0) {
-                return response()->json([
-                    'message' => "No se puede inactivar: el puesto tiene {$plazasActivas} plaza(s) activa(s).",
-                ], 422);
+            // No se puede inactivar si tiene plazas activas
+            if ($cargo->activo) {
+                $plazasActivas = $cargo->plazas()->where('activo', true)->count();
+                if ($plazasActivas > 0) {
+                    return response()->json([
+                        'message' => "No se puede inactivar: el puesto tiene {$plazasActivas} plaza(s) activa(s).",
+                    ], 422);
+                }
             }
-        }
 
-        $cargo->update([
-            'activo'       => !$cargo->activo,
-            'aud_usuario'  => auth()->user()?->name ?? 'sistema',
-        ]);
+            $cargo->update([
+                'activo'       => !$cargo->activo,
+                'aud_usuario'  => auth()->user()?->name ?? 'sistema',
+            ]);
 
-        return response()->json($cargo);
+            return response()->json($cargo);
+        });
     }
 }

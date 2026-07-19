@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\DB;
 
 class PlantillaContratoController extends RRHHBaseController
 {
+    use \App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
+
     /** GET /api/rrhh/mantenimiento/contratos/plantillas */
     public function index(Request $request): JsonResponse
     {
@@ -45,74 +47,81 @@ class PlantillaContratoController extends RRHHBaseController
     /** POST /api/rrhh/mantenimiento/contratos/plantillas */
     public function store(Request $request): JsonResponse
     {
-        $v = $request->validate([
-            'tipo_contrato_id' => 'required|integer|exists:rrhh.tipos_contrato,id',
-            'cargo_id'         => 'nullable|integer',
-            'cargo_nombre'     => 'nullable|string|max:120',
-            'nombre'           => 'required|string|max:200',
-            'contenido'        => 'required|string',
-        ]);
+        return $this->captureAndRespond($request, function () use ($request) {
+            $v = $request->validate([
+                'tipo_contrato_id' => 'required|integer|exists:rrhh.tipos_contrato,id',
+                'cargo_id'         => 'nullable|integer',
+                'cargo_nombre'     => 'nullable|string|max:120',
+                'nombre'           => 'required|string|max:200',
+                'contenido'        => 'required|string',
+            ]);
 
-        // Resolver cargo_nombre desde pgsql si solo viene cargo_id
-        if (!empty($v['cargo_id']) && empty($v['cargo_nombre'])) {
-            $cargo = DB::connection('pgsql')->table('cargos')->find($v['cargo_id']);
-            $v['cargo_nombre'] = $cargo?->nombre;
-        }
+            if (!empty($v['cargo_id']) && empty($v['cargo_nombre'])) {
+                $cargo = DB::connection('pgsql')->table('cargos')->find($v['cargo_id']);
+                $v['cargo_nombre'] = $cargo?->nombre;
+            }
 
-        $plantilla = PlantillaContrato::create([
-            ...$v,
-            'activo'      => true,
-            'version'     => 1,
-            'aud_usuario' => Auth::user()->email,
-        ]);
+            $plantilla = PlantillaContrato::create([
+                ...$v,
+                'activo'      => true,
+                'version'     => 1,
+                'aud_usuario' => Auth::user()->email,
+            ]);
 
-        $plantilla->load('tipoContrato');
+            $plantilla->load('tipoContrato');
 
-        return response()->json(['success' => true, 'data' => $plantilla], 201);
+            return response()->json(['success' => true, 'data' => $plantilla], 201);
+        });
     }
 
     /** PUT /api/rrhh/mantenimiento/contratos/plantillas/{id} */
     public function update(Request $request, int $id): JsonResponse
     {
-        $plantilla = PlantillaContrato::findOrFail($id);
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $plantilla = PlantillaContrato::findOrFail($id);
 
-        $v = $request->validate([
-            'tipo_contrato_id' => 'required|integer|exists:rrhh.tipos_contrato,id',
-            'cargo_id'         => 'nullable|integer',
-            'cargo_nombre'     => 'nullable|string|max:120',
-            'nombre'           => 'required|string|max:200',
-            'contenido'        => 'required|string',
-        ]);
+            $v = $request->validate([
+                'tipo_contrato_id' => 'required|integer|exists:rrhh.tipos_contrato,id',
+                'cargo_id'         => 'nullable|integer',
+                'cargo_nombre'     => 'nullable|string|max:120',
+                'nombre'           => 'required|string|max:200',
+                'contenido'        => 'required|string',
+            ]);
 
-        if (!empty($v['cargo_id']) && empty($v['cargo_nombre'])) {
-            $cargo = DB::connection('pgsql')->table('cargos')->find($v['cargo_id']);
-            $v['cargo_nombre'] = $cargo?->nombre;
-        }
+            if (!empty($v['cargo_id']) && empty($v['cargo_nombre'])) {
+                $cargo = DB::connection('pgsql')->table('cargos')->find($v['cargo_id']);
+                $v['cargo_nombre'] = $cargo?->nombre;
+            }
 
-        $plantilla->update([
-            ...$v,
-            'version'     => $plantilla->version + 1,
-            'aud_usuario' => Auth::user()->email,
-        ]);
+            $plantilla->update([
+                ...$v,
+                'version'     => $plantilla->version + 1,
+                'aud_usuario' => Auth::user()->email,
+            ]);
 
-        $plantilla->load('tipoContrato');
+            $plantilla->load('tipoContrato');
 
-        return response()->json(['success' => true, 'data' => $plantilla]);
+            return response()->json(['success' => true, 'data' => $plantilla]);
+        });
     }
 
     /** PATCH /api/rrhh/mantenimiento/contratos/plantillas/{id}/toggle */
     public function toggle(int $id): JsonResponse
     {
-        $plantilla = PlantillaContrato::findOrFail($id);
-        $plantilla->update(['activo' => !$plantilla->activo, 'aud_usuario' => Auth::user()->email]);
-        return response()->json(['success' => true, 'data' => $plantilla]);
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $plantilla = PlantillaContrato::findOrFail($id);
+            $plantilla->update(['activo' => !$plantilla->activo, 'aud_usuario' => Auth::user()->email]);
+            return response()->json(['success' => true, 'data' => $plantilla]);
+        });
     }
 
     /** DELETE /api/rrhh/mantenimiento/contratos/plantillas/{id} */
     public function destroy(int $id): JsonResponse
     {
-        $plantilla = PlantillaContrato::findOrFail($id);
-        $plantilla->delete();
-        return response()->json(['success' => true, 'message' => 'Plantilla eliminada.']);
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $plantilla = PlantillaContrato::findOrFail($id);
+            $plantilla->delete();
+            return response()->json(['success' => true, 'message' => 'Plantilla eliminada.']);
+        });
     }
 }

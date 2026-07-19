@@ -20,6 +20,8 @@ use Illuminate\Support\Facades\Log;
 
 class PlanillasController extends RRHHBaseController
 {
+    use \App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
+
     public function __construct(private PlanillaCalculatorService $calc) {}
 
     // ─── Listado ─────────────────────────────────────────────────────────────
@@ -122,7 +124,7 @@ class PlanillasController extends RRHHBaseController
      */
     public function generar(Request $request): JsonResponse
     {
-        try {
+        return $this->captureAndRespond($request, function () use ($request) {
             $validated = $request->validate([
                 'anio'        => 'required|integer|min:2020|max:2099',
                 'mes'         => 'required|integer|min:1|max:12',
@@ -266,23 +268,7 @@ class PlanillasController extends RRHHBaseController
 
             // Retornar planilla completa con líneas
             return $this->show($planilla->id);
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => collect($e->errors())->flatten()->first() ?? 'Error de validación.',
-                'errors'  => $e->errors(),
-            ], 422);
-        } catch (\Throwable $e) {
-            Log::error('PlanillasController@generar: ' . $e->getMessage(), [
-                'user'  => Auth::user()?->email,
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 500);
-        }
+        });
     }
 
     // ─── Aprobar ─────────────────────────────────────────────────────────────
@@ -292,44 +278,45 @@ class PlanillasController extends RRHHBaseController
      */
     public function aprobar(int $id): JsonResponse
     {
-        $planilla = Planilla::findOrFail($id);
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $planilla = Planilla::findOrFail($id);
 
-        if ($planilla->estado !== 'borrador') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Solo se puede aprobar una planilla en estado borrador.',
-            ], 422);
-        }
+            if ($planilla->estado !== 'borrador') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Solo se puede aprobar una planilla en estado borrador.',
+                ], 422);
+            }
 
-        $planilla->update(['estado' => 'aprobada']);
+            $planilla->update(['estado' => 'aprobada']);
 
-        // Marcar bonificaciones incluidas en esta planilla como "Aplicada"
-        $bonificIds = [];
-        foreach ($planilla->lineas as $linea) {
-            foreach ($linea->detalle_descuentos ?? [] as $item) {
-                if (($item['tipo'] ?? '') === 'bonificacion' && !empty($item['id'])) {
-                    $bonificIds[] = (int) $item['id'];
+            $bonificIds = [];
+            foreach ($planilla->lineas as $linea) {
+                foreach ($linea->detalle_descuentos ?? [] as $item) {
+                    if (($item['tipo'] ?? '') === 'bonificacion' && !empty($item['id'])) {
+                        $bonificIds[] = (int) $item['id'];
+                    }
                 }
             }
-        }
-        if (!empty($bonificIds)) {
-            $estadoAplicadaId = DB::connection('pgsql')
-                ->table('estados_bonificacion')
-                ->where('nombre', 'Aplicada')
-                ->value('id');
-            if ($estadoAplicadaId) {
-                DB::connection('pgsql')
-                    ->table('bonificaciones')
-                    ->whereIn('id', array_unique($bonificIds))
-                    ->update(['estado_id' => $estadoAplicadaId, 'updated_at' => now()]);
+            if (!empty($bonificIds)) {
+                $estadoAplicadaId = DB::connection('pgsql')
+                    ->table('estados_bonificacion')
+                    ->where('nombre', 'Aplicada')
+                    ->value('id');
+                if ($estadoAplicadaId) {
+                    DB::connection('pgsql')
+                        ->table('bonificaciones')
+                        ->whereIn('id', array_unique($bonificIds))
+                        ->update(['estado_id' => $estadoAplicadaId, 'updated_at' => now()]);
+                }
             }
-        }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Planilla aprobada correctamente.',
-            'data'    => $planilla->fresh(),
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Planilla aprobada correctamente.',
+                'data'    => $planilla->fresh(),
+            ]);
+        });
     }
 
     // ─── Exportar (data para Excel) ───────────────────────────────────────────
