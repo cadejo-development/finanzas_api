@@ -284,11 +284,13 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     // ─── Producción Cervecera ────────────────────────────────────────────────
     Route::prefix('brew')->group(function () {
         // Recetas de producción
-        Route::get('recetas',          [BrewRecetasController::class, 'index']);
-        Route::get('recetas/{id}',     [BrewRecetasController::class, 'show']);
-        Route::post('recetas',         [BrewRecetasController::class, 'store']);
-        Route::put('recetas/{id}',     [BrewRecetasController::class, 'update']);
-        Route::delete('recetas/{id}',  [BrewRecetasController::class, 'destroy']);
+        Route::get('recetas',                        [BrewRecetasController::class, 'index']);
+        Route::get('recetas/{id}',                   [BrewRecetasController::class, 'show']);
+        Route::post('recetas',                       [BrewRecetasController::class, 'store']);
+        Route::put('recetas/{id}',                   [BrewRecetasController::class, 'update']);
+        Route::delete('recetas/{id}',                [BrewRecetasController::class, 'destroy']);
+        Route::get('recetas/{id}/dias-objetivo',     [BrewRecetasController::class, 'diasObjetivo']);
+        Route::put('recetas/{id}/dias-objetivo',     [BrewRecetasController::class, 'guardarDiasObjetivo']);
 
         // Lotes — rutas fijas primero para evitar que {id} las capture
         Route::get('lotes/siguiente-codigo',   [BrewLotesController::class, 'siguienteCodigo']);

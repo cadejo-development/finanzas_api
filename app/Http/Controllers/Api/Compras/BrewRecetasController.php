@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Compras;
 
 use App\Http\Controllers\Controller;
 use App\Models\BrewReceta;
+use App\Models\BrewRecetaDiaObjetivo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -29,9 +30,40 @@ class BrewRecetasController extends Controller
     {
         $receta = BrewReceta::with([
             'maltas', 'lupulos', 'minerales', 'levaduras',
-            'maceradoPasos', 'boilPasos',
+            'maceradoPasos', 'boilPasos', 'diasObjetivo',
         ])->findOrFail($id);
         return $receta;
+    }
+
+    // GET /api/compras/brew/recetas/{id}/dias-objetivo
+    public function diasObjetivo($id)
+    {
+        $receta = BrewReceta::findOrFail($id);
+        return response()->json(['ok' => true, 'data' => $receta->diasObjetivo()->get()]);
+    }
+
+    // PUT /api/compras/brew/recetas/{id}/dias-objetivo
+    public function guardarDiasObjetivo(Request $request, $id)
+    {
+        $receta = BrewReceta::findOrFail($id);
+        $dias   = $request->validate([
+            'dias'                  => 'required|array',
+            'dias.*.dia'            => 'required|integer|min:1|max:120',
+            'dias.*.etapa'          => 'required|in:fermentacion,maduracion',
+            'dias.*.plato_obj'      => 'nullable|numeric',
+            'dias.*.temp_obj'       => 'nullable|numeric',
+            'dias.*.ph_obj'         => 'nullable|numeric',
+            'dias.*.notas_objetivo' => 'nullable|string|max:500',
+        ])['dias'];
+
+        $receta->diasObjetivo()->delete();
+        foreach ($dias as $dia) {
+            if (!empty($dia['plato_obj']) || !empty($dia['temp_obj']) || !empty($dia['ph_obj']) || !empty($dia['notas_objetivo'])) {
+                $receta->diasObjetivo()->create($dia);
+            }
+        }
+
+        return response()->json(['ok' => true, 'data' => $receta->diasObjetivo()->get()]);
     }
 
     public function store(Request $request)

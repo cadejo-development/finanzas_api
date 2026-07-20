@@ -26,5 +26,6 @@ class BrewReceta extends Model
     public function levaduras() { return $this->hasMany(BrewRecetaLevadura::class, 'brew_receta_id'); }
     public function maceradoPasos() { return $this->hasMany(BrewRecetaMaceradoPaso::class, 'brew_receta_id')->orderBy('orden'); }
     public function boilPasos() { return $this->hasMany(BrewRecetaBoilPaso::class, 'brew_receta_id')->orderBy('orden'); }
-    public function lotes()     { return $this->hasMany(BrewLote::class, 'brew_receta_id'); }
+    public function lotes()         { return $this->hasMany(BrewLote::class, 'brew_receta_id'); }
+    public function diasObjetivo()  { return $this->hasMany(BrewRecetaDiaObjetivo::class, 'brew_receta_id')->orderBy('etapa')->orderBy('dia'); }
 }

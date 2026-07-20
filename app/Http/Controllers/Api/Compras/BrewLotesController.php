@@ -36,7 +36,7 @@ class BrewLotesController extends Controller
     {
         $lote = BrewLote::with([
             'receta.maltas', 'receta.lupulos', 'receta.minerales',
-            'receta.levaduras', 'receta.maceradoPasos', 'receta.boilPasos',
+            'receta.levaduras', 'receta.maceradoPasos', 'receta.boilPasos', 'receta.diasObjetivo',
             'coccion', 'maceradoPasos', 'boilPasos',
             'filtracion', 'filtracionCorridas',
             'fermentacion', 'fermSeguimiento',
@@ -389,6 +389,7 @@ class BrewLotesController extends Controller
             'botellas_corridas.*.fecha'                => 'nullable|date',
             'botellas_corridas.*.bbt_vol_inicio'       => 'nullable|numeric|min:0',
             'botellas_corridas.*.bbt_vol_fin'          => 'nullable|numeric|min:0',
+            'botellas_corridas.*.botellas_peracético'  => 'nullable|integer|min:0',
             'botellas_corridas.*.botellas_buenas'      => 'nullable|integer|min:0',
             'botellas_corridas.*.bajo_nivel'           => 'nullable|integer|min:0',
             'botellas_corridas.*.derrame'              => 'nullable|integer|min:0',
@@ -427,6 +428,7 @@ class BrewLotesController extends Controller
                     $lote->llenadoBotellasCorridas()->create(array_merge(
                         collect($corrida)->only([
                             'fecha', 'bbt_vol_inicio', 'bbt_vol_fin',
+                            'botellas_peracético',
                             'botellas_buenas', 'bajo_nivel', 'derrame',
                             'vol_llenado_l', 'eficiencia', 'cajas',
                             'fg_real', 'co2_vol', 'notas',
