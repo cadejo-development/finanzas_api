@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api\RRHH;
 
 use App\Models\RRHH\Permiso;
 use App\Models\RRHH\SaldoCadejo;
-use App\Models\RRHH\SaldoVacaciones;
 use App\Models\RRHH\TipoPermiso;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -53,7 +52,7 @@ class PermisosController extends RRHHBaseController
                 'observaciones_jefe'=> 'nullable|string|max:500',
             ]);
 
-            if (!$this->esDelEquipo($validated['empleado_id'])) {
+            if (!$this->esSubordinado($validated['empleado_id'])) {
                 return response()->json([
                     'success' => false,
                     'message' => 'El empleado no pertenece a tu equipo.',

@@ -17,7 +17,7 @@ class VacacionesController extends RRHHBaseController
      */
     public function index(): JsonResponse
     {
-        $subordinadosIds = $this->getEquipoIds();
+        $subordinadosIds = $this->getSubordinadosIds();
 
         $vacaciones = Vacacion::whereIn('empleado_id', $subordinadosIds)
             ->orderByDesc('id')
@@ -44,7 +44,7 @@ class VacacionesController extends RRHHBaseController
                 'observaciones'=> 'nullable|string|max:500',
             ]);
 
-            if (!$this->esDelEquipo($validated['empleado_id'])) {
+            if (!$this->esSubordinado($validated['empleado_id'])) {
                 return response()->json([
                     'success' => false,
                     'message' => 'El empleado no pertenece a tu equipo.',
@@ -116,7 +116,7 @@ class VacacionesController extends RRHHBaseController
      */
     public function saldos(): JsonResponse
     {
-        $subordinadosIds = $this->getEquipoIds();
+        $subordinadosIds = $this->getSubordinadosIds();
         $anio = now()->year;
 
         $saldos = SaldoVacaciones::whereIn('empleado_id', $subordinadosIds)
