@@ -94,7 +94,13 @@ class AmonestacionesController extends RRHHBaseController
 
             $amonestacion->load(['tipoFalta', 'diasSuspension']);
 
-            return response()->json(['success' => true, 'data' => $amonestacion], 201);
+            $enriched = $this->enrichWithEmpleadoData([$amonestacion->toArray()]);
+            $data = $enriched[0];
+            if (empty($data['empleado_nombre'])) {
+                $data['empleado_nombre'] = 'Empleado #' . ($data['empleado_id'] ?? '?');
+            }
+
+            return response()->json(['success' => true, 'data' => $data], 201);
         });
     }
 
@@ -149,7 +155,13 @@ class AmonestacionesController extends RRHHBaseController
 
             $amonestacion->load(['tipoFalta', 'diasSuspension']);
 
-            return response()->json(['success' => true, 'data' => $amonestacion]);
+            $enriched = $this->enrichWithEmpleadoData([$amonestacion->toArray()]);
+            $data = $enriched[0];
+            if (empty($data['empleado_nombre'])) {
+                $data['empleado_nombre'] = 'Empleado #' . ($data['empleado_id'] ?? '?');
+            }
+
+            return response()->json(['success' => true, 'data' => $data]);
         });
     }
 
