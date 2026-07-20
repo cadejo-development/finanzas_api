@@ -68,6 +68,8 @@ class BrewRecetasController extends Controller
             'boil_pasos.*.fase'              => 'nullable|string|in:hervor,whirlpool',
             'boil_pasos.*.cantidad_objetivo' => 'nullable|numeric|min:0',
             'boil_pasos.*.unidad'            => 'nullable|string|max:20',
+            'boil_pasos.*.plato_objetivo'    => 'nullable|numeric',
+            'boil_pasos.*.vol_objetivo_l'    => 'nullable|numeric|min:0',
         ]);
 
         DB::connection('compras')->transaction(function () use ($data, &$receta) {
@@ -117,6 +119,8 @@ class BrewRecetasController extends Controller
             'boil_pasos.*.fase'              => 'nullable|string|in:hervor,whirlpool',
             'boil_pasos.*.cantidad_objetivo' => 'nullable|numeric|min:0',
             'boil_pasos.*.unidad'            => 'nullable|string|max:20',
+            'boil_pasos.*.plato_objetivo'    => 'nullable|numeric',
+            'boil_pasos.*.vol_objetivo_l'    => 'nullable|numeric|min:0',
         ]);
 
         DB::connection('compras')->transaction(function () use ($data, $receta) {

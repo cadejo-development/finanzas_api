@@ -93,24 +93,22 @@ class BrewLotesController extends Controller
         $loteBoil   = $lote->boilPasos->keyBy('orden');
 
         foreach ($recetaBoil as $orden => $rb) {
+            $boilObj = [
+                'descripcion'       => $rb->descripcion,
+                'tiempo_min'        => $rb->tiempo_min,
+                'fase'              => $rb->fase ?? 'hervor',
+                'cantidad_objetivo' => $rb->cantidad_objetivo,
+                'unidad'            => $rb->unidad,
+                'plato_objetivo'    => $rb->plato_objetivo,
+                'vol_objetivo_l'    => $rb->vol_objetivo_l,
+            ];
             if ($loteBoil->has($orden)) {
-                $loteBoil[$orden]->update([
-                    'descripcion'       => $rb->descripcion,
-                    'tiempo_min'        => $rb->tiempo_min,
-                    'fase'              => $rb->fase ?? 'hervor',
-                    'cantidad_objetivo' => $rb->cantidad_objetivo,
-                    'unidad'            => $rb->unidad,
-                ]);
+                $loteBoil[$orden]->update($boilObj);
             } else {
-                $lote->boilPasos()->create([
-                    'orden'             => $orden,
-                    'descripcion'       => $rb->descripcion,
-                    'tiempo_min'        => $rb->tiempo_min,
-                    'fase'              => $rb->fase ?? 'hervor',
-                    'completado'        => false,
-                    'cantidad_objetivo' => $rb->cantidad_objetivo,
-                    'unidad'            => $rb->unidad,
-                ]);
+                $lote->boilPasos()->create(array_merge($boilObj, [
+                    'orden'      => $orden,
+                    'completado' => false,
+                ]));
             }
         }
         foreach ($loteBoil as $orden => $lb) {
@@ -157,6 +155,8 @@ class BrewLotesController extends Controller
                     'completado'        => false,
                     'cantidad_objetivo' => $paso->cantidad_objetivo,
                     'unidad'            => $paso->unidad,
+                    'plato_objetivo'    => $paso->plato_objetivo,
+                    'vol_objetivo_l'    => $paso->vol_objetivo_l,
                 ]);
             }
         });
@@ -218,6 +218,8 @@ class BrewLotesController extends Controller
                         'hora'              => $row['hora']              ?? null,
                         'completado'        => $row['completado']        ?? false,
                         'timestamp_adicion' => $row['timestamp_adicion'] ?? null,
+                        'ingrediente_real'  => $row['ingrediente_real']  ?? null,
+                        't_transcu_real'    => $row['t_transcu_real']    ?? null,
                         'cantidad_real'     => $row['cantidad_real']     ?? null,
                         'plato_real'        => $row['plato_real']        ?? null,
                         'vol_real_l'        => $row['vol_real_l']        ?? null,

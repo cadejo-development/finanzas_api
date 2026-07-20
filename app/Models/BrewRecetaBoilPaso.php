@@ -8,5 +8,8 @@ class BrewRecetaBoilPaso extends Model
 {
     protected $connection = 'compras';
     protected $table = 'brew_receta_boil_pasos';
-    protected $fillable = ['brew_receta_id', 'orden', 'descripcion', 'tiempo_min', 'fase', 'cantidad_objetivo', 'unidad'];
+    protected $fillable = [
+        'brew_receta_id', 'orden', 'descripcion', 'tiempo_min', 'fase',
+        'cantidad_objetivo', 'unidad', 'plato_objetivo', 'vol_objetivo_l',
+    ];
 }
