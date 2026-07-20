@@ -61,8 +61,11 @@ class BrewRecetasController extends Controller
             'lupulos'             => 'array',
             'minerales'           => 'array',
             'levaduras'           => 'array',
-            'macerado_pasos'      => 'array',
-            'boil_pasos'          => 'array',
+            'macerado_pasos'           => 'array',
+            'boil_pasos'               => 'array',
+            'boil_pasos.*.descripcion' => 'required|string',
+            'boil_pasos.*.tiempo_min'  => 'nullable|integer|min:0',
+            'boil_pasos.*.fase'        => 'nullable|string|in:hervor,whirlpool',
         ]);
 
         DB::connection('compras')->transaction(function () use ($data, &$receta) {
@@ -105,8 +108,11 @@ class BrewRecetasController extends Controller
             'lupulos'             => 'array',
             'minerales'           => 'array',
             'levaduras'           => 'array',
-            'macerado_pasos'      => 'array',
-            'boil_pasos'          => 'array',
+            'macerado_pasos'           => 'array',
+            'boil_pasos'               => 'array',
+            'boil_pasos.*.descripcion' => 'required|string',
+            'boil_pasos.*.tiempo_min'  => 'nullable|integer|min:0',
+            'boil_pasos.*.fase'        => 'nullable|string|in:hervor,whirlpool',
         ]);
 
         DB::connection('compras')->transaction(function () use ($data, $receta) {

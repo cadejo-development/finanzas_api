@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\Compras;
 use App\Http\Controllers\Controller;
 use App\Models\BrewLote;
 use App\Models\BrewReceta;
+use App\Models\BrewLevaduraLote;
+use App\Models\BrewLevaduraPitch;
 use App\Models\Empleado;
 use App\Models\Departamento;
 use Illuminate\Http\Request;
@@ -39,6 +41,8 @@ class BrewLotesController extends Controller
             'filtracion', 'filtracionCorridas',
             'fermentacion', 'fermSeguimiento',
             'llenadoBotellas', 'llenadoBarriles',
+            'llenadoBotellasCorridas', 'llenadoBarrilesCorridas',
+            'levaduraPitches.levaduraLote',
         ])->findOrFail($id);
 
         $this->syncPasosDesdeReceta($lote);
@@ -89,12 +93,14 @@ class BrewLotesController extends Controller
                 $loteBoil[$orden]->update([
                     'descripcion' => $rb->descripcion,
                     'tiempo_min'  => $rb->tiempo_min,
+                    'fase'        => $rb->fase ?? 'hervor',
                 ]);
             } else {
                 $lote->boilPasos()->create([
                     'orden'       => $orden,
                     'descripcion' => $rb->descripcion,
                     'tiempo_min'  => $rb->tiempo_min,
+                    'fase'        => $rb->fase ?? 'hervor',
                     'completado'  => false,
                 ]);
             }
@@ -132,8 +138,11 @@ class BrewLotesController extends Controller
             }
             foreach ($receta->boilPasos as $paso) {
                 $lote->boilPasos()->create([
-                    'orden' => $paso->orden, 'descripcion' => $paso->descripcion,
-                    'tiempo_min' => $paso->tiempo_min, 'completado' => false,
+                    'orden'       => $paso->orden,
+                    'descripcion' => $paso->descripcion,
+                    'tiempo_min'  => $paso->tiempo_min,
+                    'fase'        => $paso->fase ?? 'hervor',
+                    'completado'  => false,
                 ]);
             }
         });
@@ -256,19 +265,51 @@ class BrewLotesController extends Controller
     {
         $lote = BrewLote::findOrFail($id);
         $data = $request->validate([
-            'fecha_pitch'         => 'required|date',
-            'temp_pitch'          => 'nullable|numeric',
-            'og_pitch'            => 'nullable|numeric',
-            'vol_pitch'           => 'nullable|numeric',
-            'levadura_nombre'     => 'nullable|string|max:100',
-            'levadura_cantidad_g' => 'nullable|numeric',
-            'notas'               => 'nullable|string',
-            'drest_inicio_dia'    => 'nullable|integer|min:1',
-            'drest_temp'          => 'nullable|numeric',
-            'drest_resultado'     => 'nullable|string|max:500',
+            'fecha_pitch'           => 'required|date',
+            'temp_pitch'            => 'nullable|numeric',
+            'og_pitch'              => 'nullable|numeric',
+            'vol_pitch'             => 'nullable|numeric',
+            'levadura_nombre'       => 'nullable|string|max:100',
+            'levadura_cantidad_g'   => 'nullable|numeric',
+            'levadura_vol_pitch_ml' => 'nullable|numeric|min:0',
+            'levadura_lote_id'      => 'nullable|exists:compras.brew_levadura_lotes,id',
+            'notas'                 => 'nullable|string',
+            'drest_inicio_dia'      => 'nullable|integer|min:1',
+            'drest_temp'            => 'nullable|numeric',
+            'drest_resultado'       => 'nullable|string|max:500',
         ]);
 
-        $lote->fermentacion()->updateOrCreate(['brew_lote_id' => $lote->id], $data);
+        $lote->fermentacion()->updateOrCreate(
+            ['brew_lote_id' => $lote->id],
+            collect($data)->except(['levadura_lote_id', 'levadura_vol_pitch_ml'])->toArray()
+        );
+
+        // Registrar pitch en inventario de levadura si se seleccionó un lote
+        $levLoteId = $data['levadura_lote_id'] ?? null;
+        if ($levLoteId) {
+            $levLote = BrewLevaduraLote::find($levLoteId);
+            if ($levLote) {
+                $volPitchMl = $data['levadura_vol_pitch_ml'] ?? $data['levadura_cantidad_g'] ?? null;
+                $costoEstimado = null;
+                if ($levLote->precio_total_usd && $levLote->vol_total_ml && $volPitchMl) {
+                    $costoEstimado = round(
+                        ((float) $volPitchMl / (float) $levLote->vol_total_ml) * (float) $levLote->precio_total_usd,
+                        4
+                    );
+                }
+                // Actualizar o crear el pitch de este lote cervecero
+                BrewLevaduraPitch::updateOrCreate(
+                    ['brew_levadura_lote_id' => $levLote->id, 'brew_lote_id' => $lote->id],
+                    [
+                        'fecha'               => $data['fecha_pitch'],
+                        'vol_pitch_ml'        => $volPitchMl,
+                        'og_pitch'            => $data['og_pitch'] ?? null,
+                        'temp_pitch'          => $data['temp_pitch'] ?? null,
+                        'costo_estimado_usd'  => $costoEstimado,
+                    ]
+                );
+            }
+        }
 
         if ($lote->estado === 'fermentacion') {
             $lote->update(['estado' => 'seguimiento']);
@@ -281,24 +322,33 @@ class BrewLotesController extends Controller
     {
         $lote = BrewLote::findOrFail($id);
         $data = $request->validate([
-            'dias' => 'required|array',
-            'dias.*.dia'      => 'required|integer|min:1',
-            'dias.*.fecha'    => 'required|date',
-            'dias.*.gravedad' => 'nullable|numeric',
-            'dias.*.temp'     => 'nullable|numeric',
-            'dias.*.ph'       => 'nullable|numeric',
-            'dias.*.notas'    => 'nullable|string',
+            'dias'                    => 'required|array',
+            'dias.*.dia'              => 'required|integer|min:1',
+            'dias.*.fecha'            => 'required|date',
+            'dias.*.gravedad'         => 'nullable|numeric',
+            'dias.*.temp'             => 'nullable|numeric',
+            'dias.*.ph'               => 'nullable|numeric',
+            'dias.*.gravedad_obj'     => 'nullable|numeric',
+            'dias.*.temp_obj'         => 'nullable|numeric',
+            'dias.*.ph_obj'           => 'nullable|numeric',
+            'dias.*.accion_ajuste'    => 'nullable|string|max:1000',
+            'dias.*.notas'            => 'nullable|string',
+            'cerrar_seguimiento'      => 'boolean',
         ]);
 
-        DB::connection('compras')->transaction(function () use ($lote, $data) {
+        $cerrar = $request->boolean('cerrar_seguimiento', false);
+
+        DB::connection('compras')->transaction(function () use ($lote, $data, $cerrar) {
             foreach ($data['dias'] as $dia) {
                 $lote->fermSeguimiento()->updateOrCreate(
                     ['brew_lote_id' => $lote->id, 'dia' => $dia['dia']],
-                    collect($dia)->only(['dia', 'fecha', 'gravedad', 'temp', 'ph', 'notas'])->toArray()
+                    collect($dia)->only([
+                        'dia', 'fecha', 'gravedad', 'temp', 'ph',
+                        'gravedad_obj', 'temp_obj', 'ph_obj', 'accion_ajuste', 'notas',
+                    ])->toArray()
                 );
             }
-            // Solo avanza si el usuario cierra explícitamente el seguimiento
-            if ($lote->estado === 'seguimiento' && $request->boolean('cerrar_seguimiento', false)) {
+            if ($lote->estado === 'seguimiento' && $cerrar) {
                 $lote->update(['estado' => 'filtracion']);
             }
         });
@@ -310,38 +360,127 @@ class BrewLotesController extends Controller
     {
         $lote = BrewLote::findOrFail($id);
         $data = $request->validate([
-            'botellas'                   => 'nullable|array',
-            'botellas.fecha'             => 'nullable|date',
-            'botellas.vol_inicio'        => 'nullable|numeric',
-            'botellas.vol_fin'           => 'nullable|numeric',
-            'botellas.botellas_buenas'   => 'nullable|integer',
-            'botellas.botellas_rotas'    => 'nullable|integer',
-            'botellas.fg_real'           => 'nullable|numeric',
-            'botellas.co2_vol'           => 'nullable|numeric',
-            'botellas.notas'             => 'nullable|string',
-            'barriles'                   => 'nullable|array',
-            'barriles.fecha'             => 'nullable|date',
-            'barriles.barriles_6th'      => 'nullable|integer',
-            'barriles.barriles_half'     => 'nullable|integer',
-            'barriles.vol_total_barriles'=> 'nullable|numeric',
-            'barriles.fg_real'           => 'nullable|numeric',
-            'barriles.co2_psi'           => 'nullable|numeric',
-            'barriles.notas'             => 'nullable|string',
+            // ── Nuevo: corridas multi-run ──────────────────────────────────
+            'botellas_corridas'                        => 'nullable|array',
+            'botellas_corridas.*.fecha'                => 'nullable|date',
+            'botellas_corridas.*.bbt_vol_inicio'       => 'nullable|numeric|min:0',
+            'botellas_corridas.*.bbt_vol_fin'          => 'nullable|numeric|min:0',
+            'botellas_corridas.*.botellas_buenas'      => 'nullable|integer|min:0',
+            'botellas_corridas.*.bajo_nivel'           => 'nullable|integer|min:0',
+            'botellas_corridas.*.derrame'              => 'nullable|integer|min:0',
+            'botellas_corridas.*.vol_llenado_l'        => 'nullable|numeric|min:0',
+            'botellas_corridas.*.eficiencia'           => 'nullable|numeric',
+            'botellas_corridas.*.cajas'                => 'nullable|integer|min:0',
+            'botellas_corridas.*.fg_real'              => 'nullable|numeric',
+            'botellas_corridas.*.co2_vol'              => 'nullable|numeric',
+            'botellas_corridas.*.notas'                => 'nullable|string',
+            'barriles_corridas'                        => 'nullable|array',
+            'barriles_corridas.*.fecha'                => 'nullable|date',
+            'barriles_corridas.*.bbt_vol_inicio'       => 'nullable|numeric|min:0',
+            'barriles_corridas.*.bbt_vol_fin'          => 'nullable|numeric|min:0',
+            'barriles_corridas.*.barriles_6th'         => 'nullable|integer|min:0',
+            'barriles_corridas.*.barriles_half'        => 'nullable|integer|min:0',
+            'barriles_corridas.*.derrame'              => 'nullable|numeric|min:0',
+            'barriles_corridas.*.eficiencia'           => 'nullable|numeric',
+            'barriles_corridas.*.fg_real'              => 'nullable|numeric',
+            'barriles_corridas.*.co2_psi'              => 'nullable|numeric',
+            'barriles_corridas.*.notas'                => 'nullable|string',
+            // ── Legado: registro único (backward compat) ───────────────────
+            'botellas'                                 => 'nullable|array',
+            'barriles'                                 => 'nullable|array',
         ]);
 
         DB::connection('compras')->transaction(function () use ($lote, $data) {
-            if (!empty($data['botellas'])) {
+
+            // ── Botellas corridas ──────────────────────────────────────────
+            if (isset($data['botellas_corridas'])) {
+                $lote->llenadoBotellasCorridas()->delete();
+                $totalBuenas = 0;
+                $firstFg = null; $firstCo2 = null;
+                $firstFecha = null; $firstVolInicio = null; $lastVolFin = null;
+
+                foreach ($data['botellas_corridas'] as $i => $corrida) {
+                    $lote->llenadoBotellasCorridas()->create(array_merge(
+                        collect($corrida)->only([
+                            'fecha', 'bbt_vol_inicio', 'bbt_vol_fin',
+                            'botellas_buenas', 'bajo_nivel', 'derrame',
+                            'vol_llenado_l', 'eficiencia', 'cajas',
+                            'fg_real', 'co2_vol', 'notas',
+                        ])->toArray(),
+                        ['numero_corrida' => $i + 1]
+                    ));
+                    $totalBuenas += (int) ($corrida['botellas_buenas'] ?? 0);
+                    if ($i === 0) {
+                        $firstFg        = $corrida['fg_real'] ?? null;
+                        $firstCo2       = $corrida['co2_vol'] ?? null;
+                        $firstFecha     = $corrida['fecha'] ?? null;
+                        $firstVolInicio = $corrida['bbt_vol_inicio'] ?? null;
+                    }
+                    $lastVolFin = $corrida['bbt_vol_fin'] ?? null;
+                }
+
+                // Actualizar tabla legacy para compatibilidad con reporte
+                $lote->llenadoBotellas()->updateOrCreate(
+                    ['brew_lote_id' => $lote->id],
+                    [
+                        'fecha'          => $firstFecha ?? now()->toDateString(),
+                        'botellas_buenas'=> $totalBuenas,
+                        'vol_inicio'     => $firstVolInicio,
+                        'vol_fin'        => $lastVolFin,
+                        'fg_real'        => $firstFg,
+                        'co2_vol'        => $firstCo2,
+                    ]
+                );
+            } elseif (!empty($data['botellas'])) {
                 $lote->llenadoBotellas()->updateOrCreate(
                     ['brew_lote_id' => $lote->id],
                     $data['botellas']
                 );
             }
-            if (!empty($data['barriles'])) {
+
+            // ── Barriles corridas ──────────────────────────────────────────
+            if (isset($data['barriles_corridas'])) {
+                $lote->llenadoBarrilesCorridas()->delete();
+                $totalSixth = 0; $totalHalf = 0; $firstFecha = null;
+                $firstFg = null; $firstPsi = null;
+
+                foreach ($data['barriles_corridas'] as $i => $corrida) {
+                    $lote->llenadoBarrilesCorridas()->create(array_merge(
+                        collect($corrida)->only([
+                            'fecha', 'bbt_vol_inicio', 'bbt_vol_fin',
+                            'barriles_6th', 'barriles_half', 'derrame',
+                            'eficiencia', 'fg_real', 'co2_psi', 'notas',
+                        ])->toArray(),
+                        ['numero_corrida' => $i + 1]
+                    ));
+                    $totalSixth += (int) ($corrida['barriles_6th'] ?? 0);
+                    $totalHalf  += (int) ($corrida['barriles_half'] ?? 0);
+                    if ($i === 0) {
+                        $firstFecha = $corrida['fecha'] ?? null;
+                        $firstFg    = $corrida['fg_real'] ?? null;
+                        $firstPsi   = $corrida['co2_psi'] ?? null;
+                    }
+                }
+
+                $volTotal = $totalSixth * 19.8 + $totalHalf * 58.7;
+                $lote->llenadoBarriles()->updateOrCreate(
+                    ['brew_lote_id' => $lote->id],
+                    [
+                        'fecha'               => $firstFecha ?? now()->toDateString(),
+                        'barriles_6th'        => $totalSixth,
+                        'barriles_half'       => $totalHalf,
+                        'vol_total_barriles'  => $volTotal,
+                        'fg_real'             => $firstFg,
+                        'co2_psi'             => $firstPsi,
+                    ]
+                );
+            } elseif (!empty($data['barriles'])) {
                 $lote->llenadoBarriles()->updateOrCreate(
                     ['brew_lote_id' => $lote->id],
                     $data['barriles']
                 );
             }
+
             $lote->update(['estado' => 'completo']);
         });
 

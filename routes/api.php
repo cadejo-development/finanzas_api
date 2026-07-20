@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\Compras\SolicitudCargaRecetasController;
 use App\Http\Controllers\Api\Compras\BrewRecetasController;
 use App\Http\Controllers\Api\Compras\BrewLotesController;
 use App\Http\Controllers\Api\Compras\BrewCatalogosController;
+use App\Http\Controllers\Api\Compras\BrewLevaduraLotesController;
 use App\Http\Controllers\Api\PortalController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\RRHH\CatalogosRRHHController;
@@ -306,6 +307,15 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
         // Utilidades
         Route::get('empleados-planta',         [BrewLotesController::class, 'empleadosPlanta']);
         Route::get('estadisticas',             [BrewLotesController::class, 'estadisticas']);
+
+        // Inventario de levaduras
+        Route::get('levadura-lotes',                       [BrewLevaduraLotesController::class, 'index']);
+        Route::post('levadura-lotes',                      [BrewLevaduraLotesController::class, 'store']);
+        Route::get('levadura-lotes/{id}',                  [BrewLevaduraLotesController::class, 'show']);
+        Route::put('levadura-lotes/{id}',                  [BrewLevaduraLotesController::class, 'update']);
+        Route::delete('levadura-lotes/{id}',               [BrewLevaduraLotesController::class, 'destroy']);
+        Route::post('levadura-lotes/{id}/pitches',         [BrewLevaduraLotesController::class, 'storePitch']);
+        Route::delete('levadura-lotes/{id}/pitches/{pid}', [BrewLevaduraLotesController::class, 'destroyPitch']);
 
         // Catálogos (Brilo + local)
         Route::prefix('catalogos')->group(function () {

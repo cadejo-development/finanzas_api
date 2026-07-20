@@ -22,6 +22,9 @@ class BrewLote extends Model
     public function fermSeguimiento() { return $this->hasMany(BrewLoteFermSeguimiento::class, 'brew_lote_id')->orderBy('dia'); }
     public function llenadoBotellas() { return $this->hasOne(BrewLoteLlenadoBotellas::class, 'brew_lote_id'); }
     public function llenadoBarriles() { return $this->hasOne(BrewLoteLlenadoBarril::class, 'brew_lote_id'); }
+    public function llenadoBotellasCorridas() { return $this->hasMany(BrewLoteLlenadoBotellasCorrida::class, 'brew_lote_id')->orderBy('numero_corrida'); }
+    public function llenadoBarrilesCorridas() { return $this->hasMany(BrewLoteLlenadoBarrilesCorrida::class, 'brew_lote_id')->orderBy('numero_corrida'); }
     public function maceradoPasos()  { return $this->hasMany(BrewLoteMaceradoPaso::class, 'brew_lote_id')->orderBy('orden'); }
     public function boilPasos()      { return $this->hasMany(BrewLoteBoilPaso::class, 'brew_lote_id')->orderBy('orden'); }
+    public function levaduraPitches() { return $this->hasMany(BrewLevaduraPitch::class, 'brew_lote_id')->orderBy('fecha'); }
 }

@@ -8,5 +8,8 @@ class BrewLoteFermSeguimiento extends Model
 {
     protected $connection = 'compras';
     protected $table = 'brew_lote_ferm_seguimiento';
-    protected $fillable = ['brew_lote_id', 'dia', 'fecha', 'gravedad', 'temp', 'ph', 'notas'];
+    protected $fillable = [
+        'brew_lote_id', 'dia', 'fecha', 'gravedad', 'temp', 'ph', 'notas',
+        'gravedad_obj', 'temp_obj', 'ph_obj', 'accion_ajuste',
+    ];
 }
