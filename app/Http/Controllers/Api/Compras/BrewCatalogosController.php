@@ -78,6 +78,28 @@ class BrewCatalogosController extends Controller
         return response()->json($data);
     }
 
+    // GET /api/compras/brew/catalogos/ingredientes-boil
+    public function ingredientesBoil()
+    {
+        try {
+            $data = DB::connection('compras')
+                ->table('brew_ingredientes')
+                ->whereIn('tipo', ['lupulo', 'malta', 'mineral', 'aditivo'])
+                ->orderByRaw("CASE tipo WHEN 'lupulo' THEN 1 WHEN 'malta' THEN 2 WHEN 'mineral' THEN 3 ELSE 4 END")
+                ->orderBy('nombre')
+                ->select('codigo', 'nombre', 'tipo')
+                ->get()
+                ->map(fn($r) => ['codigo' => $r->codigo ?? '', 'nombre' => $r->nombre ?? '', 'tipo' => $r->tipo ?? ''])
+                ->filter(fn($r) => $r['nombre'] !== '')
+                ->values()
+                ->all();
+            return response()->json($data);
+        } catch (\Exception $e) {
+            Log::error('brew_catalogo[ingredientes-boil]: ' . $e->getMessage());
+            return response()->json([]);
+        }
+    }
+
     // ── Helper ────────────────────────────────────────────────────────────────
     private function porTipo(string $tipo): array
     {
