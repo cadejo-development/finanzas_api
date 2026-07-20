@@ -135,7 +135,7 @@ class DesvinculacionesController extends RRHHBaseController
 
     /**
      * GET /api/rrhh/desvinculaciones/{id}/descargar
-     * Devuelve una URL pre-firmada temporal de S3 para descargar el documento adjunto.
+     * Devuelve una URL pre-firmada S3 con Content-Disposition: attachment para forzar descarga.
      */
     public function descargar(int $id): JsonResponse
     {
@@ -146,8 +146,18 @@ class DesvinculacionesController extends RRHHBaseController
         }
 
         try {
-            $url = $this->s3TemporaryUrl($desvinculacion->archivo_ruta, 15);
-            return response()->json(['success' => true, 'url' => $url]);
+            $nombre = $desvinculacion->archivo_nombre ?? basename($desvinculacion->archivo_ruta);
+
+            // ResponseContentDisposition fuerza al browser a descargar en lugar de abrir inline
+            $client = $this->s3Client();
+            $cmd = $client->getCommand('GetObject', [
+                'Bucket'                     => config('filesystems.disks.s3.bucket'),
+                'Key'                        => $desvinculacion->archivo_ruta,
+                'ResponseContentDisposition' => 'attachment; filename="' . rawurlencode($nombre) . '"',
+            ]);
+            $url = (string) $client->createPresignedRequest($cmd, '+15 minutes')->getUri();
+
+            return response()->json(['success' => true, 'url' => $url, 'nombre' => $nombre]);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('DesvinculacionesController::descargar: ' . $e->getMessage(), [
                 'desvinculacion_id' => $id,
