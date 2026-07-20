@@ -63,9 +63,11 @@ class BrewRecetasController extends Controller
             'levaduras'           => 'array',
             'macerado_pasos'           => 'array',
             'boil_pasos'               => 'array',
-            'boil_pasos.*.descripcion' => 'required|string',
-            'boil_pasos.*.tiempo_min'  => 'nullable|integer|min:0',
-            'boil_pasos.*.fase'        => 'nullable|string|in:hervor,whirlpool',
+            'boil_pasos.*.descripcion'       => 'required|string',
+            'boil_pasos.*.tiempo_min'        => 'nullable|integer|min:0',
+            'boil_pasos.*.fase'              => 'nullable|string|in:hervor,whirlpool',
+            'boil_pasos.*.cantidad_objetivo' => 'nullable|numeric|min:0',
+            'boil_pasos.*.unidad'            => 'nullable|string|max:20',
         ]);
 
         DB::connection('compras')->transaction(function () use ($data, &$receta) {
@@ -110,9 +112,11 @@ class BrewRecetasController extends Controller
             'levaduras'           => 'array',
             'macerado_pasos'           => 'array',
             'boil_pasos'               => 'array',
-            'boil_pasos.*.descripcion' => 'required|string',
-            'boil_pasos.*.tiempo_min'  => 'nullable|integer|min:0',
-            'boil_pasos.*.fase'        => 'nullable|string|in:hervor,whirlpool',
+            'boil_pasos.*.descripcion'       => 'required|string',
+            'boil_pasos.*.tiempo_min'        => 'nullable|integer|min:0',
+            'boil_pasos.*.fase'              => 'nullable|string|in:hervor,whirlpool',
+            'boil_pasos.*.cantidad_objetivo' => 'nullable|numeric|min:0',
+            'boil_pasos.*.unidad'            => 'nullable|string|max:20',
         ]);
 
         DB::connection('compras')->transaction(function () use ($data, $receta) {

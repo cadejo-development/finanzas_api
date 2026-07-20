@@ -64,16 +64,20 @@ class BrewLotesController extends Controller
         foreach ($recetaPasos as $orden => $rp) {
             if ($lotePasos->has($orden)) {
                 $lotePasos[$orden]->update([
-                    'nombre'         => $rp->nombre,
-                    'temp_objetivo'  => $rp->temp_objetivo,
-                    'tiempo_min'     => $rp->tiempo_min,
-                ]);
-            } else {
-                $lote->maceradoPasos()->create([
-                    'orden'         => $orden,
                     'nombre'        => $rp->nombre,
                     'temp_objetivo' => $rp->temp_objetivo,
                     'tiempo_min'    => $rp->tiempo_min,
+                    'ph_objetivo'   => $rp->ph_objetivo,
+                    'adicion_agua_l'=> $rp->adicion_agua_l,
+                ]);
+            } else {
+                $lote->maceradoPasos()->create([
+                    'orden'          => $orden,
+                    'nombre'         => $rp->nombre,
+                    'temp_objetivo'  => $rp->temp_objetivo,
+                    'tiempo_min'     => $rp->tiempo_min,
+                    'ph_objetivo'    => $rp->ph_objetivo,
+                    'adicion_agua_l' => $rp->adicion_agua_l,
                 ]);
             }
         }
@@ -91,17 +95,21 @@ class BrewLotesController extends Controller
         foreach ($recetaBoil as $orden => $rb) {
             if ($loteBoil->has($orden)) {
                 $loteBoil[$orden]->update([
-                    'descripcion' => $rb->descripcion,
-                    'tiempo_min'  => $rb->tiempo_min,
-                    'fase'        => $rb->fase ?? 'hervor',
+                    'descripcion'       => $rb->descripcion,
+                    'tiempo_min'        => $rb->tiempo_min,
+                    'fase'              => $rb->fase ?? 'hervor',
+                    'cantidad_objetivo' => $rb->cantidad_objetivo,
+                    'unidad'            => $rb->unidad,
                 ]);
             } else {
                 $lote->boilPasos()->create([
-                    'orden'       => $orden,
-                    'descripcion' => $rb->descripcion,
-                    'tiempo_min'  => $rb->tiempo_min,
-                    'fase'        => $rb->fase ?? 'hervor',
-                    'completado'  => false,
+                    'orden'             => $orden,
+                    'descripcion'       => $rb->descripcion,
+                    'tiempo_min'        => $rb->tiempo_min,
+                    'fase'              => $rb->fase ?? 'hervor',
+                    'completado'        => false,
+                    'cantidad_objetivo' => $rb->cantidad_objetivo,
+                    'unidad'            => $rb->unidad,
                 ]);
             }
         }
@@ -132,17 +140,23 @@ class BrewLotesController extends Controller
             $receta = BrewReceta::with(['maceradoPasos', 'boilPasos'])->find($data['brew_receta_id']);
             foreach ($receta->maceradoPasos as $paso) {
                 $lote->maceradoPasos()->create([
-                    'orden' => $paso->orden, 'nombre' => $paso->nombre,
-                    'temp_objetivo' => $paso->temp_objetivo, 'tiempo_min' => $paso->tiempo_min,
+                    'orden'          => $paso->orden,
+                    'nombre'         => $paso->nombre,
+                    'temp_objetivo'  => $paso->temp_objetivo,
+                    'tiempo_min'     => $paso->tiempo_min,
+                    'ph_objetivo'    => $paso->ph_objetivo,
+                    'adicion_agua_l' => $paso->adicion_agua_l,
                 ]);
             }
             foreach ($receta->boilPasos as $paso) {
                 $lote->boilPasos()->create([
-                    'orden'       => $paso->orden,
-                    'descripcion' => $paso->descripcion,
-                    'tiempo_min'  => $paso->tiempo_min,
-                    'fase'        => $paso->fase ?? 'hervor',
-                    'completado'  => false,
+                    'orden'             => $paso->orden,
+                    'descripcion'       => $paso->descripcion,
+                    'tiempo_min'        => $paso->tiempo_min,
+                    'fase'              => $paso->fase ?? 'hervor',
+                    'completado'        => false,
+                    'cantidad_objetivo' => $paso->cantidad_objetivo,
+                    'unidad'            => $paso->unidad,
                 ]);
             }
         });
@@ -188,18 +202,26 @@ class BrewLotesController extends Controller
             if (isset($data['macerado_pasos'])) {
                 foreach ($data['macerado_pasos'] as $row) {
                     $lote->maceradoPasos()->where('id', $row['id'])->update([
-                        'temp_real'   => $row['temp_real'] ?? null,
-                        'hora_inicio' => $row['hora_inicio'] ?? null,
-                        'hora_fin'    => $row['hora_fin'] ?? null,
-                        'ph_real'     => $row['ph_real'] ?? null,
+                        'temp_real'       => $row['temp_real']       ?? null,
+                        'hora_inicio'     => $row['hora_inicio']     ?? null,
+                        'hora_fin'        => $row['hora_fin']        ?? null,
+                        'ph_real'         => $row['ph_real']         ?? null,
+                        'vol_agua_real_l' => $row['vol_agua_real_l'] ?? null,
+                        'adiciones_reales'=> $row['adiciones_reales'] ?? null,
+                        'notas'           => $row['notas']           ?? null,
                     ]);
                 }
             }
             if (isset($data['boil_pasos'])) {
                 foreach ($data['boil_pasos'] as $row) {
                     $lote->boilPasos()->where('id', $row['id'])->update([
-                        'hora'        => $row['hora'] ?? null,
-                        'completado'  => $row['completado'] ?? false,
+                        'hora'              => $row['hora']              ?? null,
+                        'completado'        => $row['completado']        ?? false,
+                        'timestamp_adicion' => $row['timestamp_adicion'] ?? null,
+                        'cantidad_real'     => $row['cantidad_real']     ?? null,
+                        'plato_real'        => $row['plato_real']        ?? null,
+                        'vol_real_l'        => $row['vol_real_l']        ?? null,
+                        'notas'             => $row['notas']             ?? null,
                     ]);
                 }
             }
