@@ -134,6 +134,30 @@ class DesvinculacionesController extends RRHHBaseController
     }
 
     /**
+     * GET /api/rrhh/desvinculaciones/{id}/descargar
+     * Devuelve una URL pre-firmada temporal de S3 para descargar el documento adjunto.
+     */
+    public function descargar(int $id): JsonResponse
+    {
+        $desvinculacion = Desvinculacion::findOrFail($id);
+
+        if (empty($desvinculacion->archivo_ruta)) {
+            return response()->json(['success' => false, 'message' => 'Esta desvinculación no tiene archivo adjunto.'], 404);
+        }
+
+        try {
+            $url = $this->s3TemporaryUrl($desvinculacion->archivo_ruta, 15);
+            return response()->json(['success' => true, 'url' => $url]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('DesvinculacionesController::descargar: ' . $e->getMessage(), [
+                'desvinculacion_id' => $id,
+                'archivo_ruta'      => $desvinculacion->archivo_ruta,
+            ]);
+            return response()->json(['success' => false, 'message' => 'No se pudo obtener el enlace de descarga.'], 500);
+        }
+    }
+
+    /**
      * DELETE /api/rrhh/desvinculaciones/{id}
      */
     public function destroy(int $id): JsonResponse

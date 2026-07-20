@@ -17,14 +17,27 @@ class AmonestacionesController extends RRHHBaseController
      */
     public function index(): JsonResponse
     {
-        $subordinadosIds = $this->getSubordinadosIds();
+        // Admins y analistas ven TODAS las amonestaciones (incluye empleados inactivos/desvinculados).
+        // Jefatura solo ve las de su equipo activo.
+        if ($this->esAdminRrhh() || $this->esAnalistaRrhh()) {
+            $query = Amonestacion::with(['tipoFalta', 'diasSuspension'])->orderByDesc('id');
+        } else {
+            $subordinadosIds = $this->getSubordinadosIds();
+            $query = Amonestacion::with(['tipoFalta', 'diasSuspension'])
+                ->whereIn('empleado_id', $subordinadosIds)
+                ->orderByDesc('id');
+        }
 
-        $amonestaciones = Amonestacion::with(['tipoFalta', 'diasSuspension'])
-            ->whereIn('empleado_id', $subordinadosIds)
-            ->orderByDesc('id')
-            ->get();
+        $amonestaciones = $query->get();
+        $enriched = $this->enrichWithEmpleadoData($amonestaciones->toArray());
 
-        $data = $this->enrichWithEmpleadoData($amonestaciones->toArray());
+        // Fallback: si el nombre no pudo resolverse en core, mostrar referencia por ID
+        $data = array_map(function ($item) {
+            if (empty($item['empleado_nombre'])) {
+                $item['empleado_nombre'] = 'Empleado #' . ($item['empleado_id'] ?? '?');
+            }
+            return $item;
+        }, $enriched);
 
         return response()->json(['success' => true, 'data' => $data]);
     }
