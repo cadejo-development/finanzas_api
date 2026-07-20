@@ -18,20 +18,41 @@ class DesvinculacionesController extends RRHHBaseController
      */
     public function index(Request $request): JsonResponse
     {
-        $subordinadosIds = $this->getSubordinadosIds();
-
-        $query = Desvinculacion::with('motivo')
-            ->whereIn('empleado_id', $subordinadosIds)
-            ->orderByDesc('id');
+        // Las desvinculaciones son de empleados ya dados de baja (activo=false),
+        // por lo que no se puede filtrar por getSubordinadosIds() (solo activos).
+        if ($this->esAdminRrhh() || $this->esAnalistaRrhh()) {
+            $query = Desvinculacion::with('motivo')->orderByDesc('id');
+        } else {
+            // Jefatura: solo ve las que él procesó
+            try {
+                $jefeId = $this->getJefeEmpleado()->id;
+            } catch (\Throwable) {
+                return response()->json(['success' => true, 'data' => []]);
+            }
+            $query = Desvinculacion::with('motivo')
+                ->where('procesado_por_id', $jefeId)
+                ->orderByDesc('id');
+        }
 
         if ($request->filled('tipo')) {
             $query->where('tipo', $request->tipo);
         }
 
         $desvinculaciones = $query->get();
-        $data = $this->enrichWithEmpleadoData($desvinculaciones->toArray());
+        $original = $desvinculaciones->toArray();
+        $enriched = $this->enrichWithEmpleadoData($original);
 
-        return response()->json(['success' => true, 'data' => $data]);
+        // Restaurar datos denormalizados si el empleado ya no está activo en core
+        $data = array_map(function ($item, $orig) {
+            if (empty($item['empleado_nombre'])) {
+                $item['empleado_nombre'] = $orig['empleado_nombre'] ?? null;
+                $item['cargo_nombre']    = $orig['cargo_nombre']    ?? $item['cargo_nombre'];
+                $item['sucursal_nombre'] = $orig['sucursal_nombre'] ?? $item['sucursal_nombre'];
+            }
+            return $item;
+        }, $enriched, $original);
+
+        return response()->json(['success' => true, 'data' => array_values($data)]);
     }
 
     /**

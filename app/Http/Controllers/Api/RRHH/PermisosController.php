@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\RRHH;
 
 use App\Models\RRHH\Permiso;
+use App\Models\RRHH\SaldoCadejo;
 use App\Models\RRHH\SaldoVacaciones;
 use App\Models\RRHH\TipoPermiso;
 use Illuminate\Http\JsonResponse;
@@ -19,7 +20,7 @@ class PermisosController extends RRHHBaseController
      */
     public function index(): JsonResponse
     {
-        $subordinadosIds = $this->getEquipoIds();
+        $subordinadosIds = $this->getSubordinadosIds();
 
         $permisos = Permiso::with('tipoPermiso')
             ->whereIn('empleado_id', $subordinadosIds)
@@ -152,7 +153,7 @@ class PermisosController extends RRHHBaseController
      */
     public function saldos(): JsonResponse
     {
-        $subordinadosIds = $this->getEquipoIds();
+        $subordinadosIds = $this->getSubordinadosIds();
         $anio = now()->year;
 
         // Tipo permiso personal
@@ -181,6 +182,28 @@ class PermisosController extends RRHHBaseController
         });
 
         $data = $this->enrichWithEmpleadoData($saldos->all());
+
+        return response()->json(['success' => true, 'data' => $data]);
+    }
+
+    /**
+     * Saldo Cadejo del equipo para el año actual.
+     * GET /api/rrhh/permisos/saldos-cadejo
+     */
+    public function saldosCadejo(): JsonResponse
+    {
+        $subordinadosIds = $this->getSubordinadosIds();
+        $anio = now()->year;
+
+        $saldos = SaldoCadejo::where('anio', $anio)
+            ->whereIn('empleado_id', $subordinadosIds)
+            ->get()
+            ->map(fn($s) => array_merge($s->toArray(), [
+                'dias_restantes' => $s->dias_restantes,
+            ]))
+            ->all();
+
+        $data = $this->enrichWithEmpleadoData($saldos);
 
         return response()->json(['success' => true, 'data' => $data]);
     }
