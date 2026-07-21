@@ -187,6 +187,11 @@ async function run() {
     const sucRes    = await pg.query('SELECT id, codigo FROM sucursales');
     const sucursalByCode = {};
     for (const row of sucRes.rows) sucursalByCode[row.codigo] = row.id;
+
+    // Precargar códigos excluidos del sync (duplicados marcados manualmente)
+    const exclRes = await pg.query('SELECT codigo FROM empleados WHERE sync_excluido = true');
+    const syncExcluidos = new Set(exclRes.rows.map(r => r.codigo));
+    if (syncExcluidos.size) log(`  → ${syncExcluidos.size} código(s) excluidos del sync`);
     log(`  → ${sucRes.rows.length} sucursales cargadas`);
 
     // Verificar que el mapeo cubre todo
@@ -211,6 +216,12 @@ async function run() {
     const empResult = await pool.request().query(Q_EMPLEADOS);
     let empRows     = empResult.recordset;
     log(`  → ${empRows.length} empleados encontrados`);
+
+    // Filtrar códigos excluidos del sync
+    const antesDeExcluir = empRows.length;
+    empRows = empRows.filter(r => !syncExcluidos.has(clean(r.codigo, 50)));
+    if (antesDeExcluir !== empRows.length)
+      log(`  → ${antesDeExcluir - empRows.length} empleado(s) excluidos del sync omitidos`);
 
     // Deduplicar por nombre completo: conservar el de código más alto
     const porNombre = new Map();

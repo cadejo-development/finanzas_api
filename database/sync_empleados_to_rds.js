@@ -216,10 +216,30 @@ async function run() {
     log(`Cargos en RDS:     ${cargoRes.rows.length}`);
 
     // ── 3. Precargar empleados existentes en RDS (por codigo) ─────────────────
-    const existRes = await pg.query('SELECT codigo, sync_excluido FROM empleados');
+    const existRes = await pg.query('SELECT codigo, sync_excluido, departamento_id FROM empleados');
     const existentes    = new Set(existRes.rows.map(r => r.codigo));
     const excluidos     = new Set(existRes.rows.filter(r => r.sync_excluido).map(r => r.codigo));
+    const deptActual    = Object.fromEntries(
+      existRes.rows.filter(r => r.departamento_id).map(r => [r.codigo, parseInt(r.departamento_id)])
+    );
     log(`Empleados ya en RDS: ${existentes.size}\n`);
+
+    // ── 3b. Cargar jerarquía de departamentos para preservar sub-depts ─────────
+    const deptHierRes = await pg.query('SELECT id, parent_id FROM departamentos WHERE activo = true');
+    const deptParentMap = {};
+    for (const d of deptHierRes.rows)
+      deptParentMap[parseInt(d.id)] = d.parent_id ? parseInt(d.parent_id) : null;
+
+    // ¿deptId es hijo (directo o indirecto) de ancestorId?
+    function isChildDept(deptId, ancestorId) {
+      if (!deptId || !ancestorId) return false;
+      let cur = deptParentMap[deptId];
+      while (cur) {
+        if (cur === ancestorId) return true;
+        cur = deptParentMap[cur];
+      }
+      return false;
+    }
 
     // ── 4. Consultar empleados SQL Server ─────────────────────────────────────
     log('=== EMPLEADOS ===');
@@ -244,7 +264,14 @@ async function run() {
         const cargoId       = cargoByCode[r.cargo_codigo] ?? null;
         const salarioBase   = r.salario_mes != null ? parseFloat(r.salario_mes) : null;
         const emailVal      = clean(r.email, 150);
-        paraActualizar.push([departamentoId, sucursalId, fechaIngreso, cargoId, salarioBase, emailVal, codigo]);
+
+        // Si el empleado ya está en un sub-dept del dept mapeado, preservar el sub-dept
+        const curDept = deptActual[codigo] ?? null;
+        const deptFinal = (curDept && isChildDept(curDept, departamentoId))
+          ? curDept       // está en sub-dept personalizado → mantener
+          : departamentoId; // usar mapeo Brilo (o null si no hay mapeo → COALESCE lo preserva)
+
+        paraActualizar.push([deptFinal, sucursalId, fechaIngreso, cargoId, salarioBase, emailVal, codigo]);
       } else if (activo) {
         // NUEVO y activo en SQL Server → insertar completo
         const sucCodigo  = DEP_SUCURSAL_MAP[r.dep_codigo] ?? null;

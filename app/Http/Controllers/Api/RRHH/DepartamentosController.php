@@ -40,34 +40,52 @@ class DepartamentosController extends Controller
                 ->get()->keyBy('id')->toArray();
         }
 
-        // Conteo de empleados por departamento
+        // Conteo + preview de empleados por departamento
         $deptIds = collect($depts)->pluck('id')->all();
-        $counts = [];
+        $counts  = [];
+        $preview = [];
         if (!empty($deptIds)) {
-            $counts = DB::connection('pgsql')
+            // Mapear jefe_empleado_id por departamento para excluirlos de la lista de miembros
+            $jefeByDept = collect($depts)->pluck('jefe_empleado_id', 'id')->filter()->all();
+
+            $empRows = DB::connection('pgsql')
                 ->table('empleados')
                 ->whereIn('departamento_id', $deptIds)
                 ->where('activo', true)
-                ->groupBy('departamento_id')
-                ->selectRaw('departamento_id, COUNT(*) as total')
-                ->get()->keyBy('departamento_id')->toArray();
+                ->select('id', 'nombres', 'apellidos', 'departamento_id')
+                ->orderBy('apellidos')
+                ->get();
+
+            foreach ($empRows as $e) {
+                $did = $e->departamento_id;
+                // Excluir al jefe del conteo y preview
+                if (($jefeByDept[$did] ?? null) == $e->id) continue;
+                $counts[$did] = ($counts[$did] ?? 0) + 1;
+                if (!isset($preview[$did])) $preview[$did] = [];
+                if (count($preview[$did]) < 3) {
+                    $preview[$did][] = [
+                        'id'     => $e->id,
+                        'nombre' => $e->apellidos . ', ' . $e->nombres,
+                        'inicial' => mb_strtoupper(mb_substr($e->apellidos, 0, 1)),
+                    ];
+                }
+            }
         }
 
-        // Enriquecer con jefe y conteo
-        $depts = collect($depts)->map(function ($d) use ($jefes, $counts) {
+        // Enriquecer con jefe, conteo y preview
+        $depts = collect($depts)->map(function ($d) use ($jefes, $counts, $preview) {
             $d = (array) $d;
             $jefe = $d['jefe_empleado_id'] ? ($jefes[$d['jefe_empleado_id']] ?? null) : null;
-            $d['jefe_nombre'] = $jefe
+            $d['jefe_nombre']   = $jefe
                 ? trim(($jefe instanceof \stdClass ? $jefe->nombres : $jefe['nombres']) . ' '
                      . ($jefe instanceof \stdClass ? $jefe->apellidos : $jefe['apellidos']))
                 : null;
-            $d['jefe_codigo'] = $jefe
+            $d['jefe_codigo']   = $jefe
                 ? ($jefe instanceof \stdClass ? $jefe->codigo : $jefe['codigo'])
                 : null;
-            $countEntry = $counts[$d['id']] ?? null;
-            $d['total_empleados'] = $countEntry
-                ? (int) ($countEntry instanceof \stdClass ? $countEntry->total : $countEntry['total'])
-                : 0;
+            $d['jefe_inactivo'] = $d['jefe_empleado_id'] && !$jefe;
+            $d['total_empleados']    = (int) ($counts[$d['id']] ?? 0);
+            $d['empleados_preview']  = $preview[$d['id']] ?? [];
             $d['children'] = [];
             return $d;
         })->all();
@@ -151,12 +169,18 @@ class DepartamentosController extends Controller
      */
     public function empleados(int $id): JsonResponse
     {
+        $dept = DB::connection('pgsql')
+            ->table('departamentos')
+            ->where('id', $id)
+            ->value('jefe_empleado_id');
+
         $miembros = DB::connection('pgsql')
             ->table('empleados as e')
             ->join('cargos as c', 'e.cargo_id', '=', 'c.id')
             ->join('sucursales as s', 'e.sucursal_id', '=', 's.id')
             ->where('e.departamento_id', $id)
             ->where('e.activo', true)
+            ->when($dept, fn($q) => $q->where('e.id', '!=', $dept))
             ->select('e.id', 'e.codigo', 'e.nombres', 'e.apellidos',
                      'c.nombre as cargo', 's.nombre as sucursal')
             ->orderBy('e.apellidos')
