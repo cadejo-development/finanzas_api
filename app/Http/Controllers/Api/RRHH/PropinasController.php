@@ -60,12 +60,12 @@ class PropinasController extends RRHHBaseController
             ->table('empleados as e')
             ->join('cargos as c', 'c.id', '=', 'e.cargo_id')
             ->whereIn('e.id', $empIds)
-            ->select('e.id', 'e.nombre', 'e.apellido', 'c.nombre as cargo_nombre', 'e.cargo_id')
+            ->select('e.id', 'e.nombres', 'e.apellidos', 'c.nombre as cargo_nombre', 'e.cargo_id')
             ->get()->keyBy('id');
 
-        $detalles = $periodo->detalles->sortBy(fn($d) => $emps[$d->empleado_id]?->apellido ?? '')->map(fn($d) => array_merge($d->toArray(), [
+        $detalles = $periodo->detalles->sortBy(fn($d) => $emps[$d->empleado_id]?->apellidos ?? '')->map(fn($d) => array_merge($d->toArray(), [
             'nombre_completo' => isset($emps[$d->empleado_id])
-                ? trim($emps[$d->empleado_id]->nombre . ' ' . $emps[$d->empleado_id]->apellido)
+                ? trim($emps[$d->empleado_id]->nombres . ' ' . $emps[$d->empleado_id]->apellidos)
                 : 'N/D',
             'cargo_nombre' => $emps[$d->empleado_id]?->cargo_nombre,
         ]))->values();

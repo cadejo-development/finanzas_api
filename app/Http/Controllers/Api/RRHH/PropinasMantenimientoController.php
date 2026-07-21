@@ -127,12 +127,12 @@ class PropinasMantenimientoController extends RRHHBaseController
             ->table('empleados as e')
             ->join('cargos as c', 'c.id', '=', 'e.cargo_id')
             ->whereIn('e.id', $empIds)
-            ->select('e.id', 'e.nombre', 'e.apellido', 'c.nombre as cargo_nombre')
+            ->select('e.id', 'e.nombres', 'e.apellidos', 'c.nombre as cargo_nombre')
             ->get()->keyBy('id');
 
         $data = $registros->map(fn($r) => array_merge($r->toArray(), [
             'empleado_nombre' => isset($empleados[$r->empleado_id])
-                ? trim($empleados[$r->empleado_id]->nombre . ' ' . $empleados[$r->empleado_id]->apellido)
+                ? trim($empleados[$r->empleado_id]->nombres . ' ' . $empleados[$r->empleado_id]->apellidos)
                 : null,
             'cargo_nombre' => $empleados[$r->empleado_id]?->cargo_nombre,
         ]));
