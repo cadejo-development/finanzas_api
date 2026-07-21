@@ -25,7 +25,6 @@ class KpiPlantilla extends Model
 
     protected $casts = [
         'activo'          => 'boolean',
-        'monto_objetivo'  => 'float',
         'sucursal_id'     => 'integer',
         'departamento_id' => 'integer',
     ];

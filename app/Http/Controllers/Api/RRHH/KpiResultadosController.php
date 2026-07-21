@@ -72,6 +72,105 @@ class KpiResultadosController extends Controller
     }
 
     /**
+     * GET /api/rrhh/kpi-resultados/resumen?periodo=YYYY-MM
+     * Todos los resultados del período, agrupados por persona Y por KPI.
+     */
+    public function resumen(Request $request): JsonResponse
+    {
+        $periodo = $request->query('periodo');
+
+        $query = KpiResultado::with('plantilla');
+        if ($periodo) {
+            $query->where('periodo', $periodo . '-01');
+        }
+        $resultados = $query->orderByDesc('periodo')->get();
+
+        $empIds = $resultados->pluck('empleado_id')->unique()->values()->toArray();
+        $empleados = [];
+        if ($empIds) {
+            $rows = DB::connection('pgsql')
+                ->table('empleados as e')
+                ->leftJoin('cargos as c', 'e.cargo_id', '=', 'c.id')
+                ->leftJoin('sucursales as s', 'e.sucursal_id', '=', 's.id')
+                ->whereIn('e.id', $empIds)
+                ->selectRaw("e.id, TRIM(e.apellidos || ', ' || e.nombres) as nombre, c.nombre as cargo, s.nombre as sucursal")
+                ->get();
+            foreach ($rows as $r) {
+                $empleados[$r->id] = $r;
+            }
+        }
+
+        $porPersona = [];
+        $porKpi     = [];
+
+        foreach ($resultados as $r) {
+            $emp       = $empleados[$r->empleado_id] ?? null;
+            $plantilla = $r->plantilla;
+            $periodoStr = $r->periodo->format('Y-m');
+
+            $entradaEmp = [
+                'kpi_plantilla_id' => $r->kpi_plantilla_id,
+                'kpi_nombre'       => $plantilla?->nombre,
+                'indicador'        => $plantilla?->unidad_medida,
+                'meta'             => $plantilla?->monto_objetivo,
+                'periodo'          => $periodoStr,
+                'porcentaje'       => $r->porcentaje_cumplimiento,
+                'valor_real'       => $r->valor_real,
+                'monto_bono'       => $r->monto_bono,
+            ];
+            $entradaKpi = [
+                'empleado_id'  => $r->empleado_id,
+                'nombre'       => $emp?->nombre,
+                'cargo'        => $emp?->cargo,
+                'sucursal'     => $emp?->sucursal,
+                'periodo'      => $periodoStr,
+                'porcentaje'   => $r->porcentaje_cumplimiento,
+                'valor_real'   => $r->valor_real,
+                'monto_bono'   => $r->monto_bono,
+            ];
+
+            $ek = $r->empleado_id;
+            if (!isset($porPersona[$ek])) {
+                $porPersona[$ek] = [
+                    'empleado_id' => $r->empleado_id,
+                    'nombre'      => $emp?->nombre,
+                    'cargo'       => $emp?->cargo,
+                    'sucursal'    => $emp?->sucursal,
+                    'kpis'        => [],
+                    'total_bono'  => 0,
+                ];
+            }
+            $porPersona[$ek]['kpis'][]     = $entradaEmp;
+            $porPersona[$ek]['total_bono'] += $r->monto_bono;
+
+            $kk = $r->kpi_plantilla_id;
+            if (!isset($porKpi[$kk])) {
+                $porKpi[$kk] = [
+                    'kpi_plantilla_id' => $r->kpi_plantilla_id,
+                    'nombre'           => $plantilla?->nombre,
+                    'indicador'        => $plantilla?->unidad_medida,
+                    'meta'             => $plantilla?->monto_objetivo,
+                    'empleados'        => [],
+                    'total_bono'       => 0,
+                ];
+            }
+            $porKpi[$kk]['empleados'][]  = $entradaKpi;
+            $porKpi[$kk]['total_bono']  += $r->monto_bono;
+        }
+
+        $periodosDisponibles = KpiResultado::selectRaw("TO_CHAR(periodo, 'YYYY-MM') as p")
+            ->distinct()
+            ->orderByDesc('p')
+            ->pluck('p');
+
+        return response()->json([
+            'por_persona'          => array_values($porPersona),
+            'por_kpi'              => array_values($porKpi),
+            'periodos_disponibles' => $periodosDisponibles,
+        ]);
+    }
+
+    /**
      * POST /api/rrhh/kpi-resultados/preview
      * Calcula bonos sin guardar.
      */
