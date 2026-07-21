@@ -66,11 +66,12 @@ class TrasladosController extends RRHHBaseController
                 ->where('id', $validated['sucursal_destino_id'])
                 ->value('nombre');
 
+            $cargoDestinoId = $validated['cargo_destino_id'] ?? null;
             $cargoDestino = null;
-            if ($validated['cargo_destino_id']) {
+            if ($cargoDestinoId) {
                 $cargoDestino = DB::connection('pgsql')
                     ->table('cargos')
-                    ->where('id', $validated['cargo_destino_id'])
+                    ->where('id', $cargoDestinoId)
                     ->value('nombre');
             }
 
@@ -83,7 +84,7 @@ class TrasladosController extends RRHHBaseController
                 'cargo_origen_nombre'    => $empData?->cargo_nombre,
                 'sucursal_destino_id'    => $validated['sucursal_destino_id'],
                 'sucursal_destino_nombre'=> $sucursalDestino,
-                'cargo_destino_id'       => $validated['cargo_destino_id'] ?? null,
+                'cargo_destino_id'       => $cargoDestinoId,
                 'cargo_destino_nombre'   => $cargoDestino,
                 'fecha_efectiva'         => $validated['fecha_efectiva'],
                 'motivo'                 => $validated['motivo'] ?? null,
