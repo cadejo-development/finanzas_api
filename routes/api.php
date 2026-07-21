@@ -53,6 +53,8 @@ use App\Http\Controllers\Api\RRHH\IngresoPersonalController;
 use App\Http\Controllers\Api\RRHH\TipoContratoController;
 use App\Http\Controllers\Api\RRHH\PlantillaContratoController;
 use App\Http\Controllers\Api\RRHH\ContratoEmpleadoController;
+use App\Http\Controllers\Api\RRHH\PropinasController;
+use App\Http\Controllers\Api\RRHH\PropinasMantenimientoController;
 
 // ─── Geo catálogos El Salvador (público, sin auth) ────────────────────────
 Route::prefix('geo')->group(function () {
@@ -611,6 +613,37 @@ Route::prefix('rrhh/planillas')->middleware(['auth:sanctum', 'role:rrhh_admin'])
     Route::put('{id}/aprobar',                      [PlanillasController::class, 'aprobar']);
     Route::get('{id}/exportar',                     [PlanillasController::class, 'exportar']);
     Route::get('{id}/boleta/{empleadoId}',          [PlanillasController::class, 'boletaPdf']);
+});
+
+// ─── RRHH Propinas (solo rrhh_admin) ─────────────────────────────────────────
+Route::prefix('rrhh/propinas')->middleware(['auth:sanctum', 'role:rrhh_admin'])->group(function () {
+    // Mantenimiento
+    Route::get('mantenimiento/config-sucursales',          [PropinasMantenimientoController::class, 'getConfigSucursales']);
+    Route::post('mantenimiento/config-sucursales',         [PropinasMantenimientoController::class, 'storeConfigSucursal']);
+    Route::put('mantenimiento/config-sucursales/{id}',     [PropinasMantenimientoController::class, 'updateConfigSucursal']);
+    Route::get('mantenimiento/puntos-cargo',               [PropinasMantenimientoController::class, 'getPuntosCargo']);
+    Route::post('mantenimiento/puntos-cargo',              [PropinasMantenimientoController::class, 'upsertPuntosCargo']);
+    Route::get('mantenimiento/puntos-empleado',            [PropinasMantenimientoController::class, 'getPuntosEmpleado']);
+    Route::post('mantenimiento/puntos-empleado',           [PropinasMantenimientoController::class, 'storePuntosEmpleado']);
+    Route::put('mantenimiento/puntos-empleado/{id}',       [PropinasMantenimientoController::class, 'updatePuntosEmpleado']);
+    Route::delete('mantenimiento/puntos-empleado/{id}',    [PropinasMantenimientoController::class, 'destroyPuntosEmpleado']);
+    Route::get('mantenimiento/adicionales',                [PropinasMantenimientoController::class, 'getAdicionales']);
+    Route::post('mantenimiento/adicionales',               [PropinasMantenimientoController::class, 'storeAdicional']);
+    Route::put('mantenimiento/adicionales/{id}',           [PropinasMantenimientoController::class, 'updateAdicional']);
+    Route::delete('mantenimiento/adicionales/{id}',        [PropinasMantenimientoController::class, 'destroyAdicional']);
+    Route::get('mantenimiento/flujos',                     [PropinasMantenimientoController::class, 'getFlujos']);
+    Route::post('mantenimiento/flujos',                    [PropinasMantenimientoController::class, 'storeFlujo']);
+    Route::delete('mantenimiento/flujos/{id}',             [PropinasMantenimientoController::class, 'destroyFlujo']);
+
+    // Períodos operativos
+    Route::get('sobrantes',                                [PropinasController::class, 'getSobrantes']);
+    Route::get('',                                         [PropinasController::class, 'index']);
+    Route::post('',                                        [PropinasController::class, 'store']);
+    Route::get('{id}',                                     [PropinasController::class, 'show']);
+    Route::post('{id}/calcular',                           [PropinasController::class, 'calcular']);
+    Route::put('{id}/detalles/{detalleId}',                [PropinasController::class, 'updateDetalle']);
+    Route::post('{id}/aprobar',                            [PropinasController::class, 'aprobar']);
+    Route::post('{id}/integrar-planilla',                  [PropinasController::class, 'integrarAPlanilla']);
 });
 
 // ─── RRHH Admin — Departamentos (portal_admin, rrhh_admin, rrhh_analista) ────
