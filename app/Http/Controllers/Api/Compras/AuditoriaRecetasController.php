@@ -777,24 +777,25 @@ class AuditoriaRecetasController extends Controller
         $estaciones = $estacionesQ->get(['id', 'codigo', 'nombre', 'sucursal_id']);
 
         // Centro de Producción (sucursal_id=21): sus empleados están en sucursal_id=14
-        // (Casa Matriz) con departamento_id=16 (CP-Restaurantes). Se devuelve
-        // sucursal_id=21 en la respuesta para que el filtro del frontend funcione.
-        $esCP = ($sucursalId === 21);
+        // (Casa Matriz) con departamento_id=16 (CP-Restaurantes).
+        // Se mapea su sucursal_id a 21 para que el filtro del frontend funcione.
         $cocineros = DB::connection('pgsql')
             ->table('empleados as e')
             ->leftJoin('cargos as c', 'c.id', '=', 'e.cargo_id')
             ->where('e.activo', true)
-            ->when($sucursalId, function ($q) use ($esCP, $sucursalId) {
-                $esCP
-                    ? $q->where('e.departamento_id', 16)
-                    : $q->where('e.sucursal_id', $sucursalId);
+            ->when($sucursalId, function ($q) use ($sucursalId) {
+                if ($sucursalId === 21) {
+                    $q->where('e.departamento_id', 16);
+                } else {
+                    $q->where('e.sucursal_id', $sucursalId);
+                }
             })
             ->orderBy('e.nombres')
             ->select(
                 'e.id',
                 DB::raw("CONCAT(e.nombres, ' ', e.apellidos) as nombre_completo"),
                 'c.nombre as cargo',
-                DB::raw($esCP ? '21 as sucursal_id' : 'e.sucursal_id')
+                DB::raw("CASE WHEN e.departamento_id = 16 THEN 21 ELSE e.sucursal_id END as sucursal_id")
             )
             ->get();
 
