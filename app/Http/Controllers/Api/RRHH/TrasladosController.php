@@ -75,6 +75,24 @@ class TrasladosController extends RRHHBaseController
                     ->value('nombre');
             }
 
+            // Auto-aprobar si el creador gestiona tanto el origen como el destino
+            // (gerente con equipo en ambas sucursales, o admin/analista).
+            $estado = 'pendiente';
+            if ($this->esAdminRrhh() || $this->esAnalistaRrhh()) {
+                $estado = 'aprobado';
+            } else {
+                $sucursalesDelJefe = DB::connection('pgsql')
+                    ->table('empleados')
+                    ->whereIn('id', $this->getSubordinadosIds())
+                    ->whereNotNull('sucursal_id')
+                    ->pluck('sucursal_id')
+                    ->unique()
+                    ->toArray();
+                if (in_array((int) $validated['sucursal_destino_id'], $sucursalesDelJefe)) {
+                    $estado = 'aprobado';
+                }
+            }
+
             $traslado = Traslado::create([
                 'empleado_id'            => $validated['empleado_id'],
                 'solicitado_por_id'      => $jefe->id,
@@ -88,7 +106,7 @@ class TrasladosController extends RRHHBaseController
                 'cargo_destino_nombre'   => $cargoDestino,
                 'fecha_efectiva'         => $validated['fecha_efectiva'],
                 'motivo'                 => $validated['motivo'] ?? null,
-                'estado'                 => 'pendiente',
+                'estado'                 => $estado,
                 'aud_usuario'            => Auth::user()->email,
             ]);
 
