@@ -44,7 +44,7 @@ class TrasladosController extends RRHHBaseController
                 'motivo'               => 'nullable|string|max:500',
             ]);
 
-            if (!$this->esSubordinado($validated['empleado_id'])) {
+            if (!$this->puedeGestionar($validated['empleado_id'])) {
                 return response()->json([
                     'success' => false,
                     'message' => 'El empleado no pertenece a tu equipo.',
