@@ -537,7 +537,8 @@ abstract class RRHHBaseController extends Controller
         return collect($records)->map(function ($record) use ($empleados, $empleadoIdKey) {
             $arr = is_array($record) ? $record : (array) $record;
             $emp = $empleados[$arr[$empleadoIdKey] ?? null] ?? null;
-            $arr['empleado_nombre']      = $emp ? trim($emp->nombres . ' ' . $emp->apellidos) : null;
+            $fallback = 'Empleado #' . ($arr[$empleadoIdKey] ?? '?');
+            $arr['empleado_nombre']      = $emp ? (trim($emp->nombres . ' ' . $emp->apellidos) ?: $fallback) : $fallback;
             $arr['empleado_codigo']      = $emp?->codigo;
             $arr['cargo_nombre']         = $emp?->cargo_nombre;
             $arr['sucursal_nombre']      = $emp?->sucursal_nombre;
