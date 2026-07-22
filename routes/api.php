@@ -44,6 +44,7 @@ use App\Http\Controllers\Api\RRHH\HistorialController;
 use App\Http\Controllers\Api\RRHH\AusenciasController;
 use App\Http\Controllers\Api\RRHH\ReportesRRHHController;
 use App\Http\Controllers\Api\RRHH\HorariosController;
+use App\Http\Controllers\Api\RRHH\PlantillasTurnoController;
 use App\Http\Controllers\Api\RRHH\PlanillasController;
 use App\Http\Controllers\Api\RRHH\MantenimientoPlanillaController;
 use App\Http\Controllers\Api\GeoController;
@@ -494,7 +495,11 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::get('horarios/mi-horario',             [HorariosController::class, 'miHorario']);
     Route::get('horarios',                        [HorariosController::class, 'index']);
     Route::post('horarios/bulk',                  [HorariosController::class, 'bulk']);
+    Route::post('horarios/swap',                  [HorariosController::class, 'swap']);
     Route::delete('horarios/{empleadoId}/{fecha}/{parte}', [HorariosController::class, 'destroy']);
+    Route::get('horarios/plantillas',             [PlantillasTurnoController::class, 'index']);
+    Route::post('horarios/plantillas',            [PlantillasTurnoController::class, 'store']);
+    Route::delete('horarios/plantillas/{id}',     [PlantillasTurnoController::class, 'destroy']);
 
     // ── Órdenes de descuento (empleado ve las suyas) ──────────────────────────
     Route::get('ordenes-descuento/mis-ordenes', [\App\Http\Controllers\Api\RRHH\OrdenesDescuentoController::class, 'misOrdenes']);

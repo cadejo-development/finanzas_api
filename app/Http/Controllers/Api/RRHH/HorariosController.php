@@ -8,7 +8,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Validator;
 
 /**
  * Gestión de horarios semanales por empleado.
@@ -246,6 +245,77 @@ class HorariosController extends RRHHBaseController
                 ->delete();
 
             return response()->json(['ok' => true]);
+        });
+    }
+
+    /**
+     * POST /rrhh/horarios/swap
+     * Body: { empleado_a_id, empleado_b_id, fecha }
+     * Intercambia los turnos manuales (normal/libre) de dos empleados en una fecha dada.
+     */
+    public function swap(Request $request): JsonResponse
+    {
+        return $this->captureAndRespond($request, function () use ($request) {
+            $validated = $request->validate([
+                'empleado_a_id' => 'required|integer',
+                'empleado_b_id' => 'required|integer',
+                'fecha'         => 'required|date_format:Y-m-d',
+            ]);
+
+            if (!$this->puedeGestionar((int) $validated['empleado_a_id'])) {
+                return response()->json(['message' => 'Sin permiso sobre empleado A.'], 403);
+            }
+            if (!$this->puedeGestionar((int) $validated['empleado_b_id'])) {
+                return response()->json(['message' => 'Sin permiso sobre empleado B.'], 403);
+            }
+
+            $empAId = (int) $validated['empleado_a_id'];
+            $empBId = (int) $validated['empleado_b_id'];
+            $fecha  = $validated['fecha'];
+
+            $TIPOS_MANUALES = ['normal', 'libre'];
+
+            $turnosA = HorarioEmpleado::where('empleado_id', $empAId)
+                ->where('fecha', $fecha)
+                ->whereIn('tipo', $TIPOS_MANUALES)
+                ->get();
+
+            $turnosB = HorarioEmpleado::where('empleado_id', $empBId)
+                ->where('fecha', $fecha)
+                ->whereIn('tipo', $TIPOS_MANUALES)
+                ->get();
+
+            HorarioEmpleado::where('empleado_id', $empAId)->where('fecha', $fecha)->whereIn('tipo', $TIPOS_MANUALES)->delete();
+            HorarioEmpleado::where('empleado_id', $empBId)->where('fecha', $fecha)->whereIn('tipo', $TIPOS_MANUALES)->delete();
+
+            $audUsuario = Auth::user()?->name ?? 'sistema';
+
+            foreach ($turnosB as $t) {
+                HorarioEmpleado::create([
+                    'empleado_id' => $empAId,
+                    'fecha'       => $fecha,
+                    'hora_inicio' => $t->hora_inicio,
+                    'hora_fin'    => $t->hora_fin,
+                    'tipo'        => $t->tipo,
+                    'parte'       => $t->parte ?? 1,
+                    'notas'       => $t->notas,
+                    'aud_usuario' => $audUsuario,
+                ]);
+            }
+            foreach ($turnosA as $t) {
+                HorarioEmpleado::create([
+                    'empleado_id' => $empBId,
+                    'fecha'       => $fecha,
+                    'hora_inicio' => $t->hora_inicio,
+                    'hora_fin'    => $t->hora_fin,
+                    'tipo'        => $t->tipo,
+                    'parte'       => $t->parte ?? 1,
+                    'notas'       => $t->notas,
+                    'aud_usuario' => $audUsuario,
+                ]);
+            }
+
+            return response()->json(['success' => true]);
         });
     }
 
