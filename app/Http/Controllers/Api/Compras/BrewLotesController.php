@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Compras;
 
 use App\Http\Controllers\Controller;
 use App\Models\BrewLote;
+use App\Models\BrewLoteIngrediente;
 use App\Models\BrewReceta;
 use App\Models\BrewLevaduraLote;
 use App\Models\BrewLevaduraPitch;
@@ -43,9 +44,12 @@ class BrewLotesController extends Controller
             'llenadoBotellas', 'llenadoBarriles',
             'llenadoBotellasCorridas', 'llenadoBarrilesCorridas',
             'levaduraPitches.levaduraLote',
+            'ingredientes',
         ])->findOrFail($id);
 
         $this->syncPasosDesdeReceta($lote);
+        $this->syncIngredientesDesdeReceta($lote);
+        $lote->load('ingredientes');
 
         return array_merge($lote->toArray(), ['reporte' => $this->calcularReporte($lote)]);
     }
@@ -118,6 +122,105 @@ class BrewLotesController extends Controller
         }
 
         $lote->load('maceradoPasos', 'boilPasos');
+    }
+
+    /**
+     * Sincroniza brew_lote_ingredientes con la receta actual.
+     * Solo crea registros que falten — nunca elimina ni sobreescribe estado/notas.
+     */
+    private function syncIngredientesDesdeReceta(BrewLote $lote): void
+    {
+        $existentes = $lote->ingredientes->map(fn($i) => $i->tipo . ':' . $i->nombre)->flip();
+
+        $insertar = [];
+        $now = now();
+
+        foreach ($lote->receta->maltas as $m) {
+            $key = 'malta:' . $m->nombre;
+            if (!$existentes->has($key)) {
+                $insertar[] = [
+                    'brew_lote_id'      => $lote->id,
+                    'tipo'              => 'malta',
+                    'nombre'            => $m->nombre,
+                    'cantidad_objetivo' => $m->cantidad_lb,
+                    'unidad'            => 'lb',
+                    'detalle'           => $m->proveedor,
+                    'estado'            => 'pendiente',
+                    'notas'             => null,
+                    'created_at'        => $now,
+                    'updated_at'        => $now,
+                ];
+            }
+        }
+
+        foreach ($lote->receta->lupulos as $l) {
+            $key = 'lupulo:' . $l->nombre;
+            if (!$existentes->has($key)) {
+                $insertar[] = [
+                    'brew_lote_id'      => $lote->id,
+                    'tipo'              => 'lupulo',
+                    'nombre'            => $l->nombre,
+                    'cantidad_objetivo' => $l->cantidad_g,
+                    'unidad'            => 'g',
+                    'detalle'           => trim(($l->uso ?? '') . ($l->tiempo_min ? ' ' . $l->tiempo_min . ' min' : '')),
+                    'estado'            => 'pendiente',
+                    'notas'             => null,
+                    'created_at'        => $now,
+                    'updated_at'        => $now,
+                ];
+            }
+        }
+
+        foreach ($lote->receta->minerales as $mn) {
+            $key = 'mineral:' . $mn->nombre;
+            if (!$existentes->has($key)) {
+                $insertar[] = [
+                    'brew_lote_id'      => $lote->id,
+                    'tipo'              => 'mineral',
+                    'nombre'            => $mn->nombre,
+                    'cantidad_objetivo' => $mn->cantidad_g,
+                    'unidad'            => 'g',
+                    'detalle'           => $mn->fase,
+                    'estado'            => 'pendiente',
+                    'notas'             => null,
+                    'created_at'        => $now,
+                    'updated_at'        => $now,
+                ];
+            }
+        }
+
+        foreach ($lote->receta->levaduras as $lv) {
+            $key = 'levadura:' . $lv->nombre;
+            if (!$existentes->has($key)) {
+                $insertar[] = [
+                    'brew_lote_id'      => $lote->id,
+                    'tipo'              => 'levadura',
+                    'nombre'            => $lv->nombre,
+                    'cantidad_objetivo' => $lv->cantidad_g,
+                    'unidad'            => 'g',
+                    'detalle'           => $lv->proveedor,
+                    'estado'            => 'pendiente',
+                    'notas'             => null,
+                    'created_at'        => $now,
+                    'updated_at'        => $now,
+                ];
+            }
+        }
+
+        if (!empty($insertar)) {
+            DB::connection('compras')->table('brew_lote_ingredientes')->insert($insertar);
+        }
+    }
+
+    public function updateIngrediente(Request $request, $loteId, $ingId)
+    {
+        $ing = BrewLoteIngrediente::where('brew_lote_id', $loteId)->findOrFail($ingId);
+        $data = $request->validate([
+            'estado' => 'required|in:pendiente,en_proceso,agregado',
+            'notas'  => 'nullable|string|max:500',
+        ]);
+        $ing->update($data);
+        return response()->json($ing);
     }
 
     public function store(Request $request)

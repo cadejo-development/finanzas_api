@@ -308,6 +308,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
         Route::put('lotes/{id}/fermentacion',  [BrewLotesController::class, 'guardarFermentacion']);
         Route::put('lotes/{id}/seguimiento',   [BrewLotesController::class, 'guardarSeguimiento']);
         Route::put('lotes/{id}/llenado',       [BrewLotesController::class, 'guardarLlenado']);
+        Route::patch('lotes/{id}/ingredientes/{ingId}', [BrewLotesController::class, 'updateIngrediente']);
 
         // Utilidades
         Route::get('empleados-planta',         [BrewLotesController::class, 'empleadosPlanta']);
