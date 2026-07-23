@@ -1,12 +1,14 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * Ejecuta la migración plaza_historial manualmente via SQL
  * node database/_run_migration_historial.js
  */
 const { Pool } = require('pg');
 const pg = new Pool({
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+  host: process.env.DB_HOST,
   port: 5432, database: 'core_db',
-  user: 'cadejo_admin', password: 'Holamundo#3..',
+  user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false },
 });
 

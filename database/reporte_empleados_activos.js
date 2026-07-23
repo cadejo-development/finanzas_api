@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * reporte_empleados_activos.js
  *
  * Genera un reporte Excel de empleados activos ordenado por
@@ -15,9 +17,9 @@ const ExcelJS   = require('exceljs');
 const path      = require('path');
 
 const PG_CFG = {
-  host:     'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+  host:     process.env.DB_HOST,
   port:     5432, database: 'core_db',
-  user:     'cadejo_admin', password: 'Holamundo#3..',
+  user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD,
   ssl:      { rejectUnauthorized: false },
 };
 

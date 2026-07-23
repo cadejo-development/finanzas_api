@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * clean_and_remigrate.js
  *
  * 1. Limpia las tablas de compras (respetando FK order)
@@ -13,8 +15,8 @@ const { Pool } = require('pg');
 
 // ── Conexiones ────────────────────────────────────────────────────────────────
 const sqlConfig = {
-  user: 'olimporeader', password: 'olimporeader',
-  server: '10.0.4.20', port: 2033, database: 'olcomun',
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olcomun',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 15000 },
 };
 

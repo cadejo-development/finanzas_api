@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * check_botones_pos.js
  * Verifica si Polka, Sammy y Lupe Reyes Draft aparecen
  * como botones activos en los formularios POS de SQL Server.
@@ -7,8 +9,8 @@
 const sql = require('mssql');
 
 const sqlConfig = {
-  user: 'olimporeader', password: 'olimporeader',
-  server: '10.0.4.20', port: 2033, database: 'olcomun',
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olcomun',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 15000 },
 };
 

@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * _dry_run_fix_ingredientes.js
  *
  * Compara el estado ACTUAL de receta_ingredientes en RDS vs lo que
@@ -21,13 +23,13 @@ const { Client } = require('pg');
 const XLSX     = require('xlsx');
 
 const SQL_CFG = {
-  user: 'olimporeader', password: 'olimporeader',
-  server: '10.0.4.20', port: 2033, database: 'olcomun',
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olcomun',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 20000 },
 };
 const PG_CFG = {
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com', port: 5432,
-  database: 'compras_db', user: 'cadejo_admin', password: 'Holamundo#3..',
+  host: process.env.DB_HOST, port: 5432,
+  database: 'compras_db', user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false },
 };
 

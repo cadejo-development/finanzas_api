@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * Migración brew recetas 2026-06-16:
  *  - brew_receta_maltas: renombrar cantidad_kg → cantidad_lb, quitar lovibond
  *  - brew_recetas: quitar cajas_objetivo y barriles_objetivo,
@@ -6,9 +8,9 @@
  */
 const { Pool } = require('pg');
 const pg = new Pool({
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
-  port: 5432, database: 'compras_db', user: 'cadejo_admin',
-  password: 'Holamundo#3..', ssl: { rejectUnauthorized: false },
+  host: process.env.DB_HOST,
+  port: 5432, database: 'compras_db', user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD, ssl: { rejectUnauthorized: false },
 });
 
 async function colExists(table, col) {

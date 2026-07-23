@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * seed_plaza_historial.js
  *
  * Siembra plaza_historial con los registros actuales:
@@ -14,9 +16,9 @@ const { Pool } = require('pg');
 const APPLY = process.argv.includes('--apply');
 
 const pg = new Pool({
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+  host: process.env.DB_HOST,
   port: 5432, database: 'core_db',
-  user: 'cadejo_admin', password: 'Holamundo#3..',
+  user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false },
 });
 

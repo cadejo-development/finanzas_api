@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * import_plazas_excel.js
  *
  * Importa el Catálogo de Plazas desde el Excel oficial al sistema.
@@ -25,9 +27,9 @@ const APPLY = process.argv.includes('--apply');
 const FILE  = path.join('C:\\Users\\administrator\\Downloads', 'Catalogo_de_Plazas_Cadejo 1.xlsx');
 
 const pg = new Pool({
-  host:     'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+  host:     process.env.DB_HOST,
   port:     5432, database: 'core_db',
-  user:     'cadejo_admin', password: 'Holamundo#3..',
+  user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD,
   ssl:      { rejectUnauthorized: false },
 });
 

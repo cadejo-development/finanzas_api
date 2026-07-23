@@ -1,7 +1,9 @@
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
 const sql = require('mssql');
 const cfg = {
-  user: 'olimporeader', password: 'olimporeader',
-  server: '10.0.4.20', port: 2033, database: 'olCompras',
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olCompras',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 20000 },
 };
 async function main() {

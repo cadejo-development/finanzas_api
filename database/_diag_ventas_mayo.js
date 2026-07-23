@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * _diag_ventas_mayo.js
  *
  * DIAGNÓSTICO — Ventas Mayo 1-11 todas las sucursales
@@ -20,13 +22,13 @@ const DESDE = '2026-05-01';
 const HASTA = '2026-05-11';
 
 const cfgRst = {
-  user: 'olimporeader', password: 'olimporeader',
-  server: '10.0.4.20', port: 2033, database: 'olRestaurante',
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olRestaurante',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 15000 },
 };
 const pgBase = {
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
-  port: 5432, user: 'cadejo_admin', password: 'Holamundo#3..',
+  host: process.env.DB_HOST,
+  port: 5432, user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 30000,
 };
 

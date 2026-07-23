@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * Crea dos nuevos roles de analista RRHH y los asigna a los usuarios correspondientes.
  * - rrhh_analista     → Analista RRHH (Margarita Lara, user_id=40) — acceso senior
  * - rrhh_analista_jr  → Analista RRHH Jr (Mario Villalobos, user_id=50) — acceso junior
@@ -7,11 +9,11 @@
 const { Client } = require('pg');
 
 const client = new Client({
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+  host: process.env.DB_HOST,
   port: 5432,
   database: 'core_db',
-  user: 'cadejo_admin',
-  password: 'Holamundo#3..',
+  user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false },
 });
 

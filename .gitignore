@@ -29,5 +29,6 @@ node_modules/
 vite.config.js
 storage/fonts/*.json
 
-# Scripts de base de datos con credenciales / uso interno
-database/_sync_documentos_brilo.js
+# Scripts de base de datos de uso interno / diagnóstico
+# (nunca subir: pueden contener datos sensibles o lógica de un solo uso)
+database/_*.js

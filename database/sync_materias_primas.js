@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * sync_materias_primas.js
  *
  * Sincroniza TODAS las materias primas (ingredientes de compras) desde SQL Server
@@ -21,14 +23,14 @@ const sql      = require('mssql');
 const { Pool } = require('pg');
 
 const sqlCfg = {
-  user: 'olimporeader', password: 'olimporeader',
-  server: '10.0.4.20', port: 2033, database: 'olcomun',
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olcomun',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 20000 },
 };
 
 const pgCfg = {
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com', port: 5432,
-  database: 'compras_db', user: 'cadejo_admin', password: 'Holamundo#3..',
+  host: process.env.DB_HOST, port: 5432,
+  database: 'compras_db', user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false }, keepAlive: true,
   connectionTimeoutMillis: 30000, idleTimeoutMillis: 90000,
 };

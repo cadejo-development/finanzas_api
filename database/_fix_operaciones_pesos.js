@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * Actualiza los pesos de los criterios de auditoría de operaciones
  * según los valores oficiales de Lourdes (total: 100 pts).
  * Luego recalcula calificacion y clasificacion de todas las auditorias evaluadas.
@@ -8,9 +10,9 @@
 const { Pool } = require('pg');
 
 const db = new Pool({
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+  host: process.env.DB_HOST,
   port: 5432, database: 'compras_db',
-  user: 'cadejo_admin', password: 'Holamundo#3..',
+  user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false },
 });
 

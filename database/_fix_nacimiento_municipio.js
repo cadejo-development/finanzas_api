@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * _fix_nacimiento_municipio.js
  *
  * Migración puntual: parsea lugar_nacimiento en expediente_datos_personales
@@ -18,8 +20,8 @@
 
 const { Pool } = require('pg');
 
-const PG_CORE = { host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com', port: 5432, database: 'core_db', user: 'cadejo_admin', password: 'Holamundo#3..', ssl: { rejectUnauthorized: false } };
-const PG_RRHH = { host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com', port: 5432, database: 'rrhh_db', user: 'cadejo_admin', password: 'Holamundo#3..', ssl: { rejectUnauthorized: false } };
+const PG_CORE = { host: process.env.DB_HOST, port: 5432, database: 'core_db', user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD, ssl: { rejectUnauthorized: false } };
+const PG_RRHH = { host: process.env.DB_HOST, port: 5432, database: 'rrhh_db', user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD, ssl: { rejectUnauthorized: false } };
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const NOW     = new Date().toISOString();

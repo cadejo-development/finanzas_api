@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * remigrate_proveedores.js
  *
  * Limpia la tabla proveedores en PostgreSQL (pagos) y la re-importa
@@ -18,8 +20,8 @@ const sql  = require('mssql');
 const { Client } = require('pg');
 
 const MSSQL_CFG = {
-  server: '10.0.4.20', port: 2033, database: 'olcomun',
-  user: 'olimporeader', password: 'olimporeader',
+  server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olcomun',
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
   options: { encrypt: false, trustServerCertificate: true },
 };
 

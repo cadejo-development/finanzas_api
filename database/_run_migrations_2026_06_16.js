@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * Ejecuta las 2 migraciones del 2026-06-16 directamente en PostgreSQL.
  *
  * Migración 1 (core_db → ventas_ordenes):
@@ -13,15 +15,15 @@ const { Pool } = require('pg');
 const SSL = { rejectUnauthorized: false };
 
 const pgCore = new Pool({
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
-  port: 5432, database: 'compras_db', user: 'cadejo_admin',
-  password: 'Holamundo#3..', ssl: SSL,
+  host: process.env.DB_HOST,
+  port: 5432, database: 'compras_db', user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD, ssl: SSL,
 });
 
 const pgCompras = new Pool({
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
-  port: 5432, database: 'compras_db', user: 'cadejo_admin',
-  password: 'Holamundo#3..', ssl: SSL,
+  host: process.env.DB_HOST,
+  port: 5432, database: 'compras_db', user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD, ssl: SSL,
 });
 
 async function run() {

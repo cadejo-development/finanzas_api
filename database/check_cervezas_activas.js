@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * check_cervezas_activas.js
  * Verifica en SQL Server y en PostgreSQL el estado de productos de cerveza
  * que ya no existen físicamente (Polka, Sammy, Lupe Reyes, etc.)
@@ -10,17 +12,17 @@ const sql      = require('mssql');
 const { Pool } = require('pg');
 
 const sqlConfig = {
-  user: 'olimporeader', password: 'olimporeader',
-  server: '10.0.4.20', port: 2033, database: 'olcomun',
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olcomun',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 15000 },
 };
 
 const pgConfig = {
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+  host: process.env.DB_HOST,
   port: 5432,
   database: 'compras_db',
-  user: 'cadejo_admin',
-  password: 'Holamundo#3..',
+  user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false },
   connectionTimeoutMillis: 30000,
 };

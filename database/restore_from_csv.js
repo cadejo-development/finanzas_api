@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * restore_from_csv.js
  *
  * Restaura ingredientes de sub-recetas a partir del CSV de backup
@@ -16,11 +18,11 @@ const { Pool } = require('pg');
 const CSV_PATH = path.join(__dirname, 'INV_backup_esta_maniana.csv');
 
 const pgConfig = {
-  host:     'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+  host:     process.env.DB_HOST,
   port:     5432,
   database: 'compras_db',
-  user:     'cadejo_admin',
-  password: 'Holamundo#3..',
+  user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false },
   connectionTimeoutMillis: 30000,
 };

@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * fix_gerencia_financiera_role_rds.js
  * Inserta el rol gerencia_financiera en el sistema 'compras' en RDS (producción)
  * y lo asigna al usuario Juan Jose Lopez Valladares.
@@ -6,10 +8,10 @@
 const { Client } = require('pg');
 
 const rdsCfg = {
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+  host: process.env.DB_HOST,
   port: 5432,
-  user: 'cadejo_admin',
-  password: 'Holamundo#3..',
+  user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
   database: 'core_db',
   ssl: { rejectUnauthorized: false },
 };

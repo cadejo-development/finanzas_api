@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * reporte_ingredientes_guirola_8julio.js
  *
  * Genera un Excel con el consumo de ingredientes para Casa Guirola (Mansión)
@@ -22,11 +24,11 @@ const FECHA         = '2026-07-08';
 const SUCURSAL_ID   = 11;   // Restaurante Casa Guirola (Mansión)
 
 const pgConfig = {
-  host:     'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+  host:     process.env.DB_HOST,
   port:     5432,
   database: 'compras_db',
-  user:     'cadejo_admin',
-  password: 'Holamundo#3..',
+  user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
   ssl:      { rejectUnauthorized: false },
 };
 

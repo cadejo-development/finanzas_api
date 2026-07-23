@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * _fix_saldos_cadejo.js
  *
  * Corrige dias_usados en saldos_cadejo basándose en los permisos
@@ -16,9 +18,9 @@
 const { Pool } = require('pg');
 
 const PG_CFG = {
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com', port: 5432,
-  database: 'rrhh_db', user: 'cadejo_admin',
-  password: 'Holamundo#3..',
+  host: process.env.DB_HOST, port: 5432,
+  database: 'rrhh_db', user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false },
 };
 

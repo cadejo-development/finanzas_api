@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * sync_reservations_to_rds.js
  * Trae reservas desde Railway (via API) e inserta las que faltan en RDS mansion_db.
  * No borra nada — solo INSERT de ids que no existen en RDS.
@@ -10,10 +12,10 @@ const API_BASE = 'https://cadejo-mansion-backend-production.up.railway.app/api/v
 const PER_PAGE = 100;
 
 const rdsConfig = {
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+  host: process.env.DB_HOST,
   port: 5432,
-  user: 'cadejo_admin',
-  password: 'Holamundo#3..',
+  user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
   database: 'mansion_db',
   ssl: { rejectUnauthorized: false },
 };

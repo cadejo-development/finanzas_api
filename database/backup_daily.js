@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * backup_daily.js
  *
  * Backup automático diario de compras_db (RDS PostgreSQL).
@@ -40,11 +42,11 @@ const { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand }
 const CONFIG = {
   // Base de datos
   pg: {
-    host:     'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+    host:     process.env.DB_HOST,
     port:     5432,
     database: 'compras_db',
-    user:     'cadejo_admin',
-    password: 'Holamundo#3..',
+    user: process.env.DB_USERNAME,
+    password: process.env.DB_PASSWORD,
   },
 
   // S3 — reemplaza con tu bucket real

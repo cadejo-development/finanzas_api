@@ -1,14 +1,16 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * copy_railway_to_rds.js
  * Copia TODA la data de Railway → RDS (tabla por tabla)
  * Uso: node copy_railway_to_rds.js
  */
 const { Client } = require('pg');
 
-const RDS_HOST = 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com';
+const RDS_HOST = process.env.DB_HOST;
 const RDS_PORT = 5432;
-const RDS_USER = 'cadejo_admin';
-const RDS_PASS = 'Holamundo#3..';
+const RDS_USER = process.env.DB_USERNAME;
+const RDS_PASS = process.env.DB_PASSWORD;
 
 const DATABASES = [
   {

@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * sync_recetas_diario.js
  *
  * Sincronización diaria Brilo (SQL Server) → RDS (compras_db)
@@ -21,13 +23,13 @@ const { Pool } = require('pg');
 
 // ── Conexiones ────────────────────────────────────────────────────────────────
 const SQL_CFG = {
-  user: 'olimporeader', password: 'olimporeader',
-  server: '10.0.4.20', port: 2033, database: 'olcomun',
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olcomun',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 20000 },
 };
 const PG_CFG = {
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com', port: 5432,
-  database: 'compras_db', user: 'cadejo_admin', password: 'Holamundo#3..',
+  host: process.env.DB_HOST, port: 5432,
+  database: 'compras_db', user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false },
   connectionTimeoutMillis: 30000, idleTimeoutMillis: 90000,
 };

@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * migrate_rrhh_railway_to_rds.js
  * Copia todos los datos de Railway (rrhh) → RDS (rrhh_db)
  * El schema ya existe en RDS — solo se migran datos.
@@ -18,10 +20,10 @@ const srcCfg = {
 };
 
 const dstCfg = {
-  host:     'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+  host:     process.env.DB_HOST,
   port:     5432,
-  user:     'cadejo_admin',
-  password: 'Holamundo#3..',
+  user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
   database: 'rrhh_db',
   ssl: { rejectUnauthorized: false },
   connectionTimeoutMillis: 30000,

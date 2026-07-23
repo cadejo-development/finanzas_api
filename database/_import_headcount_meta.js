@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * Importa valores Meta del Excel Comparativo Plantilla → cargo_plazas_autorizadas
  *
  * Uso:
@@ -51,11 +53,11 @@ async function main() {
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }).slice(1)
 
   const client = new Client({
-    host:     'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+    host:     process.env.DB_HOST,
     port:     5432,
     database: 'core_db',
-    user:     'cadejo_admin',
-    password: 'Holamundo#3..',
+    user: process.env.DB_USERNAME,
+    password: process.env.DB_PASSWORD,
     ssl:      { rejectUnauthorized: false },
   })
   await client.connect()

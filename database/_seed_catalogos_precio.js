@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * Seed inicial de precios en catálogos de ventas externas.
  * Fuente: Listado de precios Cadejo Brewing (Excel vigente).
  * Uso: node database/_seed_catalogos_precio.js [--dry-run]
@@ -6,9 +8,9 @@
 const { Pool } = require('pg');
 
 const PG = {
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
-  port: 5432, database: 'compras_db', user: 'cadejo_admin',
-  password: 'Holamundo#3..', ssl: { rejectUnauthorized: false },
+  host: process.env.DB_HOST,
+  port: 5432, database: 'compras_db', user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD, ssl: { rejectUnauthorized: false },
 };
 
 const IVA = 0.13;

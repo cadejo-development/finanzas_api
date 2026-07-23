@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * Pobla unidad_compra / unidad_compra_nombre / factor_unidad_compra en productos
  * leyendo la unidad DEFAULT de compra desde Brilo (vwUnidadesXProductoYUniBase).
  *
@@ -12,15 +14,15 @@ const sql    = require('mssql');
 const { Client } = require('pg');
 
 const MSSQL_CFG = {
-  user: 'olimporeader', password: 'olimporeader',
-  server: '10.0.4.20', port: 2033, database: 'olInventario',
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olInventario',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 15000 },
 };
 
 const PG_CFG = {
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+  host: process.env.DB_HOST,
   port: 5432, database: 'compras_db',
-  user: 'cadejo_admin', password: 'Holamundo#3..',
+  user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false },
 };
 

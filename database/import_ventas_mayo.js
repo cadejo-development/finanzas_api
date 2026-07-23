@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * import_ventas_mayo.js  →  import_ventas_incremental.js
  *
  * Importa ventas de TODAS las sucursales activas desde Brilo SQL Server
@@ -66,14 +68,14 @@ const SUCURSAL_MAP = {
 };
 
 const cfgRst = {
-  user: 'olimporeader', password: 'olimporeader',
-  server: '10.0.4.20', port: 2033, database: 'olRestaurante',
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olRestaurante',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 30000, requestTimeout: 180000 },
 };
 const pgConfig = {
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+  host: process.env.DB_HOST,
   port: 5432, database: 'compras_db',
-  user: 'cadejo_admin', password: 'Holamundo#3..',
+  user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 30000,
 };
 

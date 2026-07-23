@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * reporte_ingredientes_semana.js
  *
  * Genera un Excel con explosión completa de sub-recetas hasta materia prima.
@@ -40,9 +42,9 @@ const CODIGOS_FILTRO = leerCodigos(argVal('--codigos'));
 
 // ── DB ────────────────────────────────────────────────────────────────────────
 const pgConfig = {
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+  host: process.env.DB_HOST,
   port: 5432, database: 'compras_db',
-  user: 'cadejo_admin', password: 'Holamundo#3..',
+  user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false },
 };
 const CATS_PLATOS = ['platos_fuertes', 'entradas', 'postres', 'desayunos'];

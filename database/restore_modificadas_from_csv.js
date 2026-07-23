@@ -1,4 +1,6 @@
 /**
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
  * restore_modificadas_from_csv.js
  *
  * Restaura los ingredientes de TODAS las sub-recetas con modificado_localmente=true
@@ -19,17 +21,17 @@ const { Pool } = require('pg');
 const CSV_PATH = path.join(__dirname, 'INV_backup_esta_maniana.csv');
 
 const sqlConfig = {
-  user: 'olimporeader', password: 'olimporeader',
-  server: '10.0.4.20', port: 2033, database: 'olcomun',
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olcomun',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 15000 },
 };
 
 const pgConfig = {
-  host:     'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com',
+  host:     process.env.DB_HOST,
   port:     5432,
   database: 'compras_db',
-  user:     'cadejo_admin',
-  password: 'Holamundo#3..',
+  user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false },
   connectionTimeoutMillis: 30000,
 };
