@@ -1,26 +1,34 @@
 /**
  * sync_empleados_to_rds.js
  *
- * SQL Server (olcomun) → RDS PostgreSQL (core_db)
+ * SQL Server (olcomun) → RDS PostgreSQL (core_db + rrhh_db)
  *
- * Reglas de sincronización:
- *   - Empleado YA existe en RDS  (match por codigo) → solo actualiza campo "activo"
- *   - Empleado NO existe en RDS                     → inserta con todos los campos
+ * Sincroniza en dos fases:
  *
- * Incluye empleados ACTIVOS e INACTIVOS del SQL Server para poder
- * reflejar bajas (empActivo = 0).
+ *  FASE 1 — Empleados (core_db)
+ *    - Empleado YA existe en RDS  (match por codigo) → actualiza departamento, cargo, salario, etc.
+ *    - Empleado NO existe en RDS  + activo en Brilo  → inserta completo
+ *
+ *  FASE 2 — Expediente completo (rrhh_db) — solo activos
+ *    - expediente_datos_personales : fecha_nacimiento, genero, estado_civil, lugar_nacimiento,
+ *                                    grupo_sanguineo, profesion, domicilio, nacionalidad
+ *    - expediente_documentos       : ISSS, AFP, NIT, DUI (lugar+fecha expedición+vencimiento)
+ *    - expediente_contactos        : celular, teléfono casa, contacto de emergencia
+ *    - expediente_cuentas_banco    : cuenta bancaria
+ *    - expediente_direcciones      : dirección de residencia
+ *
+ * Todas las escrituras de expediente son "fill-only": solo rellena campos vacíos;
+ * nunca sobreescribe datos que el equipo RRHH ya haya ingresado manualmente.
  *
  * Uso:
- *   node sync_empleados_to_rds.js             (ejecuta)
- *   node sync_empleados_to_rds.js --dry-run   (muestra conteos, no escribe)
+ *   node database/sync_empleados_to_rds.js             (ejecuta ambas fases)
+ *   node database/sync_empleados_to_rds.js --dry-run   (muestra conteos, no escribe)
+ *   node database/sync_empleados_to_rds.js --skip-expediente  (solo fase 1)
  */
 
 const sql      = require('mssql');
 const { Pool } = require('pg');
 
-// SQL Server devuelve dates como Date JS en UTC midnight; pasarlo como string
-// evita que el driver de pg lo convierta a timezone local (El Salvador UTC-6)
-// y reste un día.
 function fmtDate(d) {
   if (!d) return null;
   if (d instanceof Date) return d.toISOString().split('T')[0];
@@ -48,8 +56,23 @@ const PG_CFG = {
   keepAliveInitialDelayMillis: 10000,
 };
 
-// ── RDS PostgreSQL rrhh_db (ingresos_personal) ────────────────────────────────
+// ── RDS PostgreSQL rrhh_db ────────────────────────────────────────────────────
 const PG_RRHH_CFG = { ...PG_CFG, database: 'rrhh_db' };
+
+// ── Catálogos Brilo ───────────────────────────────────────────────────────────
+const AFP_NAMES = { 4: 'AFP CRECER', 5: 'AFP CONFIA', 6: 'IPSFA', 9: 'ISSS-IVM' };
+
+const BANCO_NAMES = {
+  1: 'BANCO CUSCATLAN', 2: 'BANCO AGRICOLA', 3: 'BANCO DAVIVIENDA',
+  4: 'BANCO PROMERICA', 5: 'BANCO AMERICA CENTRAL', 7: 'BANCO HIPOTECARIO',
+  9: 'CITIBANK', 10: 'BANCO ZAMERICANO', 11: 'BANCO G&T',
+  12: 'BANCO DE FOMENTO AGROPECUARIO', 13: 'BANCO MULTIVALORES',
+  16: 'PROCREDIT', 18: 'BANCO VIRTUAL', 23: 'BANCO AZUL',
+  24: 'BANCO ATLANTIDA', 25: 'BANCO INDUSTRIAL',
+};
+
+// Brilo empEstadoCivil (int) → valor de nuestro sistema
+const ESTADO_CIVIL = { 0: 'soltero', 1: 'casado', 2: 'divorciado', 3: 'viudo', 5: 'acompañado' };
 
 // ── Mapeo depCodigo → codigo sucursal ─────────────────────────────────────────
 const DEP_SUCURSAL_MAP = {
@@ -66,7 +89,7 @@ const DEP_SUCURSAL_MAP = {
   'RT-001':           'SUC-ZR',
   'DPT0002':          'SUC-AE1',
   'DPT0003':          'SUC-AE2',
-  'MAL-AE':           'SUC0015',  // RESTAURANTE MALCRIADAS (id=16)
+  'MAL-AE':           'SUC0015',
   'DPT0006':          'SUC-PV',
   'DPT0007':          'SUC-SE',
   'DPT0008':          'SUC-HZ',
@@ -77,38 +100,48 @@ const DEP_SUCURSAL_MAP = {
 
 // ── Mapeo depCodigo → departamento_id en RDS ──────────────────────────────────
 const DEP_DEPARTAMENTO_MAP = {
-  'C_LOGISTICA':      14,   // LOGÍSTICA
-  'C_MANTTO':         28,   // MANTENIMIENTO
-  'C_Mercadeo':        9,   // MERCADEO
-  'C_Producción':      6,   // PRODUCCIÓN
-  'C_Produccion_R':   16,   // CENTRO DE PRODUCCIÓN - RESTAURANTES
-  'C_Ventas':         30,   // VENTAS
-  'DPT0001':          15,   // BODEGA
-  'DPT0002':          25,   // RESTAURANTE AEROPUERTO 1
-  'DPT0003':          26,   // RESTAURANTE AEROPUERTO 2
-  'DPT0004':          30,   // VENTAS (eventuales)
-  'DPT0006':          22,   // RESTAURANTE PASEO VENECIA
-  'DPT0007':          23,   // RESTAURANTE SANTA ELENA
-  'DPT0008':          19,   // RESTAURANTE MONTAÑA (antes Huizúcar)
-  'DPT0009':          21,   // RESTAURANTE OPICO
-  'EVE-EXT':          29,   // EVENTOS
-  'EVE-INT':          29,   // EVENTOS
-  'MAL-AE':           27,   // RESTAURANTE MALCRIADAS AE
-  'PROD':              6,   // PRODUCCIÓN
-  'RT-001':           24,   // RESTAURANTE ZONA ROSA
-  'RT-003':           20,   // RESTAURANTE LA LIBERTAD
-  'DTP00010':         18,   // RESTAURANTE CASA GUIROLA (código RES_GUI)
+  'C_LOGISTICA':      14,
+  'C_MANTTO':         28,
+  'C_Mercadeo':        9,
+  'C_Producción':      6,
+  'C_Produccion_R':   16,
+  'C_Ventas':         30,
+  'DPT0001':          15,
+  'DPT0002':          25,
+  'DPT0003':          26,
+  'DPT0004':          30,
+  'DPT0006':          22,
+  'DPT0007':          23,
+  'DPT0008':          19,
+  'DPT0009':          21,
+  'EVE-EXT':          29,
+  'EVE-INT':          29,
+  'MAL-AE':           27,
+  'PROD':              6,
+  'RT-001':           24,
+  'RT-003':           20,
+  'DTP00010':         18,
 };
 
-const DRY_RUN = process.argv.includes('--dry-run');
-const BATCH   = 50;
-const NOW     = new Date();
-const AUD     = 'sync_empleados_to_rds.js';
+const DRY_RUN         = process.argv.includes('--dry-run');
+const SKIP_EXPEDIENTE = process.argv.includes('--skip-expediente');
+const BATCH           = 50;
+const NOW             = new Date();
+const AUD             = 'sync_empleados_to_rds.js';
 
 const ts    = () => new Date().toTimeString().slice(0, 8);
 const log   = s => console.log(`[${ts()}] ${s}`);
 const clean = (s, max = 150) =>
   !s ? null : String(s).trim().replace(/\s+/g, ' ').slice(0, max) || null;
+
+// Normaliza nombre de municipio para matching fuzzy (quita acentos, mayúsculas, puntuación)
+function normMuni(s) {
+  if (!s) return '';
+  return String(s).toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9 ]/g, '')
+    .trim().replace(/\s+/g, ' ');
+}
 
 // ── SQL Server: todos los empleados (activos e inactivos) ─────────────────────
 const Q_EMPLEADOS = `
@@ -140,16 +173,349 @@ WHERE c.crgCodigo IS NOT NULL
 ORDER BY c.crgCodigo
 `;
 
+// ── SQL Server: datos completos de expediente (solo activos) ──────────────────
+const Q_EXPEDIENTE = `
+SELECT
+  e.empCodigo,
+  -- Datos personales
+  e.empFechaNacimiento,
+  e.empSexo,
+  e.empEstadoCivil,
+  e.empTipoSangre,
+  e.empLugarNacimiento,
+  e.empProfesionDUI,
+  e.empNivelAcademico,
+  -- Contactos
+  e.empCelular,
+  e.empTelCasa,
+  e.empNomAvisarA,
+  e.empTelAvisarA,
+  -- Banco
+  e.empNumCuentaBco,
+  e.bcoId,
+  -- Documentos
+  e.empISSS,
+  e.empNumIPR,
+  e.empNIT,
+  e.iprId,
+  ipr.iprNombreAbr,
+  e.empDUI,
+  e.empDuiFechaExpedicion,
+  e.empDuiFechaExpiracion,
+  e.muniIdDuiExpedicion,
+  mExp.muniNombre        AS duiMuni,
+  deExp.dptoNombre       AS duiDpto,
+  deExp.dptoCodGobierno  AS duiDptoCod,
+  -- Residencia
+  mRes.muniNombre        AS resMuni,
+  deRes.dptoNombre       AS resDpto,
+  deRes.dptoCodGobierno  AS resDptoCod,
+  e.empDireccion
+FROM olComun.dbo.Empleados e WITH (NOLOCK)
+LEFT JOIN olComun.dbo.InstPrevisional  ipr   WITH (NOLOCK) ON ipr.iprId   = e.iprId
+LEFT JOIN olComun.dbo.MuniCondados     mExp  WITH (NOLOCK) ON mExp.muniId  = e.muniIdDuiExpedicion
+LEFT JOIN olComun.dbo.DeptosEstados    deExp WITH (NOLOCK) ON deExp.dptoId = mExp.dptoId
+LEFT JOIN olComun.dbo.MuniCondados     mRes  WITH (NOLOCK) ON mRes.muniId  = e.muniIdResidencia
+LEFT JOIN olComun.dbo.DeptosEstados    deRes WITH (NOLOCK) ON deRes.dptoId = mRes.dptoId
+WHERE e.empActivo = 1
+  AND e.empCodigo IS NOT NULL
+`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+async function syncExpedientes(mssqlPool, pg, pgRrhh, codigoToId) {
+  log('\n=== FASE 2: EXPEDIENTE ===');
+
+  // 1. Catálogos geográficos de core_db (dptoCodGobierno "06" → geo_departamentos.id)
+  log('Cargando catálogos geográficos...');
+  const [geoDeptos, geoMunis] = await Promise.all([
+    pg.query('SELECT id, codigo FROM geo_departamentos'),
+    pg.query('SELECT id, departamento_id, distrito_id, nombre FROM geo_municipios'),
+  ]);
+  const geoDeptoByCod = Object.fromEntries(geoDeptos.rows.map(d => [d.codigo, Number(d.id)]));
+  const geoMuniByKey  = {};
+  for (const m of geoMunis.rows) {
+    geoMuniByKey[`${normMuni(m.nombre)}:${m.departamento_id}`] = { id: Number(m.id), distrito_id: m.distrito_id ? Number(m.distrito_id) : null };
+  }
+  function resolveGeo(muniNombre, dptoCod) {
+    const deptoId = geoDeptoByCod[dptoCod] ?? null;
+    if (!deptoId || !muniNombre) return { deptoId, muniId: null, distId: null };
+    const hit = geoMuniByKey[`${normMuni(muniNombre)}:${deptoId}`];
+    return { deptoId, muniId: hit?.id ?? null, distId: hit?.distrito_id ?? null };
+  }
+
+  // 2. Consultar Brilo
+  log('Consultando Brilo (expediente)...');
+  const { recordset: briloEmps } = await mssqlPool.request().query(Q_EXPEDIENTE);
+  log(`Empleados activos en Brilo: ${briloEmps.length}`);
+
+  // 3. Limpiar duplicados exactos generados por runs anteriores
+  if (!DRY_RUN) {
+    // Direcciones: conserva el registro más antiguo (menor id) por (empleado_id, tipo, texto)
+    const dupDir = await pgRrhh.query(`
+      DELETE FROM expediente_direcciones
+      WHERE id NOT IN (
+        SELECT MIN(id) FROM expediente_direcciones
+        GROUP BY empleado_id, tipo, LOWER(TRIM(COALESCE(direccion, '')))
+      )
+    `);
+    if (dupDir.rowCount > 0) log(`  Direcciones duplicadas eliminadas: ${dupDir.rowCount}`);
+
+    // Contactos: conserva el registro más antiguo por (empleado_id, valor normalizado)
+    const dupCont = await pgRrhh.query(`
+      DELETE FROM expediente_contactos
+      WHERE id NOT IN (
+        SELECT MIN(id) FROM expediente_contactos
+        GROUP BY empleado_id, LOWER(TRIM(COALESCE(valor, '')))
+      )
+    `);
+    if (dupCont.rowCount > 0) log(`  Contactos duplicados eliminados: ${dupCont.rowCount}`);
+  }
+
+  // 4. Cargar estado actual de rrhh_db (tras cleanup)
+  const [dpRows, docsRows, contRows, bancoRows, dirRows] = await Promise.all([
+    pgRrhh.query('SELECT empleado_id, fecha_nacimiento, genero, estado_civil, lugar_nacimiento, grupo_sanguineo, profesion, domicilio, nacionalidad FROM expediente_datos_personales'),
+    pgRrhh.query('SELECT id, empleado_id, tipo, numero, lugar_exp_texto, lugar_exp_municipio_id, fecha_emision, fecha_vencimiento FROM expediente_documentos'),
+    pgRrhh.query('SELECT empleado_id, tipo, valor, es_emergencia FROM expediente_contactos'),
+    pgRrhh.query('SELECT empleado_id, numero_cuenta FROM expediente_cuentas_banco'),
+    pgRrhh.query('SELECT id, empleado_id, municipio_id, departamento_id FROM expediente_direcciones'),
+  ]);
+
+  const dpMap = {};
+  dpRows.rows.forEach(d => { dpMap[d.empleado_id] = d; });
+
+  const docSet = new Set(docsRows.rows.map(d => `${d.empleado_id}:${d.tipo}`));
+  const duiMap = {};
+  docsRows.rows.filter(d => d.tipo === 'dui').forEach(d => {
+    duiMap[d.empleado_id] = { id: d.id, lugar: d.lugar_exp_texto, muniId: d.lugar_exp_municipio_id, fecha: d.fecha_emision, venc: d.fecha_vencimiento };
+  });
+
+  // Dedup contactos por VALOR (no por tipo+valor): evita duplicar mismo número con distinto tipo
+  // Todos los IDs normalizados a Number para que Set/Map funcionen con los bigint de empleados.id
+  const contValSet = new Set(contRows.rows.map(c => `${c.empleado_id}:${(c.valor||'').trim()}`));
+  const emergSet   = new Set(contRows.rows.filter(c => c.es_emergencia).map(c => Number(c.empleado_id)));
+
+  const bancoSet = new Set(bancoRows.rows.map(b => `${b.empleado_id}:${(b.numero_cuenta||'').trim()}`));
+
+  // Empleados con al menos una dirección (Number para comparar con empId que es Number)
+  const tieneDir  = new Set(dirRows.rows.map(d => Number(d.empleado_id)));
+  // Primer dirId por empleado sin geo IDs (para actualizar municipio_id/depto_id)
+  const dirSinGeo = new Map();
+  for (const d of dirRows.rows) {
+    const eid = Number(d.empleado_id);
+    if (!d.municipio_id && !dirSinGeo.has(eid)) dirSinGeo.set(eid, d.id);
+  }
+
+  let dpActualiz = 0, docsIns = 0, duiActualiz = 0, contIns = 0, bancoIns = 0, dirIns = 0, dirGeoActualiz = 0, sinMatch = 0;
+
+  const ahora = NOW.toISOString();
+
+  for (const emp of briloEmps) {
+    const codigo = String(emp.empCodigo || '').trim();
+    const empId  = codigoToId[codigo];
+    if (!empId) { sinMatch++; continue; }
+
+    // ── Geo IDs para este empleado ─────────────────────────────────────────────
+    const geoExp = resolveGeo(emp.duiMuni, emp.duiDptoCod);
+    const geoRes = resolveGeo(emp.resMuni, emp.resDptoCod);
+
+    // ── Datos personales ──────────────────────────────────────────────────────
+    const dp = dpMap[empId];
+    if (dp) {
+      const updates = {};
+      const fechaNac  = fmtDate(emp.empFechaNacimiento);
+      const genero    = emp.empSexo === 'M' ? 'masculino' : emp.empSexo === 'F' ? 'femenino' : null;
+      const estadoCiv = ESTADO_CIVIL[emp.empEstadoCivil] ?? null;
+      const lugarNac  = clean(emp.empLugarNacimiento, 200);
+      const grupoSang = clean(emp.empTipoSangre, 10);
+      const profesion = clean(emp.empProfesionDUI, 150);
+      const domBrilo  = [emp.resMuni, emp.resDpto].filter(Boolean).join(', ') || null;
+
+      if (fechaNac  && !dp.fecha_nacimiento)        updates.fecha_nacimiento = fechaNac;
+      if (genero    && !dp.genero?.trim())           updates.genero = genero;
+      if (estadoCiv && !dp.estado_civil?.trim())     updates.estado_civil = estadoCiv;
+      if (lugarNac  && !dp.lugar_nacimiento?.trim()) updates.lugar_nacimiento = lugarNac;
+      if (grupoSang && !dp.grupo_sanguineo?.trim())  updates.grupo_sanguineo = grupoSang;
+      if (profesion && !dp.profesion?.trim())        updates.profesion = profesion;
+      if (domBrilo  && !dp.domicilio?.trim())        updates.domicilio = domBrilo;
+      if (!dp.nacionalidad?.trim())                  updates.nacionalidad = 'salvadoreña';
+
+      if (Object.keys(updates).length) {
+        const setCols = Object.keys(updates);
+        const vals    = Object.values(updates);
+        vals.push(ahora, empId);
+        const setClause = setCols.map((c, i) => `${c} = $${i + 1}`).join(', ');
+        if (!DRY_RUN) await pgRrhh.query(
+          `UPDATE expediente_datos_personales SET ${setClause}, updated_at = $${vals.length - 1} WHERE empleado_id = $${vals.length}`,
+          vals
+        );
+        dpActualiz++;
+      }
+    }
+
+    // ── Documentos: ISSS ──────────────────────────────────────────────────────
+    if (emp.empISSS?.trim() && !docSet.has(`${empId}:isss`)) {
+      if (!DRY_RUN) await pgRrhh.query(
+        `INSERT INTO expediente_documentos (empleado_id, tipo, numero, notas, created_at, updated_at)
+         VALUES ($1, 'isss', $2, 'sync:brilo', $3, $3)`,
+        [empId, emp.empISSS.trim(), ahora]
+      );
+      docSet.add(`${empId}:isss`);
+      docsIns++;
+    }
+
+    // ── Documentos: AFP ───────────────────────────────────────────────────────
+    if (emp.empNumIPR?.trim() && !docSet.has(`${empId}:afp`)) {
+      const afpNombre = emp.iprNombreAbr || AFP_NAMES[emp.iprId] || 'AFP';
+      if (!DRY_RUN) await pgRrhh.query(
+        `INSERT INTO expediente_documentos (empleado_id, tipo, numero, entidad_emisora, notas, created_at, updated_at)
+         VALUES ($1, 'afp', $2, $3, 'sync:brilo', $4, $4)`,
+        [empId, emp.empNumIPR.trim(), afpNombre, ahora]
+      );
+      docSet.add(`${empId}:afp`);
+      docsIns++;
+    }
+
+    // ── Documentos: NIT ───────────────────────────────────────────────────────
+    if (emp.empNIT?.trim() && !docSet.has(`${empId}:nit`)) {
+      if (!DRY_RUN) await pgRrhh.query(
+        `INSERT INTO expediente_documentos (empleado_id, tipo, numero, notas, created_at, updated_at)
+         VALUES ($1, 'nit', $2, 'sync:brilo', $3, $3)`,
+        [empId, emp.empNIT.trim(), ahora]
+      );
+      docSet.add(`${empId}:nit`);
+      docsIns++;
+    }
+
+    // ── Documentos: DUI (lugar, fecha, vencimiento, municipio_id) ─────────────
+    if (duiMap[empId]) {
+      const dui        = duiMap[empId];
+      const lugarBrilo = [emp.duiMuni, emp.duiDpto].filter(Boolean).join(', ') || null;
+      const fechaExp   = fmtDate(emp.empDuiFechaExpedicion);
+      const fechaVenc  = fmtDate(emp.empDuiFechaExpiracion);
+
+      const needsLugar = lugarBrilo  && !dui.lugar?.trim();
+      const needsFecha = fechaExp    && !dui.fecha;
+      const needsVenc  = fechaVenc   && !dui.venc;
+      const needsMuni  = geoExp.muniId && !dui.muniId;
+
+      if (needsLugar || needsFecha || needsVenc || needsMuni) {
+        if (!DRY_RUN) await pgRrhh.query(
+          `UPDATE expediente_documentos
+           SET lugar_exp_texto       = COALESCE(NULLIF(lugar_exp_texto,''), $1),
+               lugar_exp_municipio_id = COALESCE(lugar_exp_municipio_id, $2),
+               fecha_emision         = COALESCE(fecha_emision, $3),
+               fecha_vencimiento     = COALESCE(fecha_vencimiento, $4),
+               updated_at            = $5
+           WHERE id = $6`,
+          [lugarBrilo, geoExp.muniId, fechaExp, fechaVenc, ahora, dui.id]
+        );
+        duiActualiz++;
+      }
+    }
+
+    // ── Contactos: celular (dedup por valor, no por tipo+valor) ───────────────
+    const celular = clean(emp.empCelular, 30);
+    if (celular && !contValSet.has(`${empId}:${celular}`)) {
+      if (!DRY_RUN) await pgRrhh.query(
+        `INSERT INTO expediente_contactos (empleado_id, tipo, etiqueta, valor, es_emergencia, orden, created_at, updated_at)
+         VALUES ($1, 'celular', 'Celular', $2, false, 1, $3, $3)`,
+        [empId, celular, ahora]
+      );
+      contValSet.add(`${empId}:${celular}`);
+      contIns++;
+    }
+
+    // ── Contactos: teléfono casa (solo si valor distinto al celular) ──────────
+    const telCasa = clean(emp.empTelCasa, 30);
+    if (telCasa && !contValSet.has(`${empId}:${telCasa}`)) {
+      if (!DRY_RUN) await pgRrhh.query(
+        `INSERT INTO expediente_contactos (empleado_id, tipo, etiqueta, valor, es_emergencia, orden, created_at, updated_at)
+         VALUES ($1, 'telefono', 'Casa', $2, false, 2, $3, $3)`,
+        [empId, telCasa, ahora]
+      );
+      contValSet.add(`${empId}:${telCasa}`);
+      contIns++;
+    }
+
+    // ── Contactos: emergencia ─────────────────────────────────────────────────
+    const nomEmerg = clean(emp.empNomAvisarA, 150);
+    const telEmerg = clean(emp.empTelAvisarA, 30);
+    if (nomEmerg && telEmerg && !emergSet.has(empId) && !contValSet.has(`${empId}:${telEmerg}`)) {
+      if (!DRY_RUN) await pgRrhh.query(
+        `INSERT INTO expediente_contactos (empleado_id, tipo, etiqueta, valor, nombre_contacto, es_emergencia, orden, created_at, updated_at)
+         VALUES ($1, 'telefono', 'Emergencia', $2, $3, true, 10, $4, $4)`,
+        [empId, telEmerg, nomEmerg, ahora]
+      );
+      emergSet.add(empId);
+      contValSet.add(`${empId}:${telEmerg}`);
+      contIns++;
+    }
+
+    // ── Cuenta bancaria ───────────────────────────────────────────────────────
+    const numCuenta = clean(emp.empNumCuentaBco, 50);
+    if (numCuenta && numCuenta.toUpperCase() !== 'CHEQUE'
+        && emp.bcoId && !bancoSet.has(`${empId}:${numCuenta}`)) {
+      const bancoNombre = BANCO_NAMES[emp.bcoId] || `BANCO ${emp.bcoId}`;
+      if (!DRY_RUN) await pgRrhh.query(
+        `INSERT INTO expediente_cuentas_banco (empleado_id, banco, tipo_cuenta, numero_cuenta, es_principal, aud_usuario, created_at, updated_at)
+         VALUES ($1, $2, 'ahorros', $3, true, 'sync:brilo', $4, $4)`,
+        [empId, bancoNombre, numCuenta, ahora]
+      );
+      bancoSet.add(`${empId}:${numCuenta}`);
+      bancoIns++;
+    }
+
+    // ── Dirección de residencia ───────────────────────────────────────────────
+    const domBrilo = [emp.resMuni, emp.resDpto].filter(Boolean).join(', ');
+    const calle    = clean(emp.empDireccion, 300) || domBrilo;
+
+    if (!tieneDir.has(empId) && calle) {
+      // No tiene ninguna dirección → insertar con IDs geo
+      if (!DRY_RUN) await pgRrhh.query(
+        `INSERT INTO expediente_direcciones
+           (empleado_id, tipo, direccion, municipio, departamento_geo,
+            departamento_id, distrito_id, municipio_id, es_principal, created_at, updated_at)
+         VALUES ($1, 'residencia', $2, $3, $4, $5, $6, $7, true, $8, $8)`,
+        [empId, calle, emp.resMuni || '', emp.resDpto || '',
+         geoRes.deptoId, geoRes.distId, geoRes.muniId, ahora]
+      );
+      tieneDir.add(empId);
+      dirIns++;
+    } else if (tieneDir.has(empId) && dirSinGeo.has(empId) && geoRes.deptoId) {
+      // Ya tiene dirección pero le faltan los IDs geo → actualizar
+      if (!DRY_RUN) await pgRrhh.query(
+        `UPDATE expediente_direcciones
+         SET departamento_id = COALESCE(departamento_id, $1),
+             distrito_id     = COALESCE(distrito_id, $2),
+             municipio_id    = COALESCE(municipio_id, $3),
+             updated_at      = $4
+         WHERE id = $5`,
+        [geoRes.deptoId, geoRes.distId, geoRes.muniId, ahora, dirSinGeo.get(empId)]
+      );
+      dirSinGeo.delete(empId);
+      dirGeoActualiz++;
+    }
+  }
+
+  log(`Datos personales actualizados   : ${dpActualiz}`);
+  log(`Documentos insertados           : ${docsIns}`);
+  log(`DUI lugar/fecha/id actualizados : ${duiActualiz}`);
+  log(`Contactos insertados            : ${contIns}`);
+  log(`Cuentas bancarias insertadas    : ${bancoIns}`);
+  log(`Direcciones creadas             : ${dirIns}`);
+  log(`Direcciones geo actualizadas    : ${dirGeoActualiz}`);
+  log(`Sin match en core_db            : ${sinMatch}`);
+  if (DRY_RUN) log('[DRY RUN — no se escribió nada en expediente]');
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 async function run() {
   if (DRY_RUN) log('=== MODO DRY-RUN: sin cambios en BD ===');
 
-  // ── Conectar SQL Server ───────────────────────────────────────────────────
   log('Conectando a SQL Server...');
   const mssqlPool = await sql.connect(MSSQL_CFG);
   log('SQL Server OK.');
 
-  // ── Conectar PostgreSQL (con reintentos) ──────────────────────────────────
   log('Conectando a PostgreSQL RDS (core_db)...');
   let pg;
   for (let attempt = 1; attempt <= 8; attempt++) {
@@ -173,13 +539,12 @@ async function run() {
   log('PostgreSQL rrhh_db OK.\n');
 
   try {
-    // ── 1. Sincronizar cargos (upsert completo — son catálogo) ───────────────
-    log('=== CARGOS ===');
+    // ── FASE 1: CARGOS ────────────────────────────────────────────────────────
+    log('=== FASE 1A: CARGOS ===');
     const cargosRows = (await mssqlPool.request().query(Q_CARGOS)).recordset;
     log(`SQL Server: ${cargosRows.length} cargos`);
 
     if (!DRY_RUN && cargosRows.length) {
-      let cInserted = 0, cUpdated = 0;
       for (let i = 0; i < cargosRows.length; i += BATCH) {
         const batch = cargosRows.slice(i, i + BATCH);
         const params = [];
@@ -188,16 +553,12 @@ async function run() {
           const n = params.length;
           return `($${n-5},$${n-4},$${n-3},$${n-2},$${n-1},$${n})`;
         });
-        const res = await pg.query(
+        await pg.query(
           `INSERT INTO cargos (codigo, nombre, activo, aud_usuario, created_at, updated_at)
            VALUES ${rowParts.join(',')}
-           ON CONFLICT (codigo) DO UPDATE SET
-             nombre     = EXCLUDED.nombre,
-             updated_at = EXCLUDED.updated_at`,
+           ON CONFLICT (codigo) DO UPDATE SET nombre = EXCLUDED.nombre, updated_at = EXCLUDED.updated_at`,
           params
         );
-        // rowCount in ON CONFLICT DO UPDATE counts all affected rows
-        cInserted += batch.length;
       }
       await pg.query(`SELECT setval('cargos_id_seq', (SELECT COALESCE(MAX(id), 1) FROM cargos))`);
       log(`Cargos upsertados: ${cargosRows.length}\n`);
@@ -205,7 +566,9 @@ async function run() {
       log(`(dry-run) Se procesarían ${cargosRows.length} cargos\n`);
     }
 
-    // ── 2. Precargar mapas de IDs desde PostgreSQL ────────────────────────────
+    // ── FASE 1: EMPLEADOS ─────────────────────────────────────────────────────
+    log('=== FASE 1B: EMPLEADOS ===');
+
     const [sucRes, cargoRes] = await Promise.all([
       pg.query('SELECT id, codigo FROM sucursales'),
       pg.query('SELECT id, codigo FROM cargos'),
@@ -215,22 +578,19 @@ async function run() {
     log(`Sucursales en RDS: ${sucRes.rows.length}`);
     log(`Cargos en RDS:     ${cargoRes.rows.length}`);
 
-    // ── 3. Precargar empleados existentes en RDS (por codigo) ─────────────────
     const existRes = await pg.query('SELECT codigo, sync_excluido, departamento_id FROM empleados');
-    const existentes    = new Set(existRes.rows.map(r => r.codigo));
-    const excluidos     = new Set(existRes.rows.filter(r => r.sync_excluido).map(r => r.codigo));
-    const deptActual    = Object.fromEntries(
+    const existentes = new Set(existRes.rows.map(r => r.codigo));
+    const excluidos  = new Set(existRes.rows.filter(r => r.sync_excluido).map(r => r.codigo));
+    const deptActual = Object.fromEntries(
       existRes.rows.filter(r => r.departamento_id).map(r => [r.codigo, parseInt(r.departamento_id)])
     );
     log(`Empleados ya en RDS: ${existentes.size}\n`);
 
-    // ── 3b. Cargar jerarquía de departamentos para preservar sub-depts ─────────
     const deptHierRes = await pg.query('SELECT id, parent_id FROM departamentos WHERE activo = true');
     const deptParentMap = {};
     for (const d of deptHierRes.rows)
       deptParentMap[parseInt(d.id)] = d.parent_id ? parseInt(d.parent_id) : null;
 
-    // ¿deptId es hijo (directo o indirecto) de ancestorId?
     function isChildDept(deptId, ancestorId) {
       if (!deptId || !ancestorId) return false;
       let cur = deptParentMap[deptId];
@@ -241,14 +601,11 @@ async function run() {
       return false;
     }
 
-    // ── 4. Consultar empleados SQL Server ─────────────────────────────────────
-    log('=== EMPLEADOS ===');
     const empRows = (await mssqlPool.request().query(Q_EMPLEADOS)).recordset;
     log(`SQL Server: ${empRows.length} empleados (activos + inactivos)`);
 
-    const paraInsertar = [];
-    const paraActualizar = [];  // [departamento_id, sucursal_id, fecha_ingreso, cargo_id, salario_base, email, codigo]
-
+    const paraInsertar   = [];
+    const paraActualizar = [];
     let sinDepMap = 0;
 
     for (const r of empRows) {
@@ -259,44 +616,27 @@ async function run() {
       const sucursalId     = sucCodigo ? (sucByCode[sucCodigo] ?? null) : null;
 
       if (existentes.has(codigo)) {
-        if (excluidos.has(codigo)) continue; // sync_excluido=true → no tocar
-        const fechaIngreso  = fmtDate(r.fecha_ingreso);
-        const cargoId       = cargoByCode[r.cargo_codigo] ?? null;
-        const salarioBase   = r.salario_mes != null ? parseFloat(r.salario_mes) : null;
-        const emailVal      = clean(r.email, 150);
+        if (excluidos.has(codigo)) continue;
+        const fechaIngreso = fmtDate(r.fecha_ingreso);
+        const cargoId      = cargoByCode[r.cargo_codigo] ?? null;
+        const salarioBase  = r.salario_mes != null ? parseFloat(r.salario_mes) : null;
+        const emailVal     = clean(r.email, 150);
 
-        // Si el empleado ya está en un sub-dept del dept mapeado, preservar el sub-dept
-        const curDept = deptActual[codigo] ?? null;
+        const curDept  = deptActual[codigo] ?? null;
         const deptFinal = (curDept && isChildDept(curDept, departamentoId))
-          ? curDept       // está en sub-dept personalizado → mantener
-          : departamentoId; // usar mapeo Brilo (o null si no hay mapeo → COALESCE lo preserva)
+          ? curDept : departamentoId;
 
         paraActualizar.push([deptFinal, sucursalId, fechaIngreso, cargoId, salarioBase, emailVal, codigo]);
       } else if (activo) {
-        // NUEVO y activo en SQL Server → insertar completo
-        const sucCodigo  = DEP_SUCURSAL_MAP[r.dep_codigo] ?? null;
-        const sucursalId = sucCodigo ? (sucByCode[sucCodigo] ?? null) : null;
-        const cargoId    = cargoByCode[r.cargo_codigo] ?? null;
-
+        const cargoId = cargoByCode[r.cargo_codigo] ?? null;
         if (!sucCodigo) sinDepMap++;
-
         paraInsertar.push([
-          codigo,
-          clean(r.nombres, 100),
-          clean(r.apellidos, 100),
-          clean(r.email, 150),
-          cargoId,
-          sucursalId,
-          departamentoId,
-          activo,
-          fmtDate(r.fecha_ingreso),
-          r.salario_mes != null ? parseFloat(r.salario_mes) : null,
-          AUD,
-          NOW,
-          NOW,
+          codigo, clean(r.nombres, 100), clean(r.apellidos, 100), clean(r.email, 150),
+          cargoId, sucursalId, departamentoId, activo,
+          fmtDate(r.fecha_ingreso), r.salario_mes != null ? parseFloat(r.salario_mes) : null,
+          AUD, NOW, NOW,
         ]);
       }
-      // Nuevo + inactivo → se omite (no se inserta en RDS)
     }
 
     log(`  Para insertar (nuevos):          ${paraInsertar.length}`);
@@ -305,17 +645,12 @@ async function run() {
     if (sinDepMap) log(`  AVISO: ${sinDepMap} nuevos sin mapeo de sucursal`);
 
     if (!DRY_RUN) {
-      // ── Actualizar activo en empleados existentes ─────────────────────────
       if (paraActualizar.length) {
         let updOk = 0;
         for (let i = 0; i < paraActualizar.length; i += BATCH) {
           const batch = paraActualizar.slice(i, i + BATCH);
-          for (const [departamentoId, sucursalId, fechaIngreso, cargoId, salarioBase, emailVal, codigo] of batch) {
+          for (const [dId, sId, fi, cId, sb, em, codigo] of batch) {
             await pg.query(
-              // activo: NO se toca — las bajas se registran desde el módulo RRHH.
-              // cargo_id, sucursal_id, departamento_id: siempre actualizados si Brilo tiene mapeo.
-              //   Si Brilo no tiene mapeo para ese depto (ej: Mansión), se conserva el valor existente.
-              // fecha_ingreso, salario_base, email: COALESCE (solo rellena si está vacío).
               `UPDATE empleados
                SET departamento_id = COALESCE($1, departamento_id),
                    sucursal_id     = COALESCE($2, sucursal_id),
@@ -325,7 +660,7 @@ async function run() {
                    email           = COALESCE(NULLIF(email, ''), $6),
                    updated_at      = $7
                WHERE codigo = $8`,
-              [departamentoId, sucursalId, fechaIngreso, cargoId, salarioBase, emailVal, NOW, codigo]
+              [dId, sId, fi, cId, sb, em, NOW, codigo]
             );
             updOk++;
           }
@@ -335,10 +670,10 @@ async function run() {
         log(`Datos actualizados en ${updOk} empleados existentes.`);
       }
 
-      // ── Insertar empleados nuevos ─────────────────────────────────────────
       if (paraInsertar.length) {
         const cols = ['codigo', 'nombres', 'apellidos', 'email', 'cargo_id',
-                      'sucursal_id', 'departamento_id', 'activo', 'fecha_ingreso', 'salario_base', 'aud_usuario', 'created_at', 'updated_at'];
+                      'sucursal_id', 'departamento_id', 'activo', 'fecha_ingreso',
+                      'salario_base', 'aud_usuario', 'created_at', 'updated_at'];
         let insOk = 0;
         for (let i = 0; i < paraInsertar.length; i += BATCH) {
           const batch  = paraInsertar.slice(i, i + BATCH);
@@ -360,10 +695,10 @@ async function run() {
         log(`${insOk} empleados nuevos insertados.`);
       }
 
-      // ── Crear ingresos_personal para empleados nuevos ─────────────────────
+      // Crear ingresos_personal para empleados nuevos
       if (paraInsertar.length) {
         try {
-          const codigos = paraInsertar.map(r => r[0]); // r[0] = codigo
+          const codigos = paraInsertar.map(r => r[0]);
           const empRes  = await pg.query(
             `SELECT e.id, e.nombres, e.apellidos, e.fecha_ingreso,
                     c.nombre AS cargo_nombre, s.nombre AS sucursal_nombre
@@ -373,7 +708,6 @@ async function run() {
              WHERE e.codigo = ANY($1)`,
             [codigos]
           );
-
           if (empRes.rows.length) {
             const empIds = empRes.rows.map(r => r.id);
             const yaExistenRes = await pgRrhh.query(
@@ -381,16 +715,13 @@ async function run() {
               [empIds]
             );
             const yaExisten = new Set(yaExistenRes.rows.map(r => r.empleado_id));
-
             const sinIngreso = empRes.rows.filter(r => !yaExisten.has(r.id));
             if (sinIngreso.length) {
               const params = [];
               const rowParts = sinIngreso.map(r => {
                 const nombre = `${r.nombres} ${r.apellidos}`.trim();
-                params.push(
-                  r.id, nombre, r.cargo_nombre, r.sucursal_nombre,
-                  fmtDate(r.fecha_ingreso), 'pendiente', AUD, NOW, NOW
-                );
+                params.push(r.id, nombre, r.cargo_nombre, r.sucursal_nombre,
+                            fmtDate(r.fecha_ingreso), 'pendiente', AUD, NOW, NOW);
                 const n = params.length;
                 return `($${n-8},$${n-7},$${n-6},$${n-5},$${n-4},$${n-3},$${n-2},$${n-1},$${n})`;
               });
@@ -402,8 +733,6 @@ async function run() {
                 params
               );
               log(`${sinIngreso.length} registro(s) de ingreso creados en ingresos_personal.`);
-            } else {
-              log('Todos los empleados nuevos ya tenían registro de ingreso.');
             }
           }
         } catch (e) {
@@ -411,18 +740,29 @@ async function run() {
         }
       }
 
-      // ── Resumen final ─────────────────────────────────────────────────────
-      const total = await pg.query('SELECT COUNT(*) FROM empleados');
+      const total   = await pg.query('SELECT COUNT(*) FROM empleados');
       const activos = await pg.query('SELECT COUNT(*) FROM empleados WHERE activo = true');
       log('\n==========================================');
-      log('RESUMEN FINAL');
+      log('RESUMEN FASE 1');
       log(`  Empleados en RDS (total):  ${total.rows[0].count}`);
       log(`  Empleados activos:         ${activos.rows[0].count}`);
       log(`  Insertados esta ejecución: ${paraInsertar.length}`);
-      log(`  Activo actualizado en:     ${paraActualizar.length}`);
+      log(`  Actualizados esta ejecución: ${paraActualizar.length}`);
       log('==========================================');
     } else {
       log('\n(dry-run) Sin cambios. Ejecuta sin --dry-run para aplicar.');
+    }
+
+    // ── FASE 2: EXPEDIENTE ────────────────────────────────────────────────────
+    if (!SKIP_EXPEDIENTE) {
+      // Construir mapa codigo → id (después de insertar posibles nuevos empleados)
+      const idRes = await pg.query('SELECT id, codigo FROM empleados WHERE activo = true AND codigo IS NOT NULL');
+      // Number() normaliza bigint-string ("123") a number para que Set.has() funcione
+      // con los integer-type de las tablas rrhh_db (expediente_*)
+      const codigoToId = Object.fromEntries(idRes.rows.map(r => [String(r.codigo).trim(), Number(r.id)]));
+      await syncExpedientes(mssqlPool, pg, pgRrhh, codigoToId);
+    } else {
+      log('\n[--skip-expediente] Fase 2 omitida.');
     }
 
   } finally {
