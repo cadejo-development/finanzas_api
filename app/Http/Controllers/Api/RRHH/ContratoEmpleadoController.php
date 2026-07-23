@@ -372,7 +372,7 @@ class ContratoEmpleadoController extends RRHHBaseController
         // ── Fechas ───────────────────────────────────────────────────────────
         $fechaInicio      = $contrato->fecha_inicio ? Carbon::parse($contrato->fecha_inicio) : null;
         $fechaFin         = $contrato->fecha_fin    ? Carbon::parse($contrato->fecha_fin)    : null;
-        $fechaFirma       = Carbon::now();
+        $fechaFirma       = $fechaInicio ?? Carbon::now();
         $fechaNacimiento  = $datosPersonales?->fecha_nacimiento
             ? Carbon::parse($datosPersonales->fecha_nacimiento)
             : null;
