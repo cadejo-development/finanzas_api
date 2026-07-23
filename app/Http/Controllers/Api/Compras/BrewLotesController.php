@@ -136,6 +136,7 @@ class BrewLotesController extends Controller
         $now = now();
 
         foreach ($lote->receta->maltas as $m) {
+            if (empty($m->nombre)) continue;
             $key = 'malta:' . $m->nombre;
             if (!$existentes->has($key)) {
                 $insertar[] = [
@@ -154,6 +155,7 @@ class BrewLotesController extends Controller
         }
 
         foreach ($lote->receta->lupulos as $l) {
+            if (empty($l->nombre)) continue;
             $key = 'lupulo:' . $l->nombre;
             if (!$existentes->has($key)) {
                 $insertar[] = [
@@ -172,6 +174,7 @@ class BrewLotesController extends Controller
         }
 
         foreach ($lote->receta->minerales as $mn) {
+            if (empty($mn->nombre)) continue;
             $key = 'mineral:' . $mn->nombre;
             if (!$existentes->has($key)) {
                 $insertar[] = [
@@ -190,6 +193,7 @@ class BrewLotesController extends Controller
         }
 
         foreach ($lote->receta->levaduras as $lv) {
+            if (empty($lv->nombre)) continue;
             $key = 'levadura:' . $lv->nombre;
             if (!$existentes->has($key)) {
                 $insertar[] = [
