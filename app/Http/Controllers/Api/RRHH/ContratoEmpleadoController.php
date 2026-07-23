@@ -350,8 +350,24 @@ class ContratoEmpleadoController extends RRHHBaseController
         };
         $genero       = ucfirst(strtolower($datosPersonales?->genero ?? ''));
         $nacionalidad = $datosPersonales?->nacionalidad ?? 'salvadoreño/a';
-        $profesion    = $datosPersonales?->profesion ?? '';
-        $domicilio    = $datosPersonales?->domicilio  ?? '';
+
+        $profesion = trim($datosPersonales?->profesion ?? '');
+        if ($profesion === '') $profesion = 'Empleado';
+
+        $domicilio = trim($datosPersonales?->domicilio ?? '');
+        if ($domicilio === '' && $contrato->empleado_id) {
+            $dir = DB::connection('rrhh')
+                ->table('expediente_direcciones')
+                ->where('empleado_id', $contrato->empleado_id)
+                ->where('es_principal', true)
+                ->first();
+            if ($dir) {
+                $domicilio = implode(', ', array_filter([
+                    trim($dir->municipio ?? ''),
+                    trim($dir->departamento_geo ?? ''),
+                ]));
+            }
+        }
 
         // ── Fechas ───────────────────────────────────────────────────────────
         $fechaInicio      = $contrato->fecha_inicio ? Carbon::parse($contrato->fecha_inicio) : null;
