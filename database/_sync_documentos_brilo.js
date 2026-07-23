@@ -11,31 +11,38 @@
  * Uso: node database/_sync_documentos_brilo.js [--dry-run]
  */
 
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
 const sql        = require('mssql');
 const { Client } = require('pg');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
-const RDS_HOST = 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com';
-const RDS_USER = 'cadejo_admin';
-const RDS_PASS = 'Holamundo#3..';
-
 const briloConfig = {
-  server: '10.0.4.20', port: 2033, database: 'olcomun',
-  user: 'olimporeader', password: 'olimporeader',
+  server:   process.env.DB_HOST_ORIGEN,
+  port:     Number(process.env.DB_PORT_ORIGEN) || 2033,
+  database: process.env.DB_DATABASE_ORIGEN,
+  user:     process.env.DB_USERNAME_ORIGEN,
+  password: process.env.DB_PASSWORD_ORIGEN,
   options: { encrypt: false, trustServerCertificate: true, connectTimeout: 60000, requestTimeout: 60000 },
 };
 
 const pgRrhhConfig = {
-  host: RDS_HOST, port: 5432, database: 'rrhh_db',
-  user: RDS_USER, password: RDS_PASS,
-  ssl:  { rejectUnauthorized: false },
+  host:     process.env.DB_HOST_RRHH,
+  port:     Number(process.env.DB_PORT_RRHH) || 5432,
+  database: process.env.DB_DATABASE_RRHH,
+  user:     process.env.DB_USERNAME_RRHH,
+  password: process.env.DB_PASSWORD_RRHH,
+  ssl:      { rejectUnauthorized: false },
 };
 
 const pgCoreConfig = {
-  host: RDS_HOST, port: 5432, database: 'core_db',
-  user: RDS_USER, password: RDS_PASS,
-  ssl:  { rejectUnauthorized: false },
+  host:     process.env.DB_HOST,
+  port:     Number(process.env.DB_PORT) || 5432,
+  database: process.env.DB_DATABASE,
+  user:     process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
+  ssl:      { rejectUnauthorized: false },
 };
 
 // Mapa iprId → nombre de AFP

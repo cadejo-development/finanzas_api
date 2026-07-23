@@ -28,3 +28,6 @@ package-lock.json
 node_modules/
 vite.config.js
 storage/fonts/*.json
+
+# Scripts de base de datos con credenciales / uso interno
+database/_sync_documentos_brilo.js

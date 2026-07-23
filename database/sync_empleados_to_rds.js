@@ -26,6 +26,8 @@
  *   node database/sync_empleados_to_rds.js --skip-expediente  (solo fase 1)
  */
 
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
 const sql      = require('mssql');
 const { Pool } = require('pg');
 
@@ -37,17 +39,22 @@ function fmtDate(d) {
 
 // ── SQL Server ────────────────────────────────────────────────────────────────
 const MSSQL_CFG = {
-  user: 'olimporeader', password: 'olimporeader',
-  server: '10.0.4.20', port: 2033, database: 'olcomun',
+  user:     process.env.DB_USERNAME_ORIGEN,
+  password: process.env.DB_PASSWORD_ORIGEN,
+  server:   process.env.DB_HOST_ORIGEN,
+  port:     Number(process.env.DB_PORT_ORIGEN) || 2033,
+  database: process.env.DB_DATABASE_ORIGEN,
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 15000 },
   requestTimeout: 180000,
 };
 
 // ── RDS PostgreSQL core_db ────────────────────────────────────────────────────
 const PG_CFG = {
-  host: 'cadejo-finanzas-db.c7u6secoqxcn.us-east-2.rds.amazonaws.com', port: 5432,
-  database: 'core_db', user: 'cadejo_admin',
-  password: 'Holamundo#3..',
+  host:     process.env.DB_HOST,
+  port:     Number(process.env.DB_PORT) || 5432,
+  database: process.env.DB_DATABASE,
+  user:     process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false },
   connectionTimeoutMillis: 30000,
   idleTimeoutMillis: 600000,
@@ -254,13 +261,21 @@ async function syncExpedientes(mssqlPool, pg, pgRrhh, codigoToId) {
     if (!deptoId || !muniNombre) return { deptoId, muniId: null, distId: null };
     const key = `${normMuni(muniNombre)}:${deptoId}`;
 
-    // 1. Intentar match exacto de municipio
+    // 1. Municipio exacto
     const muniHit = geoMuniByKey[key];
     if (muniHit) return { deptoId, muniId: muniHit.id, distId: muniHit.distrito_id };
 
-    // 2. Fallback: Brilo a veces usa nombre de distrito como municipio (ej. "San Salvador Centro")
+    // 2. Brilo usa nombre de distrito como municipio (ej. "San Salvador Centro")
     const distId = geoDistByKey[key] ?? null;
-    return { deptoId, muniId: null, distId };
+    if (distId) {
+      // Intentar municipio "principal" del distrito quitando sufijo de orientación.
+      // Ej: "San Salvador Centro" → "san salvador" → municipio San Salvador (id=110).
+      const stripped = normMuni(muniNombre).replace(/\s+(norte|sur|este|oeste|centro|occidente|oriente)$/, '');
+      const mainMuni = geoMuniByKey[`${stripped}:${deptoId}`];
+      return { deptoId, muniId: mainMuni?.id ?? null, distId };
+    }
+
+    return { deptoId, muniId: null, distId: null };
   }
 
   // 2. Consultar Brilo
