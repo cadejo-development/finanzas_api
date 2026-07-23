@@ -227,20 +227,40 @@ async function syncExpedientes(mssqlPool, pg, pgRrhh, codigoToId) {
 
   // 1. Catálogos geográficos de core_db (dptoCodGobierno "06" → geo_departamentos.id)
   log('Cargando catálogos geográficos...');
-  const [geoDeptos, geoMunis] = await Promise.all([
+  const [geoDeptos, geoMunis, geoDists] = await Promise.all([
     pg.query('SELECT id, codigo FROM geo_departamentos'),
     pg.query('SELECT id, departamento_id, distrito_id, nombre FROM geo_municipios'),
+    pg.query('SELECT id, departamento_id, nombre FROM geo_distritos'),
   ]);
   const geoDeptoByCod = Object.fromEntries(geoDeptos.rows.map(d => [d.codigo, Number(d.id)]));
-  const geoMuniByKey  = {};
+
+  // Municipio: normMuni(nombre)+':'+departamento_id → {id, distrito_id}
+  const geoMuniByKey = {};
   for (const m of geoMunis.rows) {
-    geoMuniByKey[`${normMuni(m.nombre)}:${m.departamento_id}`] = { id: Number(m.id), distrito_id: m.distrito_id ? Number(m.distrito_id) : null };
+    geoMuniByKey[`${normMuni(m.nombre)}:${m.departamento_id}`] = {
+      id: Number(m.id), distrito_id: m.distrito_id ? Number(m.distrito_id) : null,
+    };
   }
+
+  // Distrito (fallback): normMuni(nombre)+':'+departamento_id → distrito_id
+  // Brilo usa nombres de distrito como "San Salvador Centro" como nivel de "municipio"
+  const geoDistByKey = {};
+  for (const d of geoDists.rows) {
+    geoDistByKey[`${normMuni(d.nombre)}:${Number(d.departamento_id)}`] = Number(d.id);
+  }
+
   function resolveGeo(muniNombre, dptoCod) {
     const deptoId = geoDeptoByCod[dptoCod] ?? null;
     if (!deptoId || !muniNombre) return { deptoId, muniId: null, distId: null };
-    const hit = geoMuniByKey[`${normMuni(muniNombre)}:${deptoId}`];
-    return { deptoId, muniId: hit?.id ?? null, distId: hit?.distrito_id ?? null };
+    const key = `${normMuni(muniNombre)}:${deptoId}`;
+
+    // 1. Intentar match exacto de municipio
+    const muniHit = geoMuniByKey[key];
+    if (muniHit) return { deptoId, muniId: muniHit.id, distId: muniHit.distrito_id };
+
+    // 2. Fallback: Brilo a veces usa nombre de distrito como municipio (ej. "San Salvador Centro")
+    const distId = geoDistByKey[key] ?? null;
+    return { deptoId, muniId: null, distId };
   }
 
   // 2. Consultar Brilo
@@ -277,7 +297,7 @@ async function syncExpedientes(mssqlPool, pg, pgRrhh, codigoToId) {
     pgRrhh.query('SELECT id, empleado_id, tipo, numero, lugar_exp_texto, lugar_exp_municipio_id, fecha_emision, fecha_vencimiento FROM expediente_documentos'),
     pgRrhh.query('SELECT empleado_id, tipo, valor, es_emergencia FROM expediente_contactos'),
     pgRrhh.query('SELECT empleado_id, numero_cuenta FROM expediente_cuentas_banco'),
-    pgRrhh.query('SELECT id, empleado_id, municipio_id, departamento_id FROM expediente_direcciones'),
+    pgRrhh.query('SELECT id, empleado_id, municipio_id, distrito_id, departamento_id FROM expediente_direcciones'),
   ]);
 
   const dpMap = {};
@@ -298,11 +318,11 @@ async function syncExpedientes(mssqlPool, pg, pgRrhh, codigoToId) {
 
   // Empleados con al menos una dirección (Number para comparar con empId que es Number)
   const tieneDir  = new Set(dirRows.rows.map(d => Number(d.empleado_id)));
-  // Primer dirId por empleado sin geo IDs (para actualizar municipio_id/depto_id)
+  // Primer dirId por empleado sin geo IDs completos (municipio_id O distrito_id faltante)
   const dirSinGeo = new Map();
   for (const d of dirRows.rows) {
     const eid = Number(d.empleado_id);
-    if (!d.municipio_id && !dirSinGeo.has(eid)) dirSinGeo.set(eid, d.id);
+    if ((!d.municipio_id || !d.distrito_id) && !dirSinGeo.has(eid)) dirSinGeo.set(eid, d.id);
   }
 
   let dpActualiz = 0, docsIns = 0, duiActualiz = 0, contIns = 0, bancoIns = 0, dirIns = 0, dirGeoActualiz = 0, sinMatch = 0;
