@@ -41,6 +41,30 @@ class PlazasController extends Controller
         return response()->json($plazas);
     }
 
+    public function exceso(Request $request)
+    {
+        $dptoId = $request->query('departamento_id');
+        if (!$dptoId) return response()->json([]);
+
+        $empleados = DB::connection('pgsql')->select("
+            SELECT e.id, e.nombres, e.apellidos, c.nombre as cargo_nombre, c.codigo as cargo_codigo
+            FROM empleados e
+            JOIN cargos c ON c.id = e.cargo_id
+            WHERE e.activo = true
+              AND e.departamento_id = ?
+              AND (
+                e.plaza_id IS NULL
+                OR EXISTS (
+                  SELECT 1 FROM plazas p
+                  WHERE p.id = e.plaza_id AND p.departamento_id != e.departamento_id
+                )
+              )
+            ORDER BY c.nombre, e.apellidos
+        ", [$dptoId]);
+
+        return response()->json($empleados);
+    }
+
     public function store(Request $request)
     {
         return $this->captureAndRespond($request, function () use ($request) {
