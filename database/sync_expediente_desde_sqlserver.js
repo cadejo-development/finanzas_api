@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * sync_expediente_desde_sqlserver.js
  *
  * SQL Server (olcomun) → RDS rrhh_db
@@ -25,7 +25,7 @@ const sql      = require('mssql');
 const { Pool } = require('pg');
 
 const MSSQL_CFG = {
-  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_PASSWORD_ORIGEN,
   server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olcomun',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 15000 },
 };

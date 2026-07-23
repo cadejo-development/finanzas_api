@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * sync_desactivar_inactivos.js
  *
  * Desactiva en PostgreSQL las recetas que ya no tienen botón activo
@@ -22,12 +22,12 @@ const DRY_RUN = !process.argv.includes('--apply');
 
 // ── Conexiones ────────────────────────────────────────────────────────────────
 const cfgRst = {
-  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_PASSWORD_ORIGEN,
   server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olRestaurante',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 15000 },
 };
 const cfgCom = {
-  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_PASSWORD_ORIGEN,
   server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olComun',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 15000 },
 };

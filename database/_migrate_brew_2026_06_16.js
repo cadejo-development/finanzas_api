@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * Migración brew recetas 2026-06-16:
  *  - brew_receta_maltas: renombrar cantidad_kg → cantidad_lb, quitar lovibond
  *  - brew_recetas: quitar cajas_objetivo y barriles_objetivo,

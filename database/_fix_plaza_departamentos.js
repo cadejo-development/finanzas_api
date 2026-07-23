@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * _fix_plaza_departamentos.js
  *
  * Asigna departamento_id correcto a plazas que tienen sucursal_unidad

@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * Seed inicial de precios en catálogos de ventas externas.
  * Fuente: Listado de precios Cadejo Brewing (Excel vigente).
  * Uso: node database/_seed_catalogos_precio.js [--dry-run]

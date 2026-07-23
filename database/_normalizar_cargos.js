@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * Normaliza los nombres de cargos a Title Case con preposiciones en minúscula.
  * Solo actualiza los registros que cambian.
  *

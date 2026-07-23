@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * seed_brew_ingredientes.js
  *
  * Sincroniza maltas, lúpulos y cervezas desde Brilo (SQL Server / VPN)
@@ -17,7 +17,7 @@ const sql      = require('mssql');
 const { Pool } = require('pg');
 
 const MSSQL_CFG = {
-  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_PASSWORD_ORIGEN,
   server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olcomun',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 15000 },
 };

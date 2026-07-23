@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * Pobla unidad_compra / unidad_compra_nombre / factor_unidad_compra en productos
  * leyendo la unidad DEFAULT de compra desde Brilo (vwUnidadesXProductoYUniBase).
  *
@@ -14,7 +14,7 @@ const sql    = require('mssql');
 const { Client } = require('pg');
 
 const MSSQL_CFG = {
-  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_PASSWORD_ORIGEN,
   server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olInventario',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 15000 },
 };

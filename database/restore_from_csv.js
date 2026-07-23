@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * restore_from_csv.js
  *
  * Restaura ingredientes de sub-recetas a partir del CSV de backup

@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * _fix_saldos_cadejo.js
  *
  * Corrige dias_usados en saldos_cadejo basándose en los permisos

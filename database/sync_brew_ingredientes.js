@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * sync_brew_ingredientes.js
  * Sincroniza ingredientes de cerveza desde Brilo (SQL Server) → compras_db (PostgreSQL)
  * Usa códigos de CATEGORÍA de Brilo para precisión total — no LIKE por nombre.
@@ -19,7 +19,7 @@ const sql      = require('mssql');
 const { Pool } = require('pg');
 
 const BRILO_CFG = {
-  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_PASSWORD_ORIGEN,
   server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olcomun',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 30000 },
   requestTimeout: 180000,

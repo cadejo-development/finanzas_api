@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * backup_daily.js
  *
  * Backup automático diario de compras_db (RDS PostgreSQL).

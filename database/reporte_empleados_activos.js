@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * reporte_empleados_activos.js
  *
  * Genera un reporte Excel de empleados activos ordenado por

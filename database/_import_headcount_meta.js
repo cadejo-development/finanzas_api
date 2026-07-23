@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * Importa valores Meta del Excel Comparativo Plantilla → cargo_plazas_autorizadas
  *
  * Uso:

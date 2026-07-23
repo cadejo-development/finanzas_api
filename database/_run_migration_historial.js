@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * Ejecuta la migración plaza_historial manualmente via SQL
  * node database/_run_migration_historial.js
  */

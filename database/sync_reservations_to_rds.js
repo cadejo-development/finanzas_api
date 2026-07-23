@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * sync_reservations_to_rds.js
  * Trae reservas desde Railway (via API) e inserta las que faltan en RDS mansion_db.
  * No borra nada — solo INSERT de ids que no existen en RDS.

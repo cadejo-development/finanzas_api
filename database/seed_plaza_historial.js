@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * seed_plaza_historial.js
  *
  * Siembra plaza_historial con los registros actuales:

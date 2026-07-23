@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * migrate_rrhh_railway_to_rds.js
  * Copia todos los datos de Railway (rrhh) → RDS (rrhh_db)
  * El schema ya existe en RDS — solo se migran datos.

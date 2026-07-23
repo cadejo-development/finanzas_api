@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * fix_gerencia_financiera_role_rds.js
  * Inserta el rol gerencia_financiera en el sistema 'compras' en RDS (producción)
  * y lo asigna al usuario Juan Jose Lopez Valladares.

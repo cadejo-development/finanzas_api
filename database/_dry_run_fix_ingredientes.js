@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * _dry_run_fix_ingredientes.js
  *
  * Compara el estado ACTUAL de receta_ingredientes en RDS vs lo que
@@ -23,7 +23,7 @@ const { Client } = require('pg');
 const XLSX     = require('xlsx');
 
 const SQL_CFG = {
-  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_PASSWORD_ORIGEN,
   server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olcomun',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 20000 },
 };

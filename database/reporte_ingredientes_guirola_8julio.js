@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * reporte_ingredientes_guirola_8julio.js
  *
  * Genera un Excel con el consumo de ingredientes para Casa Guirola (Mansión)

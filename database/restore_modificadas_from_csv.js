@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * restore_modificadas_from_csv.js
  *
  * Restaura los ingredientes de TODAS las sub-recetas con modificado_localmente=true
@@ -21,7 +21,7 @@ const { Pool } = require('pg');
 const CSV_PATH = path.join(__dirname, 'INV_backup_esta_maniana.csv');
 
 const sqlConfig = {
-  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_PASSWORD_ORIGEN,
   server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olcomun',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 15000 },
 };

@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * sync_ventas_catalogos.js
  * Extrae clientes y productos de Brilo (SQL Server) → compras_db (PostgreSQL)
  * Uso: node database/sync_ventas_catalogos.js
@@ -11,7 +11,7 @@ const { Pool } = require('pg');
 
 const BRILO_CFG = {
   user: process.env.DB_USERNAME_ORIGEN,
-  password: process.env.DB_USERNAME_ORIGEN,
+  password: process.env.DB_PASSWORD_ORIGEN,
   server: process.env.DB_HOST_ORIGEN,
   port: 2033,
   database: 'olcomun',

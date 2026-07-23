@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * Crea dos nuevos roles de analista RRHH y los asigna a los usuarios correspondientes.
  * - rrhh_analista     → Analista RRHH (Margarita Lara, user_id=40) — acceso senior
  * - rrhh_analista_jr  → Analista RRHH Jr (Mario Villalobos, user_id=50) — acceso junior

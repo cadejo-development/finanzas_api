@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * _migrar_autoconsumo_devoluciones.js
  * Uso: node database/_migrar_autoconsumo_devoluciones.js
  */

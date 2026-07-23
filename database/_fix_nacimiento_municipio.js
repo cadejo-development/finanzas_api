@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * _fix_nacimiento_municipio.js
  *
  * Migración puntual: parsea lugar_nacimiento en expediente_datos_personales

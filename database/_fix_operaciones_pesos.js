@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * Actualiza los pesos de los criterios de auditoría de operaciones
  * según los valores oficiales de Lourdes (total: 100 pts).
  * Luego recalcula calificacion y clasificacion de todas las auditorias evaluadas.

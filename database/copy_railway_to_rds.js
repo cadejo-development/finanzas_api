@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * copy_railway_to_rds.js
  * Copia TODA la data de Railway → RDS (tabla por tabla)
  * Uso: node copy_railway_to_rds.js

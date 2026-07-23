@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * import_plazas_excel.js
  *
  * Importa el Catálogo de Plazas desde el Excel oficial al sistema.

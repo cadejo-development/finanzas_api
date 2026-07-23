@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * Ejecuta las 2 migraciones del 2026-06-16 directamente en PostgreSQL.
  *
  * Migración 1 (core_db → ventas_ordenes):

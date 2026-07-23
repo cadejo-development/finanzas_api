@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * import_ventas_mayo.js  →  import_ventas_incremental.js
  *
  * Importa ventas de TODAS las sucursales activas desde Brilo SQL Server
@@ -68,7 +68,7 @@ const SUCURSAL_MAP = {
 };
 
 const cfgRst = {
-  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_PASSWORD_ORIGEN,
   server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olRestaurante',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 30000, requestTimeout: 180000 },
 };

@@ -1,6 +1,6 @@
-/**
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+/**
  * _diag_ventas_mayo.js
  *
  * DIAGNÓSTICO — Ventas Mayo 1-11 todas las sucursales
@@ -22,7 +22,7 @@ const DESDE = '2026-05-01';
 const HASTA = '2026-05-11';
 
 const cfgRst = {
-  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_USERNAME_ORIGEN,
+  user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_PASSWORD_ORIGEN,
   server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olRestaurante',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 15000 },
 };
