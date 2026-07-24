@@ -48,6 +48,7 @@ class KpiPlantillasController extends Controller
             'departamento_id' => 'nullable|integer|exists:pgsql.departamentos,id',
             'unidad_medida'   => 'required|string|max:80',
             'monto_objetivo'  => 'nullable|string|max:50',
+            'tipo_meta'       => 'nullable|in:fijo,variable',
             'activo'          => 'boolean',
             'cargo_ids'       => 'array',
             'cargo_ids.*'     => 'integer|exists:pgsql.cargos,id',
@@ -67,6 +68,7 @@ class KpiPlantillasController extends Controller
                 'departamento_id' => $data['departamento_id'] ?? null,
                 'unidad_medida'   => $data['unidad_medida'],
                 'monto_objetivo'  => $data['monto_objetivo'] ?? null,
+                'tipo_meta'       => $data['tipo_meta'] ?? 'fijo',
                 'activo'          => $data['activo'] ?? true,
                 'aud_usuario'     => $request->user()?->email ?? 'sistema',
             ]);
@@ -109,6 +111,7 @@ class KpiPlantillasController extends Controller
             'departamento_id' => 'nullable|integer|exists:pgsql.departamentos,id',
             'unidad_medida'   => 'required|string|max:80',
             'monto_objetivo'  => 'nullable|string|max:50',
+            'tipo_meta'       => 'nullable|in:fijo,variable',
             'activo'          => 'boolean',
             'cargo_ids'       => 'array',
             'cargo_ids.*'     => 'integer|exists:pgsql.cargos,id',
@@ -128,6 +131,7 @@ class KpiPlantillasController extends Controller
                 'departamento_id' => $data['departamento_id'] ?? null,
                 'unidad_medida'   => $data['unidad_medida'],
                 'monto_objetivo'  => $data['monto_objetivo'] ?? null,
+                'tipo_meta'       => $data['tipo_meta'] ?? $plantilla->tipo_meta,
                 'activo'          => $data['activo'] ?? $plantilla->activo,
                 'aud_usuario'     => $request->user()?->email ?? 'sistema',
             ]);
@@ -278,6 +282,7 @@ class KpiPlantillasController extends Controller
             'departamento_nombre' => $p->departamento?->nombre,
             'unidad_medida'       => $p->unidad_medida,
             'monto_objetivo'      => $p->monto_objetivo,
+            'tipo_meta'           => $p->tipo_meta ?? 'fijo',
             'activo'         => $p->activo,
             'cargos_count'   => $p->cargos_count ?? $p->cargos->count(),
             'cargos'         => $p->cargos->map(fn($c) => [

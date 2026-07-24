@@ -19,6 +19,7 @@ class KpiPlantilla extends Model
         'departamento_id',
         'unidad_medida',
         'monto_objetivo',
+        'tipo_meta',
         'activo',
         'aud_usuario',
     ];

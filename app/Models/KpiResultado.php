@@ -16,6 +16,7 @@ class KpiResultado extends Model
         'periodo',
         'porcentaje_cumplimiento',
         'valor_real',
+        'meta_periodo',
         'monto_bono',
         'bonificacion_id',
         'aud_usuario',
@@ -24,6 +25,7 @@ class KpiResultado extends Model
     protected $casts = [
         'porcentaje_cumplimiento' => 'float',
         'valor_real'              => 'float',
+        'meta_periodo'            => 'float',
         'monto_bono'              => 'float',
         'periodo'                 => 'date',
     ];

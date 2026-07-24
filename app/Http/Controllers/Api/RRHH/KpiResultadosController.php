@@ -60,6 +60,7 @@ class KpiResultadosController extends Controller
                 'sucursal'                => $emp?->sucursal,
                 'porcentaje_cumplimiento' => $r->porcentaje_cumplimiento,
                 'valor_real'              => $r->valor_real,
+                'meta_periodo'            => $r->meta_periodo,
                 'monto_bono'              => $r->monto_bono,
                 'bonificacion_id'         => $r->bonificacion_id,
                 'created_at'              => $r->created_at,
@@ -173,29 +174,31 @@ class KpiResultadosController extends Controller
     /**
      * POST /api/rrhh/kpi-resultados/preview
      * Calcula bonos sin guardar.
+     * - tipo_meta='fijo':     meta viene de plantilla.monto_objetivo
+     * - tipo_meta='variable': meta viene del campo meta_periodo del request
      */
     public function preview(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'kpi_plantilla_id' => 'required|integer|exists:pgsql.kpi_plantillas,id',
-            'resultados'       => 'required|array|min:1',
-            'resultados.*.empleado_id'             => 'required|integer',
-            'resultados.*.porcentaje_cumplimiento' => 'required|numeric|min:0|max:999',
-            'resultados.*.valor_real'              => 'nullable|numeric|min:0',
+            'kpi_plantilla_id'  => 'required|integer|exists:pgsql.kpi_plantillas,id',
+            'meta_periodo'      => 'nullable|numeric|min:0.01',
+            'resultados'        => 'required|array|min:1',
+            'resultados.*.empleado_id' => 'required|integer',
+            'resultados.*.valor_real'  => 'required|numeric|min:0',
         ]);
 
         $plantilla = KpiPlantilla::with('escala')->findOrFail($data['kpi_plantilla_id']);
         $escala    = $plantilla->escala->toArray();
-        $montoObj  = (float) ($plantilla->monto_objetivo ?? 0);
+        $meta      = $this->resolverMeta($plantilla, $data['meta_periodo'] ?? null);
 
         $out = [];
         foreach ($data['resultados'] as $fila) {
-            $pct      = (float) $fila['porcentaje_cumplimiento'];
-            $monBono  = $this->calcularBono($escala, $pct, $montoObj);
+            $pct     = $meta > 0 ? round((float) $fila['valor_real'] / $meta * 100, 2) : 0;
+            $monBono = $this->calcularBono($escala, $pct, (float) ($plantilla->monto_objetivo ?? 0));
             $out[] = [
                 'empleado_id'             => $fila['empleado_id'],
                 'porcentaje_cumplimiento' => $pct,
-                'valor_real'              => $fila['valor_real'] ?? null,
+                'valor_real'              => (float) $fila['valor_real'],
                 'monto_bono'              => $monBono,
                 'nivel_escala'            => $this->nivelEscala($escala, $pct),
             ];
@@ -203,7 +206,8 @@ class KpiResultadosController extends Controller
 
         return response()->json([
             'plantilla_id'   => $plantilla->id,
-            'monto_objetivo' => $montoObj,
+            'tipo_meta'      => $plantilla->tipo_meta,
+            'meta'           => $meta,
             'resultados'     => $out,
             'total_bono'     => collect($out)->sum('monto_bono'),
         ]);
@@ -212,21 +216,24 @@ class KpiResultadosController extends Controller
     /**
      * POST /api/rrhh/kpi-resultados/aplicar
      * Guarda resultados Y crea bonificaciones aprobadas.
+     * - tipo_meta='fijo':     meta viene de plantilla.monto_objetivo
+     * - tipo_meta='variable': meta viene del campo meta_periodo del request
      */
     public function aplicar(Request $request): JsonResponse
     {
         $data = $request->validate([
             'kpi_plantilla_id' => 'required|integer|exists:pgsql.kpi_plantillas,id',
             'periodo'          => 'required|string|regex:/^\d{4}-\d{2}$/',
+            'meta_periodo'     => 'nullable|numeric|min:0.01',
             'resultados'       => 'required|array|min:1',
-            'resultados.*.empleado_id'             => 'required|integer|exists:pgsql.empleados,id',
-            'resultados.*.porcentaje_cumplimiento' => 'required|numeric|min:0|max:999',
-            'resultados.*.valor_real'              => 'nullable|numeric|min:0',
+            'resultados.*.empleado_id' => 'required|integer|exists:pgsql.empleados,id',
+            'resultados.*.valor_real'  => 'required|numeric|min:0',
         ]);
 
         $plantilla = KpiPlantilla::with('escala')->findOrFail($data['kpi_plantilla_id']);
         $escala    = $plantilla->escala->toArray();
         $montoObj  = (float) ($plantilla->monto_objetivo ?? 0);
+        $meta      = $this->resolverMeta($plantilla, $data['meta_periodo'] ?? null);
         $periodo   = $data['periodo'] . '-01'; // 2026-07-01
         $audUser   = Auth::user()?->email ?? 'sistema';
         $fechaAplicar = date('Y-m-d', strtotime('last day of ' . $data['periodo']));
@@ -263,7 +270,7 @@ class KpiResultadosController extends Controller
         try {
             $creados = [];
             foreach ($data['resultados'] as $fila) {
-                $pct     = (float) $fila['porcentaje_cumplimiento'];
+                $pct     = $meta > 0 ? round((float) $fila['valor_real'] / $meta * 100, 2) : 0;
                 $monBono = $this->calcularBono($escala, $pct, $montoObj);
 
                 // Insertar/actualizar resultado KPI
@@ -275,7 +282,8 @@ class KpiResultadosController extends Controller
                     ],
                     [
                         'porcentaje_cumplimiento' => $pct,
-                        'valor_real'              => $fila['valor_real'] ?? null,
+                        'valor_real'              => (float) $fila['valor_real'],
+                        'meta_periodo'            => $meta > 0 ? $meta : null,
                         'monto_bono'              => $monBono,
                         'aud_usuario'             => $audUser,
                     ]
@@ -341,6 +349,14 @@ class KpiResultadosController extends Controller
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private function resolverMeta(KpiPlantilla $plantilla, ?float $metaPeriodo): float
+    {
+        if ($plantilla->tipo_meta === 'variable') {
+            return (float) ($metaPeriodo ?? 0);
+        }
+        return (float) ($plantilla->monto_objetivo ?? 0);
+    }
 
     private function calcularBono(array $escala, float $porcentaje, float $montoObjetivo): float
     {
