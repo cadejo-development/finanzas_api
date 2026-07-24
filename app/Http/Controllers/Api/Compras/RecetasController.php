@@ -99,9 +99,13 @@ class RecetasController extends Controller
               ->orWhereHas('categoria', fn ($sq) => $sq->where('activa', true));
         });
 
-        // Filtro por estado_id o código de estado
+        // Filtro por estado_id o código(s) de estado
         if ($estadoId = $request->query('estado_id')) {
             $query->where('estado_id', (int) $estadoId);
+        } elseif ($estadosCodigos = $request->query('estados')) {
+            // estados[]=activa&estados[]=finalizada → múltiples estados
+            $arr = is_array($estadosCodigos) ? $estadosCodigos : explode(',', $estadosCodigos);
+            $query->whereHas('estado', fn ($q) => $q->whereIn('codigo', $arr));
         } elseif ($estadoCodigo = $request->query('estado')) {
             $query->whereHas('estado', fn ($q) => $q->where('codigo', $estadoCodigo));
         }
