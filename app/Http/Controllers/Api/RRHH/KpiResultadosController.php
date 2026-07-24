@@ -190,11 +190,12 @@ class KpiResultadosController extends Controller
         $plantilla = KpiPlantilla::with('escala')->findOrFail($data['kpi_plantilla_id']);
         $escala    = $plantilla->escala->toArray();
         $meta      = $this->resolverMeta($plantilla, $data['meta_periodo'] ?? null);
+        $bonoBase  = (float) ($plantilla->monto_bono_base ?? $plantilla->monto_objetivo ?? 0);
 
         $out = [];
         foreach ($data['resultados'] as $fila) {
             $pct     = $meta > 0 ? round((float) $fila['valor_real'] / $meta * 100, 2) : 0;
-            $monBono = $this->calcularBono($escala, $pct, (float) ($plantilla->monto_objetivo ?? 0));
+            $monBono = $this->calcularBono($escala, $pct, $bonoBase);
             $out[] = [
                 'empleado_id'             => $fila['empleado_id'],
                 'porcentaje_cumplimiento' => $pct,
@@ -232,7 +233,7 @@ class KpiResultadosController extends Controller
 
         $plantilla = KpiPlantilla::with('escala')->findOrFail($data['kpi_plantilla_id']);
         $escala    = $plantilla->escala->toArray();
-        $montoObj  = (float) ($plantilla->monto_objetivo ?? 0);
+        $montoObj  = (float) ($plantilla->monto_bono_base ?? $plantilla->monto_objetivo ?? 0);
         $meta      = $this->resolverMeta($plantilla, $data['meta_periodo'] ?? null);
         $periodo   = $data['periodo'] . '-01'; // 2026-07-01
         $audUser   = Auth::user()?->email ?? 'sistema';

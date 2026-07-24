@@ -19,6 +19,7 @@ class KpiPlantilla extends Model
         'departamento_id',
         'unidad_medida',
         'monto_objetivo',
+        'monto_bono_base',
         'tipo_meta',
         'activo',
         'aud_usuario',
@@ -28,6 +29,7 @@ class KpiPlantilla extends Model
         'activo'          => 'boolean',
         'sucursal_id'     => 'integer',
         'departamento_id' => 'integer',
+        'monto_bono_base' => 'float',
     ];
 
     public function sucursal(): BelongsTo
