@@ -269,8 +269,6 @@ class InventarioReporteController extends Controller
         $sr = 9;
         foreach (self::SECCIONES as $sec) {
             $ps = array_filter($filas, fn ($f) => ($f['secciones'][$sec] ?? 0) > 0);
-            $tc = round(array_sum(array_column($ps, 'secciones' /* workaround below */)), 4);
-            // Calcular tc manualmente
             $tc = 0; foreach ($ps as $f) $tc += (float)($f['secciones'][$sec] ?? 0);
             $tc = round($tc, 4);
             $hasBrilo = !empty(array_filter($ps, fn ($f) => $f['brilo'] !== null));
