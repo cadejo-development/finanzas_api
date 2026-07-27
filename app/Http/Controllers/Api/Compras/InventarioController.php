@@ -736,6 +736,7 @@ class InventarioController extends Controller
         $rows = DB::connection('compras')
             ->table('conteo_borradores')
             ->where('sucursal_id', (int) $request->query('sucursal_id'))
+            ->where('estado', 'borrador')
             ->orderByDesc('updated_at')
             ->get();
 
@@ -756,6 +757,7 @@ class InventarioController extends Controller
             ->table('conteo_borradores')
             ->where('sucursal_id', (int) $request->query('sucursal_id'))
             ->where('aud_usuario', Auth::user()->email)
+            ->where('estado', 'borrador')
             ->first();
 
         if (!$row) return response()->json(['success' => true, 'data' => null]);
@@ -799,11 +801,32 @@ class InventarioController extends Controller
     public function deleteBorrador(Request $request): JsonResponse
     {
         $request->validate(['sucursal_id' => 'required|integer']);
+        // Soft-delete: marcar como descartado en lugar de borrar físicamente
         DB::connection('compras')
             ->table('conteo_borradores')
             ->where('sucursal_id', (int) $request->query('sucursal_id'))
             ->where('aud_usuario', Auth::user()->email)
-            ->delete();
+            ->where('estado', 'borrador')
+            ->update(['estado' => 'descartado', 'updated_at' => now()]);
+
+        return response()->json(['success' => true]);
+    }
+
+    // PATCH /api/compras/inventario/borrador/aplicado
+    // Marca el borrador como aplicado (llamado justo después de aplicarConteo)
+    public function marcarBorradorAplicado(Request $request): JsonResponse
+    {
+        $request->validate(['sucursal_id' => 'required|integer']);
+        DB::connection('compras')
+            ->table('conteo_borradores')
+            ->where('sucursal_id', (int) $request->query('sucursal_id'))
+            ->where('aud_usuario', Auth::user()->email)
+            ->where('estado', 'borrador')
+            ->update([
+                'estado'      => 'aplicado',
+                'aplicado_en' => now(),
+                'updated_at'  => now(),
+            ]);
 
         return response()->json(['success' => true]);
     }
