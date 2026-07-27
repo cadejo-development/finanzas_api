@@ -27,6 +27,14 @@ class InventarioReporteController extends Controller
     ];
     private const SECCIONES = ['SECOS', 'FRIOS', 'CUARTO FRIO', 'COCINA', 'BAR', 'FREEZER', 'CAJA'];
 
+    // Mapeo sucursal_id (nuestra BD) → ubiId en Brilo olInventario.Ubicaciones
+    private const SUCURSAL_BRILO_UBI = [
+        1 => 37, 2 => 38, 3 => 48, 4 => 51,
+        5 => 52, 6 => 56, 7 => 57, 8 => 58,
+        9 => 65, 10 => 69, 11 => 77, 12 => 78,
+        13 => 79, 15 => 76,
+    ];
+
     // GET /api/compras/inventario/reporte-conteo?sucursal_id=X&fecha=YYYY-MM-DD
     public function generar(Request $request): StreamedResponse
     {
@@ -84,7 +92,36 @@ class InventarioReporteController extends Controller
             ->orderBy('p.codigo')
             ->get();
 
-        // ── 4. Consolidar filas ────────────────────────────────────────────────
+        // ── 4. Kardex BRILO (leído de brilo_kardex, sincronizado vía script local) ──
+        // Busca la entrada más reciente para esta sucursal y fecha de conteo
+        $kardexMeta = DB::connection('compras')
+            ->table('brilo_kardex')
+            ->where('sucursal_id', $sucursalId)
+            ->where('fecha_hasta', $fecha)
+            ->orderByDesc('synced_at')
+            ->first();
+
+        $fechaDesde = $kardexMeta?->fecha_desde ?? null;
+
+        $kardex = [];
+        if ($kardexMeta) {
+            $rows = DB::connection('compras')
+                ->table('brilo_kardex')
+                ->where('sucursal_id', $sucursalId)
+                ->where('fecha_desde', $kardexMeta->fecha_desde)
+                ->where('fecha_hasta', $fecha)
+                ->get();
+            foreach ($rows as $r) {
+                $kardex[$r->producto_codigo] = [
+                    'saldo_ini' => (float) $r->saldo_ini,
+                    'entradas'  => (float) $r->entradas,
+                    'salidas'   => (float) $r->salidas,
+                    'saldo_fin' => (float) $r->saldo_fin,
+                ];
+            }
+        }
+
+        // ── 5. Consolidar filas ────────────────────────────────────────────────
         $filas = [];
         foreach ($prods as $p) {
             $c = $conteoMap[$p->id] ?? null;
@@ -102,24 +139,30 @@ class InventarioReporteController extends Controller
             elseif ($diff < 0)               $tipo = 'FALTANTE';
             else                             $tipo = 'SOBRANTE';
 
+            $kd = $kardex[$p->codigo] ?? null;
+
             $filas[] = [
-                'sucursal'  => $sucursalName,
-                'codigo'    => $p->codigo,
-                'nombre'    => $p->nombre,
-                'categoria' => $p->categoria ?? '—',
-                'unidad'    => $p->unidad,
-                'brilo'     => $brilo,
-                'conteo'    => $conteo,
-                'secciones' => $c['secciones'],
-                'diff'      => $diff,
-                'diffPct'   => $diffPct,
-                'tipo'      => $tipo,
-                'costo'     => $costo,
-                'costoDiff' => $costoDiff,
+                'sucursal'    => $sucursalName,
+                'codigo'      => $p->codigo,
+                'nombre'      => $p->nombre,
+                'categoria'   => $p->categoria ?? '—',
+                'unidad'      => $p->unidad,
+                'brilo'       => $brilo,
+                'conteo'      => $conteo,
+                'secciones'   => $c['secciones'],
+                'diff'        => $diff,
+                'diffPct'     => $diffPct,
+                'tipo'        => $tipo,
+                'costo'       => $costo,
+                'costoDiff'   => $costoDiff,
+                'k_saldo_ini' => $kd['saldo_ini'] ?? null,
+                'k_entradas'  => $kd['entradas']  ?? null,
+                'k_salidas'   => $kd['salidas']   ?? null,
+                'k_saldo_fin' => $kd['saldo_fin'] ?? null,
             ];
         }
 
-        // ── 5. Estadísticas globales ───────────────────────────────────────────
+        // ── 6. Estadísticas globales ───────────────────────────────────────────
         $nFalt    = count(array_filter($filas, fn ($f) => $f['tipo'] === 'FALTANTE'));
         $nSobr    = count(array_filter($filas, fn ($f) => $f['tipo'] === 'SOBRANTE'));
         $nOk      = count(array_filter($filas, fn ($f) => $f['tipo'] === 'OK'));
@@ -137,12 +180,12 @@ class InventarioReporteController extends Controller
         $filasOrd = $filas;
         usort($filasOrd, fn ($a, $b) => ($a['costoDiff'] ?? 0) <=> ($b['costoDiff'] ?? 0));
 
-        // ── 6. Generar Excel ───────────────────────────────────────────────────
+        // ── 7. Generar Excel ───────────────────────────────────────────────────
         $ss = new Spreadsheet();
         $ss->getProperties()->setCreator('Sistema Cadejo');
 
         $this->hojaResumenEjecutivo($ss, $sucursalName, $fecha, $filas, $nFalt, $nSobr, $nOk, $nSinBril, $nConBril, $totalCostoFalt, $totalCostoSobr);
-        $this->hojaDetalleVsBrilo($ss, $filasOrd);
+        $this->hojaDetalleVsBrilo($ss, $filasOrd, $fechaDesde, $fecha);
         $this->hojaEstadisticas($ss, $filas, $nFalt, $nSobr, $nOk, $nSinBril, $totalCostoFalt, $totalCostoSobr);
 
         $ss->setActiveSheetIndex(0);
@@ -271,8 +314,10 @@ class InventarioReporteController extends Controller
     // ══════════════════════════════════════════════════════════════════════════
     // HOJA 2 — DETALLE VS BRILO
     // ══════════════════════════════════════════════════════════════════════════
-    private function hojaDetalleVsBrilo(Spreadsheet $ss, array $filasOrd): void
-    {
+    private function hojaDetalleVsBrilo(
+        Spreadsheet $ss, array $filasOrd,
+        ?string $fechaDesde, string $fechaHasta
+    ): void {
         $ws = $ss->createSheet();
         $ws->setTitle('Detalle vs BRILO');
         $ws->setShowGridlines(false);
@@ -280,25 +325,50 @@ class InventarioReporteController extends Controller
         $ws->getDefaultRowDimension()->setRowHeight(17);
         $ws->freezePane('D3');
 
-        // Fila 1 — grupos
+        $hasKardex = $fechaDesde !== null
+            && !empty(array_filter($filasOrd, fn ($f) => $f['k_saldo_ini'] !== null));
+
+        $fmtFecha = fn(?string $d) => $d ? date('d/m/Y', strtotime($d)) : '—';
+
+        // Fila 1 — grupos de columnas
+        // Columnas: [5 identificación] [4 kardex brilo] [5 comparativa] [2 costos]
         $grupos = [
-            ['IDENTIFICACIÓN',    5],
-            ['COMPARATIVA BRILO', 6],
-            ['',                  2],
+            ['IDENTIFICACIÓN', 5],
+            $hasKardex
+                ? ['KARDEX BRILO (' . $fmtFecha($fechaDesde) . ' → ' . $fmtFecha($fechaHasta) . ')', 4]
+                : ['KARDEX BRILO (sin datos — ejecutar script sync)', 4],
+            ['COMPARATIVA', 5],
+            ['', 2],
         ];
         $gc = 1;
         foreach ($grupos as [$label, $cols]) {
-            if ($cols > 1) $ws->mergeCells(Coordinate::stringFromColumnIndex($gc) . '1:' . Coordinate::stringFromColumnIndex($gc + $cols - 1) . '1');
-            $this->sc($ws, 1, $gc, $label, ['bg' => self::C['header'], 'fg' => self::C['white'], 'bold' => true, 'align' => 'center']);
+            if ($cols > 1) {
+                $ws->mergeCells(
+                    Coordinate::stringFromColumnIndex($gc) . '1:' .
+                    Coordinate::stringFromColumnIndex($gc + $cols - 1) . '1'
+                );
+            }
+            $this->sc($ws, 1, $gc, $label, [
+                'bg' => self::C['header'], 'fg' => self::C['white'], 'bold' => true, 'align' => 'center',
+            ]);
             $gc += $cols;
         }
         $ws->getRowDimension(1)->setRowHeight(24);
 
-        // Fila 2 — columnas
-        $cols2 = ['Sucursal','Código','Nombre','Categoría','Unidad','Stock BRILO','Conteo Físico','Diferencia','Dif. %','Tipo','Costo Unit.','Costo Dif. ($)','Comentarios'];
+        // Fila 2 — cabeceras de columna (16 columnas)
+        $cols2 = [
+            'Sucursal', 'Código', 'Nombre', 'Categoría', 'Unidad',   // 1-5
+            'Saldo Ini.',                                              // 6 kardex
+            'Entradas',                                               // 7 kardex
+            'Salidas',                                                // 8 kardex
+            'Saldo Final BRILO',                                      // 9 kardex
+            'Conteo Físico', 'Diferencia', 'Dif. %', 'Tipo',         // 10-13
+            'Costo Unit.', 'Costo Dif. ($)', 'Comentarios',          // 14-16
+        ];
         foreach ($cols2 as $ci => $h) {
             $this->sc($ws, 2, $ci + 1, $h, [
-                'bg' => self::C['subhdr'], 'fg' => self::C['white'], 'bold' => true, 'align' => 'center', 'wrap' => true,
+                'bg' => self::C['subhdr'], 'fg' => self::C['white'],
+                'bold' => true, 'align' => 'center', 'wrap' => true,
             ]);
         }
         $ws->getRowDimension(2)->setRowHeight(30);
@@ -307,25 +377,37 @@ class InventarioReporteController extends Controller
         foreach ($filasOrd as $f) {
             [$colBg, $colFg] = $this->tipoColor($f['tipo']);
             $rowBg = $dr % 2 === 0 ? 'F8F8F8' : 'FFFFFF';
+            $kBg   = $dr % 2 === 0 ? 'FFF8E1' : 'FFFDE7';  // fondo suave para kardex
 
             $vals = [
                 $f['sucursal'], $f['codigo'], $f['nombre'], $f['categoria'], $f['unidad'],
-                $f['brilo'], $f['conteo'], $f['diff'], $f['diffPct'], $f['tipo'],
+                $f['k_saldo_ini'], $f['k_entradas'], $f['k_salidas'], $f['k_saldo_fin'],
+                $f['conteo'], $f['diff'], $f['diffPct'], $f['tipo'],
                 $f['costo'], $f['costoDiff'], '',
             ];
 
             foreach ($vals as $ci => $v) {
-                $isTipo  = $ci === 9;
-                $isDiff  = $ci === 7;
-                $isCostD = $ci === 11;
-                $bg = $isTipo ? $colBg : ($isCostD && $f['costoDiff'] !== null ? ($f['tipo'] === 'FALTANTE' ? self::C['red_bg'] : ($f['tipo'] === 'SOBRANTE' ? self::C['blue_bg'] : $rowBg)) : $rowBg);
-                $fg = ($isTipo || $isDiff || $isCostD) ? $colFg : null;
-                $numfmt = null;
-                if (is_float($v) && $ci >= 5 && $ci !== 8) $numfmt = '#,##0.00';
-                if ($ci === 8 && $v !== null)               $numfmt = '#,##0.00"%"';
-                if ($ci === 11 && $v !== null)              $numfmt = '"$"#,##0.00';
+                $isTipo  = $ci === 12;
+                $isDiff  = $ci === 10;
+                $isCostD = $ci === 14;
+                $isKardex = $ci >= 5 && $ci <= 8;
 
-                $this->sc($ws, $dr, $ci + 1, $v, [
+                $bg = $isTipo  ? $colBg
+                    : ($isCostD && $f['costoDiff'] !== null
+                        ? ($f['tipo'] === 'FALTANTE' ? self::C['red_bg']
+                          : ($f['tipo'] === 'SOBRANTE' ? self::C['blue_bg'] : $rowBg))
+                        : ($isKardex ? $kBg : $rowBg));
+                $fg = ($isTipo || $isDiff || $isCostD) ? $colFg : null;
+
+                $numfmt = null;
+                if ($isKardex && $v !== null)            $numfmt = '#,##0.00';
+                if ($ci === 9 && $v !== null)            $numfmt = '#,##0.00';   // conteo
+                if ($ci === 10 && $v !== null)           $numfmt = '#,##0.00';   // diff
+                if ($ci === 11 && $v !== null)           $numfmt = '#,##0.00"%"'; // dif%
+                if ($ci === 14 && $v !== null)           $numfmt = '#,##0.00';   // costo
+                if ($ci === 15 && $v !== null)           $numfmt = '"$"#,##0.00'; // costoDiff
+
+                $this->sc($ws, $dr, $ci + 1, $v ?? ($isKardex ? '—' : ''), [
                     'bg' => $bg, 'fg' => $fg,
                     'bold' => $isTipo || $isDiff || $isCostD,
                     'size' => 9,
@@ -338,7 +420,7 @@ class InventarioReporteController extends Controller
             $dr++;
         }
 
-        foreach ([14,14,38,22,8,14,14,13,10,12,13,16,26] as $i => $w) {
+        foreach ([12, 12, 36, 18, 7, 13, 12, 12, 16, 14, 13, 10, 12, 12, 16, 24] as $i => $w) {
             $ws->getColumnDimensionByColumn($i + 1)->setWidth($w);
         }
         $ws->setAutoFilter("A2:" . Coordinate::stringFromColumnIndex(count($cols2)) . "2");
