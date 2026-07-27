@@ -729,6 +729,27 @@ class InventarioController extends Controller
         return response()->json(['success' => true, 'data' => array_values($byProd)]);
     }
 
+    // GET /api/compras/inventario/borradores-activos?sucursal_id=X
+    // Devuelve TODOS los borradores activos de la sucursal (cualquier usuario)
+    public function borradoresActivos(Request $request): JsonResponse
+    {
+        $request->validate(['sucursal_id' => 'required|integer']);
+        $rows = DB::connection('compras')
+            ->table('conteo_borradores')
+            ->where('sucursal_id', (int) $request->query('sucursal_id'))
+            ->orderByDesc('updated_at')
+            ->get();
+
+        $data = $rows->map(fn($r) => [
+            'aud_usuario'  => $r->aud_usuario,
+            'fecha_conteo' => $r->fecha_conteo,
+            'updated_at'   => $r->updated_at,
+            'payload'      => json_decode($r->payload, true),
+        ]);
+
+        return response()->json(['success' => true, 'data' => $data]);
+    }
+
     public function getBorrador(Request $request): JsonResponse
     {
         $request->validate(['sucursal_id' => 'required|integer']);
