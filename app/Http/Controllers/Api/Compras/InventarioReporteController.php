@@ -9,7 +9,6 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -27,13 +26,6 @@ class InventarioReporteController extends Controller
     ];
     private const SECCIONES = ['SECOS', 'FRIOS', 'CUARTO FRIO', 'COCINA', 'BAR', 'FREEZER', 'CAJA'];
 
-    // Mapeo sucursal_id (nuestra BD) → ubiId en Brilo olInventario.Ubicaciones
-    private const SUCURSAL_BRILO_UBI = [
-        1 => 37, 2 => 38, 3 => 48, 4 => 51,
-        5 => 52, 6 => 56, 7 => 57, 8 => 58,
-        9 => 65, 10 => 69, 11 => 77, 12 => 78,
-        13 => 79, 15 => 76,
-    ];
 
     // GET /api/compras/inventario/reporte-conteo?sucursal_id=X&fecha=YYYY-MM-DD
     public function generar(Request $request): StreamedResponse
@@ -323,7 +315,7 @@ class InventarioReporteController extends Controller
         $ws->setShowGridlines(false);
         $ws->getTabColor()->setRGB('EF5350');
         $ws->getDefaultRowDimension()->setRowHeight(17);
-        $ws->freezePane('D3');
+        $ws->freezePane('A3');  // congela solo las 2 filas de cabecera, sin congelar columnas
 
         $hasKardex = $fechaDesde !== null
             && !empty(array_filter($filasOrd, fn ($f) => $f['k_saldo_ini'] !== null));
