@@ -435,21 +435,19 @@ class InventarioController extends Controller
 
                 if (abs($diferenciaBase) < 0.00001) continue;
 
-                // Construir detalle por sección (solo las que tienen cantidad > 0)
-                $detalle = null;
+                // Construir detalle con total_contado siempre, secciones si vienen
+                $seccionesConValor = [];
                 if (!empty($item['secciones'])) {
                     $seccionesConValor = array_filter(
                         $item['secciones'],
                         fn($v) => is_numeric($v) && $v > 0
                     );
-                    if (!empty($seccionesConValor)) {
-                        $detalle = [
-                            'secciones'       => $seccionesConValor,
-                            'total_contado'   => round((float) $item['cantidad_contada'], 4),
-                            'stock_anterior'  => round($stockActualBase / $factor, 4),
-                        ];
-                    }
                 }
+                $detalle = [
+                    'secciones'      => $seccionesConValor,
+                    'total_contado'  => round((float) $item['cantidad_contada'], 4),
+                    'stock_anterior' => round($stockActualBase / $factor, 4),
+                ];
 
                 MovimientoInventario::create([
                     'sucursal_id'     => $sucursalId,
