@@ -288,7 +288,7 @@ class InventarioReporteController extends Controller
         ];
         $gc = 1;
         foreach ($grupos as [$label, $cols]) {
-            if ($cols > 1) $ws->mergeCellsByColumnAndRow($gc, 1, $gc + $cols - 1, 1);
+            if ($cols > 1) $ws->mergeCells(Coordinate::stringFromColumnIndex($gc) . '1:' . Coordinate::stringFromColumnIndex($gc + $cols - 1) . '1');
             $this->sc($ws, 1, $gc, $label, ['bg' => self::C['header'], 'fg' => self::C['white'], 'bold' => true, 'align' => 'center']);
             $gc += $cols;
         }
@@ -449,7 +449,7 @@ class InventarioReporteController extends Controller
         }
         // Total faltantes
         $totFaltRow = $st3 + 1 + count($rows3) + 1;
-        $ws->mergeCellsByColumnAndRow(1, $totFaltRow, 6, $totFaltRow);
+        $ws->mergeCells('A' . $totFaltRow . ':F' . $totFaltRow);
         $this->sc($ws, $totFaltRow, 1, 'Total pérdida estimada (Top ' . count($top10Falt) . ' faltantes):', [
             'bold' => true, 'size' => 9, 'fg' => self::C['red'], 'align' => 'right',
         ]);
@@ -489,7 +489,7 @@ class InventarioReporteController extends Controller
         }
         if (count($top10Sobr) > 0) {
             $totSobrRow = $st4 + 1 + count($rows4) + 1;
-            $ws->mergeCellsByColumnAndRow(1, $totSobrRow, 6, $totSobrRow);
+            $ws->mergeCells('A' . $totSobrRow . ':F' . $totSobrRow);
             $this->sc($ws, $totSobrRow, 1, 'Total sobrante estimado (Top ' . count($top10Sobr) . ' sobrantes):', [
                 'bold' => true, 'size' => 9, 'fg' => self::C['blue'], 'align' => 'right',
             ]);
@@ -519,7 +519,7 @@ class InventarioReporteController extends Controller
 
     private function secTitle($ws, int $row, string $text, int $cols): void
     {
-        $ws->mergeCellsByColumnAndRow(1, $row, $cols, $row);
+        $ws->mergeCells('A' . $row . ':' . Coordinate::stringFromColumnIndex($cols) . $row);
         $this->sc($ws, $row, 1, $text, [
             'bg' => self::C['header'], 'fg' => self::C['white'], 'bold' => true, 'size' => 11, 'align' => 'left',
         ]);
