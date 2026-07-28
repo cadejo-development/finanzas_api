@@ -72,6 +72,39 @@ const UNIT_MAP = {
 };
 const normUnit = s => !s ? 'u' : (UNIT_MAP[s.trim().toUpperCase()] ?? s.trim().toLowerCase().slice(0, 20));
 
+// ── Conversión de unidades (mismo mapa que ExportBriloController.php) ─────────
+const BRILO_CODE = {
+  'oz': 'OZ001', 'oz fl': 'OZF', 'lb': 'C_LIBRA', 'kg': 'C_KG',
+  'lt': 'C_LITRO', 'ml': 'C_LITRO', 'u': 'UNID0005', 'porcion': 'UNID0013',
+  'tanda': 'UNID0029', 'barril': 'UNID0016', 'galon': 'C_GALON',
+  'caja': 'CAJ001', 'paquete': 'PAQU010', 'botella': 'BOTE001', 'rebanada': 'UNID0021',
+  'bolsa 2kg': 'UNID0009', 'bolsa 1kg': 'UNID0009', 'bolsa 5lb': 'C_BOLSA',
+};
+const CONV = {
+  'OZ001→C_LIBRA': x => x / 16,      'C_LIBRA→OZ001': x => x * 16,
+  'OZ001→C_KG':    x => x * 0.0283495, 'C_KG→OZ001':    x => x * 35.274,
+  'C_KG→C_LIBRA':  x => x * 2.20462,  'C_LIBRA→C_KG':  x => x * 0.453592,
+  'OZF→C_LITRO':   x => x * 0.0295735,'C_LITRO→OZF':   x => x / 0.0295735,
+  'OZF→C_GALON':   x => x / 128,      'C_GALON→OZF':   x => x * 128,
+  'C_LITRO→C_GALON':x=>x*0.264172,   'C_GALON→C_LITRO':x=>x*3.78541,
+};
+// Convierte qty desde unidad RDS normalizada → unidad base de Brilo normalizada.
+// Retorna null si no hay conversión directa.
+function convertirABase(qty, rdsUnit, briloUnitNorm) {
+  if (rdsUnit === briloUnitNorm) return qty;
+  const de = BRILO_CODE[rdsUnit] || rdsUnit.toUpperCase();
+  const a  = BRILO_CODE[briloUnitNorm] || briloUnitNorm.toUpperCase();
+  if (de === a) return qty;
+  const fn = CONV[`${de}→${a}`];
+  return fn ? fn(qty) : null;
+}
+// Convierte cantidad de ingrediente sub-receta (RDS) a TANDA para comparar con Brilo.
+function cantEnTanda(rdsQty, rdsUnit, rendimiento, rendUnidadNorm) {
+  const enRendUnit = convertirABase(rdsQty, rdsUnit, rendUnidadNorm);
+  if (enRendUnit === null || !(rendimiento > 0)) return null;
+  return enRendUnit / rendimiento;
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
   log('════════════════════════════════════════════════════');
@@ -139,15 +172,15 @@ async function main() {
       SELECT mx.proId AS rec_proId, mx.proIdMaterial AS mat_proId,
              TRIM(mat.proCodigo) AS ing_codigo, mat.proNombre AS ing_nombre,
              cpr.cprCodigo AS ing_cat_codigo, cpr.cprNombre AS ing_cat_nombre,
-             mx.mxprCantUnidad AS cantidad,
-             ISNULL(uni.uniNombre, 'u') AS unidad
+             mx.mxprCantidad AS cantidad,
+             ISNULL(uniBase.uniNombre, 'u') AS unidad
       FROM olComun.dbo.MaterialesXProducto mx WITH(NOLOCK)
       JOIN olComun.dbo.Productos mat WITH(NOLOCK) ON mat.proId = mx.proIdMaterial
       LEFT JOIN olComun.dbo.CategoriasProductos cpr WITH(NOLOCK) ON cpr.cprId = mat.cprId
-      LEFT JOIN olComun.dbo.Unidades uni WITH(NOLOCK) ON uni.uniId = mx.uniId
+      LEFT JOIN olComun.dbo.Unidades uniBase WITH(NOLOCK) ON uniBase.uniId = mat.uniId
       WHERE mx.proId IN (${proIds})
         AND mx.mxprActivo = 1 AND mx.mxprEliminado = 0
-        AND mx.mxprCantUnidad > 0
+        AND mx.mxprCantidad > 0
         AND mat.proCodigo IS NOT NULL
       ORDER BY mx.proId, mx.mxprId
     `)).recordset;
@@ -383,7 +416,9 @@ async function main() {
         SELECT ri.receta_id,
                COALESCE(p.codigo, sr.codigo_origen) AS codigo,
                ri.cantidad_por_plato AS cantidad,
-               ri.unidad
+               ri.unidad,
+               sr.rendimiento        AS sub_rendimiento,
+               sr.rendimiento_unidad AS sub_rend_unidad
         FROM receta_ingredientes ri
         LEFT JOIN productos p ON p.id = ri.producto_id
         LEFT JOIN recetas   sr ON sr.id = ri.sub_receta_id
@@ -395,7 +430,9 @@ async function main() {
       }
     }
 
-    // Verifica si ingredientes de RDS son idénticos a Brilo (mismos códigos, cantidades y unidades)
+    // Verifica si ingredientes de RDS son idénticos a Brilo (mismos códigos, cantidades y unidades).
+    // Brilo almacena cantidades en unidad base del material (mxprCantidad), por lo que se
+    // convierte la cantidad RDS a la misma unidad base antes de comparar.
     function ingredientesIguales(recetaId, briloIngs) {
       const rds = rdsIngMap[recetaId] || [];
       if (rds.length !== briloIngs.length) return false;
@@ -404,8 +441,23 @@ async function main() {
       for (const cod of Object.keys(briloSet)) {
         const r = rdsSet[cod], b = briloSet[cod];
         if (!r) return false;
-        if (Math.abs(parseFloat(r.cantidad) - parseFloat(b.cantidad)) > 0.001) return false;
-        if (r.unidad !== normUnit(b.unidad)) return false;
+
+        const briloUnitNorm = normUnit(b.unidad); // ej: 'LIBRA'→'lb', 'TANDA'→'tanda'
+        const briloQty      = parseFloat(b.cantidad);
+        let   rdsQtyNorm;
+
+        if (briloUnitNorm === 'tanda') {
+          // Sub-receta: cantidad en Brilo es TANDA; convertir RDS qty usando rendimiento
+          const rendimiento    = parseFloat(r.sub_rendimiento);
+          const rendUnitNorm   = normUnit(r.sub_rend_unidad || 'u');
+          rdsQtyNorm = cantEnTanda(parseFloat(r.cantidad), r.unidad, rendimiento, rendUnitNorm);
+        } else {
+          // Materia prima / CP: convertir unidad RDS a unidad base de Brilo
+          rdsQtyNorm = convertirABase(parseFloat(r.cantidad), r.unidad, briloUnitNorm);
+        }
+
+        if (rdsQtyNorm === null) return false; // no hay conversión conocida
+        if (Math.abs(rdsQtyNorm - briloQty) > 0.001) return false;
       }
       return true;
     }
