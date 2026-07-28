@@ -962,6 +962,13 @@ class InventarioController extends Controller
             usort($rankingSucursales, fn ($a, $b) => $b['pct_faltante'] <=> $a['pct_faltante']);
         }
 
+        // Última fecha de conteo físico para esta sucursal
+        $ultimoConteo = DB::connection('compras')
+            ->table('movimientos_inventario')
+            ->where('tipo', 'conteo_fisico')
+            ->when($sucursalId, fn ($q) => $q->where('sucursal_id', $sucursalId))
+            ->max(DB::raw('DATE(fecha)'));
+
         return response()->json([
             'resumen' => [
                 'total'             => $total,
@@ -977,6 +984,7 @@ class InventarioController extends Controller
             'top_sobrantes'      => $topSobrantes,
             'comparacion_mes'    => $topMayoresCambios,
             'ranking_sucursales' => $rankingSucursales,
+            'ultimo_conteo'      => $ultimoConteo,
         ]);
     }
 
