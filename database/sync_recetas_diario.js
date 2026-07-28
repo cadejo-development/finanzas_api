@@ -172,12 +172,15 @@ async function main() {
       SELECT mx.proId AS rec_proId, mx.proIdMaterial AS mat_proId,
              TRIM(mat.proCodigo) AS ing_codigo, mat.proNombre AS ing_nombre,
              cpr.cprCodigo AS ing_cat_codigo, cpr.cprNombre AS ing_cat_nombre,
-             mx.mxprCantidad AS cantidad,
-             ISNULL(uniBase.uniNombre, 'u') AS unidad
+             mx.mxprCantidad    AS cantidad_base,
+             ISNULL(uniBase.uniNombre, 'u') AS unidad_base,
+             mx.mxprCantUnidad  AS cantidad_pres,
+             uniPres.uniNombre  AS unidad_pres
       FROM olComun.dbo.MaterialesXProducto mx WITH(NOLOCK)
       JOIN olComun.dbo.Productos mat WITH(NOLOCK) ON mat.proId = mx.proIdMaterial
       LEFT JOIN olComun.dbo.CategoriasProductos cpr WITH(NOLOCK) ON cpr.cprId = mat.cprId
       LEFT JOIN olComun.dbo.Unidades uniBase WITH(NOLOCK) ON uniBase.uniId = mat.uniId
+      LEFT JOIN olComun.dbo.Unidades uniPres WITH(NOLOCK) ON uniPres.uniId = mx.uniId
       WHERE mx.proId IN (${proIds})
         AND mx.mxprActivo = 1 AND mx.mxprEliminado = 0
         AND mx.mxprCantidad > 0
@@ -375,8 +378,9 @@ async function main() {
           const iParams  = [], iParts = [];
           for (const ing of ingChunk) {
             const pId = prodMap[ing.ing_codigo];
-            if (!pId) continue; // producto no existe en RDS — se inserta más adelante
-            const vals = [r.id, pId, parseFloat(ing.cantidad) || 0, normUnit(ing.unidad), AUD, NOW, NOW];
+            if (!pId) continue;
+            const { cantidad, unidad } = cantUniAlmacenar(ing);
+            const vals = [r.id, pId, cantidad, unidad, AUD, NOW, NOW];
             const ph   = vals.map(v => { iParams.push(v); return `$${iParams.length}`; });
             iParts.push(`(${ph.join(',')})`);
           }
@@ -388,6 +392,7 @@ async function main() {
                ON CONFLICT (receta_id, producto_id) DO UPDATE SET
                  cantidad_por_plato = EXCLUDED.cantidad_por_plato,
                  unidad             = EXCLUDED.unidad,
+                 aud_usuario        = EXCLUDED.aud_usuario,
                  updated_at         = EXCLUDED.updated_at`,
               iParams
             );
@@ -430,9 +435,20 @@ async function main() {
       }
     }
 
+    // Devuelve { cantidad, unidad } a almacenar en RDS para un ingrediente de Brilo.
+    // Usa la presentación (mxprCantUnidad + uniPres) cuando está disponible,
+    // y cae a la unidad base (mxprCantidad + uniBase) si no hay presentación.
+    function cantUniAlmacenar(ing) {
+      const cantPres = parseFloat(ing.cantidad_pres);
+      if (cantPres > 0 && ing.unidad_pres) {
+        return { cantidad: cantPres, unidad: normUnit(ing.unidad_pres) };
+      }
+      return { cantidad: parseFloat(ing.cantidad_base) || 0, unidad: normUnit(ing.unidad_base) };
+    }
+
     // Verifica si ingredientes de RDS son idénticos a Brilo (mismos códigos, cantidades y unidades).
-    // Brilo almacena cantidades en unidad base del material (mxprCantidad), por lo que se
-    // convierte la cantidad RDS a la misma unidad base antes de comparar.
+    // Siempre compara en unidad BASE de Brilo (mxprCantidad + uniBase) para evitar
+    // ambigüedad entre presentación y base.
     function ingredientesIguales(recetaId, briloIngs) {
       const rds = rdsIngMap[recetaId] || [];
       if (rds.length !== briloIngs.length) return false;
@@ -442,21 +458,19 @@ async function main() {
         const r = rdsSet[cod], b = briloSet[cod];
         if (!r) return false;
 
-        const briloUnitNorm = normUnit(b.unidad); // ej: 'LIBRA'→'lb', 'TANDA'→'tanda'
-        const briloQty      = parseFloat(b.cantidad);
+        const briloUnitNorm = normUnit(b.unidad_base);
+        const briloQty      = parseFloat(b.cantidad_base);
         let   rdsQtyNorm;
 
         if (briloUnitNorm === 'tanda') {
-          // Sub-receta: cantidad en Brilo es TANDA; convertir RDS qty usando rendimiento
-          const rendimiento    = parseFloat(r.sub_rendimiento);
-          const rendUnitNorm   = normUnit(r.sub_rend_unidad || 'u');
+          const rendimiento  = parseFloat(r.sub_rendimiento);
+          const rendUnitNorm = normUnit(r.sub_rend_unidad || 'u');
           rdsQtyNorm = cantEnTanda(parseFloat(r.cantidad), r.unidad, rendimiento, rendUnitNorm);
         } else {
-          // Materia prima / CP: convertir unidad RDS a unidad base de Brilo
           rdsQtyNorm = convertirABase(parseFloat(r.cantidad), r.unidad, briloUnitNorm);
         }
 
-        if (rdsQtyNorm === null) return false; // no hay conversión conocida
+        if (rdsQtyNorm === null) return false;
         if (Math.abs(rdsQtyNorm - briloQty) > 0.001) return false;
       }
       return true;
@@ -543,7 +557,8 @@ async function main() {
       for (const ing of bIngs) {
         const pId = prodMap[ing.ing_codigo];
         if (!pId) { ingSkip++; continue; }
-        const vals = [recId, pId, parseFloat(ing.cantidad) || 0, normUnit(ing.unidad), AUD, NOW, NOW];
+        const { cantidad, unidad } = cantUniAlmacenar(ing);
+        const vals = [recId, pId, cantidad, unidad, AUD, NOW, NOW];
         const ph   = vals.map(v => { iParams.push(v); return `$${iParams.length}`; });
         iParts.push(`(${ph.join(',')})`);
         ingOk++;
