@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\Log;
  *
  * Revisa todas las desvinculaciones (despidos y renuncias) cuya fecha_efectiva
  * sea hoy o anterior y cuyo empleado aún esté activo en la tabla "empleados"
- * (tabla core / pgsql), y los marca como activo = false.
+ * (tabla core / pgsql), los marca como activo = false, limpia plaza_id y
+ * libera la plaza (estado → 'vacante') si ningún otro activo la ocupa.
  *
  * Pensado para ejecutarse cada mañana (06:00) vía el scheduler de Laravel.
  */
@@ -65,20 +66,47 @@ class InactivarEmpleadosDesvinculados extends Command
             $this->line("  → {$label} ({$dv->tipo}) — fecha efectiva: {$dv->fecha_efectiva}");
 
             if (!$dryRun) {
+                // Obtener plaza actual antes de inactivar
+                $empleado = DB::connection('pgsql')
+                    ->table('empleados')
+                    ->where('id', $dv->empleado_id)
+                    ->select('plaza_id')
+                    ->first();
+
                 DB::connection('pgsql')
                     ->table('empleados')
                     ->where('id', $dv->empleado_id)
                     ->update([
                         'activo'       => false,
+                        'plaza_id'     => null,
                         'aud_usuario'  => 'sistema:inactivar-desvinculados',
                         'updated_at'   => now(),
                     ]);
+
+                // Liberar la plaza si ningún otro activo la ocupa
+                if ($empleado?->plaza_id) {
+                    $otrosActivos = DB::connection('pgsql')
+                        ->table('empleados')
+                        ->where('plaza_id', $empleado->plaza_id)
+                        ->where('activo', true)
+                        ->count();
+
+                    if ($otrosActivos === 0) {
+                        DB::connection('pgsql')
+                            ->table('plazas')
+                            ->where('id', $empleado->plaza_id)
+                            ->update(['estado' => 'vacante', 'updated_at' => now()]);
+
+                        $this->line("    Plaza liberada (id={$empleado->plaza_id}) → vacante");
+                    }
+                }
 
                 Log::channel('daily')->info('rrhh:inactivar-desvinculados', [
                     'empleado_id'    => $dv->empleado_id,
                     'empleado_nombre'=> $label,
                     'tipo'           => $dv->tipo,
                     'fecha_efectiva' => $dv->fecha_efectiva,
+                    'plaza_liberada' => $empleado?->plaza_id,
                 ]);
             }
         }
