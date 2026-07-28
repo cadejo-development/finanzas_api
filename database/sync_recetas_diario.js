@@ -497,10 +497,7 @@ async function main() {
         promovidas += idsPromover.length;
       }
       if (idsPendientes.length) {
-        await pg.query(
-          `UPDATE recetas SET sincronizado_brilo = true, updated_at = $1 WHERE id = ANY($2)`,
-          [NOW, idsPendientes]
-        );
+        // No tocar — quedan en Autorizada sin ningún cambio hasta que se resuelvan las diferencias
         pendientesRevision += idsPendientes.length;
       }
 
