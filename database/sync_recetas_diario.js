@@ -368,35 +368,108 @@ async function main() {
     log(`  Recetas actualizadas: ${updOk}`);
 
     // ── 4c. Solo flags (mod_local=true): activa + sincronizado_brilo ──
+    // Para recetas en Autorizada(3): solo promueven a Activa(4) si sus ingredientes,
+    // cantidades y unidades son idénticos a Brilo. Si difieren, quedan en Autorizada.
     log('\n  [4c] Actualizando flags (mod_local=true)...');
-    let flagOk = 0;
+
+    // Cargar ingredientes RDS de todas las recetas con mod_local=true en Autorizada
+    const autorizadasIds = paraActivo
+      .filter(({ b, r }) => b.activo && parseInt(r.estado_id) === 3)
+      .map(({ r }) => r.id);
+
+    const rdsIngMap = {}; // receta_id → [ { codigo, cantidad, unidad } ]
+    if (autorizadasIds.length) {
+      const { rows: rdsIngs } = await pg.query(`
+        SELECT ri.receta_id,
+               COALESCE(p.codigo, sr.codigo_origen) AS codigo,
+               ri.cantidad_por_plato AS cantidad,
+               ri.unidad
+        FROM receta_ingredientes ri
+        LEFT JOIN productos p ON p.id = ri.producto_id
+        LEFT JOIN recetas   sr ON sr.id = ri.sub_receta_id
+        WHERE ri.receta_id = ANY($1)
+      `, [autorizadasIds]);
+      for (const row of rdsIngs) {
+        if (!rdsIngMap[row.receta_id]) rdsIngMap[row.receta_id] = [];
+        rdsIngMap[row.receta_id].push(row);
+      }
+    }
+
+    // Verifica si ingredientes de RDS son idénticos a Brilo (mismos códigos, cantidades y unidades)
+    function ingredientesIguales(recetaId, briloIngs) {
+      const rds = rdsIngMap[recetaId] || [];
+      if (rds.length !== briloIngs.length) return false;
+      const rdsSet   = Object.fromEntries(rds.map(r => [r.codigo, r]));
+      const briloSet = Object.fromEntries(briloIngs.map(b => [b.ing_codigo, b]));
+      for (const cod of Object.keys(briloSet)) {
+        const r = rdsSet[cod], b = briloSet[cod];
+        if (!r) return false;
+        if (Math.abs(parseFloat(r.cantidad) - parseFloat(b.cantidad)) > 0.001) return false;
+        if (r.unidad !== normUnit(b.unidad)) return false;
+      }
+      return true;
+    }
+
+    let flagOk = 0, promovidas = 0, pendientesRevision = 0;
 
     for (let i = 0; i < paraActivo.length; i += BATCH) {
       const chunk = paraActivo.slice(i, i + BATCH);
 
       // Brilo solo puede DESACTIVAR — si Brilo está inactiva, desactiva en RDS.
-      // Si Brilo está activa pero RDS ya está inactiva, respetar RDS (no reactivar).
       const idsBriloInactiva = chunk.filter(({ b }) => !b.activo).map(({ r }) => r.id);
-
       if (idsBriloInactiva.length) {
         await pg.query(
           `UPDATE recetas SET activa = false, sincronizado_brilo = true, updated_at = $1 WHERE id = ANY($2)`,
           [NOW, idsBriloInactiva]
         );
       }
-      // Para las que Brilo está activa: solo actualizamos sincronizado_brilo, sin tocar activa
-      const idsBriloActiva = chunk.filter(({ b }) => b.activo).map(({ r }) => r.id);
-      if (idsBriloActiva.length) {
+
+      // Brilo activa + Autorizada: promover solo si ingredientes son idénticos a Brilo
+      const autorizadasChunk = chunk.filter(({ b, r }) => b.activo && parseInt(r.estado_id) === 3);
+      const idsPromover = [], idsPendientes = [];
+      for (const { b, r } of autorizadasChunk) {
+        const briloIngs = briloIngMap[b.proId] || [];
+        if (ingredientesIguales(r.id, briloIngs)) {
+          idsPromover.push(r.id);
+        } else {
+          idsPendientes.push(r.id);
+          if (DRY_RUN || true) log(`  [Autorizada-pendiente] ${b.codigo} ${b.nombre} — ingredientes difieren de Brilo`);
+        }
+      }
+
+      if (idsPromover.length) {
+        await pg.query(
+          `UPDATE recetas SET estado_id = 4, sincronizado_brilo = true, updated_at = $1 WHERE id = ANY($2)`,
+          [NOW, idsPromover]
+        );
+        promovidas += idsPromover.length;
+      }
+      if (idsPendientes.length) {
         await pg.query(
           `UPDATE recetas SET sincronizado_brilo = true, updated_at = $1 WHERE id = ANY($2)`,
-          [NOW, idsBriloActiva]
+          [NOW, idsPendientes]
+        );
+        pendientesRevision += idsPendientes.length;
+      }
+
+      // Brilo activa + cualquier otro estado: solo sincronizado_brilo
+      const otrasActivas = chunk
+        .filter(({ b, r }) => b.activo && parseInt(r.estado_id) !== 3)
+        .map(({ r }) => r.id);
+      if (otrasActivas.length) {
+        await pg.query(
+          `UPDATE recetas SET sincronizado_brilo = true, updated_at = $1 WHERE id = ANY($2)`,
+          [NOW, otrasActivas]
         );
       }
+
       flagOk += chunk.length;
       process.stdout.write(`\r    Flags: ${i + chunk.length}/${paraActivo.length}  `);
     }
     console.log();
-    log(`  Flags actualizados: ${flagOk}`);
+    log(`  Flags actualizados:               ${flagOk}`);
+    log(`  Promovidas Autorizada → Activa:   ${promovidas}`);
+    log(`  Pendientes revisión (dif. ingred): ${pendientesRevision}`);
 
     // ── 4d. Ingredientes de recetas nuevas ───────────────────────
     log('\n  [4d] Insertando ingredientes de recetas nuevas...');
