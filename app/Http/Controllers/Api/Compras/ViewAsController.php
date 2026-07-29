@@ -7,7 +7,6 @@ use App\Models\Sucursal;
 use App\Models\System;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class ViewAsController extends Controller
@@ -20,7 +19,7 @@ class ViewAsController extends Controller
      *     → busca marcelaorellana@cervezacadejo.com
      *   - email completo  : "marcelaorellana@cervezacadejo.com"
      */
-    public function lookup(Request $request, string $identifier): JsonResponse
+    public function lookup(string $identifier): JsonResponse
     {
         if (str_contains($identifier, '@')) {
             $email = strtolower(trim($identifier));
@@ -74,21 +73,24 @@ class ViewAsController extends Controller
                 ]);
         }
 
-        $sucursalNombre = $user->sucursal_id
-            ? Sucursal::find($user->sucursal_id)?->nombre
-            : null;
+        $sucursalNombre    = $user->sucursal_id ? Sucursal::find($user->sucursal_id)?->nombre : null;
+        $todasIds          = $user->todasSucursalesIds();
+        $todasSucursales   = Sucursal::whereIn('id', $todasIds)->orderBy('nombre')->get()
+            ->map(fn ($s) => ['id' => $s->id, 'nombre' => $s->nombre]);
 
         return response()->json([
             'success' => true,
             'user'    => [
-                'id'          => $user->id,
-                'name'        => $user->name,
-                'email'       => $user->email,
-                'activo'      => $user->activo,
-                'sucursal_id' => $user->sucursal_id,
-                'sucursal'    => $sucursalNombre,
-                'roles'       => $roles->values(),
-                'permisos'    => $permisos->values(),
+                'id'             => $user->id,
+                'name'           => $user->name,
+                'email'          => $user->email,
+                'activo'         => $user->activo,
+                'sucursal_id'    => $user->sucursal_id,
+                'sucursal'       => $sucursalNombre,
+                'sucursales_ids' => $todasIds,
+                'sucursales'     => $todasSucursales,
+                'roles'          => $roles->values(),
+                'permisos'       => $permisos->values(),
             ],
         ]);
     }
