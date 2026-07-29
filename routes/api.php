@@ -654,6 +654,11 @@ Route::prefix('rrhh/propinas')->middleware(['auth:sanctum', 'role:rrhh_admin'])-
     Route::post('{id}/integrar-planilla',                  [PropinasController::class, 'integrarAPlanilla']);
 });
 
+// ─── Compras Admin — ViewAs ───────────────────────────────────────────────────
+Route::prefix('compras/admin')->middleware(['auth:sanctum', 'role:admin_compras,gerencia_financiera,dir_comercial'])->group(function () {
+    Route::get('view-as/{identifier}', [\App\Http\Controllers\Api\Compras\ViewAsController::class, 'lookup']);
+});
+
 // ─── RRHH Admin — Departamentos (portal_admin, rrhh_admin, rrhh_analista) ────
 Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh_admin,rrhh_analista'])->group(function () {
     Route::get('view-as/{identifier}',                       [\App\Http\Controllers\Api\RRHH\ViewAsController::class, 'lookup']);
