@@ -51,11 +51,31 @@ class VacacionesController extends RRHHBaseController
                 ], 403);
             }
 
+            $aprobadorId   = $this->getAprobadorPara($validated['empleado_id']) ?? $jefe->id;
+            $estadoInicial = $this->estadoParaEmpleado($validated['empleado_id'], $aprobadorId);
+
             $vacacion = Vacacion::create(array_merge($validated, [
-                'jefe_id'     => $jefe->id,
-                'estado'      => 'pendiente',
+                'jefe_id'     => $aprobadorId,
+                'estado'      => $estadoInicial,
                 'aud_usuario' => Auth::user()->email,
             ]));
+
+            if ($this->debeNotificar($validated['empleado_id'])) {
+                $detalles = array_filter([
+                    'Desde' => $validated['fecha_inicio'],
+                    'Hasta' => $validated['fecha_fin'],
+                    'Días'  => $validated['dias'] . ' día(s)',
+                    'Observaciones' => $validated['observaciones'] ?? null,
+                ]);
+                $this->notificarSolicitud(
+                    $validated['empleado_id'],
+                    'Vacaciones',
+                    $detalles,
+                    'vacaciones',
+                    $vacacion->id,
+                    'vacacion',
+                );
+            }
 
             return response()->json(['success' => true, 'data' => $vacacion], 201);
         });
