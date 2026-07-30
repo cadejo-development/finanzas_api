@@ -840,6 +840,24 @@ class InventarioController extends Controller
     public function estadisticas(Request $request): JsonResponse
     {
         $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
+        $fecha      = $request->query('fecha'); // YYYY-MM-DD opcional
+
+        // ── Guard: si se filtra por sucursal, verificar que haya un conteo aplicado ──
+        // Sin conteo real las estadísticas no tienen sentido (brilo vs 0 no refleja nada)
+        if ($sucursalId) {
+            $query = DB::connection('compras')
+                ->table('movimientos_inventario')
+                ->where('tipo', 'conteo_fisico')
+                ->where('sucursal_id', $sucursalId);
+
+            if ($fecha) {
+                $query->whereDate('fecha', $fecha);
+            }
+
+            if (!$query->exists()) {
+                return response()->json(['sin_datos' => true, 'mensaje' => 'No hay conteo físico aplicado para esta sucursal' . ($fecha ? " en la fecha $fecha" : '') . '.']);
+            }
+        }
 
         // ── Calcular stock por sucursal usando el mismo método que index() ──
         // stock_actual = (cantidad_inicial_base + SUM(mov excl. carga_inicial)) / factor_conversion
