@@ -71,13 +71,38 @@ class PermisosController extends RRHHBaseController
                 $validated['horas_solicitadas'] = null;
             }
 
+            // getAprobadorPara() resuelve correctamente la jerarquía:
+            //   - Jefatura creando para subordinado → jefe_id = jefatura (auto-aprobador)
+            //   - Empleado creando propio permiso   → jefe_id = jefe del departamento
+            $aprobadorId = $this->getAprobadorPara($validated['empleado_id']) ?? $jefe->id;
+
             $permiso = Permiso::create(array_merge($validated, [
-                'jefe_id'     => $jefe->id,
+                'jefe_id'     => $aprobadorId,
                 'estado'      => 'pendiente',
                 'aud_usuario' => Auth::user()->email,
             ]));
 
             $permiso->load('tipoPermiso');
+
+            // Notificar al supervisor cuando el empleado registra su propia solicitud
+            if ($this->debeNotificar($validated['empleado_id'])) {
+                $tipoLabel = $permiso->tipoPermiso?->nombre ?? 'Permiso';
+                $detalles  = array_filter([
+                    'Tipo'   => $tipoLabel,
+                    'Fecha'  => $validated['fecha'],
+                    'Días'   => isset($validated['dias']) ? $validated['dias'] . ' día(s)' : null,
+                    'Horas'  => isset($validated['horas_solicitadas']) ? $validated['horas_solicitadas'] . ' hora(s)' : null,
+                    'Motivo' => $validated['motivo'] ?? null,
+                ]);
+                $this->notificarSolicitud(
+                    $validated['empleado_id'],
+                    $tipoLabel,
+                    $detalles,
+                    'permisos',
+                    $permiso->id,
+                    'permiso',
+                );
+            }
 
             return response()->json(['success' => true, 'data' => $permiso], 201);
         });
