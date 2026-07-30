@@ -128,7 +128,13 @@ class PermisosController extends RRHHBaseController
                 }
             }
 
-            $permiso->update(array_merge($validated, ['aud_usuario' => Auth::user()->email]));
+            $extra = ['aud_usuario' => Auth::user()->email];
+            if (isset($validated['estado']) && in_array($validated['estado'], ['aprobado', 'rechazado'])) {
+                $user = Auth::user();
+                $extra['aprobado_por'] = $user->name ?? explode('@', $user->email)[0];
+                $extra['aprobado_at']  = now();
+            }
+            $permiso->update(array_merge($validated, $extra));
             $permiso->load('tipoPermiso');
 
             return response()->json(['success' => true, 'data' => $permiso]);

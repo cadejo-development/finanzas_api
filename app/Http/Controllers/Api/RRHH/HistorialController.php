@@ -63,12 +63,20 @@ class HistorialController extends RRHHBaseController
             if ($hasta)   $q->whereDate('fecha', '<=', $hasta);
 
             $q->get()->each(function ($p) use (&$eventos) {
+                $cat = $p->tipoPermiso?->categoria ?? 'personal';
+                $tipoLabel = match ($cat) {
+                    'cadejo'   => 'Días Cadejo',
+                    'especial' => 'Permiso Especial',
+                    'sin_goce' => 'Permiso Sin Goce',
+                    default    => 'Permiso Personal',
+                };
                 $eventos->push([
                     'id'            => 'permiso-' . $p->id,
                     'tipo'          => 'permiso',
-                    'tipo_label'    => 'Permiso',
+                    'tipo_label'    => $tipoLabel,
+                    'categoria'     => $cat,
                     'empleado_id'   => $p->empleado_id,
-                    'descripcion'   => $p->tipoPermiso?->nombre ?? 'Permiso',
+                    'descripcion'   => $p->tipoPermiso?->nombre ?? $tipoLabel,
                     'detalle'       => $p->motivo ?? '',
                     'fecha'         => $p->fecha->toDateString(),
                     'fecha_fin'     => null,
@@ -77,8 +85,11 @@ class HistorialController extends RRHHBaseController
                     'created_at'    => $p->created_at?->toDateTimeString(),
                     'creado_por'    => $p->creado_por ?? (explode('@', $p->aud_usuario ?? '')[0] ?: null),
                     'aprobador_id'  => $p->jefe_id,
+                    'aprobado_por'  => $p->aprobado_por ?? null,
                     'veredicto'     => $p->observaciones_jefe ?? '',
-                    'decision_at'   => $p->estado !== 'pendiente' ? $p->updated_at?->toDateTimeString() : null,
+                    'decision_at'   => $p->estado !== 'pendiente'
+                                        ? ($p->aprobado_at?->toDateTimeString() ?? $p->updated_at?->toDateTimeString())
+                                        : null,
                 ]);
             });
         }

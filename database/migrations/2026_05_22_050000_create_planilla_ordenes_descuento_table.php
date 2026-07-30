@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    protected $connection$connection = 'rrhh';
+    protected $connection = 'rrhh';
 
     public function up(): void
     {

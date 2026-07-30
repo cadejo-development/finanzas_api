@@ -14,6 +14,7 @@ class Permiso extends Model
         'fecha', 'es_dia_completo', 'hora_inicio', 'hora_fin', 'horas_solicitadas',
         'dias', 'motivo', 'relacion_familiar', 'fecha_evento',
         'estado', 'observaciones_jefe',
+        'aprobado_por', 'aprobado_at',
         'archivo_nombre', 'archivo_ruta',
         'doc_posterior_pendiente',
         'aud_usuario', 'creado_por',
@@ -26,6 +27,7 @@ class Permiso extends Model
         'horas_solicitadas'       => 'decimal:2',
         'dias'                    => 'decimal:1',
         'doc_posterior_pendiente' => 'boolean',
+        'aprobado_at'             => 'datetime',
     ];
 
     public function tipoPermiso()
