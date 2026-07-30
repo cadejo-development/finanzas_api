@@ -3,7 +3,6 @@
 use App\Console\Commands\InactivarEmpleadosDesvinculados;
 use App\Console\Commands\AlertasPeriodoPrueba;
 use App\Console\Commands\AlertasVacacionesVencimiento;
-use App\Console\Commands\SyncBriloStockCommand;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -34,9 +33,5 @@ Schedule::command(AlertasVacacionesVencimiento::class)
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/alertas-vacaciones-vencimiento.log'));
 
-// Sincroniza brilo_stock desde SQL Server para los productos prod_seg de cada sucursal.
-Schedule::command(SyncBriloStockCommand::class)
-    ->dailyAt('03:00')
-    ->withoutOverlapping()
-    ->runInBackground()
-    ->appendOutputTo(storage_path('logs/sync-brilo-stock.log'));
+// NOTA: sync-brilo-stock NO corre desde App Runner — requiere VPN FortiClient hacia Brilo.
+// Se ejecuta localmente con Windows Task Scheduler. Ver database/sync_brilo_scheduler.ps1
