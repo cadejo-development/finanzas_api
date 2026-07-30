@@ -73,12 +73,19 @@ class PermisosController extends RRHHBaseController
 
             // getAprobadorPara() resuelve correctamente la jerarquía:
             //   - Jefatura creando para subordinado → jefe_id = jefatura (auto-aprobador)
-            //   - Empleado creando propio permiso   → jefe_id = jefe del departamento
+            //   - Empleado/jefe creando propio permiso → jefe_id = jefe del departamento/padre
             $aprobadorId = $this->getAprobadorPara($validated['empleado_id']) ?? $jefe->id;
+
+            // estadoParaEmpleado() determina el estado inicial según quién crea y para quién:
+            //   - Jefatura para subordinado → 'aprobado' (el jefe es el aprobador)
+            //   - Empleado para sí mismo    → 'pendiente' (espera al jefe)
+            //   - Jefe para sí mismo        → 'pendiente' (espera al jefe padre)
+            //   - rrhh_admin / analista     → 'aprobado' (autoridad máxima)
+            $estadoInicial = $this->estadoParaEmpleado($validated['empleado_id'], $aprobadorId);
 
             $permiso = Permiso::create(array_merge($validated, [
                 'jefe_id'     => $aprobadorId,
-                'estado'      => 'pendiente',
+                'estado'      => $estadoInicial,
                 'aud_usuario' => Auth::user()->email,
             ]));
 
