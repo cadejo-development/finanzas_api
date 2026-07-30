@@ -832,6 +832,28 @@ class InventarioController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // GET /api/compras/inventario/fechas-conteo?sucursal_id=X
+    // Retorna array de fechas (YYYY-MM-DD) que tienen conteo_fisico aplicado.
+    // ─────────────────────────────────────────────────────────────────────────
+    public function fechasConteo(Request $request): JsonResponse
+    {
+        $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
+        if (!$sucursalId) {
+            return response()->json(['data' => []]);
+        }
+
+        $fechas = DB::connection('compras')
+            ->table('movimientos_inventario')
+            ->where('tipo', 'conteo_fisico')
+            ->where('sucursal_id', $sucursalId)
+            ->selectRaw('DATE(fecha)::text AS fecha')
+            ->groupBy(DB::raw('DATE(fecha)'))
+            ->orderBy(DB::raw('DATE(fecha)'), 'desc')
+            ->pluck('fecha');
+
+        return response()->json(['data' => $fechas]);
+    }
+
     // GET /api/compras/inventario/estadisticas?sucursal_id=X
     // Dashboard de estadísticas: top faltantes, sobrantes, comparación mes,
     // pérdida monetaria y ranking por sucursal (admin).
