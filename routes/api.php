@@ -265,6 +265,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
 
     // Inventario
     Route::get('inventario/estadisticas',       [InventarioController::class, 'estadisticas']);
+    Route::get('inventario/prod-seg',           [InventarioController::class, 'prodSegStats']);
     Route::get('inventario/fechas-conteo',      [InventarioController::class, 'fechasConteo']);
     Route::get('inventario/reporte-conteo',     [InventarioReporteController::class, 'generar']);
     Route::get('inventario/pedido-sugerido',    [InventarioController::class, 'pedidoSugerido']);

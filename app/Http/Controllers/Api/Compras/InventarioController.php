@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Compras;
 
 use App\Http\Controllers\Controller;
+use App\Mail\ConteoProdSegNotificacion;
 use App\Models\Inventario;
 use App\Models\MovimientoInventario;
 use App\Models\Pedido;
@@ -12,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 
 class InventarioController extends Controller
 {
@@ -471,11 +473,86 @@ class InventarioController extends Controller
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
 
+        // ── Notificación por email: prod_seg vs conteo aplicado ─────────────
+        try {
+            $this->enviarNotificacionConteoProdSeg($sucursalId, $fecha, $usuario, $validated['items'], $inventarios, $productos, $movimientos);
+        } catch (\Throwable) {
+            // Error de email no interrumpe la respuesta
+        }
+
         return response()->json([
             'success'   => true,
             'message'   => "{$aplicados} productos ajustados por conteo físico.",
             'aplicados' => $aplicados,
         ]);
+    }
+
+    private function enviarNotificacionConteoProdSeg(
+        int    $sucursalId,
+        string $fecha,
+        string $aplicadoPor,
+        array  $itemsConteo,
+        $inventarios,
+        $productos,
+        $movimientos,
+    ): void {
+        $prodSegItems = DB::connection('compras')
+            ->table('inventarios as i')
+            ->join('productos as p', 'p.id', '=', 'i.producto_id')
+            ->join('sucursales as s', 's.id', '=', 'i.sucursal_id')
+            ->where('i.sucursal_id', $sucursalId)
+            ->where('i.prod_seg', true)
+            ->select('i.producto_id', 'p.nombre', 'i.unidad', 'i.brilo_stock', 's.nombre as sucursal_nombre')
+            ->get();
+
+        if ($prodSegItems->isEmpty()) return;
+
+        $sucursalNombre = $prodSegItems->first()->sucursal_nombre;
+
+        // Mapa de cantidades contadas en este conteo, indexado por producto_id
+        $conteoMap = collect($itemsConteo)->keyBy('producto_id');
+
+        $emailItems = $prodSegItems->map(function ($row) use ($conteoMap, $inventarios, $productos, $movimientos) {
+            $pid      = $row->producto_id;
+            $inv      = $inventarios[$pid] ?? null;
+            $factor   = max((float) ($productos[$pid]?->factor_conversion ?? 1), 0.0001);
+            $movBase  = (float) ($movimientos[$pid] ?? 0);
+            $stockBase = $inv ? ($inv->cantidad_inicial_base + $movBase) : 0;
+            $stock    = round($stockBase / $factor, 3);
+
+            $conteoItem = $conteoMap[$pid] ?? null;
+            $conteo     = $conteoItem ? round((float) $conteoItem['cantidad_contada'], 3) : null;
+            $brilo      = $row->brilo_stock !== null ? round((float) $row->brilo_stock, 3) : null;
+            $diferencia = ($brilo !== null && $conteo !== null) ? round($conteo - $brilo, 3) : null;
+
+            $tipo = 'SIN DATOS';
+            if ($diferencia !== null) {
+                if ($diferencia > 0.01)       $tipo = 'SOBRANTE';
+                elseif ($diferencia < -0.01)  $tipo = 'FALTANTE';
+                else                          $tipo = 'OK';
+            }
+
+            return [
+                'nombre'      => $row->nombre,
+                'unidad'      => $row->unidad,
+                'brilo_stock' => $brilo,
+                'conteo'      => $conteo,
+                'diferencia'  => $diferencia,
+                'tipo'        => $tipo,
+            ];
+        })->values()->all();
+
+        $destinatarios = [
+            ['email' => 'enriqueduran@cervezacadejo.com',  'name' => 'Manuel Enrique Duran Rivas'],
+            ['email' => 'marcelaorellana@cervezacadejo.com', 'name' => 'Ana Marcela Orellana'],
+            ['email' => 'javiermejia@cervezacadejo.com',   'name' => 'Javier Francisco Mejia'],
+        ];
+
+        $mailable = new ConteoProdSegNotificacion($sucursalNombre, $fecha, $aplicadoPor, $emailItems);
+
+        foreach ($destinatarios as $dest) {
+            Mail::to($dest['email'], $dest['name'])->send($mailable);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1032,6 +1109,116 @@ class InventarioController extends Controller
     // Calcula stock_actual usando el mismo método que index():
     // (cantidad_inicial_base + SUM(movimientos excl. carga_inicial)) / factor_conversion
     // ─────────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET /api/compras/inventario/prod-seg
+    // Retorna los productos marcados prod_seg=true con brilo_stock, conteo físico
+    // más reciente y diferencia, por sucursal. Solo para admins.
+    // Query params: sucursal_id (opcional) — si se omite devuelve todas.
+    // ─────────────────────────────────────────────────────────────────────────
+    public function prodSegStats(Request $request): JsonResponse
+    {
+        $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
+
+        $rows = DB::connection('compras')
+            ->table('inventarios as i')
+            ->join('productos as p', 'p.id', '=', 'i.producto_id')
+            ->join('sucursales as s', 's.id', '=', 'i.sucursal_id')
+            ->where('i.prod_seg', true)
+            ->where('i.activo', true)
+            ->when($sucursalId, fn ($q) => $q->where('i.sucursal_id', $sucursalId))
+            ->select(
+                'i.sucursal_id',
+                's.nombre as sucursal_nombre',
+                'i.producto_id',
+                'p.nombre as producto_nombre',
+                'p.codigo as producto_codigo',
+                'i.unidad',
+                'i.brilo_stock',
+                'i.brilo_sync_at',
+                'i.cantidad_inicial_base',
+                'p.factor_conversion',
+            )
+            ->orderBy('s.nombre')
+            ->orderBy('p.nombre')
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return response()->json(['sucursales' => []]);
+        }
+
+        $productoIds  = $rows->pluck('producto_id')->unique()->all();
+        $sucursalIds  = $rows->pluck('sucursal_id')->unique()->all();
+
+        // Suma de movimientos (excl. carga_inicial) por sucursal+producto
+        $movs = DB::connection('compras')
+            ->table('movimientos_inventario')
+            ->whereIn('sucursal_id', $sucursalIds)
+            ->whereIn('producto_id', $productoIds)
+            ->where('tipo', '!=', 'carga_inicial')
+            ->selectRaw('sucursal_id, producto_id, SUM(cantidad_base) as total_base')
+            ->groupBy('sucursal_id', 'producto_id')
+            ->get()
+            ->groupBy('sucursal_id')
+            ->map(fn ($g) => $g->pluck('total_base', 'producto_id'));
+
+        // Último conteo físico por sucursal+producto
+        $ultimosConteos = DB::connection('compras')
+            ->table('movimientos_inventario')
+            ->whereIn('sucursal_id', $sucursalIds)
+            ->whereIn('producto_id', $productoIds)
+            ->where('tipo', 'conteo_fisico')
+            ->selectRaw('sucursal_id, producto_id, MAX(fecha) as ultima_fecha, SUM(cantidad_base) as total_ajuste_base')
+            ->groupBy('sucursal_id', 'producto_id')
+            ->get()
+            ->groupBy('sucursal_id')
+            ->map(fn ($g) => $g->keyBy('producto_id'));
+
+        $grouped = $rows->groupBy('sucursal_id')->map(function ($items, $sucId) use ($movs, $ultimosConteos) {
+            $sucursalMovs   = $movs[$sucId] ?? collect();
+            $sucursalConteos = $ultimosConteos[$sucId] ?? collect();
+
+            $productos = $items->map(function ($r) use ($sucursalMovs, $sucursalConteos) {
+                $pid    = $r->producto_id;
+                $factor = max((float) ($r->factor_conversion ?? 1), 0.0001);
+                $movBase = (float) ($sucursalMovs[$pid] ?? 0);
+                $stockActual = round(($r->cantidad_inicial_base + $movBase) / $factor, 3);
+
+                $brilo      = $r->brilo_stock !== null ? round((float) $r->brilo_stock, 3) : null;
+                $diferencia = $brilo !== null ? round($stockActual - $brilo, 3) : null;
+
+                $tipo = null;
+                if ($diferencia !== null) {
+                    if ($diferencia > 0.01)      $tipo = 'SOBRANTE';
+                    elseif ($diferencia < -0.01) $tipo = 'FALTANTE';
+                    else                         $tipo = 'OK';
+                }
+
+                $ultimoConteo = $sucursalConteos[$pid] ?? null;
+
+                return [
+                    'producto_id'   => $pid,
+                    'nombre'        => $r->producto_nombre,
+                    'codigo'        => $r->producto_codigo,
+                    'unidad'        => $r->unidad,
+                    'stock_actual'  => $stockActual,
+                    'brilo_stock'   => $brilo,
+                    'brilo_sync_at' => $r->brilo_sync_at,
+                    'diferencia'    => $diferencia,
+                    'tipo'          => $tipo,
+                    'ultimo_conteo' => $ultimoConteo?->ultima_fecha,
+                ];
+            })->values()->all();
+
+            return [
+                'sucursal_id'     => $sucId,
+                'sucursal_nombre' => $items->first()->sucursal_nombre,
+                'productos'       => $productos,
+            ];
+        })->values()->all();
+
+        return response()->json(['sucursales' => $grouped]);
+    }
+
     private function calcularStockItems(?int $sucursalId): \Illuminate\Support\Collection
     {
         $inventarios = Inventario::with('producto')
