@@ -130,6 +130,7 @@ class InventarioController extends Controller
                 'stock_actual_base'   => round($stockActualBase, 6),
                 'alerta'              => $alerta,
                 'activo'              => (bool) ($inv->activo ?? true),
+                'prod_seg'            => (bool) ($inv->prod_seg ?? false),
             ]);
         }
 
