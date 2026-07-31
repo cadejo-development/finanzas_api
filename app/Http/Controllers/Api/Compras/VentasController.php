@@ -651,6 +651,168 @@ class VentasController extends Controller
         ]);
     }
 
+    /**
+     * GET /api/compras/ventas/proyeccion-ingredientes
+     * Traduce la proyección de platos del siguiente período a cantidades de ingredientes,
+     * e incluye el último conteo físico de este mes por producto.
+     *
+     * Params: sucursal_id (req), desde (Y-m-d), hasta (Y-m-d), categoria_key (opt)
+     * Devuelve: ingredientes[{producto_id, codigo, nombre, unidad, qty_proyectada, conteo_fisico, total_a_pedir}]
+     */
+    public function proyeccionIngredientes(Request $request): JsonResponse
+    {
+        $request->validate([
+            'sucursal_id'   => 'required|integer|min:1',
+            'desde'         => 'nullable|date',
+            'hasta'         => 'nullable|date',
+            'categoria_key' => 'nullable|string',
+        ]);
+
+        $sucursalId   = (int) $request->sucursal_id;
+        $categoriaKey = $request->categoria_key;
+        $desde        = $request->desde ?? date('Y-m-d', strtotime('tomorrow'));
+        $hasta        = $request->hasta ?? date('Y-m-d', strtotime($desde . ' +9 days'));
+
+        // ── 1. Obtener proyección de platos ───────────────────────────────
+        $proyReq = clone $request;
+        $proyReq->merge(['sucursal_id' => $sucursalId, 'desde' => $desde, 'hasta' => $hasta, 'categoria_key' => $categoriaKey]);
+        $proyResp = $this->proyeccion($proyReq);
+        $proyData = json_decode($proyResp->getContent(), true);
+
+        if (empty($proyData['proyecciones'])) {
+            return response()->json([
+                'success'      => true,
+                'sucursal_id'  => $sucursalId,
+                'desde'        => $desde,
+                'hasta'        => $hasta,
+                'ingredientes' => [],
+            ]);
+        }
+
+        // Map plato_codigo → qty_proyectada
+        $qtyMap = [];
+        foreach ($proyData['proyecciones'] as $p) {
+            if (!empty($p['codigo'])) {
+                $qtyMap[$p['codigo']] = (float) $p['qty_proyectada'];
+            }
+        }
+
+        $codigos = array_keys($qtyMap);
+
+        // ── 2. Expandir recetas → ingredientes (directo + sub-receta nivel 1) ──
+        $directos = DB::connection('compras')
+            ->table('recetas as r')
+            ->join('receta_ingredientes as ri', 'ri.receta_id', '=', 'r.id')
+            ->join('productos as p', 'p.id', '=', 'ri.producto_id')
+            ->whereIn('r.codigo_origen', $codigos)
+            ->where('r.activa', true)
+            ->whereNotNull('ri.producto_id')
+            ->select(
+                'r.codigo_origen as plato_codigo',
+                'p.id as producto_id', 'p.nombre', 'p.codigo as prod_codigo',
+                'p.unidad', 'p.costo',
+                'ri.cantidad_por_plato', 'ri.unidad as unidad_receta'
+            )
+            ->get();
+
+        $subReceta = DB::connection('compras')
+            ->table('recetas as r')
+            ->join('receta_ingredientes as ri', 'ri.receta_id', '=', 'r.id')
+            ->join('recetas as sr', 'sr.id', '=', 'ri.sub_receta_id')
+            ->join('receta_ingredientes as ri2', 'ri2.receta_id', '=', 'sr.id')
+            ->join('productos as p', 'p.id', '=', 'ri2.producto_id')
+            ->whereIn('r.codigo_origen', $codigos)
+            ->where('r.activa', true)
+            ->where('sr.activa', true)
+            ->whereNotNull('ri2.producto_id')
+            ->select(
+                'r.codigo_origen as plato_codigo',
+                'p.id as producto_id', 'p.nombre', 'p.codigo as prod_codigo',
+                'p.unidad', 'p.costo',
+                DB::raw('ri.cantidad_por_plato * ri2.cantidad_por_plato AS cantidad_por_plato'),
+                'ri2.unidad as unidad_receta'
+            )
+            ->get();
+
+        // Acumular por producto_id
+        $mapa = [];
+        foreach (array_merge($directos->all(), $subReceta->all()) as $row) {
+            $qty = $qtyMap[$row->plato_codigo] ?? 0;
+            $pid = $row->producto_id;
+
+            if (!isset($mapa[$pid])) {
+                $mapa[$pid] = [
+                    'producto_id'    => $pid,
+                    'codigo'         => $row->prod_codigo,
+                    'nombre'         => $row->nombre,
+                    'unidad'         => $row->unidad_receta,
+                    'qty_proyectada' => 0.0,
+                    'costo'          => (float) ($row->costo ?? 0),
+                ];
+            }
+            $mapa[$pid]['qty_proyectada'] += (float) $row->cantidad_por_plato * $qty;
+        }
+
+        if (empty($mapa)) {
+            return response()->json([
+                'success'      => true,
+                'sucursal_id'  => $sucursalId,
+                'desde'        => $desde,
+                'hasta'        => $hasta,
+                'ingredientes' => [],
+            ]);
+        }
+
+        // ── 3. Último conteo físico del mes en curso para estos productos ──
+        $mesInicio = date('Y-m-01');
+        $mesFin    = date('Y-m-t');
+
+        $conteos = DB::connection('compras')
+            ->table('movimientos_inventario as m')
+            ->where('m.sucursal_id', $sucursalId)
+            ->where('m.tipo', 'conteo_fisico')
+            ->whereBetween('m.fecha', [$mesInicio, $mesFin])
+            ->whereIn('m.producto_id', array_keys($mapa))
+            ->select('m.producto_id', 'm.detalle', DB::raw('MAX(m.fecha) as ultima_fecha'))
+            ->groupBy('m.producto_id', 'm.detalle')
+            ->orderByRaw('MAX(m.fecha) DESC')
+            ->get()
+            // Quedarse solo con el registro más reciente por producto
+            ->groupBy('producto_id')
+            ->map(fn($rows) => $rows->first());
+
+        // ── 4. Construir respuesta ────────────────────────────────────────
+        $ingredientes = array_values(array_map(function ($ing) use ($conteos) {
+            $ing['qty_proyectada'] = round($ing['qty_proyectada'], 3);
+
+            $detalle = $conteos->get($ing['producto_id']);
+            $totalContado = null;
+            if ($detalle) {
+                $det = is_string($detalle->detalle) ? json_decode($detalle->detalle, true) : (array) $detalle->detalle;
+                $totalContado = (float) ($det['total_contado'] ?? 0);
+            }
+            $ing['conteo_fisico']  = $totalContado;
+            $ing['total_a_pedir']  = $totalContado !== null
+                ? round(max(0, $ing['qty_proyectada'] - $totalContado), 3)
+                : round($ing['qty_proyectada'], 3);
+
+            return $ing;
+        }, $mapa));
+
+        // Ordenar por qty_proyectada desc
+        usort($ingredientes, fn($a, $b) => $b['qty_proyectada'] <=> $a['qty_proyectada']);
+
+        return response()->json([
+            'success'      => true,
+            'sucursal_id'  => $sucursalId,
+            'desde'        => $desde,
+            'hasta'        => $hasta,
+            'dias'         => $proyData['dias'],
+            'eventos'      => $proyData['eventos'] ?? [],
+            'ingredientes' => $ingredientes,
+        ]);
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     /** Qty total vendida por plato en un rango, keyed by producto_codigo. */

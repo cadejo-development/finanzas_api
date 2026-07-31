@@ -114,12 +114,13 @@ class PedidosController extends Controller
         }
 
         $validated = $request->validate([
-            'items'                   => 'required|array',
-            'items.*.producto_id'     => 'required|integer',
-            'items.*.cantidad'        => 'required|numeric|min:0',
-            'items.*.precio_unitario' => 'required|numeric|min:0',
-            'items.*.nota'            => 'nullable|string',
-            'items.*.unidad'          => 'nullable|string|max:20',
+            'items'                     => 'required|array',
+            'items.*.producto_id'       => 'required|integer',
+            'items.*.cantidad'          => 'required|numeric|min:0',
+            'items.*.precio_unitario'   => 'required|numeric|min:0',
+            'items.*.nota'              => 'nullable|string',
+            'items.*.justificacion'     => 'nullable|string',
+            'items.*.unidad'            => 'nullable|string|max:20',
         ]);
 
         DB::connection('compras')->transaction(function () use ($pedido, $validated) {
@@ -139,6 +140,7 @@ class PedidosController extends Controller
                     'precio_unitario' => $item['precio_unitario'],
                     'subtotal'        => $subtotal,
                     'nota'            => $item['nota'] ?? null,
+                    'justificacion'   => $item['justificacion'] ?? null,
                     'aud_usuario'     => auth('sanctum')->user()?->email ?? 'api',
                 ]);
             }
@@ -378,6 +380,7 @@ class PedidosController extends Controller
                 'precio_unitario' => (float) $d->precio_unitario,
                 'subtotal'        => (float) $d->subtotal,
                 'nota'            => $d->nota ?? '',
+                'justificacion'   => $d->justificacion ?? '',
             ])->values(),
         ];
     }
