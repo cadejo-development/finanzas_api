@@ -10,9 +10,11 @@ return new class extends Migration
 
     public function up(): void
     {
-        Schema::connection('compras')->table('ventas_catalogo_precio_lineas', function (Blueprint $table) {
-            $table->unsignedSmallInteger('cantidad_minima')->default(1)->after('precio_con_iva');
-        });
+        if (!Schema::connection('compras')->hasColumn('ventas_catalogo_precio_lineas', 'cantidad_minima')) {
+            Schema::connection('compras')->table('ventas_catalogo_precio_lineas', function (Blueprint $table) {
+                $table->unsignedSmallInteger('cantidad_minima')->default(1)->after('precio_con_iva');
+            });
+        }
     }
 
     public function down(): void

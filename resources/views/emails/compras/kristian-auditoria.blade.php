@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Auditoría de Calidad</title>
+  <title>Auditoría de Calidad — Revisión Kristian</title>
 </head>
 <body style="margin:0;padding:0;background:#f5f0e8;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
 
@@ -23,18 +23,25 @@
 
         {{-- Banner --}}
         <tr>
-          <td style="background:#065f46;padding:14px 48px;text-align:center;">
-            <p style="margin:0;color:#ffffff;font-size:14px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">Auditoría de Calidad Finalizada · Responde en 48 h</p>
+          @if($apelo)
+          <td style="background:#7c3aed;padding:14px 48px;text-align:center;">
+            <p style="margin:0;color:#ffffff;font-size:14px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">⚠ Gerente ha apelado — Revisión requerida</p>
           </td>
+          @else
+          <td style="background:#d97706;padding:14px 48px;text-align:center;">
+            <p style="margin:0;color:#ffffff;font-size:14px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">Auditoría sin apelar · Cierre requerido</p>
+          </td>
+          @endif
         </tr>
 
         {{-- Cuerpo --}}
         <tr>
           <td style="padding:32px 40px 16px;">
             <p style="margin:0 0 12px;color:#333333;font-size:15px;line-height:1.65;">
-              Se ha finalizado una <strong>Auditoría de Calidad</strong> en <strong>{{ $sucursalNombre }}</strong>. Tienes <strong>48 horas</strong> para revisar los resultados y agregar tus comentarios (apelación).
-              @if($deadlineAt)
-              <br/><span style="color:#b45309;font-size:13px;">⏰ Plazo: <strong>{{ $deadlineAt }}</strong></span>
+              @if($apelo)
+                El gerente de <strong>{{ $sucursalNombre }}</strong> ha enviado una apelación a la auditoría de calidad del <strong>{{ $fecha }}</strong>. Tienes <strong>48 horas</strong> para revisar, modificar la nota si es necesario, y cerrar la auditoría.
+              @else
+                El período de 48 horas para que el gerente de <strong>{{ $sucursalNombre }}</strong> apelara venció sin respuesta. La auditoría del <strong>{{ $fecha }}</strong> queda a tu cargo. Tienes <strong>48 horas</strong> para cerrarla (puedes modificar la nota si lo consideras necesario).
               @endif
             </p>
           </td>
@@ -60,7 +67,7 @@
                 <td style="padding:12px 18px;font-size:13px;color:#6b7280;border-bottom:1px solid #f3f4f6;">Calificación</td>
                 <td style="padding:12px 18px;font-size:15px;font-weight:700;text-align:right;border-bottom:1px solid #f3f4f6;
                   color:{{ $calificacion !== null && $calificacion >= 75 ? '#059669' : ($calificacion !== null && $calificacion >= 60 ? '#d97706' : '#dc2626') }};">
-                  {{ $calificacion !== null ? number_format($calificacion, 2).'%' : '—' }}
+                  {{ $calificacion !== null ? number_format($calificacion, 1).'%' : '—' }}
                 </td>
               </tr>
               <tr style="background:#fafafa;">
@@ -71,14 +78,14 @@
           </td>
         </tr>
 
-        @if($observaciones)
+        @if($apelo && $comentarioGerente)
         <tr>
           <td style="padding:0 40px 16px;">
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td style="background:#ecfdf5;border-left:4px solid #059669;border-radius:4px;padding:14px 18px;">
-                  <p style="margin:0 0 4px;color:#065f46;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Observaciones generales</p>
-                  <p style="margin:0;color:#065f46;font-size:13px;line-height:1.6;">{{ $observaciones }}</p>
+                <td style="background:#ede9fe;border-left:4px solid #7c3aed;border-radius:4px;padding:14px 18px;">
+                  <p style="margin:0 0 4px;color:#5b21b6;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Comentario del Gerente (apelación)</p>
+                  <p style="margin:0;color:#4c1d95;font-size:13px;line-height:1.6;">{{ $comentarioGerente }}</p>
                 </td>
               </tr>
             </table>
@@ -91,8 +98,8 @@
           <td style="padding:16px 40px 36px;text-align:center;">
             <table cellpadding="0" cellspacing="0" align="center">
               <tr>
-                <td style="background:#059669;border-radius:8px;padding:12px 32px;">
-                  <a href="{{ $linkUrl }}" style="color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;display:inline-block;letter-spacing:0.3px;">Ver auditoría en el sistema</a>
+                <td style="background:{{ $apelo ? '#7c3aed' : '#d97706' }};border-radius:8px;padding:12px 32px;">
+                  <a href="{{ $linkUrl }}" style="color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;display:inline-block;letter-spacing:0.3px;">Revisar auditoría en el sistema</a>
                 </td>
               </tr>
             </table>

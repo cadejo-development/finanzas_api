@@ -579,13 +579,19 @@ class AuditoriaRecetasController extends Controller
                 default                                    => 'borrador',
             };
 
-            $auditoria->update([
+            $extra = [];
+            if ($submit && $auditoria->tipo === 'calidad' && !$auditoria->submitted_at) {
+                $extra['submitted_at']      = now();
+                $extra['gerente_deadline_at'] = now()->addHours(48);
+            }
+
+            $auditoria->update(array_merge([
                 'estado'                  => $nuevoEstado,
                 'calificacion'            => $calificacion,
                 'clasificacion'           => $clasificacion,
                 'observaciones_generales' => $validated['observaciones_generales'] ?? null,
                 'acciones_correctivas'    => $validated['acciones_correctivas'] ?? null,
-            ]);
+            ], $extra));
         });
 
         // Notificar por correo al finalizar auditoría de calidad
@@ -631,6 +637,9 @@ class AuditoriaRecetasController extends Controller
 
                 if (!empty($destinatarios)) {
                     $linkUrl = config('app.frontend_compras_url', 'https://gestion-operaciones.cervezacadejo.com') . '/auditorias-calidad';
+                    $deadlineLabel = $auditoria->gerente_deadline_at
+                        ? $auditoria->gerente_deadline_at->setTimezone('America/El_Salvador')->format('d/m/Y H:i') . ' (hora SV)'
+                        : null;
                     $mailable = new AuditoriaCalidadNotificacion(
                         sucursalNombre: $sucursalNombre,
                         fecha:          $auditoria->fecha?->format('d/m/Y') ?? '',
@@ -639,6 +648,7 @@ class AuditoriaRecetasController extends Controller
                         clasificacion:  $auditoria->clasificacion,
                         observaciones:  $auditoria->observaciones_generales,
                         linkUrl:        $linkUrl,
+                        deadlineAt:     $deadlineLabel,
                     );
                     Mail::to($destinatarios)->send($mailable);
 
@@ -833,6 +843,14 @@ class AuditoriaRecetasController extends Controller
             return response()->json(['message' => 'Solo aplica para auditorías de calidad.'], 422);
         }
 
+        if ($auditoria->estado !== 'pendiente_respuesta') {
+            return response()->json(['message' => 'Esta auditoría ya no acepta respuestas.'], 422);
+        }
+
+        if ($auditoria->gerente_deadline_at && now()->gt($auditoria->gerente_deadline_at)) {
+            return response()->json(['message' => 'El plazo de 48 horas para apelar ha vencido.'], 422);
+        }
+
         $validated = $request->validate([
             'comentario_gerente' => 'required|string|max:2000',
         ]);
@@ -845,7 +863,15 @@ class AuditoriaRecetasController extends Controller
             'respondido_por_nombre' => $user?->name,
             'respondido_at'         => now(),
             'estado'                => 'respondida',
+            'gerente_respondio'     => true,
+            'kristian_notificado_at' => now(),
+            'kristian_deadline_at'  => now()->addHours(48),
         ]);
+
+        $sucursalNombre = DB::connection('pgsql')
+            ->table('sucursales')->where('id', $auditoria->sucursal_id)->value('nombre') ?? 'Sucursal';
+
+        $this->notificarKristian($auditoria, $sucursalNombre, apeló: true);
 
         $sucursales = DB::connection('pgsql')->table('sucursales')
             ->where('id', $auditoria->sucursal_id)->pluck('nombre', 'id');
@@ -882,6 +908,12 @@ class AuditoriaRecetasController extends Controller
             'respondido_por_id'        => $a->respondido_por_id,
             'respondido_por_nombre'    => $a->respondido_por_nombre,
             'respondido_at'            => $a->respondido_at?->toIso8601String(),
+            // Flujo apelación / deadlines
+            'submitted_at'             => $a->submitted_at?->toIso8601String(),
+            'gerente_deadline_at'      => $a->gerente_deadline_at?->toIso8601String(),
+            'gerente_respondio'        => $a->gerente_respondio,
+            'kristian_notificado_at'   => $a->kristian_notificado_at?->toIso8601String(),
+            'kristian_deadline_at'     => $a->kristian_deadline_at?->toIso8601String(),
             'fotos'                    => $a->relationLoaded('fotos')
                 ? $a->fotos->map(fn ($f) => [
                     'id'          => $f->id,
@@ -891,6 +923,42 @@ class AuditoriaRecetasController extends Controller
                 : [],
             'created_at'               => $a->created_at?->toIso8601String(),
         ];
+    }
+
+    private function notificarKristian(AuditoriaReceta $auditoria, string $sucursalNombre, bool $apeló): void
+    {
+        try {
+            $linkUrl = config('app.frontend_compras_url', 'https://gestion-operaciones.cervezacadejo.com') . '/auditorias-calidad';
+            Mail::to('kristian@cervezacadejo.com')->send(
+                new \App\Mail\Compras\KristianAuditoriaNotificacion(
+                    sucursalNombre:   $sucursalNombre,
+                    fecha:            $auditoria->fecha?->format('d/m/Y') ?? '',
+                    evaluadorNombre:  $auditoria->evaluador_nombre ?? '',
+                    calificacion:     $auditoria->calificacion !== null ? (float) $auditoria->calificacion : null,
+                    clasificacion:    $auditoria->clasificacion,
+                    comentarioGerente: $auditoria->comentario_gerente,
+                    apelo:            $apeló,
+                    linkUrl:          $linkUrl,
+                )
+            );
+
+            DB::connection('pgsql')->table('email_logs')->insert([
+                'sistema'         => 'compras',
+                'tipo'            => 'auditoria_kristian',
+                'destinatario'    => 'kristian@cervezacadejo.com',
+                'asunto'          => ($apeló ? 'Apelación' : 'Auditoría sin apelar') . " — {$sucursalNombre}",
+                'estado'          => 'enviado',
+                'enviado_por'     => 'sistema',
+                'referencia_id'   => $auditoria->id,
+                'referencia_tipo' => 'auditoria',
+                'created_at'      => now(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('AuditoriaCalidad: fallo al notificar a Kristian', [
+                'auditoria_id' => $auditoria->id,
+                'error'        => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

@@ -3,6 +3,7 @@
 use App\Console\Commands\InactivarEmpleadosDesvinculados;
 use App\Console\Commands\AlertasPeriodoPrueba;
 use App\Console\Commands\AlertasVacacionesVencimiento;
+use App\Console\Commands\CerrarAuditoriasVencidas;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -32,6 +33,13 @@ Schedule::command(AlertasVacacionesVencimiento::class)
     ->withoutOverlapping()
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/alertas-vacaciones-vencimiento.log'));
+
+// Cierra para el gerente las auditorías de calidad cuyo plazo de 48h venció y notifica a Kristian.
+Schedule::command(CerrarAuditoriasVencidas::class)
+    ->hourly()
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/cerrar-auditorias-vencidas.log'));
 
 // NOTA: sync-brilo-stock NO corre desde App Runner — requiere VPN FortiClient hacia Brilo.
 // Se ejecuta localmente con Windows Task Scheduler. Ver database/sync_brilo_scheduler.ps1

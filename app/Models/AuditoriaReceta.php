@@ -15,13 +15,19 @@ class AuditoriaReceta extends Model
         'evaluador_id', 'evaluador_nombre', 'notas', 'estado',
         'calificacion', 'clasificacion', 'observaciones_generales', 'acciones_correctivas',
         'respondido_por_id', 'respondido_por_nombre', 'respondido_at',
-        'comentario_gerente',
-        'aud_usuario',
+        'comentario_gerente', 'aud_usuario',
+        'submitted_at', 'gerente_deadline_at', 'gerente_respondio',
+        'kristian_notificado_at', 'kristian_deadline_at',
     ];
 
     protected $casts = [
-        'fecha'         => 'date',
-        'respondido_at' => 'datetime',
+        'fecha'                  => 'date',
+        'respondido_at'          => 'datetime',
+        'submitted_at'           => 'datetime',
+        'gerente_deadline_at'    => 'datetime',
+        'gerente_respondio'      => 'boolean',
+        'kristian_notificado_at' => 'datetime',
+        'kristian_deadline_at'   => 'datetime',
     ];
 
     public function estacion()

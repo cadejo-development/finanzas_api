@@ -8,7 +8,7 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class AuditoriaCalidadNotificacion extends Mailable
+class KristianAuditoriaNotificacion extends Mailable
 {
     use Queueable, SerializesModels;
 
@@ -18,22 +18,22 @@ class AuditoriaCalidadNotificacion extends Mailable
         public readonly string  $evaluadorNombre,
         public readonly ?float  $calificacion,
         public readonly ?string $clasificacion,
-        public readonly ?string $observaciones,
+        public readonly ?string $comentarioGerente,
+        public readonly bool    $apelo,
         public readonly string  $linkUrl,
-        public readonly ?string $deadlineAt = null,
     ) {}
 
     public function envelope(): Envelope
     {
-        return new Envelope(
-            subject: "Auditoría de Calidad finalizada — {$this->sucursalNombre} ({$this->fecha})",
-        );
+        $asunto = $this->apelo
+            ? "Apelación de Gerente — Auditoría Calidad {$this->sucursalNombre} ({$this->fecha})"
+            : "Auditoría sin apelar — {$this->sucursalNombre} ({$this->fecha}) · Requiere revisión";
+
+        return new Envelope(subject: $asunto);
     }
 
     public function content(): Content
     {
-        return new Content(
-            view: 'emails.compras.auditoria-calidad',
-        );
+        return new Content(view: 'emails.compras.kristian-auditoria');
     }
 }
