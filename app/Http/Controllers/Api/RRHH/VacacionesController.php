@@ -7,6 +7,7 @@ use App\Models\RRHH\Vacacion;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class VacacionesController extends RRHHBaseController
 {
@@ -139,13 +140,24 @@ class VacacionesController extends RRHHBaseController
         $subordinadosIds = $this->getSubordinadosIds();
         $anio = now()->year;
 
-        $saldos = SaldoVacaciones::whereIn('empleado_id', $subordinadosIds)
+        // Incluir al propio jefe igual que hace el endpoint de catalogos,
+        // para que su tarjeta muestre el saldo correcto en lugar de 0.
+        $jefeId = DB::connection('pgsql')
+            ->table('empleados')
+            ->where('user_id', $this->getEffectiveUser()->id)
+            ->value('id');
+
+        $idsVisibles = $jefeId
+            ? array_values(array_unique(array_merge([(int) $jefeId], $subordinadosIds)))
+            : $subordinadosIds;
+
+        $saldos = SaldoVacaciones::whereIn('empleado_id', $idsVisibles)
             ->where('anio', $anio)
             ->get()
             ->keyBy('empleado_id');
 
         // Para empleados sin saldo registrado, mostrar valores por defecto
-        $data = collect($subordinadosIds)->map(function ($empId) use ($saldos, $anio) {
+        $data = collect($idsVisibles)->map(function ($empId) use ($saldos, $anio) {
             $saldo = $saldos[$empId] ?? null;
             return [
                 'empleado_id'      => $empId,
