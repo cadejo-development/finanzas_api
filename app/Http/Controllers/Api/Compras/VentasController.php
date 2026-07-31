@@ -510,7 +510,252 @@ class VentasController extends Controller
         ]);
     }
 
+    /**
+     * GET /api/compras/ventas/proyeccion
+     * Proyección de ventas por plato para un período futuro usando fórmula de 6 niveles.
+     *
+     * Params: sucursal_id (req), desde (Y-m-d, default mañana), hasta (Y-m-d, default desde+9), categoria_key (opt)
+     *
+     * Fórmula: P = blend ponderado de 5 componentes × Fe (eventos)
+     *   L1 35% — Histórico mismo período año anterior
+     *   L2 25% — Histórico × factor crecimiento sucursal (90d)
+     *   L3 15% — Histórico × factor crecimiento plato (120d)
+     *   L4 15% — Tendencia reciente (avg 10d×50% + 30d×30% + 60d×20%)
+     *   L5 10% — Mejor estimado × factor eventos
+     *
+     * Buffer: pedido_sugerido = P × 1.10 (siempre), × 1.05 adicional en vacaciones
+     */
+    public function proyeccion(Request $request): JsonResponse
+    {
+        $request->validate([
+            'sucursal_id'   => 'required|integer|min:1',
+            'desde'         => 'nullable|date',
+            'hasta'         => 'nullable|date',
+            'categoria_key' => 'nullable|string',
+        ]);
+
+        $sucursalId   = (int) $request->sucursal_id;
+        $categoriaKey = $request->categoria_key;
+
+        // Período de proyección (default: próximos 10 días)
+        $desde = $request->desde ?? date('Y-m-d', strtotime('tomorrow'));
+        $hasta = $request->hasta ?? date('Y-m-d', strtotime($desde . ' +9 days'));
+
+        $diasPeriodo = max(1, (int) round((strtotime($hasta) - strtotime($desde)) / 86400) + 1);
+
+        // Día de referencia: último día con datos reales (día anterior a la proyección)
+        $ref = date('Y-m-d', strtotime($desde) - 86400);
+
+        // ── L1: Histórico — mismo período año anterior ────────────────────
+        $desdeAnt = date('Y-m-d', strtotime($desde . ' -1 year'));
+        $hastaAnt = date('Y-m-d', strtotime($hasta . ' -1 year'));
+        $historico = $this->vpGetPorPlato($sucursalId, $desdeAnt, $hastaAnt, $categoriaKey);
+
+        // ── L2: Factor sucursal — crecimiento últimos 90d ─────────────────
+        $suc90Desde    = date('Y-m-d', strtotime($ref . ' -90 days'));
+        $suc90AntDesde = date('Y-m-d', strtotime($suc90Desde . ' -1 year'));
+        $suc90AntHasta = date('Y-m-d', strtotime($ref . ' -1 year'));
+
+        $sucTotal    = $this->vpTotalQty($sucursalId, $suc90Desde, $ref);
+        $sucTotalAnt = $this->vpTotalQty($sucursalId, $suc90AntDesde, $suc90AntHasta);
+        $Fs          = $sucTotalAnt > 0 ? max(0.3, min(3.0, $sucTotal / $sucTotalAnt)) : 1.0;
+
+        // ── L3: Factor plato — crecimiento últimos 120d ───────────────────
+        $p120Desde    = date('Y-m-d', strtotime($ref . ' -120 days'));
+        $p120AntDesde = date('Y-m-d', strtotime($p120Desde . ' -1 year'));
+        $p120AntHasta = date('Y-m-d', strtotime($ref . ' -1 year'));
+
+        $platos120Act = $this->vpGetPorPlato($sucursalId, $p120Desde, $ref, $categoriaKey);
+        $platos120Ant = $this->vpGetPorPlato($sucursalId, $p120AntDesde, $p120AntHasta, $categoriaKey);
+
+        // ── L4: Tendencia reciente ────────────────────────────────────────
+        $avg10d = $this->vpAvgDiario($sucursalId, date('Y-m-d', strtotime($ref . ' -9 days')),   $ref, $categoriaKey);
+        $avg30d = $this->vpAvgDiario($sucursalId, date('Y-m-d', strtotime($ref . ' -29 days')),  $ref, $categoriaKey);
+        $avg60d = $this->vpAvgDiario($sucursalId, date('Y-m-d', strtotime($ref . ' -59 days')),  $ref, $categoriaKey);
+
+        // ── L6: Factor eventos ────────────────────────────────────────────
+        [$Fe, $detalleEventos] = $this->vpFactorEventos($desde, $hasta);
+
+        // ── Proyección por plato ──────────────────────────────────────────
+        $codigos = array_unique(array_merge(
+            array_keys($historico),
+            array_keys($platos120Act),
+            array_keys($avg10d),
+        ));
+
+        $proyecciones = [];
+
+        foreach ($codigos as $cod) {
+            // L1
+            $H = $historico[$cod]['qty'] ?? 0;
+
+            // L3: factor plato clamped
+            $qAct = $platos120Act[$cod]['qty'] ?? 0;
+            $qAnt = $platos120Ant[$cod]['qty'] ?? 0;
+            $Fp   = $qAnt > 0 ? max(0.3, min(3.0, $qAct / $qAnt)) : 1.0;
+
+            // L4: tendencia proyectada al período
+            $d10 = ($avg10d[$cod]['avg'] ?? 0) * $diasPeriodo;
+            $d30 = ($avg30d[$cod]['avg'] ?? 0) * $diasPeriodo;
+            $d60 = ($avg60d[$cod]['avg'] ?? 0) * $diasPeriodo;
+            $Ft  = $d10 * 0.50 + $d30 * 0.30 + $d60 * 0.20;
+
+            // Blend 5 componentes
+            $P1 = $H;              // histórico puro
+            $P2 = $H * $Fs;       // histórico × crecimiento sucursal
+            $P3 = $H * $Fp;       // histórico × crecimiento plato
+            $P4 = $Ft;            // tendencia reciente
+            $P5 = max($P1, $P2, $P3, $P4) * $Fe; // mejor estimado × eventos
+
+            $P = 0.35 * $P1 + 0.25 * $P2 + 0.15 * $P3 + 0.15 * $P4 + 0.10 * $P5;
+            $P = max(0.0, $P);
+
+            if ($P < 0.5) continue; // descartar productos insignificantes
+
+            // Buffer +10% base; +5% adicional si hay vacaciones en el período
+            $bufferVac = in_array('vacaciones_escolares', $detalleEventos) ? 1.05 : 1.0;
+            $pedido    = $P * 1.10 * $bufferVac;
+
+            $nombre    = $historico[$cod]['nombre']    ?? ($platos120Act[$cod]['nombre'] ?? $cod);
+            $categoria = $historico[$cod]['categoria'] ?? ($platos120Act[$cod]['categoria'] ?? null);
+
+            $proyecciones[] = [
+                'codigo'         => $cod,
+                'nombre'         => $nombre,
+                'categoria_key'  => $categoria,
+                'qty_proyectada' => round($P, 1),
+                'qty_pedido'     => round($pedido, 1),
+                'factores'       => [
+                    'H'  => round($H, 1),
+                    'Fs' => round($Fs, 3),
+                    'Fp' => round($Fp, 3),
+                    'Ft' => round($Ft, 1),
+                    'Fe' => round($Fe, 3),
+                ],
+            ];
+        }
+
+        usort($proyecciones, fn($a, $b) => $b['qty_proyectada'] <=> $a['qty_proyectada']);
+
+        return response()->json([
+            'success'         => true,
+            'sucursal_id'     => $sucursalId,
+            'desde'           => $desde,
+            'hasta'           => $hasta,
+            'dias'            => $diasPeriodo,
+            'referencia'      => $ref,
+            'factor_sucursal' => round($Fs, 3),
+            'factor_eventos'  => round($Fe, 3),
+            'eventos'         => $detalleEventos,
+            'proyecciones'    => $proyecciones,
+        ]);
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
+
+    /** Qty total vendida por plato en un rango, keyed by producto_codigo. */
+    private function vpGetPorPlato(int $suc, string $desde, string $hasta, ?string $cat): array
+    {
+        $q = DB::connection('compras')
+            ->table('ventas_semanales as vs')
+            ->join('ventas_semanales_detalle as d', 'd.venta_semanal_id', '=', 'vs.id')
+            ->where('vs.sucursal_id', $suc)
+            ->whereBetween('vs.semana_inicio', [$desde, $hasta])
+            ->select('d.producto_codigo as cod', 'd.producto_nombre as nom', 'd.categoria_key as cat',
+                     DB::raw('SUM(d.cantidad_vendida) as qty'))
+            ->groupBy('d.producto_codigo', 'd.producto_nombre', 'd.categoria_key');
+
+        if ($cat) $q->where('d.categoria_key', $cat);
+
+        return $q->get()->keyBy('cod')->map(fn($r) => [
+            'nombre'    => $r->nom,
+            'categoria' => $r->cat,
+            'qty'       => (float) $r->qty,
+        ])->toArray();
+    }
+
+    /** Qty total de todos los platos sumada (para factor sucursal). */
+    private function vpTotalQty(int $suc, string $desde, string $hasta): float
+    {
+        return (float) DB::connection('compras')
+            ->table('ventas_semanales as vs')
+            ->join('ventas_semanales_detalle as d', 'd.venta_semanal_id', '=', 'vs.id')
+            ->where('vs.sucursal_id', $suc)
+            ->whereBetween('vs.semana_inicio', [$desde, $hasta])
+            ->sum('d.cantidad_vendida');
+    }
+
+    /** Promedio diario de qty por plato en un rango, keyed by producto_codigo. */
+    private function vpAvgDiario(int $suc, string $desde, string $hasta, ?string $cat): array
+    {
+        $dias = max(1, (int) round((strtotime($hasta) - strtotime($desde)) / 86400) + 1);
+
+        $q = DB::connection('compras')
+            ->table('ventas_semanales as vs')
+            ->join('ventas_semanales_detalle as d', 'd.venta_semanal_id', '=', 'vs.id')
+            ->where('vs.sucursal_id', $suc)
+            ->whereBetween('vs.semana_inicio', [$desde, $hasta])
+            ->select('d.producto_codigo as cod', 'd.producto_nombre as nom', 'd.categoria_key as cat',
+                     DB::raw('SUM(d.cantidad_vendida) as qty_total'))
+            ->groupBy('d.producto_codigo', 'd.producto_nombre', 'd.categoria_key');
+
+        if ($cat) $q->where('d.categoria_key', $cat);
+
+        return $q->get()->keyBy('cod')->map(fn($r) => [
+            'nombre'    => $r->nom,
+            'categoria' => $r->cat,
+            'avg'       => (float) $r->qty_total / $dias,
+        ])->toArray();
+    }
+
+    /**
+     * Calcula el factor de eventos (Fe) y devuelve [float $Fe, array $etiquetas].
+     * Fe base = 1.0; se suman ajustes por feriados, quincena y vacaciones escolares.
+     */
+    private function vpFactorEventos(string $desde, string $hasta): array
+    {
+        // Feriados El Salvador (mes-día)
+        $feriadosMD = [
+            '01-01', '05-01', '05-10', '08-06', '08-07',
+            '09-15', '11-02', '12-25', '12-31',
+        ];
+
+        $feriadosEnPeriodo = 0;
+        $esQuincena        = false;
+        $etiquetas         = [];
+
+        $cursor = strtotime($desde);
+        $fin    = strtotime($hasta);
+
+        while ($cursor <= $fin) {
+            $md  = date('m-d', $cursor);
+            $dia = (int) date('d', $cursor);
+            $ult = (int) date('t', $cursor); // último día del mes
+
+            if (in_array($md, $feriadosMD)) $feriadosEnPeriodo++;
+            if ($dia === 15 || $dia === $ult) $esQuincena = true;
+
+            $cursor += 86400;
+        }
+
+        // Vacaciones escolares (marzo–abril y julio–agosto)
+        $mDesde = (int) date('m', strtotime($desde));
+        $mHasta = (int) date('m', strtotime($hasta));
+        $esVacaciones = false;
+        for ($m = $mDesde; $m <= $mHasta; $m++) {
+            if (in_array($m, [3, 4, 7, 8])) { $esVacaciones = true; break; }
+        }
+
+        $Fe = 1.0;
+        if ($feriadosEnPeriodo >= 1) {
+            $Fe += 0.05 * $feriadosEnPeriodo;
+            $etiquetas[] = "feriados({$feriadosEnPeriodo})";
+        }
+        if ($esQuincena)  { $Fe += 0.08; $etiquetas[] = 'quincena'; }
+        if ($esVacaciones){ $Fe += 0.05; $etiquetas[] = 'vacaciones_escolares'; }
+
+        return [min($Fe, 1.40), $etiquetas];
+    }
 
     /**
      * Busca la clave de columna (A, B, C...) en la fila de cabecera
