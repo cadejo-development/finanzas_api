@@ -382,6 +382,29 @@ class InventarioController extends Controller
         $fecha      = $validated['fecha_conteo'];
         $usuario    = Auth::user()->email;
 
+        // Bloquear re-aplicación para gerentes: solo admins pueden re-aplicar el mismo día
+        $tieneConteoPrevio = DB::connection('compras')
+            ->table('movimientos_inventario')
+            ->where('sucursal_id', $sucursalId)
+            ->where('tipo', 'conteo_fisico')
+            ->where('fecha', $fecha)
+            ->exists();
+
+        if ($tieneConteoPrevio) {
+            $authUser   = Auth::user();
+            $esAdmin    = $authUser && (
+                $authUser->hasRole('admin_compras') ||
+                $authUser->hasRole('gerencia_financiera') ||
+                $authUser->hasRole('dir_comercial')
+            );
+            if (!$esAdmin) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El conteo de este día ya fue aplicado para esta sucursal. No es posible modificarlo.',
+                ], 422);
+            }
+        }
+
         $productoIds = collect($validated['items'])->pluck('producto_id')->unique()->all();
 
         $inventarios = Inventario::where('sucursal_id', $sucursalId)
