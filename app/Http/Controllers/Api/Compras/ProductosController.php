@@ -395,7 +395,7 @@ class ProductosController extends Controller
     public function sucursales(): JsonResponse
     {
         $sucursales = Sucursal::whereHas('tipoSucursal', fn($q) => $q->where('codigo', 'operativa'))
-            ->whereNotIn('id', [19, 16]) // excluir entradas legacy (duplicados de CASA GUIROLA y MALCRIADAS)
+            ->whereNotIn('id', [19, 20]) // excluir registros inactivos duplicados (RES-CASA GUIROLA id=19, MALCRIADAS inactiva id=20)
             ->where(fn($q) => $q->where('activa', true)->orWhereNull('activa'))
             ->orderBy('nombre')
             ->get(['id', 'codigo', 'nombre']);
