@@ -1243,6 +1243,82 @@ class InventarioController extends Controller
         return response()->json(['sucursales' => $grouped]);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET /api/compras/inventario/prod-seg-historico
+    // Histórico diario de brilo_stock vs conteo_fisico de productos prod_seg.
+    // Query params: sucursal_id (requerido), dias (default 30)
+    // ─────────────────────────────────────────────────────────────────────────
+    public function prodSegHistorico(Request $request): JsonResponse
+    {
+        $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
+        $dias       = min((int) ($request->query('dias', 30)), 90);
+        $desde      = now()->subDays($dias)->toDateString();
+
+        $rows = DB::connection('compras')
+            ->table('prod_seg_historico as h')
+            ->join('productos as p', 'p.id', '=', 'h.producto_id')
+            ->when($sucursalId, fn ($q) => $q->where('h.sucursal_id', $sucursalId))
+            ->where('h.fecha', '>=', $desde)
+            ->select(
+                'h.sucursal_id',
+                'h.producto_id',
+                'p.codigo as producto_codigo',
+                'p.nombre as producto_nombre',
+                'p.unidad',
+                'h.fecha',
+                'h.sync_at',
+                'h.brilo_stock',
+                'h.conteo_fisico',
+                'h.diferencia',
+            )
+            ->orderBy('h.fecha', 'desc')
+            ->orderBy('h.sucursal_id')
+            ->orderBy('p.nombre')
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return response()->json(['sucursales' => [], 'fechas' => []]);
+        }
+
+        // Fechas únicas ordenadas desc
+        $fechas = $rows->pluck('fecha')->unique()->sort()->values()->all();
+
+        // Agrupar por sucursal
+        $sucursales = $rows->groupBy('sucursal_id')->map(function ($items, $sucId) use ($fechas) {
+            // Productos únicos de esta sucursal
+            $productos = $items->unique('producto_id')->map(fn ($r) => [
+                'producto_id' => $r->producto_id,
+                'codigo'      => $r->producto_codigo,
+                'nombre'      => $r->producto_nombre,
+                'unidad'      => $r->unidad,
+            ])->values()->all();
+
+            // Historico: por fecha → por producto_id
+            $historico = $items->groupBy('fecha')->map(function ($fechaItems, $fecha) {
+                return [
+                    'fecha'   => $fecha,
+                    'sync_at' => $fechaItems->first()->sync_at,
+                    'items'   => $fechaItems->keyBy('producto_id')->map(fn ($r) => [
+                        'brilo_stock'   => $r->brilo_stock !== null ? round((float) $r->brilo_stock, 3) : null,
+                        'conteo_fisico' => $r->conteo_fisico !== null ? round((float) $r->conteo_fisico, 3) : null,
+                        'diferencia'    => $r->diferencia !== null ? round((float) $r->diferencia, 3) : null,
+                    ])->all(),
+                ];
+            })->sortByDesc('fecha')->values()->all();
+
+            return [
+                'sucursal_id' => $sucId,
+                'productos'   => $productos,
+                'historico'   => $historico,
+            ];
+        })->values()->all();
+
+        return response()->json([
+            'sucursales' => $sucursales,
+            'fechas'     => $fechas,
+        ]);
+    }
+
     private function calcularStockItems(?int $sucursalId): \Illuminate\Support\Collection
     {
         $inventarios = Inventario::with('producto')
