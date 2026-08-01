@@ -852,7 +852,7 @@ class AuditoriaRecetasController extends Controller
         }
 
         $validated = $request->validate([
-            'comentario_gerente' => 'required|string|max:2000',
+            'comentario_gerente' => 'required|string|max:5000',
         ]);
 
         $user = $request->user();
