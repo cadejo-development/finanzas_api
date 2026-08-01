@@ -879,6 +879,40 @@ class AuditoriaRecetasController extends Controller
         return response()->json(['message' => 'Respuesta registrada.', 'data' => $this->formatAuditoria($auditoria, $sucursales)]);
     }
 
+    // ── POST /api/compras/auditorias/{id}/cerrar ────────────────────
+    public function cerrar(Request $request, int $id): JsonResponse
+    {
+        $auditoria = AuditoriaReceta::findOrFail($id);
+
+        if ($auditoria->tipo !== 'calidad') {
+            return response()->json(['message' => 'Solo aplica para auditorías de calidad.'], 422);
+        }
+
+        if ($auditoria->estado !== 'respondida') {
+            return response()->json(['message' => 'Solo se pueden cerrar auditorías en estado "respondida".'], 422);
+        }
+
+        $validated = $request->validate([
+            'nota_cierre' => 'nullable|string|max:2000',
+        ]);
+
+        $updates = [
+            'estado'     => 'cerrada',
+            'aud_usuario' => $request->user()?->name ?? $auditoria->aud_usuario,
+        ];
+
+        if (!empty($validated['nota_cierre'])) {
+            $updates['observaciones_generales'] = $validated['nota_cierre'];
+        }
+
+        $auditoria->update($updates);
+
+        $sucursales = DB::connection('pgsql')->table('sucursales')
+            ->where('id', $auditoria->sucursal_id)->pluck('nombre', 'id');
+
+        return response()->json(['message' => 'Auditoría cerrada.', 'data' => $this->formatAuditoria($auditoria, $sucursales)]);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────
     private function formatAuditoria(AuditoriaReceta $a, $sucursales): array
     {
