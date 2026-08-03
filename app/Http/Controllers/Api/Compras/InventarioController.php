@@ -1280,35 +1280,37 @@ class InventarioController extends Controller
         // buscar el conteo más reciente en movimientos_inventario de esa fecha.
         $sinConteo = $rows->filter(fn ($r) => is_null($r->conteo_fisico));
         if ($sinConteo->isNotEmpty()) {
-            $sucIds  = implode(',', $sinConteo->pluck('sucursal_id')->unique()->map('intval')->all());
-            $prodIds = implode(',', $sinConteo->pluck('producto_id')->unique()->map('intval')->all());
-            $fechasQ = $sinConteo->pluck('fecha')->unique()->map(fn ($f) => "'" . addslashes($f) . "'")->implode(',');
+            $pdo     = DB::connection('compras')->getPdo();
+            $sucIds  = implode(',', array_map('intval', $sinConteo->pluck('sucursal_id')->unique()->values()->all()));
+            $prodIds = implode(',', array_map('intval', $sinConteo->pluck('producto_id')->unique()->values()->all()));
+            $fechasQ = implode(',', $sinConteo->pluck('fecha')->unique()->map(fn ($f) => $pdo->quote((string) $f))->all());
 
             $conteosMov = DB::connection('compras')->select("
                 SELECT DISTINCT ON (sucursal_id, producto_id, fecha)
-                    sucursal_id, producto_id, fecha,
-                    (detalle::json->>'total_contado')::numeric AS conteo_fisico
+                    sucursal_id::text AS sucursal_id,
+                    producto_id::text AS producto_id,
+                    fecha::text       AS fecha,
+                    (detalle->>'total_contado')::numeric AS conteo_fisico
                 FROM movimientos_inventario
                 WHERE tipo = 'conteo_fisico'
                   AND sucursal_id IN ({$sucIds})
                   AND producto_id IN ({$prodIds})
-                  AND fecha::date IN ({$fechasQ})
+                  AND fecha IN ({$fechasQ})
                 ORDER BY sucursal_id, producto_id, fecha, created_at DESC
             ");
 
-            $conteosMap = collect($conteosMov)
-                ->groupBy('sucursal_id')
-                ->map(fn ($g) => $g->groupBy('producto_id')
-                    ->map(fn ($g2) => $g2->keyBy('fecha')));
+            // Lookup plain PHP array con claves string para evitar mismatch de tipos
+            $lookup = [];
+            foreach ($conteosMov as $c) {
+                $lookup[$c->sucursal_id][$c->producto_id][$c->fecha] = $c->conteo_fisico;
+            }
 
-            $rows = $rows->map(function ($r) use ($conteosMap) {
+            $rows = $rows->map(function ($r) use ($lookup) {
                 if (is_null($r->conteo_fisico)) {
-                    $conteo = $conteosMap->get($r->sucursal_id)
-                        ?->get($r->producto_id)
-                        ?->get($r->fecha);
-                    if ($conteo && $conteo->conteo_fisico !== null) {
-                        $r->conteo_fisico = $conteo->conteo_fisico;
-                        $r->diferencia    = (float) $conteo->conteo_fisico - (float) ($r->brilo_stock ?? 0);
+                    $val = $lookup[(string) $r->sucursal_id][(string) $r->producto_id][(string) $r->fecha] ?? null;
+                    if ($val !== null) {
+                        $r->conteo_fisico = $val;
+                        $r->diferencia    = (float) $val - (float) ($r->brilo_stock ?? 0);
                     }
                 }
                 return $r;
