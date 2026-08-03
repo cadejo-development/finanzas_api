@@ -1320,8 +1320,27 @@ class InventarioController extends Controller
         // Fechas únicas ordenadas desc
         $fechas = $rows->pluck('fecha')->unique()->sort()->values()->all();
 
+        // Hora en que se aplicó el conteo físico por (sucursal_id, fecha)
+        $sucIdsAll  = implode(',', array_map('intval', $rows->pluck('sucursal_id')->unique()->values()->all()));
+        $fechasAll  = implode(',', $rows->pluck('fecha')->unique()->map(fn ($f) => "'" . addslashes((string) $f) . "'")->all());
+        $conteoTimes = DB::connection('compras')->select("
+            SELECT DISTINCT ON (sucursal_id, fecha)
+                sucursal_id::text AS sucursal_id,
+                fecha::text       AS fecha,
+                (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/El_Salvador')::text AS conteo_at
+            FROM movimientos_inventario
+            WHERE tipo = 'conteo_fisico'
+              AND sucursal_id IN ({$sucIdsAll})
+              AND fecha IN ({$fechasAll})
+            ORDER BY sucursal_id, fecha, created_at ASC
+        ");
+        $conteoAtMap = [];
+        foreach ($conteoTimes as $ct) {
+            $conteoAtMap[$ct->sucursal_id][$ct->fecha] = $ct->conteo_at;
+        }
+
         // Agrupar por sucursal
-        $sucursales = $rows->groupBy('sucursal_id')->map(function ($items, $sucId) use ($fechas) {
+        $sucursales = $rows->groupBy('sucursal_id')->map(function ($items, $sucId) use ($fechas, $conteoAtMap) {
             // Productos únicos de esta sucursal
             $productos = $items->unique('producto_id')->map(fn ($r) => [
                 'producto_id' => $r->producto_id,
@@ -1331,11 +1350,13 @@ class InventarioController extends Controller
             ])->values()->all();
 
             // Historico: por fecha → por producto_id
-            $historico = $items->groupBy('fecha')->map(function ($fechaItems, $fecha) {
+            $historico = $items->groupBy('fecha')->map(function ($fechaItems, $fecha) use ($sucId, $conteoAtMap) {
+                $conteoAt = $conteoAtMap[(string) $sucId][(string) $fecha] ?? null;
                 return [
-                    'fecha'   => $fecha,
-                    'sync_at' => $fechaItems->first()->sync_at,
-                    'items'   => $fechaItems->keyBy('producto_id')->map(fn ($r) => [
+                    'fecha'     => $fecha,
+                    'sync_at'   => $fechaItems->first()->sync_at,
+                    'conteo_at' => $conteoAt,
+                    'items'     => $fechaItems->keyBy('producto_id')->map(fn ($r) => [
                         'brilo_stock'   => $r->brilo_stock !== null ? round((float) $r->brilo_stock, 3) : null,
                         'conteo_fisico' => $r->conteo_fisico !== null ? round((float) $r->conteo_fisico, 3) : null,
                         'diferencia'    => $r->diferencia !== null ? round((float) $r->diferencia, 3) : null,
