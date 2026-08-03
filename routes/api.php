@@ -701,8 +701,9 @@ Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh
     Route::put('cargos/{id}/headcount', [\App\Http\Controllers\Api\RRHH\CargosController::class, 'updateHeadcount']);
 
     // ── Catálogo de plazas ────────────────────────────────────────────────────
-    Route::get('plazas/stats',          [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'stats']);
-    Route::get('plazas/exceso',         [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'exceso']);
+    Route::get('plazas/stats',                    [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'stats']);
+    Route::get('plazas/exceso',                   [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'exceso']);
+    Route::get('plazas/disponibles-sucursal',     [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'disponiblesSucursal']);
     Route::get('plazas',                [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'index']);
     Route::post('plazas',               [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'store']);
     Route::put('plazas/{id}',           [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'update']);
