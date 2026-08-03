@@ -1262,7 +1262,7 @@ class InventarioController extends Controller
                 'p.nombre as producto_nombre',
                 'p.unidad',
                 'h.fecha',
-                'h.sync_at',
+                DB::raw("(h.sync_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/El_Salvador') AS sync_at"),
                 'h.brilo_stock',
                 'h.conteo_fisico',
                 'h.diferencia',
