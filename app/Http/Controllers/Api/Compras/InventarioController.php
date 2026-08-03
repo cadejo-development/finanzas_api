@@ -1173,42 +1173,40 @@ class InventarioController extends Controller
         $productoIds  = $rows->pluck('producto_id')->unique()->all();
         $sucursalIds  = $rows->pluck('sucursal_id')->unique()->all();
 
-        // Suma de movimientos (excl. carga_inicial) por sucursal+producto
-        $movs = DB::connection('compras')
-            ->table('movimientos_inventario')
-            ->whereIn('sucursal_id', $sucursalIds)
-            ->whereIn('producto_id', $productoIds)
-            ->where('tipo', '!=', 'carga_inicial')
-            ->selectRaw('sucursal_id, producto_id, SUM(cantidad_base) as total_base')
-            ->groupBy('sucursal_id', 'producto_id')
-            ->get()
-            ->groupBy('sucursal_id')
-            ->map(fn ($g) => $g->pluck('total_base', 'producto_id'));
+        // Último conteo físico por sucursal+producto (total_contado real del gerente)
+        $sucursalIdList = implode(',', array_map('intval', $sucursalIds));
+        $productoIdList = implode(',', array_map('intval', $productoIds));
 
-        // Último conteo físico por sucursal+producto
-        $ultimosConteos = DB::connection('compras')
-            ->table('movimientos_inventario')
-            ->whereIn('sucursal_id', $sucursalIds)
-            ->whereIn('producto_id', $productoIds)
-            ->where('tipo', 'conteo_fisico')
-            ->selectRaw('sucursal_id, producto_id, MAX(fecha) as ultima_fecha, SUM(cantidad_base) as total_ajuste_base')
-            ->groupBy('sucursal_id', 'producto_id')
-            ->get()
+        $ultimoConteoRaw = DB::connection('compras')->select("
+            SELECT DISTINCT ON (sucursal_id, producto_id)
+                sucursal_id, producto_id, fecha,
+                (detalle::json->>'total_contado')::numeric AS total_contado
+            FROM movimientos_inventario
+            WHERE tipo = 'conteo_fisico'
+              AND sucursal_id IN ({$sucursalIdList})
+              AND producto_id IN ({$productoIdList})
+            ORDER BY sucursal_id, producto_id, created_at DESC
+        ");
+
+        $ultimosConteos = collect($ultimoConteoRaw)
             ->groupBy('sucursal_id')
             ->map(fn ($g) => $g->keyBy('producto_id'));
 
-        $grouped = $rows->groupBy('sucursal_id')->map(function ($items, $sucId) use ($movs, $ultimosConteos) {
-            $sucursalMovs   = $movs[$sucId] ?? collect();
+        $grouped = $rows->groupBy('sucursal_id')->map(function ($items, $sucId) use ($ultimosConteos) {
             $sucursalConteos = $ultimosConteos[$sucId] ?? collect();
 
-            $productos = $items->map(function ($r) use ($sucursalMovs, $sucursalConteos) {
-                $pid    = $r->producto_id;
-                $factor = max((float) ($r->factor_conversion ?? 1), 0.0001);
-                $movBase = (float) ($sucursalMovs[$pid] ?? 0);
-                $stockActual = round(($r->cantidad_inicial_base + $movBase) / $factor, 3);
+            $productos = $items->map(function ($r) use ($sucursalConteos) {
+                $pid  = $r->producto_id;
+                $brilo = $r->brilo_stock !== null ? round((float) $r->brilo_stock, 3) : null;
 
-                $brilo      = $r->brilo_stock !== null ? round((float) $r->brilo_stock, 3) : null;
-                $diferencia = $brilo !== null ? round($stockActual - $brilo, 3) : null;
+                $ultimoConteo = $sucursalConteos[$pid] ?? null;
+                $conteoFisico = $ultimoConteo && $ultimoConteo->total_contado !== null
+                    ? round((float) $ultimoConteo->total_contado, 3)
+                    : null;
+
+                $diferencia = ($brilo !== null && $conteoFisico !== null)
+                    ? round($conteoFisico - $brilo, 3)
+                    : null;
 
                 $tipo = null;
                 if ($diferencia !== null) {
@@ -1217,19 +1215,17 @@ class InventarioController extends Controller
                     else                         $tipo = 'OK';
                 }
 
-                $ultimoConteo = $sucursalConteos[$pid] ?? null;
-
                 return [
                     'producto_id'   => $pid,
                     'nombre'        => $r->producto_nombre,
                     'codigo'        => $r->producto_codigo,
                     'unidad'        => $r->unidad,
-                    'stock_actual'  => $stockActual,
+                    'conteo_fisico' => $conteoFisico,
                     'brilo_stock'   => $brilo,
                     'brilo_sync_at' => $r->brilo_sync_at,
                     'diferencia'    => $diferencia,
                     'tipo'          => $tipo,
-                    'ultimo_conteo' => $ultimoConteo?->ultima_fecha,
+                    'ultimo_conteo' => $ultimoConteo?->fecha,
                 ];
             })->values()->all();
 
