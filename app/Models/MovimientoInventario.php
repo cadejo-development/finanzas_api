@@ -20,6 +20,7 @@ class MovimientoInventario extends Model
         'fecha',
         'referencia_tipo',
         'referencia_id',
+        'detalle',
         'aud_usuario',
     ];
 
@@ -27,6 +28,7 @@ class MovimientoInventario extends Model
         'cantidad'      => 'float',
         'cantidad_base' => 'float',
         'fecha'         => 'date',
+        'detalle'       => 'array',
     ];
 
     public function producto()
