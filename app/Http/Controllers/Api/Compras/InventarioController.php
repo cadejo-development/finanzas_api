@@ -1276,6 +1276,45 @@ class InventarioController extends Controller
             return response()->json(['sucursales' => [], 'fechas' => []]);
         }
 
+        // Para filas sin conteo en el snapshot (conteo hecho después del sync 3am),
+        // buscar el conteo más reciente en movimientos_inventario de esa fecha.
+        $sinConteo = $rows->filter(fn ($r) => is_null($r->conteo_fisico));
+        if ($sinConteo->isNotEmpty()) {
+            $sucIds  = implode(',', $sinConteo->pluck('sucursal_id')->unique()->map('intval')->all());
+            $prodIds = implode(',', $sinConteo->pluck('producto_id')->unique()->map('intval')->all());
+            $fechasQ = $sinConteo->pluck('fecha')->unique()->map(fn ($f) => "'" . addslashes($f) . "'")->implode(',');
+
+            $conteosMov = DB::connection('compras')->select("
+                SELECT DISTINCT ON (sucursal_id, producto_id, fecha)
+                    sucursal_id, producto_id, fecha,
+                    (detalle::json->>'total_contado')::numeric AS conteo_fisico
+                FROM movimientos_inventario
+                WHERE tipo = 'conteo_fisico'
+                  AND sucursal_id IN ({$sucIds})
+                  AND producto_id IN ({$prodIds})
+                  AND fecha::date IN ({$fechasQ})
+                ORDER BY sucursal_id, producto_id, fecha, created_at DESC
+            ");
+
+            $conteosMap = collect($conteosMov)
+                ->groupBy('sucursal_id')
+                ->map(fn ($g) => $g->groupBy('producto_id')
+                    ->map(fn ($g2) => $g2->keyBy('fecha')));
+
+            $rows = $rows->map(function ($r) use ($conteosMap) {
+                if (is_null($r->conteo_fisico)) {
+                    $conteo = $conteosMap->get($r->sucursal_id)
+                        ?->get($r->producto_id)
+                        ?->get($r->fecha);
+                    if ($conteo && $conteo->conteo_fisico !== null) {
+                        $r->conteo_fisico = $conteo->conteo_fisico;
+                        $r->diferencia    = (float) $conteo->conteo_fisico - (float) ($r->brilo_stock ?? 0);
+                    }
+                }
+                return $r;
+            });
+        }
+
         // Fechas únicas ordenadas desc
         $fechas = $rows->pluck('fecha')->unique()->sort()->values()->all();
 
