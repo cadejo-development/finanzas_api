@@ -890,8 +890,15 @@ class AuditoriaRecetasController extends Controller
             return response()->json(['message' => 'Solo aplica para auditorías de calidad.'], 422);
         }
 
-        if ($auditoria->estado !== 'respondida') {
-            return response()->json(['message' => 'Solo se pueden cerrar auditorías en estado "respondida".'], 422);
+        $estadosPermitidos = ['respondida'];
+        // Permitir cerrar también si está pendiente_respuesta con plazo del gerente vencido
+        $gerenteDeadlineVencido = $auditoria->gerente_deadline_at && now()->gt($auditoria->gerente_deadline_at);
+        if ($auditoria->estado === 'pendiente_respuesta' && $gerenteDeadlineVencido) {
+            $estadosPermitidos[] = 'pendiente_respuesta';
+        }
+
+        if (!in_array($auditoria->estado, $estadosPermitidos)) {
+            return response()->json(['message' => 'Solo se pueden cerrar auditorías en estado "respondida" (o "pendiente_respuesta" con plazo vencido).'], 422);
         }
 
         $validated = $request->validate([
