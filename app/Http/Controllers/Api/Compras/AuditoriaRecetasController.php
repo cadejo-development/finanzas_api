@@ -891,9 +891,10 @@ class AuditoriaRecetasController extends Controller
         }
 
         $estadosPermitidos = ['respondida'];
-        // Permitir cerrar también si está pendiente_respuesta con plazo del gerente vencido
-        $gerenteDeadlineVencido = $auditoria->gerente_deadline_at && now()->gt($auditoria->gerente_deadline_at);
-        if ($auditoria->estado === 'pendiente_respuesta' && $gerenteDeadlineVencido) {
+        // Sin deadline configurado (registro antiguo) ó con deadline vencido → puede cerrar
+        $puedesCerrarPendiente = !$auditoria->gerente_deadline_at
+            || now()->gt($auditoria->gerente_deadline_at);
+        if ($auditoria->estado === 'pendiente_respuesta' && $puedesCerrarPendiente) {
             $estadosPermitidos[] = 'pendiente_respuesta';
         }
 
