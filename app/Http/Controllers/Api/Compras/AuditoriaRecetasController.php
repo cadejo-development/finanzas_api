@@ -572,11 +572,13 @@ class AuditoriaRecetasController extends Controller
             }
 
             // Estado según tipo: calidad usa borrador/pendiente_respuesta; operaciones usa evaluada
+            // Si la auditoría ya está en respondida/cerrada, preservar ese estado (edición por Kristian)
             $nuevoEstado = match(true) {
-                $auditoria->tipo === 'calidad' && $submit => 'pendiente_respuesta',
-                $auditoria->tipo === 'calidad'             => 'borrador',
-                $submit                                    => 'evaluada',
-                default                                    => 'borrador',
+                in_array($auditoria->estado, ['respondida', 'cerrada']) => $auditoria->estado,
+                $auditoria->tipo === 'calidad' && $submit               => 'pendiente_respuesta',
+                $auditoria->tipo === 'calidad'                          => 'borrador',
+                $submit                                                  => 'evaluada',
+                default                                                  => 'borrador',
             };
 
             $extra = [];
