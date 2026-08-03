@@ -1310,7 +1310,7 @@ class InventarioController extends Controller
                     $val = $lookup[(string) $r->sucursal_id][(string) $r->producto_id][(string) $r->fecha] ?? null;
                     if ($val !== null) {
                         $r->conteo_fisico = $val;
-                        $r->diferencia    = (float) ($r->brilo_stock ?? 0) - (float) $val;
+                        $r->diferencia    = (float) $val - (float) ($r->brilo_stock ?? 0);
                     }
                 }
                 return $r;

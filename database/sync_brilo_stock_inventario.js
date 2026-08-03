@@ -194,7 +194,7 @@ async function guardarHistorico(pg, sucursalId, fecha, briloMap, isDryRun) {
   for (const p of prodSeg) {
     const stock   = briloMap[p.codigo?.trim()] ?? p.brilo_stock ?? null;
     const conteo  = p.conteo_fisico !== null ? parseFloat(p.conteo_fisico) : null;
-    const diff    = (stock !== null && conteo !== null) ? parseFloat((stock - conteo).toFixed(6)) : null;
+    const diff    = (stock !== null && conteo !== null) ? parseFloat((conteo - stock).toFixed(6)) : null;
     const seg     = conteo !== null ? (diff >= 0 ? '✅' : '⚠️ ') : '—';
 
     console.log(`  │ ${seg} ${p.codigo.padEnd(12)} ${p.nombre.substring(0,30).padEnd(30)}  brilo=${stock?.toFixed(2) ?? 'n/a'}  conteo=${conteo?.toFixed(2) ?? 'n/a'}  diff=${diff?.toFixed(2) ?? 'n/a'}`);
