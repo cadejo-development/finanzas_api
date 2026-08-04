@@ -459,8 +459,6 @@ class InventarioController extends Controller
                 $cantadaBase     = (float) $item['cantidad_contada'] * $factor;
                 $diferenciaBase  = $cantadaBase - $stockActualBase;
 
-                if (abs($diferenciaBase) < 0.00001) continue;
-
                 // Construir detalle con total_contado siempre, secciones si vienen
                 $seccionesConValor = [];
                 if (!empty($item['secciones'])) {
@@ -475,6 +473,8 @@ class InventarioController extends Controller
                     'stock_anterior' => round($stockActualBase / $factor, 4),
                 ];
 
+                // Siempre crear movimiento para dejar registro de total_contado,
+                // aunque diferencia sea 0 (no afecta stock, permite mostrar en histórico)
                 MovimientoInventario::create([
                     'sucursal_id'     => $sucursalId,
                     'producto_id'     => $pid,
@@ -485,10 +485,13 @@ class InventarioController extends Controller
                     'motivo'          => "Conteo físico — {$fecha}",
                     'fecha'           => $fecha,
                     'referencia_tipo' => 'conteo',
-                    'detalle'         => $detalle ? json_encode($detalle) : null,
+                    'detalle'         => json_encode($detalle),
                     'aud_usuario'     => $usuario,
                 ]);
-                $aplicados++;
+
+                if (abs($diferenciaBase) >= 0.00001) {
+                    $aplicados++;
+                }
             }
 
             DB::connection('compras')->commit();
