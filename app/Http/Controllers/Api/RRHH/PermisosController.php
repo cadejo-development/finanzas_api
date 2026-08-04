@@ -111,7 +111,8 @@ class PermisosController extends RRHHBaseController
                 );
             }
 
-            return response()->json(['success' => true, 'data' => $permiso], 201);
+            $arr = $this->enrichWithEmpleadoData([$permiso->toArray()]);
+            return response()->json(['success' => true, 'data' => $arr[0]], 201);
         });
     }
 

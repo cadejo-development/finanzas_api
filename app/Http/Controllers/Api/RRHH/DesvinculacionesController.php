@@ -97,6 +97,28 @@ class DesvinculacionesController extends RRHHBaseController
 
             $desvinculacion->load('motivo');
 
+            $empleadoNombreNotif = $desvinculacion->empleado_nombre ?? "Empleado #{$validated['empleado_id']}";
+            $detallesNotif = [
+                'Tipo'           => ucfirst($validated['tipo']),
+                'Cargo'          => $desvinculacion->cargo_nombre ?? '—',
+                'Sucursal'       => $desvinculacion->sucursal_nombre ?? '—',
+                'Fecha efectiva' => $desvinculacion->fecha_efectiva,
+                'Motivo'         => $desvinculacion->motivo?->nombre ?? '—',
+            ];
+
+            $this->notificarAdminsRrhh(
+                tipo:            'Desvinculación de Personal',
+                empleadoNombre:  $empleadoNombreNotif,
+                detalles:        $detallesNotif,
+                rutaFrontend:    'desvinculaciones',
+            );
+            $this->notificarGerenciaOps(
+                tipo:            'Desvinculación de Personal',
+                empleadoNombre:  $empleadoNombreNotif,
+                detalles:        $detallesNotif,
+                rutaFrontend:    'desvinculaciones',
+            );
+
             return response()->json(['success' => true, 'data' => $desvinculacion], 201);
         });
     }

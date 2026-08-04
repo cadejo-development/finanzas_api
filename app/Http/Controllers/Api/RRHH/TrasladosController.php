@@ -115,7 +115,32 @@ class TrasladosController extends RRHHBaseController
                 $this->aplicarTraslado($traslado);
             }
 
-            return response()->json(['success' => true, 'data' => $traslado], 201);
+            $arr = $this->enrichWithEmpleadoData([$traslado->toArray()]);
+            $empleadoNombreNotif = $arr[0]['empleado_nombre'] ?? "Empleado #{$validated['empleado_id']}";
+
+            $detallesNotif = [
+                'Origen'         => $empData?->sucursal_nombre ?? '—',
+                'Destino'        => $sucursalDestino ?? '—',
+                'Cargo destino'  => $cargoDestino ?? '(sin cambio de cargo)',
+                'Fecha efectiva' => $traslado->fecha_efectiva->format('d/m/Y'),
+                'Estado'         => ucfirst($estado),
+                'Motivo'         => $validated['motivo'] ?? '—',
+            ];
+
+            $this->notificarAdminsRrhh(
+                tipo:            'Traslado de Personal',
+                empleadoNombre:  $empleadoNombreNotif,
+                detalles:        $detallesNotif,
+                rutaFrontend:    'traslados',
+            );
+            $this->notificarGerenciaOps(
+                tipo:            'Traslado de Personal',
+                empleadoNombre:  $empleadoNombreNotif,
+                detalles:        $detallesNotif,
+                rutaFrontend:    'traslados',
+            );
+
+            return response()->json(['success' => true, 'data' => $arr[0]], 201);
         });
     }
 

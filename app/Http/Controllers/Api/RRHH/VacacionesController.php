@@ -78,7 +78,8 @@ class VacacionesController extends RRHHBaseController
                 );
             }
 
-            return response()->json(['success' => true, 'data' => $vacacion], 201);
+            $arr = $this->enrichWithEmpleadoData([$vacacion->toArray()]);
+            return response()->json(['success' => true, 'data' => $arr[0]], 201);
         });
     }
 
