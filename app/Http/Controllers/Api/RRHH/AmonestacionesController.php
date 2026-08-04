@@ -100,6 +100,29 @@ class AmonestacionesController extends RRHHBaseController
                 $data['empleado_nombre'] = 'Empleado #' . ($data['empleado_id'] ?? '?');
             }
 
+            $detallesNotif = [
+                'Tipo de falta'  => $amonestacion->tipoFalta?->nombre ?? '—',
+                'Fecha'          => $validated['fecha_amonestacion'],
+                'Descripción'    => $validated['descripcion'],
+                'Acción tomada'  => $validated['accion_tomada'] ?? '—',
+                'Suspensión'     => $aplica ? 'Sí' : 'No',
+                'Cargo'          => $data['cargo_nombre'] ?? '—',
+                'Sucursal'       => $data['sucursal_nombre'] ?? '—',
+            ];
+
+            $this->notificarAdminsRrhh(
+                tipo:           'Amonestación / Falta Grave',
+                empleadoNombre: $data['empleado_nombre'],
+                detalles:       $detallesNotif,
+                rutaFrontend:   'amonestaciones',
+            );
+            $this->notificarGerenciaOps(
+                tipo:           'Amonestación / Falta Grave',
+                empleadoNombre: $data['empleado_nombre'],
+                detalles:       $detallesNotif,
+                rutaFrontend:   'amonestaciones',
+            );
+
             return response()->json(['success' => true, 'data' => $data], 201);
         });
     }
