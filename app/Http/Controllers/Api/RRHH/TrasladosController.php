@@ -110,6 +110,11 @@ class TrasladosController extends RRHHBaseController
                 'aud_usuario'            => Auth::user()->email,
             ]);
 
+            // Aplicar cambios al empleado cuando el traslado queda aprobado de inmediato
+            if ($estado === 'aprobado') {
+                $this->aplicarTraslado($traslado);
+            }
+
             return response()->json(['success' => true, 'data' => $traslado], 201);
         });
     }
@@ -171,5 +176,37 @@ class TrasladosController extends RRHHBaseController
             Traslado::findOrFail($id)->delete();
             return response()->json(['success' => true, 'message' => 'Traslado eliminado.']);
         });
+    }
+
+    /**
+     * Aplica el traslado aprobado al registro del empleado.
+     * - Cambio de plaza (misma sucursal): actualiza cargo_id y plaza_id
+     * - Traslado real (distinta sucursal): actualiza sucursal_id y departamento_id
+     */
+    private function aplicarTraslado(\App\Models\RRHH\Traslado $traslado): void
+    {
+        $updates = ['updated_at' => now()];
+
+        $esCambioDePlaza = $traslado->sucursal_origen_id &&
+            (int) $traslado->sucursal_origen_id === (int) $traslado->sucursal_destino_id;
+
+        if ($esCambioDePlaza) {
+            // Solo cambia el cargo; la sucursal/departamento no se mueve
+            if ($traslado->cargo_destino_id) {
+                $updates['cargo_id'] = $traslado->cargo_destino_id;
+            }
+        } else {
+            // Traslado a otra sucursal: mover sucursal y limpiar departamento
+            // (el departamento en destino lo asigna RRHH cuando corresponda)
+            $updates['sucursal_id'] = $traslado->sucursal_destino_id;
+            if ($traslado->cargo_destino_id) {
+                $updates['cargo_id'] = $traslado->cargo_destino_id;
+            }
+        }
+
+        DB::connection('pgsql')
+            ->table('empleados')
+            ->where('id', $traslado->empleado_id)
+            ->update($updates);
     }
 }

@@ -690,7 +690,7 @@ async function run() {
                SET departamento_id = COALESCE($1, departamento_id),
                    sucursal_id     = COALESCE($2, sucursal_id),
                    fecha_ingreso   = COALESCE(fecha_ingreso, $3),
-                   cargo_id        = COALESCE($4, cargo_id),
+                   cargo_id        = COALESCE(cargo_id, $4),
                    salario_base    = COALESCE(salario_base, $5),
                    email           = COALESCE(NULLIF(email, ''), $6),
                    updated_at      = $7
