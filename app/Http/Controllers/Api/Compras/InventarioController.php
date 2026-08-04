@@ -1276,16 +1276,8 @@ class InventarioController extends Controller
             return response()->json(['sucursales' => [], 'fechas' => []]);
         }
 
-        // Sucursales de cierre nocturno: hacen conteo de 11pm a 2:30am del día siguiente.
-        // El sync de las 3am de día D ya captura ese conteo → el historico.fecha=D debe
-        // compararse con movimientos.fecha=D-1 (el día que cerraron).
-        // Demás sucursales abren a las 11am: hacen conteo de 8-11am del mismo día D,
-        // después del sync → historico.fecha=D compara con movimientos.fecha=D.
-        $sucursalesNocturnas = [4, 5, 16, 20]; // Aeropuerto 1, Aeropuerto 2, Malcriadas
-        $nocturnosStr        = implode(',', $sucursalesNocturnas);
-
-        // Para filas sin conteo en el snapshot, buscar en movimientos_inventario
-        // usando el offset correcto según tipo de sucursal.
+        // Para filas sin conteo en el snapshot, buscar en movimientos_inventario.
+        // Todas las sucursales usan fecha directa (conteo.fecha = historico.fecha).
         $sinConteo = $rows->filter(fn ($r) => is_null($r->conteo_fisico));
         if ($sinConteo->isNotEmpty()) {
             $pdo     = DB::connection('compras')->getPdo();
@@ -1296,34 +1288,17 @@ class InventarioController extends Controller
             // Para nocturnas: la clave de join es fecha_historico = movimiento.fecha + 1 día
             // Para normales:  la clave de join es fecha_historico = movimiento.fecha
             $conteosMov = DB::connection('compras')->select("
-                SELECT DISTINCT ON (sucursal_id, producto_id, fecha_historico)
-                    sucursal_id::text          AS sucursal_id,
-                    producto_id::text          AS producto_id,
-                    fecha_historico::text      AS fecha,
-                    conteo_fisico
-                FROM (
-                    SELECT
-                        m.sucursal_id,
-                        m.producto_id,
-                        m.created_at,
-                        (m.detalle->>'total_contado')::numeric AS conteo_fisico,
-                        CASE
-                            WHEN m.sucursal_id IN ({$nocturnosStr})
-                                THEN (m.fecha + INTERVAL '1 day')::date
-                            ELSE m.fecha
-                        END AS fecha_historico
-                    FROM movimientos_inventario m
-                    WHERE m.tipo = 'conteo_fisico'
-                      AND m.sucursal_id IN ({$sucIds})
-                      AND m.producto_id IN ({$prodIds})
-                      AND (
-                          (m.sucursal_id NOT IN ({$nocturnosStr}) AND m.fecha IN ({$fechasQ}))
-                          OR
-                          (m.sucursal_id IN ({$nocturnosStr})
-                           AND (m.fecha + INTERVAL '1 day')::date::text IN ({$fechasQ}))
-                      )
-                ) sub
-                ORDER BY sucursal_id, producto_id, fecha_historico, created_at DESC
+                SELECT DISTINCT ON (sucursal_id, producto_id, fecha)
+                    sucursal_id::text                          AS sucursal_id,
+                    producto_id::text                          AS producto_id,
+                    m.fecha::text                              AS fecha,
+                    (m.detalle->>'total_contado')::numeric     AS conteo_fisico
+                FROM movimientos_inventario m
+                WHERE m.tipo = 'conteo_fisico'
+                  AND m.sucursal_id IN ({$sucIds})
+                  AND m.producto_id IN ({$prodIds})
+                  AND m.fecha IN ({$fechasQ})
+                ORDER BY sucursal_id, producto_id, fecha, created_at DESC
             ");
 
             $lookup = [];
@@ -1346,35 +1321,21 @@ class InventarioController extends Controller
         // Fechas únicas ordenadas desc
         $fechas = $rows->pluck('fecha')->unique()->sort()->values()->all();
 
-        // Hora de aplicación del conteo por (sucursal_id, fecha_historico)
-        // Nocturnas: conteo.fecha = historico.fecha - 1 día → mismo offset
+        // Hora de aplicación del conteo por (sucursal_id, fecha).
+        // Todas las sucursales usan la misma lógica: conteo.fecha = historico.fecha.
+        // (Las nocturnas ingresan el conteo en la mañana con la fecha del día actual.)
         $sucIdsAll  = implode(',', array_map('intval', $rows->pluck('sucursal_id')->unique()->values()->all()));
         $fechasAll  = implode(',', $rows->pluck('fecha')->unique()->map(fn ($f) => "'" . addslashes((string) $f) . "'")->all());
         $conteoTimes = DB::connection('compras')->select("
-            SELECT DISTINCT ON (sucursal_id, fecha_historico)
+            SELECT DISTINCT ON (sucursal_id, fecha)
                 sucursal_id::text AS sucursal_id,
-                fecha_historico::text AS fecha,
+                m.fecha::text AS fecha,
                 (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/El_Salvador')::text AS conteo_at
-            FROM (
-                SELECT
-                    m.sucursal_id,
-                    m.created_at,
-                    CASE
-                        WHEN m.sucursal_id IN ({$nocturnosStr})
-                            THEN (m.fecha + INTERVAL '1 day')::date
-                        ELSE m.fecha
-                    END AS fecha_historico
-                FROM movimientos_inventario m
-                WHERE m.tipo = 'conteo_fisico'
-                  AND m.sucursal_id IN ({$sucIdsAll})
-                  AND (
-                      (m.sucursal_id NOT IN ({$nocturnosStr}) AND m.fecha IN ({$fechasAll}))
-                      OR
-                      (m.sucursal_id IN ({$nocturnosStr})
-                       AND (m.fecha + INTERVAL '1 day')::date::text IN ({$fechasAll}))
-                  )
-            ) sub
-            ORDER BY sucursal_id, fecha_historico, created_at ASC
+            FROM movimientos_inventario m
+            WHERE m.tipo = 'conteo_fisico'
+              AND m.sucursal_id IN ({$sucIdsAll})
+              AND m.fecha IN ({$fechasAll})
+            ORDER BY sucursal_id, fecha, created_at ASC
         ");
         $conteoAtMap = [];
         foreach ($conteoTimes as $ct) {
