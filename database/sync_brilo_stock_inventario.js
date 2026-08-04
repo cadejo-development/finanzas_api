@@ -176,13 +176,14 @@ async function guardarHistorico(pg, sucursalId, fecha, briloMap, isDryRun) {
              WHERE m.sucursal_id = i.sucursal_id
                AND m.producto_id = i.producto_id
                AND m.tipo = 'conteo_fisico'
-             ORDER BY m.fecha DESC
+               AND m.fecha = $2
+             ORDER BY m.created_at DESC
              LIMIT 1
            ) AS conteo_fisico
     FROM inventarios i
     JOIN productos p ON p.id = i.producto_id
     WHERE i.sucursal_id = $1 AND i.prod_seg = true AND i.activo = true
-  `, [sucursalId]);
+  `, [sucursalId, fechaStr]);
 
   if (prodSeg.length === 0) {
     console.log(`  [historico] Sin productos prod_seg para sucursal ${sucursalId}`);
@@ -192,7 +193,8 @@ async function guardarHistorico(pg, sucursalId, fecha, briloMap, isDryRun) {
   console.log(`\n  ┌─ Histórico prod_seg (${prodSeg.length} productos):`);
   let ok = 0;
   for (const p of prodSeg) {
-    const stock   = briloMap[p.codigo?.trim()] ?? p.brilo_stock ?? null;
+    const rawStock = briloMap[p.codigo?.trim()] ?? p.brilo_stock ?? null;
+    const stock    = rawStock !== null ? parseFloat(rawStock) : null;
     const conteo  = p.conteo_fisico !== null ? parseFloat(p.conteo_fisico) : null;
     const diff    = (stock !== null && conteo !== null) ? parseFloat((conteo - stock).toFixed(6)) : null;
     const seg     = conteo !== null ? (diff >= 0 ? '✅' : '⚠️ ') : '—';

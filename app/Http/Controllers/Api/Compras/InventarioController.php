@@ -485,7 +485,7 @@ class InventarioController extends Controller
                     'motivo'          => "Conteo físico — {$fecha}",
                     'fecha'           => $fecha,
                     'referencia_tipo' => 'conteo',
-                    'detalle'         => json_encode($detalle),
+                    'detalle'         => $detalle,
                     'aud_usuario'     => $usuario,
                 ]);
 
