@@ -1333,7 +1333,7 @@ class InventarioController extends Controller
             SELECT DISTINCT ON (sucursal_id, fecha)
                 sucursal_id::text AS sucursal_id,
                 m.fecha::text AS fecha,
-                (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/El_Salvador')::text AS conteo_at
+                created_at::text AS conteo_at
             FROM movimientos_inventario m
             WHERE m.tipo = 'conteo_fisico'
               AND m.sucursal_id IN ({$sucIdsAll})
