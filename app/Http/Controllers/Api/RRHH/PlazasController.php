@@ -41,6 +41,29 @@ class PlazasController extends Controller
         return response()->json($plazas);
     }
 
+    public function disponiblesSucursal(Request $request)
+    {
+        $sucursalId      = (int) $request->query('sucursal_id', 0);
+        $cargoExcluir    = (int) $request->query('cargo_id_excluir', 0);
+
+        if (!$sucursalId) return response()->json([]);
+
+        $rows = DB::connection('pgsql')->select("
+            SELECT p.id AS plaza_id, p.codigo AS plaza_codigo, c.id AS cargo_id, c.nombre AS cargo_nombre
+            FROM plazas p
+            JOIN cargos c ON c.id = p.cargo_id
+            JOIN departamentos d ON d.id = p.departamento_id
+            LEFT JOIN empleados e ON e.plaza_id = p.id AND e.activo = true
+            WHERE d.sucursal_id = ?
+              AND p.activo = true
+              AND e.id IS NULL
+              AND c.id != ?
+            ORDER BY c.nombre
+        ", [$sucursalId, $cargoExcluir ?: 0]);
+
+        return response()->json($rows);
+    }
+
     public function exceso(Request $request)
     {
         $dptoId = $request->query('departamento_id');

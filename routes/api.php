@@ -479,6 +479,9 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::put('traslados/{id}',    [TrasladosController::class, 'update']);
     Route::delete('traslados/{id}', [TrasladosController::class, 'destroy']);
 
+    // Plazas vacantes (necesario para jefatura al registrar cambio de plaza)
+    Route::get('plazas/disponibles-sucursal', [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'disponiblesSucursal']);
+
     // Cambios salariales (aumentos + nivelaciones, filtrar por ?tipo_aumento_id=X)
     Route::get('cambios-salariales',                         [CambiosSalarialesController::class, 'index']);
     Route::post('cambios-salariales',                        [CambiosSalarialesController::class, 'store']);
