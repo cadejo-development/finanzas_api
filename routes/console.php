@@ -4,6 +4,7 @@ use App\Console\Commands\InactivarEmpleadosDesvinculados;
 use App\Console\Commands\AlertasPeriodoPrueba;
 use App\Console\Commands\AlertasVacacionesVencimiento;
 use App\Console\Commands\CerrarAuditoriasVencidas;
+use App\Console\Commands\AplicarTrasladosPendientes;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -40,6 +41,13 @@ Schedule::command(CerrarAuditoriasVencidas::class)
     ->withoutOverlapping()
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/cerrar-auditorias-vencidas.log'));
+
+// Aplica traslados aprobados cuya fecha_efectiva ya llegó (futuros que se convirtieron en hoy/pasado).
+Schedule::command(AplicarTrasladosPendientes::class)
+    ->dailyAt('06:30')
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/aplicar-traslados.log'));
 
 // NOTA: sync-brilo-stock NO corre desde App Runner — requiere VPN FortiClient hacia Brilo.
 // Se ejecuta localmente con Windows Task Scheduler. Ver database/sync_brilo_scheduler.ps1

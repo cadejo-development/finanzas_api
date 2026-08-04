@@ -110,8 +110,8 @@ class TrasladosController extends RRHHBaseController
                 'aud_usuario'            => Auth::user()->email,
             ]);
 
-            // Aplicar cambios al empleado cuando el traslado queda aprobado de inmediato
-            if ($estado === 'aprobado') {
+            // Aplicar si aprobado y la fecha efectiva ya llegó (pasada o hoy)
+            if ($estado === 'aprobado' && $traslado->fecha_efectiva->lte(now())) {
                 $this->aplicarTraslado($traslado);
             }
 
@@ -208,5 +208,7 @@ class TrasladosController extends RRHHBaseController
             ->table('empleados')
             ->where('id', $traslado->empleado_id)
             ->update($updates);
+
+        $traslado->update(['aplicado_at' => now()]);
     }
 }

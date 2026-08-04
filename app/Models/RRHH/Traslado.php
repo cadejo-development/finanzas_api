@@ -17,8 +17,11 @@ class Traslado extends Model
         'sucursal_destino_id', 'sucursal_destino_nombre',
         'cargo_destino_id', 'cargo_destino_nombre',
         'departamento_destino_id', 'departamento_destino_nombre',
-        'fecha_efectiva', 'motivo', 'estado', 'aud_usuario', 'creado_por',
+        'fecha_efectiva', 'motivo', 'estado', 'aplicado_at', 'aud_usuario', 'creado_por',
     ];
 
-    protected $casts = ['fecha_efectiva' => 'date'];
+    protected $casts = [
+        'fecha_efectiva' => 'date',
+        'aplicado_at'    => 'datetime',
+    ];
 }
