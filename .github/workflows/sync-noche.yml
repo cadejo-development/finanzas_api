@@ -23,7 +23,9 @@ jobs:
         run: npm install
 
       - name: Crear .env
-        run: echo "${{ secrets.ENV_FILE }}" > .env
+        env:
+          ENV_FILE_CONTENT: ${{ secrets.ENV_FILE }}
+        run: printf '%s' "$ENV_FILE_CONTENT" > .env
 
       - name: Instalar openfortivpn
         run: sudo apt-get install -y openfortivpn
