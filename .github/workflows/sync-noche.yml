@@ -40,21 +40,26 @@ jobs:
           echo "VPN_PID=$VPN_PID" >> $GITHUB_ENV
 
           for i in $(seq 1 30); do
-            if ip link show ppp0 &>/dev/null; then
-              echo "✓ VPN conectada (ppp0 activa en ${i}s)"
+            if ip addr show ppp0 2>/dev/null | grep -q 'inet '; then
+              echo "✓ VPN conectada con IP (en ${i}s)"
               break
             fi
             sleep 1
           done
 
-          if ! ip link show ppp0 &>/dev/null; then
+          if ! ip addr show ppp0 2>/dev/null | grep -q 'inet '; then
             echo "✗ VPN no conectó en 30s"
             cat /tmp/vpn.log
             exit 1
           fi
 
-          sudo ip route add 10.0.0.0/8 dev ppp0 || true
-          echo "✓ Ruta 10.0.0.0/8 agregada"
+          for i in $(seq 1 10); do
+            if sudo ip route add 10.0.0.0/8 dev ppp0 2>/dev/null; then
+              echo "✓ Ruta 10.0.0.0/8 agregada"
+              break
+            fi
+            sleep 1
+          done
 
       - name: Sync stock Brilo
         run: node database/sync_brilo_stock_inventario.js
