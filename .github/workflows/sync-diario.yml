@@ -1,9 +1,14 @@
-name: Sync Nocturno — Stock Brilo
+name: Sync Diario — Materias Primas y Empleados
 
 on:
   schedule:
-    - cron: '0 9 * * *'   # 3:00 AM El Salvador (UTC-6)
+    - cron: '0 16 * * *'   # 10:00 AM El Salvador (UTC-6)
   workflow_dispatch:
+    inputs:
+      scripts:
+        description: 'Scripts a ejecutar (all | materias | empleados)'
+        required: false
+        default: 'all'
 
 jobs:
   sync:
@@ -54,8 +59,13 @@ jobs:
             exit 1
           fi
 
-      - name: Sync stock Brilo
-        run: node database/sync_brilo_stock_inventario.js
+      - name: Sync materias primas
+        if: ${{ github.event.inputs.scripts == 'all' || github.event.inputs.scripts == 'materias' || github.event_name == 'schedule' }}
+        run: node database/sync_materias_primas.js
+
+      - name: Sync empleados
+        if: ${{ github.event.inputs.scripts == 'all' || github.event.inputs.scripts == 'empleados' || github.event_name == 'schedule' }}
+        run: node database/sync_empleados_to_rds.js
 
       - name: Desconectar VPN
         if: always()
