@@ -58,6 +58,9 @@ jobs:
             exit 1
           fi
 
+          sudo ip route add 10.0.0.0/8 dev ppp0 || true
+          echo "✓ Ruta 10.0.0.0/8 agregada"
+
       - name: Sync materias primas
         if: ${{ github.event.inputs.scripts == 'all' || github.event.inputs.scripts == 'materias' || github.event_name == 'schedule' }}
         run: node database/sync_materias_primas.js
