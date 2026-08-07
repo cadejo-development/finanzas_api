@@ -1,0 +1,12 @@
+{
+  "devDependencies": {
+    "exceljs": "^4.4.0",
+    "mssql": "^12.2.0",
+    "pg": "^8.20.0"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.4.2",
+    "xlsx": "^0.18.5"
+  }
+}
