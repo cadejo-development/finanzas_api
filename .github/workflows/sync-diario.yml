@@ -2,7 +2,7 @@ name: Sync Diario — Materias Primas y Empleados
 
 on:
   schedule:
-    - cron: '0 18 * * *'  # 12:00 PM El Salvador (UTC-6) — prueba temporal
+    - cron: '0 16 * * *'  # 10:00 AM El Salvador (UTC-6)
   workflow_dispatch:
     inputs:
       scripts:
