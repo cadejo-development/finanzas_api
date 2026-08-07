@@ -1,0 +1,73 @@
+name: Sync Diario — Materias Primas y Empleados
+
+on:
+  schedule:
+    - cron: '0 16 * * *'   # 10:00 AM El Salvador (UTC-6)
+  workflow_dispatch:
+    inputs:
+      scripts:
+        description: 'Scripts a ejecutar (all | materias | empleados)'
+        required: false
+        default: 'all'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependencias Node
+        run: npm install
+
+      - name: Crear .env
+        run: echo "${{ secrets.ENV_FILE }}" > .env
+
+      - name: Instalar openfortivpn
+        run: sudo apt-get install -y openfortivpn
+
+      - name: Conectar VPN CLIN
+        run: |
+          sudo openfortivpn ${{ secrets.VPN_HOST }}:${{ secrets.VPN_PORT }} \
+            --username="${{ secrets.VPN_USERNAME }}" \
+            --password="${{ secrets.VPN_PASSWORD }}" \
+            --trusted-cert="${{ secrets.VPN_TRUSTED_CERT }}" \
+            --no-routes \
+            2>&1 | tee /tmp/vpn.log &
+          VPN_PID=$!
+          echo "VPN_PID=$VPN_PID" >> $GITHUB_ENV
+
+          for i in $(seq 1 30); do
+            if ip link show ppp0 &>/dev/null; then
+              echo "✓ VPN conectada (ppp0 activa en ${i}s)"
+              break
+            fi
+            sleep 1
+          done
+
+          if ! ip link show ppp0 &>/dev/null; then
+            echo "✗ VPN no conectó en 30s"
+            cat /tmp/vpn.log
+            exit 1
+          fi
+
+      - name: Sync materias primas
+        if: ${{ github.event.inputs.scripts == 'all' || github.event.inputs.scripts == 'materias' || github.event_name == 'schedule' }}
+        run: node database/sync_materias_primas.js
+
+      - name: Sync empleados
+        if: ${{ github.event.inputs.scripts == 'all' || github.event.inputs.scripts == 'empleados' || github.event_name == 'schedule' }}
+        run: node database/sync_empleados_to_rds.js
+
+      - name: Desconectar VPN
+        if: always()
+        run: |
+          sudo kill $VPN_PID 2>/dev/null || sudo pkill openfortivpn || true
+          echo "VPN desconectada"
