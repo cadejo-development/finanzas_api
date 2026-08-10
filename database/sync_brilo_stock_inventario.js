@@ -163,9 +163,9 @@ function buildKardexQuery(ubiId, fecha) {
 }
 
 // ── Insertar snapshot en prod_seg_historico ───────────────────────────────────
-async function guardarHistorico(pg, sucursalId, fecha, briloMap, isDryRun) {
+async function guardarHistorico(pg, sucursalId, fecha, briloMap, isDryRun, syncAtOverride = null) {
   const fechaStr = fecha.toISOString().split('T')[0];
-  const syncAt   = new Date().toISOString();
+  const syncAt   = syncAtOverride ?? new Date().toISOString();
 
   // Prod_seg products con su brilo_stock y último conteo físico del mes
   const { rows: prodSeg } = await pg.query(`
@@ -216,7 +216,7 @@ async function guardarHistorico(pg, sucursalId, fecha, briloMap, isDryRun) {
 }
 
 // ── Sync de una sucursal ──────────────────────────────────────────────────────
-async function syncSucursal(pg, sucursalId, fechaKardex, isDryRun) {
+async function syncSucursal(pg, sucursalId, fechaKardex, isDryRun, syncAtOverride = null) {
   const mapeo = SUCURSAL_UBI_MAP[sucursalId];
   if (!mapeo) {
     console.log(`\n⚠️  sucursal_id=${sucursalId} no tiene mapeo Brilo — omitida`);
@@ -283,17 +283,20 @@ async function syncSucursal(pg, sucursalId, fechaKardex, isDryRun) {
   }
 
   // Guardar histórico prod_seg
-  await guardarHistorico(pg, sucursalId, fechaKardex, briloMap, isDryRun);
+  await guardarHistorico(pg, sucursalId, fechaKardex, briloMap, isDryRun, syncAtOverride);
 
   return { actualizados, enCero, insertados };
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 (async () => {
-  const args      = process.argv.slice(2).filter(a => a !== '--dry-run');
-  const isDryRun  = process.argv.includes('--dry-run');
-  const sucursalArg = args[0] && !isNaN(args[0]) ? parseInt(args[0], 10) : null;
+  const args         = process.argv.slice(2).filter(a => a !== '--dry-run' && a !== '--skip-if-today');
+  const isDryRun     = process.argv.includes('--dry-run');
+  const skipIfToday  = process.argv.includes('--skip-if-today');
+  const sucursalArg = args.find(a => !isNaN(a) && /^\d+$/.test(a)) ? parseInt(args.find(a => !isNaN(a) && /^\d+$/.test(a)), 10) : null;
   const fechaArg    = args.find(a => /^\d{4}-\d{2}-\d{2}$/.test(a)) || null;
+  // --sync-at=2026-08-05T09:05:00.000Z  (ISO UTC) para fijar el timestamp en prod_seg_historico
+  const syncAtOverride = (args.find(a => a.startsWith('--sync-at=')) ?? '').split('=')[1] || null;
 
   const fechaKardex = fechaArg ? new Date(fechaArg + 'T12:00:00') : new Date();
   const sucursalIds = sucursalArg
@@ -304,7 +307,7 @@ async function syncSucursal(pg, sucursalId, fechaKardex, isDryRun) {
   console.log(`  SYNC BRILO → compras_db${isDryRun ? '  [DRY RUN]' : ''}`);
   console.log(`  Fecha kardex : ${fechaSQL(fechaKardex)}`);
   console.log(`  Sucursales   : ${sucursalIds.join(', ')}`);
-  console.log(`  Timestamp    : ${new Date().toISOString()}`);
+  console.log(`  Timestamp    : ${syncAtOverride ?? new Date().toISOString()}${syncAtOverride ? ' (override)' : ''}`);
   console.log(`${'█'.repeat(64)}`);
 
   if (isDryRun) {
@@ -315,11 +318,24 @@ async function syncSucursal(pg, sucursalId, fechaKardex, isDryRun) {
   await pg.query('SELECT 1');
   console.log('Conectado a compras_db (PostgreSQL) ✓');
 
+  if (skipIfToday && !fechaArg) {
+    const hoy = new Date().toISOString().split('T')[0];
+    const { rows } = await pg.query(
+      'SELECT 1 FROM prod_seg_historico WHERE fecha = $1 LIMIT 1',
+      [hoy]
+    );
+    if (rows.length > 0) {
+      console.log(`\n⏭  Ya existe registro para ${hoy} — sync omitido (--skip-if-today)\n`);
+      await pg.end();
+      process.exit(0);
+    }
+  }
+
   let totalAct = 0, totalCero = 0, totalIns = 0, errores = [];
 
   for (const sucursalId of sucursalIds) {
     try {
-      const r = await syncSucursal(pg, sucursalId, fechaKardex, isDryRun);
+      const r = await syncSucursal(pg, sucursalId, fechaKardex, isDryRun, syncAtOverride);
       totalAct  += r.actualizados;
       totalCero += r.enCero;
       totalIns  += r.insertados;

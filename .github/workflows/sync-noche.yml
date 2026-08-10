@@ -64,7 +64,7 @@ jobs:
           done
 
       - name: Sync stock Brilo
-        run: node database/sync_brilo_stock_inventario.js
+        run: node database/sync_brilo_stock_inventario.js --skip-if-today
 
       - name: Desconectar VPN
         if: always()
