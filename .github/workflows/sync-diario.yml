@@ -1,4 +1,4 @@
-name: Sync Diario — Materias Primas y Empleados
+name: Sync Diario — Materias Primas, Empleados y Ventas
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       scripts:
-        description: 'Scripts a ejecutar (all | materias | empleados)'
+        description: 'Scripts a ejecutar (all | materias | empleados | ventas)'
         required: false
         default: 'all'
 
@@ -75,6 +75,10 @@ jobs:
       - name: Sync empleados
         if: ${{ github.event.inputs.scripts == 'all' || github.event.inputs.scripts == 'empleados' || github.event_name == 'schedule' }}
         run: node database/sync_empleados_to_rds.js
+
+      - name: Sync ventas Santa Elena
+        if: ${{ github.event.inputs.scripts == 'all' || github.event.inputs.scripts == 'ventas' || github.event_name == 'schedule' }}
+        run: node database/sync_ventas_santa_elena.js
 
       - name: Desconectar VPN
         if: always()
