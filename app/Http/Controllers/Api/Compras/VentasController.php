@@ -876,6 +876,7 @@ class VentasController extends Controller
             'tsp|lt'    => 0.00492892, 'tbsp|lt'   => 0.0147868,
         ];
 
+        // Ingredientes directos (producto_id enlazado directamente)
         $directos = DB::connection('compras')
             ->table('recetas as r')
             ->join('receta_ingredientes as ri', 'ri.receta_id', '=', 'r.id')
@@ -891,6 +892,25 @@ class VentasController extends Controller
             )
             ->get();
 
+        // Sub-recetas CP: son materias primas — se proyectan como producto, no se expanden
+        $subRecetasCP = DB::connection('compras')
+            ->table('recetas as r')
+            ->join('receta_ingredientes as ri', 'ri.receta_id', '=', 'r.id')
+            ->join('recetas as sr', 'sr.id', '=', 'ri.sub_receta_id')
+            ->join('productos as p', 'p.codigo', '=', 'sr.codigo_origen')
+            ->whereIn('r.codigo_origen', $codigos)
+            ->where('r.activa', true)
+            ->where('sr.activa', true)
+            ->where('sr.codigo_origen', 'like', 'CP%')
+            ->select(
+                'r.codigo_origen as plato_codigo', 'r.nombre as plato_nombre_receta',
+                'p.id as producto_id', 'p.nombre', 'p.codigo as prod_codigo', 'p.unidad', 'p.costo',
+                'ri.cantidad_por_plato', 'ri.unidad as unidad_receta',
+                'sr.nombre as sub_nombre'
+            )
+            ->get();
+
+        // Sub-recetas regulares (no CP): se expanden en sus ingredientes
         $subRecetas = DB::connection('compras')
             ->table('recetas as r')
             ->join('receta_ingredientes as ri', 'ri.receta_id', '=', 'r.id')
@@ -900,6 +920,7 @@ class VentasController extends Controller
             ->whereIn('r.codigo_origen', $codigos)
             ->where('r.activa', true)
             ->where('sr.activa', true)
+            ->where('sr.codigo_origen', 'not like', 'CP%')
             ->whereNotNull('ri2.producto_id')
             ->select(
                 'r.codigo_origen as plato_codigo', 'r.nombre as plato_nombre_receta',
@@ -912,7 +933,7 @@ class VentasController extends Controller
         $mapa  = [];
         $filas = [];
 
-        foreach (array_merge($directos->all(), $subRecetas->all()) as $row) {
+        foreach (array_merge($directos->all(), $subRecetasCP->all(), $subRecetas->all()) as $row) {
             $qty    = $qtyMap[$row->plato_codigo] ?? 0;
             $pid    = $row->producto_id;
             $fromU  = strtolower(trim($row->unidad_receta ?? ''));
