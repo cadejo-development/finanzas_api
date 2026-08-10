@@ -620,7 +620,7 @@ class VentasController extends Controller
             $categoria = $historico[$cod]['categoria'] ?? ($platos120Act[$cod]['categoria'] ?? null);
 
             $proyecciones[] = [
-                'codigo'         => $cod,
+                'codigo'         => (string) $cod,
                 'nombre'         => $nombre,
                 'categoria_key'  => $categoria,
                 'qty_proyectada' => round($P, 1),
