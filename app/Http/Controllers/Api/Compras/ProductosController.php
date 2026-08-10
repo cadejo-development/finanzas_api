@@ -130,13 +130,19 @@ class ProductosController extends Controller
                         ->table('movimientos_inventario')
                         ->where('sucursal_id', $activeSucursalId)
                         ->whereIn('producto_id', $inventarios->keys()->toArray())
-                        ->selectRaw('producto_id, SUM(cantidad_base) as total')
+                        ->selectRaw('producto_id, SUM(cantidad_base) as total, COUNT(*) as num_movs')
                         ->groupBy('producto_id')
-                        ->pluck('total', 'producto_id');
+                        ->get()
+                        ->keyBy('producto_id');
 
                     foreach ($inventarios as $pId => $inv) {
+                        $mov = $movs[$pId] ?? null;
+                        // Solo mostrar saldo si hay al menos un movimiento registrado.
+                        // Sin movimientos el saldo es solo el dato inicial de configuración (potencialmente viejo).
+                        if (!$mov || (int) $mov->num_movs === 0) continue;
+
                         $invData[$pId] = [
-                            'stock_base'   => (float) $inv->cantidad_inicial_base + (float) ($movs[$pId] ?? 0),
+                            'stock_base'   => (float) $inv->cantidad_inicial_base + (float) $mov->total,
                             'stock_minimo' => $inv->stock_minimo !== null ? (float) $inv->stock_minimo : null,
                         ];
                     }
