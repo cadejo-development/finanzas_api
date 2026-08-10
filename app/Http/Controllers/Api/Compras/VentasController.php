@@ -677,8 +677,6 @@ class VentasController extends Controller
             }
         }
 
-        $codigos = array_keys($qtyMap);
-
         // ── 2. Expandir recetas → ingredientes ────────────────────────────────
         [$mapa, ] = $this->_expandRecetasIngredientes($qtyMap);
 
@@ -712,7 +710,8 @@ class VentasController extends Controller
 
         // ── 4. Construir respuesta ────────────────────────────────────────
         $ingredientes = array_values(array_map(function ($ing) use ($conteos) {
-            $ing['qty_proyectada'] = (int) ceil($ing['qty_proyectada']);
+            $qtyRaw = $ing['qty_proyectada'];
+            $ing['qty_proyectada'] = round($qtyRaw, 2); // decimal para columna PROYEC.
 
             $detalle = $conteos->get($ing['producto_id']);
             $totalContado = null;
@@ -722,8 +721,8 @@ class VentasController extends Controller
             }
             $ing['conteo_fisico']  = $totalContado;
             $ing['total_a_pedir']  = $totalContado !== null
-                ? (int) max(0, ceil($ing['qty_proyectada'] - $totalContado))
-                : (int) $ing['qty_proyectada'];
+                ? (int) max(0, ceil($qtyRaw - $totalContado))
+                : (int) ceil($qtyRaw); // entero para botón A PEDIR
 
             return $ing;
         }, $mapa));
