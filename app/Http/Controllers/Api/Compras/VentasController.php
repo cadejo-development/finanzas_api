@@ -679,76 +679,8 @@ class VentasController extends Controller
 
         $codigos = array_keys($qtyMap);
 
-        // ── 2. Expandir recetas → ingredientes (directo + sub-receta nivel 1) ──
-        $directos = DB::connection('compras')
-            ->table('recetas as r')
-            ->join('receta_ingredientes as ri', 'ri.receta_id', '=', 'r.id')
-            ->join('productos as p', 'p.id', '=', 'ri.producto_id')
-            ->whereIn('r.codigo_origen', $codigos)
-            ->where('r.activa', true)
-            ->whereNotNull('ri.producto_id')
-            ->select(
-                'r.codigo_origen as plato_codigo',
-                'p.id as producto_id', 'p.nombre', 'p.codigo as prod_codigo',
-                'p.unidad', 'p.costo',
-                'ri.cantidad_por_plato', 'ri.unidad as unidad_receta'
-            )
-            ->get();
-
-        $subReceta = DB::connection('compras')
-            ->table('recetas as r')
-            ->join('receta_ingredientes as ri', 'ri.receta_id', '=', 'r.id')
-            ->join('recetas as sr', 'sr.id', '=', 'ri.sub_receta_id')
-            ->join('receta_ingredientes as ri2', 'ri2.receta_id', '=', 'sr.id')
-            ->join('productos as p', 'p.id', '=', 'ri2.producto_id')
-            ->whereIn('r.codigo_origen', $codigos)
-            ->where('r.activa', true)
-            ->where('sr.activa', true)
-            ->whereNotNull('ri2.producto_id')
-            ->select(
-                'r.codigo_origen as plato_codigo',
-                'p.id as producto_id', 'p.nombre', 'p.codigo as prod_codigo',
-                'p.unidad', 'p.costo',
-                DB::raw('ri.cantidad_por_plato * ri2.cantidad_por_plato AS cantidad_por_plato'),
-                'ri2.unidad as unidad_receta'
-            )
-            ->get();
-
-        // Conversión por fila: cada ingrediente puede usarse con unidades distintas en distintos platos
-        $unitConv = [
-            'oz fl|lt'  => 0.0295735,  'oz fl|ml'  => 29.5735,
-            'fl oz|lt'  => 0.0295735,  'fl oz|ml'  => 29.5735,
-            'oz|g'      => 28.3495,    'oz|kg'     => 0.0283495,
-            'ml|lt'     => 0.001,      'lt|ml'     => 1000.0,
-            'g|kg'      => 0.001,      'kg|g'      => 1000.0,
-            'lb|kg'     => 0.453592,   'lb|g'      => 453.592,
-            'cup|lt'    => 0.236588,   'cups|lt'   => 0.236588,
-            'tsp|lt'    => 0.00492892, 'tbsp|lt'   => 0.0147868,
-        ];
-
-        // Acumular por producto_id aplicando conversión por fila
-        $mapa = [];
-        foreach (array_merge($directos->all(), $subReceta->all()) as $row) {
-            $qty     = $qtyMap[$row->plato_codigo] ?? 0;
-            $pid     = $row->producto_id;
-            $fromU   = strtolower(trim($row->unidad_receta ?? ''));
-            $toU     = strtolower(trim($row->unidad ?? ''));
-            $factor  = ($fromU !== $toU && $fromU !== '' && $toU !== '')
-                       ? ($unitConv["$fromU|$toU"] ?? 1.0)
-                       : 1.0;
-
-            if (!isset($mapa[$pid])) {
-                $mapa[$pid] = [
-                    'producto_id'    => $pid,
-                    'codigo'         => $row->prod_codigo,
-                    'nombre'         => $row->nombre,
-                    'unidad'         => $toU !== '' ? $toU : $fromU,
-                    'qty_proyectada' => 0.0,
-                    'costo'          => (float) ($row->costo ?? 0),
-                ];
-            }
-            $mapa[$pid]['qty_proyectada'] += (float) $row->cantidad_por_plato * $qty * $factor;
-        }
+        // ── 2. Expandir recetas → ingredientes ────────────────────────────────
+        [$mapa, ] = $this->_expandRecetasIngredientes($qtyMap);
 
         if (empty($mapa)) {
             return response()->json([
@@ -840,8 +772,7 @@ class VentasController extends Controller
             return response()->json(['success' => false, 'message' => 'Ingrediente no encontrado'], 404);
         }
 
-        $productoId   = $producto->id;
-        $unidCatalog  = strtolower(trim($producto->unidad ?? ''));
+        $productoId = $producto->id;
 
         // 2. Proyección de platos
         $proyReq = clone $request;
@@ -865,82 +796,26 @@ class VentasController extends Controller
                 $platosData[$p['codigo']] = $p;
             }
         }
-        $codigos = array_keys($qtyMap);
 
-        // 3. Ingrediente en recetas directas
-        $directos = DB::connection('compras')
-            ->table('recetas as r')
-            ->join('receta_ingredientes as ri', 'ri.receta_id', '=', 'r.id')
-            ->whereIn('r.codigo_origen', $codigos)
-            ->where('r.activa', true)
-            ->where('ri.producto_id', $productoId)
-            ->select(
-                'r.codigo_origen as plato_codigo',
-                'r.nombre as plato_nombre_receta',
-                'ri.cantidad_por_plato',
-                'ri.unidad as unidad_receta',
-                DB::raw("NULL::text as sub_nombre")
-            )
-            ->get();
+        // 3. Expandir recetas usando el mismo cálculo centralizado
+        [, $filas] = $this->_expandRecetasIngredientes($qtyMap);
 
-        // 3b. Ingrediente en sub-recetas nivel 1
-        $subRecetas = DB::connection('compras')
-            ->table('recetas as r')
-            ->join('receta_ingredientes as ri', 'ri.receta_id', '=', 'r.id')
-            ->join('recetas as sr', 'sr.id', '=', 'ri.sub_receta_id')
-            ->join('receta_ingredientes as ri2', 'ri2.receta_id', '=', 'sr.id')
-            ->whereIn('r.codigo_origen', $codigos)
-            ->where('r.activa', true)
-            ->where('sr.activa', true)
-            ->where('ri2.producto_id', $productoId)
-            ->select(
-                'r.codigo_origen as plato_codigo',
-                'r.nombre as plato_nombre_receta',
-                DB::raw('ri.cantidad_por_plato * ri2.cantidad_por_plato AS cantidad_por_plato'),
-                'ri2.unidad as unidad_receta',
-                'sr.nombre as sub_nombre'
-            )
-            ->get();
-
-        // 4. Tabla de conversiones
-        $unitConv = [
-            'oz fl|lt'  => 0.0295735,  'oz fl|ml'  => 29.5735,
-            'fl oz|lt'  => 0.0295735,  'fl oz|ml'  => 29.5735,
-            'oz|g'      => 28.3495,    'oz|kg'     => 0.0283495,
-            'ml|lt'     => 0.001,      'lt|ml'     => 1000.0,
-            'g|kg'      => 0.001,      'kg|g'      => 1000.0,
-            'lb|kg'     => 0.453592,   'lb|g'      => 453.592,
-            'cup|lt'    => 0.236588,   'cups|lt'   => 0.236588,
-            'tsp|lt'    => 0.00492892, 'tbsp|lt'   => 0.0147868,
-        ];
-
-        // 5. Construir desglose
+        // 4. Filtrar filas del ingrediente solicitado y construir desglose
         $platos = [];
-        foreach (array_merge($directos->all(), $subRecetas->all()) as $row) {
-            $codPlato   = $row->plato_codigo;
-            $qtyPlato   = $qtyMap[$codPlato] ?? 0;
-            $cantReceta = (float) $row->cantidad_por_plato;
-            $unidReceta = strtolower(trim($row->unidad_receta ?? ''));
-
-            $factor = 1.0;
-            if ($unidReceta !== $unidCatalog && $unidReceta !== '' && $unidCatalog !== '') {
-                $factor = $unitConv["$unidReceta|$unidCatalog"] ?? 1.0;
-            }
-
-            $contribucion = $cantReceta * $qtyPlato * $factor;
-            $pData        = $platosData[$codPlato] ?? [];
-
+        foreach ($filas as $fila) {
+            if ($fila['producto_id'] !== $productoId) continue;
+            $pData = $platosData[$fila['plato_codigo']] ?? [];
             $platos[] = [
-                'plato_codigo'     => $codPlato,
-                'plato_nombre'     => $pData['nombre'] ?? ($row->plato_nombre_receta ?? $codPlato),
+                'plato_codigo'     => $fila['plato_codigo'],
+                'plato_nombre'     => $pData['nombre'] ?? $fila['plato_nombre'],
                 'categoria_key'    => $pData['categoria_key'] ?? null,
-                'via_sub_receta'   => $row->sub_nombre ?? null,
-                'qty_plato'        => round($qtyPlato, 1),
+                'via_sub_receta'   => $fila['sub_nombre'],
+                'qty_plato'        => round($fila['qty_plato'], 1),
                 'qty_pedido_plato' => round((float) ($pData['qty_pedido'] ?? 0), 1),
-                'cant_por_plato'   => round($cantReceta, 4),
-                'unidad_receta'    => $row->unidad_receta,
-                'contribucion'     => round($contribucion, 3),
-                'pct'              => 0, // se calcula abajo
+                'cant_por_plato'   => round($fila['cant_por_plato'], 4),
+                'unidad_receta'    => $fila['unidad_receta'],
+                'contribucion'     => round($fila['contribucion'], 3),
+                'pct'              => 0,
             ];
         }
 
@@ -970,6 +845,110 @@ class VentasController extends Controller
             'platos'          => $platos,
             'total'           => round($total, 3),
         ]);
+    }
+
+    // ─── Cálculo centralizado de ingredientes ─────────────────────────────────
+
+    /**
+     * Expande un mapa plato_codigo→qty a ingredientes con conversión de unidades aplicada por fila.
+     * Única fuente de verdad para proyeccionIngredientes y proyeccionIngredienteDetalle.
+     *
+     * @param  array $qtyMap  [plato_codigo => qty_proyectada]
+     * @return array  [$mapa, $filas]
+     *   $mapa  = [producto_id => ['codigo', 'nombre', 'unidad', 'qty_proyectada', 'costo', ...]]
+     *   $filas = [['producto_id', 'plato_codigo', 'plato_nombre', 'sub_nombre',
+     *              'cant_por_plato', 'unidad_receta', 'qty_plato', 'contribucion'], ...]
+     */
+    private function _expandRecetasIngredientes(array $qtyMap): array
+    {
+        if (empty($qtyMap)) return [[], []];
+
+        $codigos = array_keys($qtyMap);
+
+        $unitConv = [
+            'oz fl|lt'  => 0.0295735,  'oz fl|ml'  => 29.5735,
+            'fl oz|lt'  => 0.0295735,  'fl oz|ml'  => 29.5735,
+            'oz|g'      => 28.3495,    'oz|kg'     => 0.0283495,
+            'ml|lt'     => 0.001,      'lt|ml'     => 1000.0,
+            'g|kg'      => 0.001,      'kg|g'      => 1000.0,
+            'lb|kg'     => 0.453592,   'lb|g'      => 453.592,
+            'cup|lt'    => 0.236588,   'cups|lt'   => 0.236588,
+            'tsp|lt'    => 0.00492892, 'tbsp|lt'   => 0.0147868,
+        ];
+
+        $directos = DB::connection('compras')
+            ->table('recetas as r')
+            ->join('receta_ingredientes as ri', 'ri.receta_id', '=', 'r.id')
+            ->join('productos as p', 'p.id', '=', 'ri.producto_id')
+            ->whereIn('r.codigo_origen', $codigos)
+            ->where('r.activa', true)
+            ->whereNotNull('ri.producto_id')
+            ->select(
+                'r.codigo_origen as plato_codigo', 'r.nombre as plato_nombre_receta',
+                'p.id as producto_id', 'p.nombre', 'p.codigo as prod_codigo', 'p.unidad', 'p.costo',
+                'ri.cantidad_por_plato', 'ri.unidad as unidad_receta',
+                DB::raw("NULL::text as sub_nombre")
+            )
+            ->get();
+
+        $subRecetas = DB::connection('compras')
+            ->table('recetas as r')
+            ->join('receta_ingredientes as ri', 'ri.receta_id', '=', 'r.id')
+            ->join('recetas as sr', 'sr.id', '=', 'ri.sub_receta_id')
+            ->join('receta_ingredientes as ri2', 'ri2.receta_id', '=', 'sr.id')
+            ->join('productos as p', 'p.id', '=', 'ri2.producto_id')
+            ->whereIn('r.codigo_origen', $codigos)
+            ->where('r.activa', true)
+            ->where('sr.activa', true)
+            ->whereNotNull('ri2.producto_id')
+            ->select(
+                'r.codigo_origen as plato_codigo', 'r.nombre as plato_nombre_receta',
+                'p.id as producto_id', 'p.nombre', 'p.codigo as prod_codigo', 'p.unidad', 'p.costo',
+                DB::raw('ri.cantidad_por_plato * ri2.cantidad_por_plato AS cantidad_por_plato'),
+                'ri2.unidad as unidad_receta', 'sr.nombre as sub_nombre'
+            )
+            ->get();
+
+        $mapa  = [];
+        $filas = [];
+
+        foreach (array_merge($directos->all(), $subRecetas->all()) as $row) {
+            $qty    = $qtyMap[$row->plato_codigo] ?? 0;
+            $pid    = $row->producto_id;
+            $fromU  = strtolower(trim($row->unidad_receta ?? ''));
+            $toU    = strtolower(trim($row->unidad ?? ''));
+            $factor = ($fromU !== $toU && $fromU !== '' && $toU !== '')
+                      ? ($unitConv["$fromU|$toU"] ?? 1.0)
+                      : 1.0;
+
+            $contrib   = (float) $row->cantidad_por_plato * $qty * $factor;
+            $unidFinal = $toU !== '' ? $toU : $fromU;
+
+            if (!isset($mapa[$pid])) {
+                $mapa[$pid] = [
+                    'producto_id'    => $pid,
+                    'codigo'         => $row->prod_codigo,
+                    'nombre'         => $row->nombre,
+                    'unidad'         => $unidFinal,
+                    'qty_proyectada' => 0.0,
+                    'costo'          => (float) ($row->costo ?? 0),
+                ];
+            }
+            $mapa[$pid]['qty_proyectada'] += $contrib;
+
+            $filas[] = [
+                'producto_id'   => $pid,
+                'plato_codigo'  => $row->plato_codigo,
+                'plato_nombre'  => $row->plato_nombre_receta ?? $row->plato_codigo,
+                'sub_nombre'    => $row->sub_nombre ?? null,
+                'cant_por_plato'=> (float) $row->cantidad_por_plato,
+                'unidad_receta' => $row->unidad_receta,
+                'qty_plato'     => $qty,
+                'contribucion'  => $contrib,
+            ];
+        }
+
+        return [$mapa, $filas];
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
