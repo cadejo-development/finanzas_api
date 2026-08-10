@@ -327,30 +327,42 @@ class VentasController extends Controller
         // La query usa UNION ALL, por lo que los parámetros se repiten dos veces
         $bindings = array_merge($base, $base);
 
+        // Factor para convertir unidad_receta → unidad del catálogo (p.unidad).
+        // Se evalúa por fila dentro del SUM, así distintas recetas que usen
+        // unidades diferentes (oz fl, lt, ml…) para el mismo producto se consolidan
+        // en una sola fila ya normalizada a la unidad del catálogo.
         $convCase = "CASE
             WHEN LOWER(l.unidad_receta) = LOWER(p.unidad) THEN 1
             WHEN p.factor_conversion IS NOT NULL AND p.unidad_base IS NOT NULL
              AND LOWER(l.unidad_receta) = LOWER(p.unidad_base) THEN 1.0/p.factor_conversion
-            WHEN LOWER(l.unidad_receta)='oz'  AND LOWER(p.unidad)='lb'               THEN 1.0/16
-            WHEN LOWER(l.unidad_receta)='lb'  AND LOWER(p.unidad)='oz'               THEN 16
-            WHEN LOWER(l.unidad_receta)='g'   AND LOWER(p.unidad)='kg'               THEN 1.0/1000
-            WHEN LOWER(l.unidad_receta)='kg'  AND LOWER(p.unidad)='g'                THEN 1000
-            WHEN LOWER(l.unidad_receta)='g'   AND LOWER(p.unidad)='lb'               THEN 1.0/453.592
-            WHEN LOWER(l.unidad_receta)='lb'  AND LOWER(p.unidad)='g'                THEN 453.592
+            WHEN LOWER(l.unidad_receta) IN ('oz fl','fl oz') AND LOWER(p.unidad) IN ('l','lt','lts') THEN 0.0295735
+            WHEN LOWER(l.unidad_receta) IN ('oz fl','fl oz') AND LOWER(p.unidad) = 'ml'              THEN 29.5735
+            WHEN LOWER(l.unidad_receta)='oz'  AND LOWER(p.unidad)='lb'                THEN 1.0/16
+            WHEN LOWER(l.unidad_receta)='lb'  AND LOWER(p.unidad)='oz'                THEN 16
+            WHEN LOWER(l.unidad_receta)='oz'  AND LOWER(p.unidad)='kg'                THEN 0.0283495
+            WHEN LOWER(l.unidad_receta)='lb'  AND LOWER(p.unidad)='kg'                THEN 0.453592
+            WHEN LOWER(l.unidad_receta)='g'   AND LOWER(p.unidad)='kg'                THEN 1.0/1000
+            WHEN LOWER(l.unidad_receta)='kg'  AND LOWER(p.unidad)='g'                 THEN 1000
+            WHEN LOWER(l.unidad_receta)='g'   AND LOWER(p.unidad)='lb'                THEN 1.0/453.592
+            WHEN LOWER(l.unidad_receta)='lb'  AND LOWER(p.unidad)='g'                 THEN 453.592
             WHEN LOWER(l.unidad_receta)='ml'  AND LOWER(p.unidad) IN ('l','lt','lts') THEN 1.0/1000
-            WHEN LOWER(l.unidad_receta) IN ('l','lt','lts') AND LOWER(p.unidad)='ml' THEN 1000
+            WHEN LOWER(l.unidad_receta) IN ('l','lt','lts') AND LOWER(p.unidad)='ml'  THEN 1000
+            WHEN LOWER(l.unidad_receta)='cup'  AND LOWER(p.unidad) IN ('l','lt','lts') THEN 0.236588
+            WHEN LOWER(l.unidad_receta)='cups' AND LOWER(p.unidad) IN ('l','lt','lts') THEN 0.236588
+            WHEN LOWER(l.unidad_receta)='tsp'  AND LOWER(p.unidad) IN ('l','lt','lts') THEN 0.00492892
+            WHEN LOWER(l.unidad_receta)='tbsp' AND LOWER(p.unidad) IN ('l','lt','lts') THEN 0.0147868
             ELSE 1 END";
 
         $rows = DB::connection('compras')->select("
             SELECT
                 p.nombre             AS ingrediente,
                 p.codigo             AS ingrediente_codigo,
-                l.unidad_receta,
+                p.unidad             AS unidad_receta,
                 p.unidad             AS unidad_compra,
                 p.unidad_base,
                 p.factor_conversion,
                 COALESCE(p.costo,0)  AS costo_unitario,
-                ROUND(SUM(l.cantidad_usada)::numeric, 3) AS total_consumido,
+                ROUND(SUM(l.cantidad_usada * ({$convCase}))::numeric, 3) AS total_consumido,
                 ROUND(SUM(l.cantidad_usada * COALESCE(p.costo,0) * ({$convCase}))::numeric, 2) AS costo_total,
                 COUNT(DISTINCT l.plato_codigo) AS en_platos,
                 STRING_AGG(DISTINCT l.plato_nombre, ', ' ORDER BY l.plato_nombre) AS platos_que_lo_usan
@@ -388,52 +400,20 @@ class VentasController extends Controller
                 {$catWhere}
             ) l
             JOIN productos p ON p.id = l.producto_id
-            GROUP BY p.id, p.nombre, p.codigo, l.unidad_receta, p.unidad, p.unidad_base, p.factor_conversion, p.costo
+            GROUP BY p.id, p.nombre, p.codigo, p.unidad, p.unidad_base, p.factor_conversion, p.costo
             ORDER BY costo_total DESC
         ", $bindings);
 
-        // Tabla de conversiones estándar: 'unidad_receta:unidad_compra' => factor multiplicador
-        $conversiones = [
-            'oz:lb'  => 1 / 16,        'lb:oz'  => 16,
-            'oz:kg'  => 1 / 35.274,    'kg:oz'  => 35.274,
-            'g:kg'   => 1 / 1000,      'kg:g'   => 1000,
-            'g:lb'   => 1 / 453.592,   'lb:g'   => 453.592,
-            'ml:l'   => 1 / 1000,      'l:ml'   => 1000,
-            'ml:lt'  => 1 / 1000,      'lt:ml'  => 1000,
-            'ml:lts' => 1 / 1000,      'lts:ml' => 1000,
-        ];
-
-        $ingredientes = array_map(function ($r) use ($conversiones) {
-            $totalConsumido = (float) $r->total_consumido;
-            $uRec  = strtolower(trim($r->unidad_receta  ?? ''));
-            $uComp = strtolower(trim($r->unidad_compra  ?? ''));
-            $uBase = strtolower(trim($r->unidad_base    ?? ''));
-            $factor = $r->factor_conversion ? (float) $r->factor_conversion : null;
-
-            $totalEnCompra    = null;
-            $unidadesDifieren = $uRec !== $uComp;
-
-            if ($unidadesDifieren) {
-                // Prioridad 1: factor_conversion del producto (unidad_base → unidad_compra)
-                if ($factor && $uBase && $uRec === $uBase) {
-                    $totalEnCompra = round($totalConsumido / $factor, 4);
-                } else {
-                    // Prioridad 2: conversión estándar
-                    $key = "{$uRec}:{$uComp}";
-                    if (isset($conversiones[$key])) {
-                        $totalEnCompra = round($totalConsumido * $conversiones[$key], 4);
-                    }
-                }
-            }
-
+        // La conversión ya se aplicó en SQL; total_consumido siempre está en p.unidad (catálogo).
+        $ingredientes = array_map(function ($r) {
             return [
                 'ingrediente'         => $r->ingrediente,
                 'codigo'              => $r->ingrediente_codigo,
-                'unidad_receta'       => $r->unidad_receta,
+                'unidad_receta'       => $r->unidad_receta,   // = unidad catálogo
                 'unidad_compra'       => $r->unidad_compra,
-                'unidades_difieren'   => $unidadesDifieren,
-                'total_consumido'     => $totalConsumido,
-                'total_en_compra'     => $totalEnCompra,
+                'unidades_difieren'   => false,
+                'total_consumido'     => (float) $r->total_consumido,
+                'total_en_compra'     => null,
                 'costo_unitario'      => round((float) $r->costo_unitario, 4),
                 'costo_total'         => (float) $r->costo_total,
                 'en_platos'           => (int) $r->en_platos,
