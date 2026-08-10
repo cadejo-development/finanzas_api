@@ -840,6 +840,168 @@ class VentasController extends Controller
         ]);
     }
 
+    /**
+     * GET /api/compras/ventas/proyeccion-ingrediente-detalle
+     * Desglose por plato de cuánto contribuye cada uno a la proyección de un ingrediente.
+     * Params: sucursal_id, desde, hasta, codigo (código del producto/ingrediente)
+     */
+    public function proyeccionIngredienteDetalle(Request $request): JsonResponse
+    {
+        $request->validate([
+            'sucursal_id' => 'required|integer|min:1',
+            'desde'       => 'nullable|date',
+            'hasta'       => 'nullable|date',
+            'codigo'      => 'required|string',
+        ]);
+
+        $sucursalId = (int) $request->sucursal_id;
+        $desde      = $request->desde ?? date('Y-m-d', strtotime('tomorrow'));
+        $hasta      = $request->hasta ?? date('Y-m-d', strtotime($desde . ' +9 days'));
+        $codigo     = trim($request->codigo);
+
+        // 1. Resolver producto por código
+        $producto = DB::connection('compras')
+            ->table('productos')
+            ->where('codigo', $codigo)
+            ->select('id', 'nombre', 'unidad', 'codigo')
+            ->first();
+
+        if (!$producto) {
+            return response()->json(['success' => false, 'message' => 'Ingrediente no encontrado'], 404);
+        }
+
+        $productoId   = $producto->id;
+        $unidCatalog  = strtolower(trim($producto->unidad ?? ''));
+
+        // 2. Proyección de platos
+        $proyReq = clone $request;
+        $proyReq->merge(['sucursal_id' => $sucursalId, 'desde' => $desde, 'hasta' => $hasta]);
+        $proyData = json_decode($this->proyeccion($proyReq)->getContent(), true);
+
+        if (empty($proyData['proyecciones'])) {
+            return response()->json([
+                'success'     => true,
+                'ingrediente' => ['codigo' => $codigo, 'nombre' => $producto->nombre, 'unidad' => $producto->unidad],
+                'desde'       => $desde, 'hasta' => $hasta, 'dias' => 10,
+                'platos'      => [], 'total' => 0,
+            ]);
+        }
+
+        $qtyMap     = [];
+        $platosData = [];
+        foreach ($proyData['proyecciones'] as $p) {
+            if (!empty($p['codigo'])) {
+                $qtyMap[$p['codigo']]     = (float) $p['qty_proyectada'];
+                $platosData[$p['codigo']] = $p;
+            }
+        }
+        $codigos = array_keys($qtyMap);
+
+        // 3. Ingrediente en recetas directas
+        $directos = DB::connection('compras')
+            ->table('recetas as r')
+            ->join('receta_ingredientes as ri', 'ri.receta_id', '=', 'r.id')
+            ->whereIn('r.codigo_origen', $codigos)
+            ->where('r.activa', true)
+            ->where('ri.producto_id', $productoId)
+            ->select(
+                'r.codigo_origen as plato_codigo',
+                'r.nombre as plato_nombre_receta',
+                'ri.cantidad_por_plato',
+                'ri.unidad as unidad_receta',
+                DB::raw("NULL::text as sub_nombre")
+            )
+            ->get();
+
+        // 3b. Ingrediente en sub-recetas nivel 1
+        $subRecetas = DB::connection('compras')
+            ->table('recetas as r')
+            ->join('receta_ingredientes as ri', 'ri.receta_id', '=', 'r.id')
+            ->join('recetas as sr', 'sr.id', '=', 'ri.sub_receta_id')
+            ->join('receta_ingredientes as ri2', 'ri2.receta_id', '=', 'sr.id')
+            ->whereIn('r.codigo_origen', $codigos)
+            ->where('r.activa', true)
+            ->where('sr.activa', true)
+            ->where('ri2.producto_id', $productoId)
+            ->select(
+                'r.codigo_origen as plato_codigo',
+                'r.nombre as plato_nombre_receta',
+                DB::raw('ri.cantidad_por_plato * ri2.cantidad_por_plato AS cantidad_por_plato'),
+                'ri2.unidad as unidad_receta',
+                'sr.nombre as sub_nombre'
+            )
+            ->get();
+
+        // 4. Tabla de conversiones
+        $unitConv = [
+            'oz fl|lt'  => 0.0295735,  'oz fl|ml'  => 29.5735,
+            'fl oz|lt'  => 0.0295735,  'fl oz|ml'  => 29.5735,
+            'oz|g'      => 28.3495,    'oz|kg'     => 0.0283495,
+            'ml|lt'     => 0.001,      'lt|ml'     => 1000.0,
+            'g|kg'      => 0.001,      'kg|g'      => 1000.0,
+            'lb|kg'     => 0.453592,   'lb|g'      => 453.592,
+            'cup|lt'    => 0.236588,   'cups|lt'   => 0.236588,
+            'tsp|lt'    => 0.00492892, 'tbsp|lt'   => 0.0147868,
+        ];
+
+        // 5. Construir desglose
+        $platos = [];
+        foreach (array_merge($directos->all(), $subRecetas->all()) as $row) {
+            $codPlato   = $row->plato_codigo;
+            $qtyPlato   = $qtyMap[$codPlato] ?? 0;
+            $cantReceta = (float) $row->cantidad_por_plato;
+            $unidReceta = strtolower(trim($row->unidad_receta ?? ''));
+
+            $factor = 1.0;
+            if ($unidReceta !== $unidCatalog && $unidReceta !== '' && $unidCatalog !== '') {
+                $factor = $unitConv["$unidReceta|$unidCatalog"] ?? 1.0;
+            }
+
+            $contribucion = $cantReceta * $qtyPlato * $factor;
+            $pData        = $platosData[$codPlato] ?? [];
+
+            $platos[] = [
+                'plato_codigo'     => $codPlato,
+                'plato_nombre'     => $pData['nombre'] ?? ($row->plato_nombre_receta ?? $codPlato),
+                'categoria_key'    => $pData['categoria_key'] ?? null,
+                'via_sub_receta'   => $row->sub_nombre ?? null,
+                'qty_plato'        => round($qtyPlato, 1),
+                'qty_pedido_plato' => round((float) ($pData['qty_pedido'] ?? 0), 1),
+                'cant_por_plato'   => round($cantReceta, 4),
+                'unidad_receta'    => $row->unidad_receta,
+                'contribucion'     => round($contribucion, 3),
+                'pct'              => 0, // se calcula abajo
+            ];
+        }
+
+        usort($platos, fn($a, $b) => $b['contribucion'] <=> $a['contribucion']);
+
+        $total = array_sum(array_column($platos, 'contribucion'));
+        if ($total > 0) {
+            foreach ($platos as &$p) {
+                $p['pct'] = round($p['contribucion'] / $total * 100, 1);
+            }
+            unset($p);
+        }
+
+        return response()->json([
+            'success'         => true,
+            'ingrediente'     => [
+                'codigo' => $codigo,
+                'nombre' => $producto->nombre,
+                'unidad' => $producto->unidad,
+            ],
+            'desde'           => $desde,
+            'hasta'           => $hasta,
+            'dias'            => (int) ($proyData['dias'] ?? 10),
+            'eventos'         => $proyData['eventos'] ?? [],
+            'factor_sucursal' => round((float) ($proyData['factor_sucursal'] ?? 1), 3),
+            'factor_eventos'  => round((float) ($proyData['factor_eventos'] ?? 1), 3),
+            'platos'          => $platos,
+            'total'           => round($total, 3),
+        ]);
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     /** Qty total vendida por plato en un rango, keyed by producto_codigo. */
