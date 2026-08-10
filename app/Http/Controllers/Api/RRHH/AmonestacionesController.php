@@ -110,14 +110,16 @@ class AmonestacionesController extends RRHHBaseController
                 'Sucursal'       => $data['sucursal_nombre'] ?? '—',
             ];
 
+            $tipoNotif = 'Amonestación / ' . ($amonestacion->tipoFalta?->nombre ?? 'Falta');
+
             $this->notificarAdminsRrhh(
-                tipo:           'Amonestación / Falta Grave',
+                tipo:           $tipoNotif,
                 empleadoNombre: $data['empleado_nombre'],
                 detalles:       $detallesNotif,
                 rutaFrontend:   'amonestaciones',
             );
             $this->notificarGerenciaOps(
-                tipo:           'Amonestación / Falta Grave',
+                tipo:           $tipoNotif,
                 empleadoNombre: $data['empleado_nombre'],
                 detalles:       $detallesNotif,
                 rutaFrontend:   'amonestaciones',
