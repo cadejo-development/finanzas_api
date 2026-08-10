@@ -742,16 +742,43 @@ class VentasController extends Controller
 
             if (!isset($mapa[$pid])) {
                 $mapa[$pid] = [
-                    'producto_id'    => $pid,
-                    'codigo'         => $row->prod_codigo,
-                    'nombre'         => $row->nombre,
-                    'unidad'         => $row->unidad_receta,
-                    'qty_proyectada' => 0.0,
-                    'costo'          => (float) ($row->costo ?? 0),
+                    'producto_id'     => $pid,
+                    'codigo'          => $row->prod_codigo,
+                    'nombre'          => $row->nombre,
+                    'unidad'          => $row->unidad_receta,   // se reemplaza abajo tras conversión
+                    '_unidad_receta'  => strtolower(trim($row->unidad_receta ?? '')),
+                    '_unidad_catalog' => strtolower(trim($row->unidad ?? '')),
+                    'qty_proyectada'  => 0.0,
+                    'costo'           => (float) ($row->costo ?? 0),
                 ];
             }
             $mapa[$pid]['qty_proyectada'] += (float) $row->cantidad_por_plato * $qty;
         }
+
+        // Convertir qty_proyectada a la unidad del catálogo cuando difiere de la unidad receta
+        $unitConv = [
+            'oz fl|lt'  => 0.0295735,  'oz fl|ml'  => 29.5735,
+            'fl oz|lt'  => 0.0295735,  'fl oz|ml'  => 29.5735,
+            'oz|g'      => 28.3495,    'oz|kg'     => 0.0283495,
+            'ml|lt'     => 0.001,      'lt|ml'     => 1000.0,
+            'g|kg'      => 0.001,      'kg|g'      => 1000.0,
+            'lb|kg'     => 0.453592,   'lb|g'      => 453.592,
+            'cup|lt'    => 0.236588,   'cups|lt'   => 0.236588,
+            'tsp|lt'    => 0.00492892, 'tbsp|lt'   => 0.0147868,
+        ];
+        foreach ($mapa as &$ing) {
+            $from = $ing['_unidad_receta'];
+            $to   = $ing['_unidad_catalog'];
+            if ($from !== $to && $from !== '' && $to !== '') {
+                $factor = $unitConv["$from|$to"] ?? null;
+                if ($factor !== null) {
+                    $ing['qty_proyectada'] *= $factor;
+                }
+            }
+            $ing['unidad'] = $ing['_unidad_catalog'] !== '' ? $ing['_unidad_catalog'] : $ing['_unidad_receta'];
+            unset($ing['_unidad_receta'], $ing['_unidad_catalog']);
+        }
+        unset($ing);
 
         if (empty($mapa)) {
             return response()->json([
