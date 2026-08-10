@@ -712,7 +712,7 @@ class VentasController extends Controller
 
         // ── 4. Construir respuesta ────────────────────────────────────────
         $ingredientes = array_values(array_map(function ($ing) use ($conteos) {
-            $ing['qty_proyectada'] = round($ing['qty_proyectada'], 3);
+            $ing['qty_proyectada'] = (int) ceil($ing['qty_proyectada']);
 
             $detalle = $conteos->get($ing['producto_id']);
             $totalContado = null;
@@ -722,8 +722,8 @@ class VentasController extends Controller
             }
             $ing['conteo_fisico']  = $totalContado;
             $ing['total_a_pedir']  = $totalContado !== null
-                ? round(max(0, $ing['qty_proyectada'] - $totalContado), 3)
-                : round($ing['qty_proyectada'], 3);
+                ? (int) max(0, ceil($ing['qty_proyectada'] - $totalContado))
+                : (int) $ing['qty_proyectada'];
 
             return $ing;
         }, $mapa));
@@ -843,7 +843,7 @@ class VentasController extends Controller
             'factor_sucursal' => round((float) ($proyData['factor_sucursal'] ?? 1), 3),
             'factor_eventos'  => round((float) ($proyData['factor_eventos'] ?? 1), 3),
             'platos'          => $platos,
-            'total'           => round($total, 3),
+            'total'           => (int) ceil($total),
         ]);
     }
 
