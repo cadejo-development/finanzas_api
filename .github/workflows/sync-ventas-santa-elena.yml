@@ -1,0 +1,94 @@
+name: Sync Ventas — Santa Elena
+
+on:
+  schedule:
+    - cron: '0 14 * * *'  # 08:00 AM El Salvador (UTC-6)
+  workflow_dispatch:
+    inputs:
+      dias:
+        description: 'Días hacia atrás a sincronizar (ej: 2 para ayer y anteayer)'
+        required: false
+        default: '7'
+      dry_run:
+        description: 'Simular sin escribir en BD'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependencias Node
+        run: npm install
+
+      - name: Crear .env
+        env:
+          ENV_FILE_CONTENT: ${{ secrets.ENV_FILE }}
+        run: printf '%s' "$ENV_FILE_CONTENT" > .env
+
+      - name: Instalar openfortivpn
+        run: sudo apt-get install -y openfortivpn
+
+      - name: Conectar VPN CLIN
+        run: |
+          sudo openfortivpn ${{ secrets.VPN_HOST }}:${{ secrets.VPN_PORT }} \
+            --username="${{ secrets.VPN_USERNAME }}" \
+            --password="${{ secrets.VPN_PASSWORD }}" \
+            --trusted-cert="${{ secrets.VPN_TRUSTED_CERT }}" \
+            --no-routes \
+            2>&1 | tee /tmp/vpn.log &
+          VPN_PID=$!
+          echo "VPN_PID=$VPN_PID" >> $GITHUB_ENV
+
+          for i in $(seq 1 30); do
+            if ip addr show ppp0 2>/dev/null | grep -q 'inet '; then
+              echo "✓ VPN conectada (${i}s)"
+              break
+            fi
+            sleep 1
+          done
+
+          if ! ip addr show ppp0 2>/dev/null | grep -q 'inet '; then
+            echo "✗ VPN no conectó en 30s"
+            cat /tmp/vpn.log
+            exit 1
+          fi
+
+          for i in $(seq 1 10); do
+            if sudo ip route add 10.0.0.0/8 dev ppp0 2>/dev/null; then
+              echo "✓ Ruta 10.0.0.0/8 agregada"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Sync ventas Santa Elena
+        run: |
+          DIAS="${{ github.event.inputs.dias || '7' }}"
+          DRY="${{ github.event.inputs.dry_run || 'false' }}"
+          ARGS="--dias=${DIAS}"
+          if [ "$DRY" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          echo "Ejecutando: node database/sync_ventas_santa_elena.js $ARGS"
+          node database/sync_ventas_santa_elena.js $ARGS
+
+      - name: Desconectar VPN
+        if: always()
+        run: |
+          sudo kill $VPN_PID 2>/dev/null || sudo pkill openfortivpn || true
+          echo "VPN desconectada"
