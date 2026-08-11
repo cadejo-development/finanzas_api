@@ -15,7 +15,8 @@ class BrewLote extends Model
     ];
 
     public function receta()         { return $this->belongsTo(BrewReceta::class, 'brew_receta_id'); }
-    public function coccion()        { return $this->hasOne(BrewLoteCoccion::class, 'brew_lote_id'); }
+    public function coccion()         { return $this->hasOne(BrewLoteCoccion::class, 'brew_lote_id')->where('numero', 1); }
+    public function cocciones()       { return $this->hasMany(BrewLoteCoccion::class, 'brew_lote_id')->orderBy('numero'); }
     public function filtracion()     { return $this->hasOne(BrewLoteFiltracion::class, 'brew_lote_id'); }
     public function filtracionCorridas() { return $this->hasMany(BrewLoteFiltracionCorrida::class, 'brew_lote_id'); }
     public function fermentacion()   { return $this->hasOne(BrewLoteFermentacion::class, 'brew_lote_id'); }

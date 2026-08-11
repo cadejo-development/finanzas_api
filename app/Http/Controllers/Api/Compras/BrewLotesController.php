@@ -38,7 +38,7 @@ class BrewLotesController extends Controller
         $lote = BrewLote::with([
             'receta.maltas', 'receta.lupulos', 'receta.minerales',
             'receta.levaduras', 'receta.maceradoPasos', 'receta.boilPasos', 'receta.diasObjetivo',
-            'coccion', 'maceradoPasos', 'boilPasos',
+            'cocciones', 'maceradoPasos', 'boilPasos',
             'filtracion', 'filtracionCorridas',
             'fermentacion', 'fermSeguimiento',
             'llenadoBotellas', 'llenadoBarriles',
@@ -61,63 +61,64 @@ class BrewLotesController extends Controller
      */
     private function syncPasosDesdeReceta(BrewLote $lote): void
     {
-        // ── Macerado ────────────────────────────────────────────────────────
-        $recetaPasos = $lote->receta->maceradoPasos->keyBy('orden');
-        $lotePasos   = $lote->maceradoPasos->keyBy('orden');
+        $numCocciones = (int) ($lote->num_cocciones ?? 1);
+        $recetaPasos  = $lote->receta->maceradoPasos->keyBy('orden');
+        $recetaBoil   = $lote->receta->boilPasos->keyBy('orden');
 
-        foreach ($recetaPasos as $orden => $rp) {
-            if ($lotePasos->has($orden)) {
-                $lotePasos[$orden]->update([
-                    'nombre'        => $rp->nombre,
-                    'temp_objetivo' => $rp->temp_objetivo,
-                    'tiempo_min'    => $rp->tiempo_min,
-                    'ph_objetivo'   => $rp->ph_objetivo,
-                    'adicion_agua_l'=> $rp->adicion_agua_l,
-                ]);
-            } else {
-                $lote->maceradoPasos()->create([
-                    'orden'          => $orden,
-                    'nombre'         => $rp->nombre,
-                    'temp_objetivo'  => $rp->temp_objetivo,
-                    'tiempo_min'     => $rp->tiempo_min,
-                    'ph_objetivo'    => $rp->ph_objetivo,
-                    'adicion_agua_l' => $rp->adicion_agua_l,
-                ]);
-            }
-        }
-        // Eliminar pasos del lote que ya no existen en la receta
-        foreach ($lotePasos as $orden => $lp) {
-            if (!$recetaPasos->has($orden)) {
-                $lp->delete();
-            }
-        }
+        for ($n = 1; $n <= $numCocciones; $n++) {
+            // ── Macerado ────────────────────────────────────────────────────
+            $lotePasos = $lote->maceradoPasos->where('coccion_numero', $n)->keyBy('orden');
 
-        // ── Boil pasos ──────────────────────────────────────────────────────
-        $recetaBoil = $lote->receta->boilPasos->keyBy('orden');
-        $loteBoil   = $lote->boilPasos->keyBy('orden');
-
-        foreach ($recetaBoil as $orden => $rb) {
-            $boilObj = [
-                'descripcion'       => $rb->descripcion,
-                'tiempo_min'        => $rb->tiempo_min,
-                'fase'              => $rb->fase ?? 'hervor',
-                'cantidad_objetivo' => $rb->cantidad_objetivo,
-                'unidad'            => $rb->unidad,
-                'plato_objetivo'    => $rb->plato_objetivo,
-                'vol_objetivo_l'    => $rb->vol_objetivo_l,
-            ];
-            if ($loteBoil->has($orden)) {
-                $loteBoil[$orden]->update($boilObj);
-            } else {
-                $lote->boilPasos()->create(array_merge($boilObj, [
-                    'orden'      => $orden,
-                    'completado' => false,
-                ]));
+            foreach ($recetaPasos as $orden => $rp) {
+                if ($lotePasos->has($orden)) {
+                    $lotePasos[$orden]->update([
+                        'nombre'         => $rp->nombre,
+                        'temp_objetivo'  => $rp->temp_objetivo,
+                        'tiempo_min'     => $rp->tiempo_min,
+                        'ph_objetivo'    => $rp->ph_objetivo,
+                        'adicion_agua_l' => $rp->adicion_agua_l,
+                    ]);
+                } else {
+                    $lote->maceradoPasos()->create([
+                        'coccion_numero' => $n,
+                        'orden'          => $orden,
+                        'nombre'         => $rp->nombre,
+                        'temp_objetivo'  => $rp->temp_objetivo,
+                        'tiempo_min'     => $rp->tiempo_min,
+                        'ph_objetivo'    => $rp->ph_objetivo,
+                        'adicion_agua_l' => $rp->adicion_agua_l,
+                    ]);
+                }
             }
-        }
-        foreach ($loteBoil as $orden => $lb) {
-            if (!$recetaBoil->has($orden)) {
-                $lb->delete();
+            foreach ($lotePasos as $orden => $lp) {
+                if (!$recetaPasos->has($orden)) $lp->delete();
+            }
+
+            // ── Boil pasos ──────────────────────────────────────────────────
+            $loteBoil = $lote->boilPasos->where('coccion_numero', $n)->keyBy('orden');
+
+            foreach ($recetaBoil as $orden => $rb) {
+                $boilObj = [
+                    'descripcion'       => $rb->descripcion,
+                    'tiempo_min'        => $rb->tiempo_min,
+                    'fase'              => $rb->fase ?? 'hervor',
+                    'cantidad_objetivo' => $rb->cantidad_objetivo,
+                    'unidad'            => $rb->unidad,
+                    'plato_objetivo'    => $rb->plato_objetivo,
+                    'vol_objetivo_l'    => $rb->vol_objetivo_l,
+                ];
+                if ($loteBoil->has($orden)) {
+                    $loteBoil[$orden]->update($boilObj);
+                } else {
+                    $lote->boilPasos()->create(array_merge($boilObj, [
+                        'coccion_numero' => $n,
+                        'orden'          => $orden,
+                        'completado'     => false,
+                    ]));
+                }
+            }
+            foreach ($loteBoil as $orden => $lb) {
+                if (!$recetaBoil->has($orden)) $lb->delete();
             }
         }
 
@@ -242,30 +243,35 @@ class BrewLotesController extends Controller
 
         DB::connection('compras')->transaction(function () use ($data, &$lote) {
             $lote = BrewLote::create(array_merge($data, ['estado' => 'coccion']));
-            // Copiar pasos de macerado y boil desde la receta
-            $receta = BrewReceta::with(['maceradoPasos', 'boilPasos'])->find($data['brew_receta_id']);
-            foreach ($receta->maceradoPasos as $paso) {
-                $lote->maceradoPasos()->create([
-                    'orden'          => $paso->orden,
-                    'nombre'         => $paso->nombre,
-                    'temp_objetivo'  => $paso->temp_objetivo,
-                    'tiempo_min'     => $paso->tiempo_min,
-                    'ph_objetivo'    => $paso->ph_objetivo,
-                    'adicion_agua_l' => $paso->adicion_agua_l,
-                ]);
-            }
-            foreach ($receta->boilPasos as $paso) {
-                $lote->boilPasos()->create([
-                    'orden'             => $paso->orden,
-                    'descripcion'       => $paso->descripcion,
-                    'tiempo_min'        => $paso->tiempo_min,
-                    'fase'              => $paso->fase ?? 'hervor',
-                    'completado'        => false,
-                    'cantidad_objetivo' => $paso->cantidad_objetivo,
-                    'unidad'            => $paso->unidad,
-                    'plato_objetivo'    => $paso->plato_objetivo,
-                    'vol_objetivo_l'    => $paso->vol_objetivo_l,
-                ]);
+            $receta       = BrewReceta::with(['maceradoPasos', 'boilPasos'])->find($data['brew_receta_id']);
+            $numCocciones = (int) ($data['num_cocciones'] ?? 1);
+            // Crear un juego de pasos macerado+boil por cada cocción
+            for ($n = 1; $n <= $numCocciones; $n++) {
+                foreach ($receta->maceradoPasos as $paso) {
+                    $lote->maceradoPasos()->create([
+                        'coccion_numero' => $n,
+                        'orden'          => $paso->orden,
+                        'nombre'         => $paso->nombre,
+                        'temp_objetivo'  => $paso->temp_objetivo,
+                        'tiempo_min'     => $paso->tiempo_min,
+                        'ph_objetivo'    => $paso->ph_objetivo,
+                        'adicion_agua_l' => $paso->adicion_agua_l,
+                    ]);
+                }
+                foreach ($receta->boilPasos as $paso) {
+                    $lote->boilPasos()->create([
+                        'coccion_numero'    => $n,
+                        'orden'             => $paso->orden,
+                        'descripcion'       => $paso->descripcion,
+                        'tiempo_min'        => $paso->tiempo_min,
+                        'fase'              => $paso->fase ?? 'hervor',
+                        'completado'        => false,
+                        'cantidad_objetivo' => $paso->cantidad_objetivo,
+                        'unidad'            => $paso->unidad,
+                        'plato_objetivo'    => $paso->plato_objetivo,
+                        'vol_objetivo_l'    => $paso->vol_objetivo_l,
+                    ]);
+                }
             }
         });
 
@@ -278,6 +284,7 @@ class BrewLotesController extends Controller
     {
         $lote = BrewLote::findOrFail($id);
         $data = $request->validate([
+            'coccion_numero'        => 'nullable|integer|min:1|max:10',
             'og_real'               => 'nullable|numeric',
             'vol_preboil_real'      => 'nullable|numeric|min:0',
             'vol_postboil_real'     => 'nullable|numeric|min:0',
@@ -301,10 +308,12 @@ class BrewLotesController extends Controller
             'boil_pasos'            => 'array',
         ]);
 
-        DB::connection('compras')->transaction(function () use ($lote, $data) {
-            $lote->coccion()->updateOrCreate(
-                ['brew_lote_id' => $lote->id],
-                collect($data)->except(['macerado_pasos', 'boil_pasos'])->toArray()
+        $coccionNumero = (int) ($data['coccion_numero'] ?? 1);
+
+        DB::connection('compras')->transaction(function () use ($lote, $data, $coccionNumero) {
+            $lote->cocciones()->updateOrCreate(
+                ['brew_lote_id' => $lote->id, 'numero' => $coccionNumero],
+                collect($data)->except(['coccion_numero', 'macerado_pasos', 'boil_pasos'])->toArray()
             );
 
             if (isset($data['macerado_pasos'])) {
@@ -336,7 +345,8 @@ class BrewLotesController extends Controller
                 }
             }
 
-            if ($lote->estado === 'coccion') {
+            // Avanzar estado solo cuando se guarda la última cocción
+            if ($lote->estado === 'coccion' && $coccionNumero >= ($lote->num_cocciones ?? 1)) {
                 $lote->update(['estado' => 'fermentacion']);
             }
         });
@@ -624,7 +634,7 @@ class BrewLotesController extends Controller
     public function reporte($id)
     {
         $lote = BrewLote::with([
-            'receta', 'coccion', 'filtracion', 'fermentacion',
+            'receta', 'cocciones', 'filtracion', 'fermentacion',
             'fermSeguimiento', 'llenadoBotellas', 'llenadoBarriles',
         ])->findOrFail($id);
 
@@ -635,15 +645,17 @@ class BrewLotesController extends Controller
 
     private function calcularReporte(BrewLote $lote): array
     {
-        $receta   = $lote->receta;
-        $coccion  = $lote->coccion;
+        $receta    = $lote->receta;
+        $cocciones = $lote->relationLoaded('cocciones')
+            ? $lote->cocciones
+            : $lote->cocciones()->get();
         $filtr    = $lote->filtracion;
         $botellas = $lote->llenadoBotellas;
         $barriles = $lote->llenadoBarriles;
 
-        // Volúmenes reales
-        $volPreboil  = (float) ($coccion->vol_preboil_real ?? 0);
-        $volPostboil = (float) ($coccion->vol_postboil_real ?? 0);
+        // Volúmenes reales — suma de todas las cocciones
+        $volPreboil  = $cocciones->sum(fn($c) => (float) ($c->vol_preboil_real  ?? 0));
+        $volPostboil = $cocciones->sum(fn($c) => (float) ($c->vol_postboil_real ?? 0));
         $volBbt      = (float) ($filtr->vol_bbt_real ?? 0);
 
         // Llenado
@@ -674,7 +686,8 @@ class BrewLotesController extends Controller
         }
 
         // ABV calculado desde OG/FG reales
-        $og   = (float) ($lote->fermentacion->og_pitch ?? $coccion->og_real ?? 0);
+        $coccion1 = $cocciones->first();
+        $og   = (float) ($lote->fermentacion->og_pitch ?? $coccion1?->og_real ?? 0);
         $fg   = (float) ($botellas->fg_real ?? $barriles->fg_real ?? 0);
         $abv_real = ($og > 0 && $fg > 0) ? round(($og - $fg) * 131.25, 2) : null;
 
