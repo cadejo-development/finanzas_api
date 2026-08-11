@@ -27,14 +27,14 @@ class BrewCatalogosController extends Controller
     }
 
     // GET /api/compras/brew/catalogos/cervezas
+    // Sugiere desde las propias brew_recetas del sistema (no desde Brilo)
     public function cervezas()
     {
         try {
             $data = DB::connection('compras')
-                ->table('brew_ingredientes')
-                ->where('tipo', 'cerveza')
-                ->orderBy('nombre')
+                ->table('brew_recetas')
                 ->select('codigo', 'nombre', 'estilo')
+                ->orderBy('nombre')
                 ->get()
                 ->map(fn($r) => [
                     'codigo' => $r->codigo ?? '',
@@ -42,6 +42,7 @@ class BrewCatalogosController extends Controller
                     'estilo' => $r->estilo ?? '',
                 ])
                 ->filter(fn($r) => $r['nombre'] !== '')
+                ->unique('nombre')
                 ->values()
                 ->all();
 
