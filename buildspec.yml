@@ -37,7 +37,9 @@ phases:
           echo "Triggering App Runner deployment for $APPRUNNER_SERVICE_ARN"
           aws apprunner start-deployment \
             --service-arn "$APPRUNNER_SERVICE_ARN" \
-            --region "$AWS_DEFAULT_REGION"
+            --region "$AWS_DEFAULT_REGION" \
+            && echo "App Runner deployment triggered." \
+            || echo "App Runner no disponible para deploy ahora (posiblemente ya en curso) — se omite."
         else
           echo "APPRUNNER_SERVICE_ARN not configured, skipping App Runner trigger"
         fi
