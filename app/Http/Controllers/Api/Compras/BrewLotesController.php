@@ -285,6 +285,8 @@ class BrewLotesController extends Controller
         $lote = BrewLote::findOrFail($id);
         $data = $request->validate([
             'coccion_numero'        => 'nullable|integer|min:1|max:10',
+            'vol_preboil_obj'       => 'nullable|numeric|min:0',
+            'vol_postboil_obj'      => 'nullable|numeric|min:0',
             'og_real'               => 'nullable|numeric',
             'vol_preboil_real'      => 'nullable|numeric|min:0',
             'vol_postboil_real'     => 'nullable|numeric|min:0',
