@@ -8,5 +8,5 @@ class BrewRecetaLevadura extends Model
 {
     protected $connection = 'compras';
     protected $table = 'brew_receta_levaduras';
-    protected $fillable = ['brew_receta_id', 'nombre', 'codigo', 'proveedor', 'cantidad_g', 'temp_min', 'temp_max', 'generacion', 'viabilidad_pct', 'vol_pitch', 'temp_pitch'];
+    protected $fillable = ['brew_receta_id', 'nombre', 'codigo', 'proveedor', 'cantidad_g', 'temp_min', 'temp_max', 'tasa_inoculacion_millones'];
 }

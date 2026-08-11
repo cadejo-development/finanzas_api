@@ -220,8 +220,9 @@ class BrewLotesController extends Controller
     {
         $ing = BrewLoteIngrediente::where('brew_lote_id', $loteId)->findOrFail($ingId);
         $data = $request->validate([
-            'estado' => 'required|in:pendiente,en_proceso,agregado',
-            'notas'  => 'nullable|string|max:500',
+            'estado'         => 'required|in:pendiente,en_proceso,parcial,agregado',
+            'notas'          => 'nullable|string|max:500',
+            'cantidad_real'  => 'nullable|numeric|min:0',
         ]);
         $ing->update($data);
         return response()->json($ing);

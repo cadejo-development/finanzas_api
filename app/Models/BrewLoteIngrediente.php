@@ -12,7 +12,7 @@ class BrewLoteIngrediente extends Model
     protected $fillable = [
         'brew_lote_id', 'tipo', 'nombre',
         'cantidad_objetivo', 'unidad', 'detalle',
-        'estado', 'notas',
+        'estado', 'notas', 'cantidad_real',
     ];
 
     public function lote() { return $this->belongsTo(BrewLote::class, 'brew_lote_id'); }
