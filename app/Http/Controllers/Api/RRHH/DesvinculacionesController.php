@@ -112,12 +112,14 @@ class DesvinculacionesController extends RRHHBaseController
                 detalles:        $detallesNotif,
                 rutaFrontend:    'desvinculaciones',
             );
-            $this->notificarGerenciaOps(
-                tipo:            'Desvinculación de Personal',
-                empleadoNombre:  $empleadoNombreNotif,
-                detalles:        $detallesNotif,
-                rutaFrontend:    'desvinculaciones',
-            );
+            if ($this->esEmpleadoDeRestaurante($validated['empleado_id'])) {
+                $this->notificarGerenciaOps(
+                    tipo:            'Desvinculación de Personal',
+                    empleadoNombre:  $empleadoNombreNotif,
+                    detalles:        $detallesNotif,
+                    rutaFrontend:    'desvinculaciones',
+                );
+            }
 
             return response()->json(['success' => true, 'data' => $desvinculacion], 201);
         });

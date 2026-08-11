@@ -133,12 +133,14 @@ class TrasladosController extends RRHHBaseController
                 detalles:        $detallesNotif,
                 rutaFrontend:    'traslados',
             );
-            $this->notificarGerenciaOps(
-                tipo:            'Traslado de Personal',
-                empleadoNombre:  $empleadoNombreNotif,
-                detalles:        $detallesNotif,
-                rutaFrontend:    'traslados',
-            );
+            if ($this->esEmpleadoDeRestaurante($validated['empleado_id'])) {
+                $this->notificarGerenciaOps(
+                    tipo:            'Traslado de Personal',
+                    empleadoNombre:  $empleadoNombreNotif,
+                    detalles:        $detallesNotif,
+                    rutaFrontend:    'traslados',
+                );
+            }
 
             return response()->json(['success' => true, 'data' => $arr[0]], 201);
         });

@@ -118,12 +118,14 @@ class AmonestacionesController extends RRHHBaseController
                 detalles:       $detallesNotif,
                 rutaFrontend:   'amonestaciones',
             );
-            $this->notificarGerenciaOps(
-                tipo:           $tipoNotif,
-                empleadoNombre: $data['empleado_nombre'],
-                detalles:       $detallesNotif,
-                rutaFrontend:   'amonestaciones',
-            );
+            if ($this->esEmpleadoDeRestaurante($validated['empleado_id'])) {
+                $this->notificarGerenciaOps(
+                    tipo:           $tipoNotif,
+                    empleadoNombre: $data['empleado_nombre'],
+                    detalles:       $detallesNotif,
+                    rutaFrontend:   'amonestaciones',
+                );
+            }
 
             return response()->json(['success' => true, 'data' => $data], 201);
         });
