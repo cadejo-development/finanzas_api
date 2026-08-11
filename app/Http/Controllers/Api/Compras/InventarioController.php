@@ -712,7 +712,7 @@ class InventarioController extends Controller
             'fecha'          => $m->fecha?->toDateString(),
             'created_at'     => $m->created_at?->toIso8601String(),
             'aud_usuario'    => $m->aud_usuario,
-            'detalle'        => $m->detalle ? json_decode($m->detalle, true) : null,
+            'detalle'        => $m->detalle,
         ]);
 
         return response()->json(['success' => true, 'data' => $data]);
