@@ -27,8 +27,9 @@ class BrewIngredientesSeeder extends Seeder
         $maltas   = $this->fetchBrilo('malta');
         $lupulos  = $this->fetchBrilo('lupulo');
         $cervezas = $this->fetchBrilo('cerveza');
+        $aditivos = $this->fetchBriloAditivos();
 
-        $this->command->info("Jalados: {$maltas} maltas, {$lupulos} lúpulos, {$cervezas} cervezas.");
+        $this->command->info("Jalados: {$maltas} maltas, {$lupulos} lúpulos, {$cervezas} cervezas, {$aditivos} aditivos.");
         $this->command->info('Sincronización completa.');
     }
 
@@ -90,6 +91,7 @@ class BrewIngredientesSeeder extends Seeder
             default => '1=0',
         };
 
+
         $rows = DB::connection('origen')->select("
             SELECT LTRIM(RTRIM(proCodigo)) AS codigo,
                    LTRIM(RTRIM(proNombre))  AS nombre
@@ -139,5 +141,64 @@ class BrewIngredientesSeeder extends Seeder
 
         $this->command->info("  ✓ {$tipo}: " . count($rows) . " registros insertados.");
         return count($rows);
+    }
+
+    /**
+     * Busca aditivos/especias en Brilo y hace upsert sin borrar los registros estáticos.
+     */
+    private function fetchBriloAditivos(): int
+    {
+        $where = "
+            LOWER(proNombre) LIKE '%cascara%naranja%'
+         OR LOWER(proNombre) LIKE '%naranja%cascara%'
+         OR LOWER(proNombre) LIKE '%culantro%'
+         OR LOWER(proNombre) LIKE '%coriander%'
+         OR LOWER(proNombre) LIKE '%manzanilla%'
+         OR LOWER(proNombre) LIKE '%jengibre%'
+         OR LOWER(proNombre) LIKE '%nuez moscada%'
+         OR LOWER(proNombre) LIKE '%irish moss%'
+         OR LOWER(proNombre) LIKE '%carragenina%'
+         OR LOWER(proNombre) LIKE '%kick%clarif%'";
+
+        try {
+            $rows = DB::connection('origen')->select("
+                SELECT LTRIM(RTRIM(proCodigo)) AS codigo,
+                       LTRIM(RTRIM(proNombre))  AS nombre
+                FROM   olComun.dbo.Productos WITH (NOLOCK)
+                WHERE  proActivo = 1
+                  AND  ({$where})
+                ORDER BY proNombre
+            ");
+        } catch (\Exception $e) {
+            $this->command->warn('  ⚠ No se pudo conectar a Brilo para aditivos: ' . $e->getMessage());
+            return 0;
+        }
+
+        if (empty($rows)) {
+            $this->command->info('  ℹ aditivos: ninguno encontrado en Brilo (se mantienen los estáticos).');
+            return 0;
+        }
+
+        $now = now();
+        $count = 0;
+        foreach ($rows as $r) {
+            // Upsert por código: no borra los estáticos (ESP-*)
+            DB::connection('compras')->table('brew_ingredientes')->upsert(
+                [
+                    'tipo'       => 'aditivo',
+                    'codigo'     => $r->codigo ?? '',
+                    'nombre'     => $r->nombre ?? '',
+                    'activo'     => true,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ],
+                ['codigo'],
+                ['nombre', 'activo', 'updated_at'],
+            );
+            $count++;
+        }
+
+        $this->command->info("  ✓ aditivos: {$count} registros desde Brilo.");
+        return $count;
     }
 }
