@@ -689,7 +689,7 @@ async function run() {
               `UPDATE empleados
                SET departamento_id = COALESCE($1, departamento_id),
                    sucursal_id     = COALESCE($2, sucursal_id),
-                   fecha_ingreso   = COALESCE(fecha_ingreso, $3),
+                   fecha_ingreso   = COALESCE($3, fecha_ingreso),
                    cargo_id        = COALESCE(cargo_id, $4),
                    salario_base    = COALESCE(salario_base, $5),
                    email           = COALESCE(NULLIF(email, ''), $6),
