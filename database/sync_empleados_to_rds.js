@@ -20,16 +20,24 @@
  * Todas las escrituras de expediente son "fill-only": solo rellena campos vacíos;
  * nunca sobreescribe datos que el equipo RRHH ya haya ingresado manualmente.
  *
+ *  FASE 3 — Cuentas de usuario (core_db)
+ *    - Empleados activos sin user_id y con email → crea usuario con contraseña
+ *      predeterminada C@dejo2026 (force_password_change = true) y asigna
+ *      rol "Empleado" (id=24, sistema Recursos Humanos).
+ *    - Si el email ya existe en users, solo vincula el user_id existente.
+ *
  * Uso:
- *   node database/sync_empleados_to_rds.js             (ejecuta ambas fases)
- *   node database/sync_empleados_to_rds.js --dry-run   (muestra conteos, no escribe)
- *   node database/sync_empleados_to_rds.js --skip-expediente  (solo fase 1)
+ *   node database/sync_empleados_to_rds.js                    (ejecuta las 3 fases)
+ *   node database/sync_empleados_to_rds.js --dry-run          (muestra conteos, no escribe)
+ *   node database/sync_empleados_to_rds.js --skip-expediente  (omite fase 2)
+ *   node database/sync_empleados_to_rds.js --skip-cuentas     (omite fase 3)
  */
 
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const sql      = require('mssql');
 const { Pool } = require('pg');
+const bcrypt   = require('bcryptjs');
 
 function fmtDate(d) {
   if (!d) return null;
@@ -130,9 +138,12 @@ const DEP_DEPARTAMENTO_MAP = {
   'DTP00010':         18,
 };
 
-const DRY_RUN         = process.argv.includes('--dry-run');
-const SKIP_EXPEDIENTE = process.argv.includes('--skip-expediente');
-const BATCH           = 50;
+const DRY_RUN           = process.argv.includes('--dry-run');
+const SKIP_EXPEDIENTE   = process.argv.includes('--skip-expediente');
+const SKIP_CUENTAS      = process.argv.includes('--skip-cuentas');
+const BATCH             = 50;
+const DEFAULT_PASSWORD  = 'C@dejo2026';
+const ROL_EMPLEADO_ID   = 24;   // rol "Empleado" sistema Recursos Humanos
 const NOW             = new Date();
 const AUD             = 'sync_empleados_to_rds.js';
 
@@ -227,6 +238,102 @@ LEFT JOIN olComun.dbo.DeptosEstados    deRes WITH (NOLOCK) ON deRes.dptoId = mRe
 WHERE e.empActivo = 1
   AND e.empCodigo IS NOT NULL
 `;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FASE 3: Crear cuentas de usuario para empleados activos sin cuenta
+// ─────────────────────────────────────────────────────────────────────────────
+async function crearCuentasEmpleados(pg) {
+  log('\n=== FASE 3: CUENTAS DE USUARIO ===');
+
+  // Empleados activos sin user_id y con email válido
+  const { rows: sinCuenta } = await pg.query(`
+    SELECT e.id, e.nombres, e.apellidos, e.email, e.sucursal_id
+    FROM empleados e
+    WHERE e.activo = true
+      AND e.user_id IS NULL
+      AND e.email IS NOT NULL
+      AND e.email <> ''
+    ORDER BY e.id
+  `);
+
+  log(`Empleados activos sin cuenta (con email): ${sinCuenta.length}`);
+  if (sinCuenta.length === 0) {
+    log('Nada que crear.');
+    return;
+  }
+
+  if (DRY_RUN) {
+    for (const e of sinCuenta) {
+      const nombre = `${e.nombres} ${e.apellidos}`.trim();
+      log(`  [dry-run] Crearía cuenta para ${nombre} <${e.email}>`);
+    }
+    log('[DRY RUN — no se creó ninguna cuenta]');
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 12);
+  const ahora = NOW.toISOString();
+  let creadas = 0, omitidas = 0;
+
+  for (const emp of sinCuenta) {
+    const email  = emp.email.trim().toLowerCase();
+    const nombre = `${emp.nombres || ''} ${emp.apellidos || ''}`.trim() || email;
+
+    // Verificar que el email no exista ya en users
+    const { rows: existe } = await pg.query(
+      `SELECT id FROM users WHERE LOWER(email) = $1 LIMIT 1`, [email]
+    );
+
+    if (existe.length > 0) {
+      const userId = existe[0].id;
+      // Verificar que ese user no esté ya vinculado a otro empleado
+      const { rows: yaVinculado } = await pg.query(
+        `SELECT id FROM empleados WHERE user_id = $1 AND id <> $2 LIMIT 1`, [userId, emp.id]
+      );
+      if (yaVinculado.length > 0) {
+        log(`  ⚠ Omitido (email duplicado): ${nombre} <${email}> — user_id=${userId} ya vinculado a otro empleado`);
+        omitidas++;
+        continue;
+      }
+      await pg.query(`UPDATE empleados SET user_id = $1, updated_at = $2 WHERE id = $3`,
+        [userId, ahora, emp.id]);
+      log(`  Vinculado (email ya existía): ${nombre} <${email}> → user_id=${userId}`);
+      omitidas++;
+      continue;
+    }
+
+    try {
+      // 1. Crear usuario
+      const { rows: [newUser] } = await pg.query(
+        `INSERT INTO users (name, email, password, activo, force_password_change, sucursal_id, aud_usuario, created_at, updated_at)
+         VALUES ($1, $2, $3, true, true, $4, 'sync_empleados', $5, $5)
+         RETURNING id`,
+        [nombre, email, passwordHash, emp.sucursal_id, ahora]
+      );
+      const userId = newUser.id;
+
+      // 2. Asignar rol Empleado (sistema Recursos Humanos)
+      await pg.query(
+        `INSERT INTO role_user (user_id, role_id, created_at, updated_at)
+         VALUES ($1, $2, $3, $3)
+         ON CONFLICT DO NOTHING`,
+        [userId, ROL_EMPLEADO_ID, ahora]
+      );
+
+      // 3. Vincular empleado → usuario
+      await pg.query(`UPDATE empleados SET user_id = $1, updated_at = $2 WHERE id = $3`,
+        [userId, ahora, emp.id]);
+
+      log(`  ✓ Cuenta creada: ${nombre} <${email}> → user_id=${userId}`);
+      creadas++;
+    } catch (e) {
+      log(`  ✗ Error al crear cuenta para ${nombre} <${email}>: ${e.message}`);
+    }
+  }
+
+  log(`Cuentas creadas : ${creadas}`);
+  log(`Vinculadas (email ya existía): ${omitidas}`);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 async function syncExpedientes(mssqlPool, pg, pgRrhh, codigoToId) {
@@ -790,14 +897,18 @@ async function run() {
 
     // ── FASE 2: EXPEDIENTE ────────────────────────────────────────────────────
     if (!SKIP_EXPEDIENTE) {
-      // Construir mapa codigo → id (después de insertar posibles nuevos empleados)
       const idRes = await pg.query('SELECT id, codigo FROM empleados WHERE activo = true AND codigo IS NOT NULL');
-      // Number() normaliza bigint-string ("123") a number para que Set.has() funcione
-      // con los integer-type de las tablas rrhh_db (expediente_*)
       const codigoToId = Object.fromEntries(idRes.rows.map(r => [String(r.codigo).trim(), Number(r.id)]));
       await syncExpedientes(mssqlPool, pg, pgRrhh, codigoToId);
     } else {
       log('\n[--skip-expediente] Fase 2 omitida.');
+    }
+
+    // ── FASE 3: CUENTAS DE USUARIO ───────────────────────────────────────────
+    if (!SKIP_CUENTAS) {
+      await crearCuentasEmpleados(pg);
+    } else {
+      log('\n[--skip-cuentas] Fase 3 omitida.');
     }
 
   } finally {
