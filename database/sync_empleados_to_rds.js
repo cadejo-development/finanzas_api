@@ -142,11 +142,7 @@ const DRY_RUN           = process.argv.includes('--dry-run');
 const SKIP_EXPEDIENTE   = process.argv.includes('--skip-expediente');
 const SKIP_CUENTAS      = process.argv.includes('--skip-cuentas');
 const BATCH             = 50;
-const DEFAULT_PASSWORD  = process.env.DEFAULT_EMPLOYEE_PASSWORD;
-if (!SKIP_CUENTAS && !DEFAULT_PASSWORD) {
-  console.error('ERROR: La variable de entorno DEFAULT_EMPLOYEE_PASSWORD no está definida.');
-  process.exit(1);
-}
+const DEFAULT_PASSWORD  = process.env.DEFAULT_EMPLOYEE_PASSWORD || 'C@dejo2026';
 const ROL_EMPLEADO_ID   = 24;   // rol "Empleado" sistema Recursos Humanos
 const NOW             = new Date();
 const AUD             = 'sync_empleados_to_rds.js';
