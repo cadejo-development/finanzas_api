@@ -170,8 +170,18 @@ class IngresoPersonalController extends RRHHBaseController
                 'aud_usuario'        => Auth::user()->email,
             ]);
 
-            // No Show → notificar a admins RRHH
+            // No Show → liberar plaza, desactivar empleado y notificar a admins RRHH
             if ($validated['confirmacion'] === 'no_show') {
+                if ($ingreso->empleado_id) {
+                    \App\Models\RRHH\Empleado::where('id', $ingreso->empleado_id)
+                        ->update([
+                            'activo'      => false,
+                            'plaza_id'    => null,
+                            'updated_at'  => now(),
+                            'aud_usuario' => Auth::user()->email,
+                        ]);
+                }
+
                 try {
                     $this->notificarAdminsRrhh(
                         tipo:           'No Show — Primer Dia',
