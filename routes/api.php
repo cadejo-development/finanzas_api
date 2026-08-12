@@ -707,11 +707,13 @@ Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh
     // ── Catálogo de plazas ────────────────────────────────────────────────────
     Route::get('plazas/stats',                    [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'stats']);
     Route::get('plazas/exceso',                   [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'exceso']);
+    Route::get('plazas/vacantes-para-asignar',    [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'vacantesParaAsignar']);
     Route::get('plazas/disponibles-sucursal',     [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'disponiblesSucursal']);
     Route::get('plazas',                [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'index']);
     Route::post('plazas',               [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'store']);
     Route::put('plazas/{id}',           [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'update']);
     Route::patch('plazas/{id}/toggle',  [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'toggleActivo']);
+    Route::post('plazas/{id}/asignar',  [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'asignarEmpleado']);
     Route::get('plazas/{id}/historial', [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'historial']);
     Route::delete('plazas/{id}',        [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'destroy']);
 

@@ -70,7 +70,8 @@ class PlazasController extends Controller
         if (!$dptoId) return response()->json([]);
 
         $empleados = DB::connection('pgsql')->select("
-            SELECT e.id, e.nombres, e.apellidos, c.nombre as cargo_nombre, c.codigo as cargo_codigo
+            SELECT e.id, e.nombres, e.apellidos, e.cargo_id, e.departamento_id,
+                   c.nombre as cargo_nombre, c.codigo as cargo_codigo
             FROM empleados e
             JOIN cargos c ON c.id = e.cargo_id
             WHERE e.activo = true
@@ -86,6 +87,49 @@ class PlazasController extends Controller
         ", [$dptoId]);
 
         return response()->json($empleados);
+    }
+
+    public function vacantesParaAsignar(Request $request)
+    {
+        $cargoId = $request->query('cargo_id');
+        $dptoId  = $request->query('departamento_id');
+        if (!$cargoId || !$dptoId) return response()->json([]);
+
+        $plazas = DB::connection('pgsql')->select("
+            SELECT p.id, p.codigo
+            FROM plazas p
+            LEFT JOIN empleados e ON e.plaza_id = p.id AND e.activo = true
+            WHERE p.cargo_id = ? AND p.departamento_id = ? AND p.activo = true AND e.id IS NULL
+            ORDER BY p.codigo
+        ", [$cargoId, $dptoId]);
+
+        return response()->json($plazas);
+    }
+
+    public function asignarEmpleado(Request $request, int $id)
+    {
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $plaza = Plaza::findOrFail($id);
+
+            if (!$plaza->activo) {
+                return response()->json(['message' => 'La plaza no está activa.'], 422);
+            }
+
+            $ocupada = DB::connection('pgsql')
+                ->selectOne("SELECT id FROM empleados WHERE plaza_id = ? AND activo = true LIMIT 1", [$id]);
+            if ($ocupada) {
+                return response()->json(['message' => 'La plaza ya está ocupada por otro empleado.'], 422);
+            }
+
+            $data = $request->validate(['empleado_id' => 'required|integer|exists:pgsql.empleados,id']);
+
+            DB::connection('pgsql')->statement(
+                "UPDATE empleados SET plaza_id = ?, updated_at = NOW() WHERE id = ?",
+                [$id, $data['empleado_id']]
+            );
+
+            return response()->json(['ok' => true]);
+        });
     }
 
     public function store(Request $request)
