@@ -112,7 +112,7 @@ class CargosController extends Controller
                 d.id                            AS departamento_id,
                 d.nombre                        AS departamento,
                 COALESCE(emp.n, 0)::int         AS empleados,
-                COALESCE(auth.cantidad, 0)::int AS autorizado
+                COALESCE(auth.n, 0)::int AS autorizado
             FROM (
                 SELECT departamento_id FROM empleados
                 WHERE cargo_id = :cid1 AND activo = true AND departamento_id IS NOT NULL
@@ -129,8 +129,12 @@ class CargosController extends Controller
                 WHERE cargo_id = :cid3 AND activo = true AND departamento_id IS NOT NULL
                 GROUP BY departamento_id
             ) emp ON emp.departamento_id = rel.departamento_id
-            LEFT JOIN cargo_plazas_autorizadas auth
-                ON auth.departamento_id = rel.departamento_id AND auth.cargo_id = :cid4
+            LEFT JOIN (
+                SELECT departamento_id, COUNT(*)::int AS n
+                FROM plazas
+                WHERE cargo_id = :cid4 AND activo = true AND departamento_id IS NOT NULL
+                GROUP BY departamento_id
+            ) auth ON auth.departamento_id = rel.departamento_id
             ORDER BY d.nombre
         ", ['cid1' => $id, 'cid2' => $id, 'cid3' => $id, 'cid4' => $id]);
 

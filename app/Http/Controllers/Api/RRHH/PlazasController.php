@@ -197,8 +197,9 @@ class PlazasController extends Controller
         $excesoRows = DB::connection('pgsql')->select("
             WITH
             auth AS (
-                SELECT departamento_id, cargo_id, cantidad AS n
-                FROM cargo_plazas_autorizadas
+                SELECT departamento_id, cargo_id, COUNT(*)::int AS n
+                FROM plazas WHERE activo = true
+                GROUP BY departamento_id, cargo_id
             ),
             emp AS (
                 SELECT departamento_id, cargo_id, COUNT(*)::int AS n
