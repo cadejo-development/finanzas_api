@@ -325,6 +325,12 @@ class BrewLotesController extends Controller
             'enf_tiempo_min'        => 'nullable|integer|min:0',
             'oxig_temp'             => 'nullable|numeric',
             'oxig_nivel'            => 'nullable|string|max:30',
+            'macerado_hora_inicio'  => 'nullable|string|max:8',
+            'macerado_hora_fin'     => 'nullable|string|max:8',
+            'hervor_hora_inicio'    => 'nullable|string|max:8',
+            'hervor_hora_fin'       => 'nullable|string|max:8',
+            'enf_hora_inicio'       => 'nullable|string|max:8',
+            'enf_hora_fin'          => 'nullable|string|max:8',
             'macerado_pasos'        => 'array',
             'boil_pasos'            => 'array',
         ]);
