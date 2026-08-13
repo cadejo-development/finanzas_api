@@ -182,7 +182,7 @@ async function guardarHistorico(pg, sucursalId, fecha, briloMap, isDryRun) {
            ) AS conteo_fisico
     FROM inventarios i
     JOIN productos p ON p.id = i.producto_id
-    WHERE i.sucursal_id = $1 AND i.prod_seg = true AND i.activo = true
+    WHERE i.sucursal_id = $1 AND i.prod_seg = true
   `, [sucursalId, fechaStr]);
 
   if (prodSeg.length === 0) {
