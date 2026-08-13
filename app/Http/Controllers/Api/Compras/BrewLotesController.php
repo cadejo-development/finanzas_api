@@ -317,6 +317,8 @@ class BrewLotesController extends Controller
             'ph_postboil'           => 'nullable|numeric|min:0|max:14',
             'molino_kg_real'        => 'nullable|numeric|min:0',
             'molino_tiempo_min'     => 'nullable|integer|min:0',
+            'molino_hora_inicio'    => 'nullable|string|max:8',
+            'molino_hora_fin'       => 'nullable|string|max:8',
             'whirlpool_hora'        => 'nullable|string|max:8',
             'whirlpool_temp'        => 'nullable|numeric',
             'enf_temp_entrada'      => 'nullable|numeric',
@@ -331,6 +333,9 @@ class BrewLotesController extends Controller
             'hervor_hora_fin'       => 'nullable|string|max:8',
             'enf_hora_inicio'       => 'nullable|string|max:8',
             'enf_hora_fin'          => 'nullable|string|max:8',
+            'wp_tiempo_min'         => 'nullable|integer|min:0',
+            'wp_hora_inicio'        => 'nullable|string|max:8',
+            'wp_hora_fin'           => 'nullable|string|max:8',
             'macerado_pasos'        => 'array',
             'boil_pasos'            => 'array',
         ]);
@@ -446,6 +451,9 @@ class BrewLotesController extends Controller
             'drest_inicio_dia'      => 'nullable|integer|min:1',
             'drest_temp'            => 'nullable|numeric',
             'drest_resultado'       => 'nullable|string|max:500',
+            'pitch_tiempo_min'      => 'nullable|integer|min:0',
+            'pitch_hora_inicio'     => 'nullable|string|max:8',
+            'pitch_hora_fin'        => 'nullable|string|max:8',
         ]);
 
         $lote->fermentacion()->updateOrCreate(
