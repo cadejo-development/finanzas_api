@@ -229,6 +229,25 @@ class BrewLotesController extends Controller
         return response()->json($ing);
     }
 
+    public function createIngrediente(Request $request, $loteId)
+    {
+        $lote = BrewLote::findOrFail($loteId);
+        $data = $request->validate([
+            'tipo'              => 'required|string|max:30',
+            'nombre'            => 'required|string|max:200',
+            'cantidad_objetivo' => 'nullable|numeric|min:0',
+            'unidad'            => 'nullable|string|max:20',
+            'detalle'           => 'nullable|string|max:200',
+        ]);
+
+        $ing = BrewLoteIngrediente::create(array_merge($data, [
+            'brew_lote_id' => $lote->id,
+            'estado'       => 'pendiente',
+        ]));
+
+        return response()->json($ing, 201);
+    }
+
     public function store(Request $request)
     {
         $data = $request->validate([
