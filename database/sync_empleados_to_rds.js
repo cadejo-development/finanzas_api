@@ -795,7 +795,7 @@ async function run() {
             await pg.query(
               `UPDATE empleados
                SET departamento_id = COALESCE($1, departamento_id),
-                   sucursal_id     = COALESCE($2, sucursal_id),
+                   sucursal_id     = COALESCE(sucursal_id, $2),
                    fecha_ingreso   = COALESCE($3, fecha_ingreso),
                    cargo_id        = COALESCE(cargo_id, $4),
                    salario_base    = COALESCE(salario_base, $5),
