@@ -36,6 +36,7 @@ class DepartamentosController extends Controller
             $jefes = DB::connection('pgsql')
                 ->table('empleados')
                 ->whereIn('id', $jefeIds)
+                ->where('activo', true)
                 ->select('id', 'nombres', 'apellidos', 'codigo')
                 ->get()->keyBy('id')->toArray();
         }
