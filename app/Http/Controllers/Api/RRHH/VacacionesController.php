@@ -61,6 +61,10 @@ class VacacionesController extends RRHHBaseController
                 'aud_usuario' => Auth::user()->email,
             ]));
 
+            if ($estadoInicial === 'aprobado') {
+                $this->descontarSaldo($vacacion->empleado_id, $vacacion->dias);
+            }
+
             if ($this->debeNotificar($validated['empleado_id'])) {
                 $detalles = array_filter([
                     'Desde' => $validated['fecha_inicio'],
@@ -110,10 +114,11 @@ class VacacionesController extends RRHHBaseController
                 'observaciones' => 'nullable|string|max:500',
             ]);
 
+            $estadoAnterior = $vacacion->estado;
             $vacacion->update(array_merge($validated, ['aud_usuario' => Auth::user()->email]));
 
-            // Si se aprueba, descontar del saldo
-            if (($validated['estado'] ?? null) === 'aprobado') {
+            // Descontar saldo solo en la transición pendiente→aprobado
+            if (($validated['estado'] ?? null) === 'aprobado' && $estadoAnterior !== 'aprobado') {
                 $this->descontarSaldo($vacacion->empleado_id, $vacacion->dias);
             }
 
