@@ -91,20 +91,21 @@ class PermisosController extends RRHHBaseController
 
             $permiso->load('tipoPermiso');
 
+            $tipoLabel = $permiso->tipoPermiso?->nombre ?? 'Permiso';
+            $detallesPermiso = array_filter([
+                'Tipo'   => $tipoLabel,
+                'Fecha'  => $validated['fecha'],
+                'Días'   => isset($validated['dias']) ? $validated['dias'] . ' día(s)' : null,
+                'Horas'  => isset($validated['horas_solicitadas']) ? $validated['horas_solicitadas'] . ' hora(s)' : null,
+                'Motivo' => $validated['motivo'] ?? null,
+            ]);
+
             // Notificar al supervisor cuando el empleado registra su propia solicitud
             if ($this->debeNotificar($validated['empleado_id'])) {
-                $tipoLabel = $permiso->tipoPermiso?->nombre ?? 'Permiso';
-                $detalles  = array_filter([
-                    'Tipo'   => $tipoLabel,
-                    'Fecha'  => $validated['fecha'],
-                    'Días'   => isset($validated['dias']) ? $validated['dias'] . ' día(s)' : null,
-                    'Horas'  => isset($validated['horas_solicitadas']) ? $validated['horas_solicitadas'] . ' hora(s)' : null,
-                    'Motivo' => $validated['motivo'] ?? null,
-                ]);
                 $this->notificarSolicitud(
                     $validated['empleado_id'],
                     $tipoLabel,
-                    $detalles,
+                    $detallesPermiso,
                     'permisos',
                     $permiso->id,
                     'permiso',
@@ -112,6 +113,20 @@ class PermisosController extends RRHHBaseController
             }
 
             $arr = $this->enrichWithEmpleadoData([$permiso->toArray()]);
+
+            // Siempre notificar a gerenciaops cuando se registra un día cadejo en restaurante
+            if (
+                $permiso->tipoPermiso?->categoria === 'cadejo'
+                && $this->esEmpleadoDeRestaurante($validated['empleado_id'])
+            ) {
+                $this->notificarGerenciaOps(
+                    tipo:           'Día Cadejo',
+                    empleadoNombre: $arr[0]['empleado_nombre'] ?? "Empleado #{$validated['empleado_id']}",
+                    detalles:       $detallesPermiso,
+                    rutaFrontend:   'permisos',
+                );
+            }
+
             return response()->json(['success' => true, 'data' => $arr[0]], 201);
         });
     }
@@ -170,7 +185,8 @@ class PermisosController extends RRHHBaseController
             $permiso->update(array_merge($validated, $extra));
             $permiso->load('tipoPermiso');
 
-            return response()->json(['success' => true, 'data' => $permiso]);
+            $arr = $this->enrichWithEmpleadoData([$permiso->toArray()]);
+            return response()->json(['success' => true, 'data' => $arr[0]]);
         });
     }
 
