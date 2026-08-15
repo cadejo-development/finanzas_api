@@ -111,25 +111,36 @@ class IncapacidadesController extends RRHHBaseController
                     ->update(['cubierta_por_incapacidad_id' => $incapacidad->id]);
             }
 
-            // Notify supervisor when employee submits own incapacidad (informational)
+            $arr = $this->enrichWithEmpleadoData([$incapacidad->toArray()]);
+
+            $institucionLabel = match ($validated['tipo_institucion'] ?? null) {
+                'isss'    => 'ISSS',
+                'privada' => 'Privada',
+                default   => null,
+            };
+            $detallesNotif = array_filter([
+                'Tipo'         => $incapacidad->tipoIncapacidad?->nombre,
+                'Institución'  => $institucionLabel,
+                'Desde'        => $validated['fecha_inicio'],
+                'Hasta'        => $validated['fecha_fin'],
+                'Días'         => $dias . ' día(s)',
+                'Observaciones'=> $validated['observaciones'] ?? null,
+            ]);
+
+            // Notificar al supervisor cuando el empleado reporta su propia incapacidad
             if ($this->debeNotificar($validated['empleado_id'])) {
-                $institucionLabel = match ($validated['tipo_institucion'] ?? null) {
-                    'isss'    => 'ISSS',
-                    'privada' => 'Privada',
-                    default   => null,
-                };
-                $detalles = array_filter([
-                    'Tipo'        => $incapacidad->tipoIncapacidad?->nombre,
-                    'Institución' => $institucionLabel,
-                    'Desde'       => $validated['fecha_inicio'],
-                    'Hasta'       => $validated['fecha_fin'],
-                    'Días'        => $dias . ' día(s)',
-                    'Observaciones' => $validated['observaciones'] ?? null,
-                ]);
-                $this->notificarAccion($validated['empleado_id'], 'Incapacidad', $detalles, 'incapacidades');
+                $this->notificarAccion($validated['empleado_id'], 'Incapacidad', $detallesNotif, 'incapacidades');
             }
 
-            $arr = $this->enrichWithEmpleadoData([$incapacidad->toArray()]);
+            // Siempre notificar a gerenciaops para empleados de restaurante
+            if ($this->esEmpleadoDeRestaurante($validated['empleado_id'])) {
+                $this->notificarGerenciaOps(
+                    tipo:           'Incapacidad',
+                    empleadoNombre: $arr[0]['empleado_nombre'] ?? "Empleado #{$validated['empleado_id']}",
+                    detalles:       $detallesNotif,
+                    rutaFrontend:   'incapacidades',
+                );
+            }
             return response()->json(['success' => true, 'data' => $arr[0]], 201);
         });
     }

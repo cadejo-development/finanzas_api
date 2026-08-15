@@ -291,6 +291,16 @@ class AusenciasController extends RRHHBaseController
                 detalles:     $detalles,
                 rutaFrontend: 'ausencias',
             );
+
+            // Notificar a gerenciaops si es empleado de restaurante
+            if ($this->esEmpleadoDeRestaurante($empleadoId)) {
+                $this->notificarGerenciaOps(
+                    tipo:           'Alerta de Ausencias Injustificadas',
+                    empleadoNombre: $empNombre,
+                    detalles:       $detalles,
+                    rutaFrontend:   'ausencias',
+                );
+            }
         } catch (\Throwable $e) {
             Log::warning('AusenciasController: error verificando umbrales', ['error' => $e->getMessage()]);
         }
