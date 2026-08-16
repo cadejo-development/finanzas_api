@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Api\RRHH;
 
 use App\Models\RRHH\Amonestacion;
 use App\Models\RRHH\DiaSuspension;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class AmonestacionesController extends RRHHBaseController
 {
@@ -190,6 +193,63 @@ class AmonestacionesController extends RRHHBaseController
 
             return response()->json(['success' => true, 'data' => $data]);
         });
+    }
+
+    /**
+     * GET /api/rrhh/amonestaciones/{id}/pdf
+     */
+    public function pdf(int $id): Response
+    {
+        $amonestacion = Amonestacion::with(['tipoFalta', 'diasSuspension'])->findOrFail($id);
+
+        // Datos del empleado desde core_db
+        $emp = DB::connection('pgsql')
+            ->table('empleados as e')
+            ->leftJoin('cargos as c',      'c.id', '=', 'e.cargo_id')
+            ->leftJoin('sucursales as s',   's.id', '=', 'e.sucursal_id')
+            ->where('e.id', $amonestacion->empleado_id)
+            ->select('e.nombres', 'e.apellidos', 'c.nombre as cargo', 's.nombre as sucursal')
+            ->first();
+
+        // Datos del jefe desde core_db
+        $jefe = DB::connection('pgsql')
+            ->table('empleados as e')
+            ->leftJoin('cargos as c', 'c.id', '=', 'e.cargo_id')
+            ->where('e.id', $amonestacion->jefe_id)
+            ->select('e.nombres', 'e.apellidos', 'c.nombre as cargo')
+            ->first();
+
+        $tipoSancion = match ($amonestacion->tipo_sancion ?? '') {
+            'suspension' => 'con Suspensión',
+            'escrita'    => 'Escrita',
+            default      => 'Verbal',
+        };
+
+        $empleadoNombre = $emp
+            ? trim($emp->nombres . ' ' . $emp->apellidos)
+            : "Empleado #{$amonestacion->empleado_id}";
+
+        $pdf = Pdf::setOptions([
+            'isRemoteEnabled' => true,
+            'defaultFont'     => 'helvetica',
+            'dpi'             => 96,
+        ])->loadView('pdf.amonestacion', [
+            'amonestacion'   => $amonestacion,
+            'tipoLabel'      => $tipoSancion,
+            'fecha'          => $amonestacion->fecha_amonestacion->format('d/m/Y'),
+            'empleadoNombre' => $empleadoNombre,
+            'cargoNombre'    => $emp?->cargo ?? '—',
+            'unidad'         => $emp?->sucursal ?? '—',
+            'tipoFaltaNombre'=> $amonestacion->tipoFalta?->nombre ?? '—',
+            'descripcion'    => $amonestacion->descripcion,
+            'observacion'    => $amonestacion->observacion ?? null,
+            'accionTomada'   => $amonestacion->accion_tomada ?? null,
+            'jefeCargo'      => $jefe?->cargo ?? 'Jefe inmediato',
+        ])->setPaper('letter', 'portrait');
+
+        $nombre = 'Amonestacion_' . str_replace(' ', '_', $empleadoNombre) . "_{$id}.pdf";
+
+        return $pdf->download($nombre);
     }
 
     /**
