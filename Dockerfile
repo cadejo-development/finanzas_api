@@ -4,6 +4,10 @@
 # =============================================================================
 FROM public.ecr.aws/docker/library/composer:2 AS vendor
 
+# GitHub token para evitar rate-limit 429 al descargar paquetes
+ARG COMPOSER_AUTH
+ENV COMPOSER_AUTH=$COMPOSER_AUTH
+
 WORKDIR /app
 
 COPY composer.json composer.lock ./
@@ -12,7 +16,8 @@ RUN composer install \
     --no-dev \
     --no-scripts \
     --no-autoloader \
-    --ignore-platform-reqs
+    --ignore-platform-reqs \
+    --prefer-dist
 
 COPY . .
 
