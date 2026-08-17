@@ -59,6 +59,7 @@ class AmonestacionesController extends RRHHBaseController
                 'fecha_amonestacion' => 'required|date',
                 'descripcion'        => 'required|string|max:1000',
                 'accion_tomada'      => 'nullable|string|max:500',
+                'tipo_sancion'       => 'nullable|in:verbal,escrita,suspension',
                 'aplica_suspension'  => 'boolean',
                 'dias_suspension'    => 'nullable|array|required_if:aplica_suspension,true',
                 'dias_suspension.*'  => 'date',
@@ -80,6 +81,7 @@ class AmonestacionesController extends RRHHBaseController
                 'fecha_amonestacion' => $validated['fecha_amonestacion'],
                 'descripcion'        => $validated['descripcion'],
                 'accion_tomada'      => $validated['accion_tomada'] ?? null,
+                'tipo_sancion'       => $validated['tipo_sancion'] ?? null,
                 'aplica_suspension'  => $aplica,
                 'aud_usuario'        => Auth::user()->email,
             ]);
@@ -158,6 +160,7 @@ class AmonestacionesController extends RRHHBaseController
                 'fecha_amonestacion' => 'sometimes|date',
                 'descripcion'        => 'sometimes|string|max:1000',
                 'accion_tomada'      => 'nullable|string|max:500',
+                'tipo_sancion'       => 'sometimes|nullable|in:verbal,escrita,suspension',
                 'aplica_suspension'  => 'sometimes|boolean',
                 'dias_suspension'    => 'nullable|array',
                 'dias_suspension.*'  => 'date',
