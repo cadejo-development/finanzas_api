@@ -83,13 +83,16 @@ class PropinasMantenimientoController extends RRHHBaseController
 
         $puntosMap = $puntos->keyBy('cargo_id');
 
-        $data = $todosLosCargos->map(fn($c) => [
-            'cargo_id'       => $c->id,
-            'cargo_nombre'   => $c->nombre,
-            'puntos_propina' => isset($puntosMap[$c->id]) ? (float) $puntosMap[$c->id]->puntos_propina : null,
-            'config_id'      => $puntosMap[$c->id]?->id,
-            'notas'          => $puntosMap[$c->id]?->notas,
-        ]);
+        $data = $todosLosCargos->map(function ($c) use ($puntosMap) {
+            $cfg = $puntosMap->get($c->id);
+            return [
+                'cargo_id'       => $c->id,
+                'cargo_nombre'   => $c->nombre,
+                'puntos_propina' => $cfg ? (float) $cfg->puntos_propina : null,
+                'config_id'      => $cfg?->id,
+                'notas'          => $cfg?->notas,
+            ];
+        });
 
         return response()->json(['success' => true, 'data' => $data]);
     }
