@@ -73,18 +73,7 @@ class AuthController extends Controller
                     'codigo' => $r->codigo,
                 ]);
 
-            $permisos = $user->roles()
-                ->where('system_id', $sistema->id)
-                ->with('permissions')
-                ->get()
-                ->flatMap(fn($r) => $r->permissions)
-                ->unique('id')
-                ->values()
-                ->map(fn($p) => [
-                    'id'     => $p->id,
-                    'nombre' => $p->nombre,
-                    'codigo' => $p->codigo,
-                ]);
+            $permisos = $this->buildPermisos($user, $sistema);
         }
 
         $centrosCosto = $this->centrosCostoDeUsuario($user->sucursal_id);
@@ -322,18 +311,7 @@ class AuthController extends Controller
                     'codigo' => $r->codigo,
                 ]);
 
-            $permisos = $user->roles()
-                ->where('system_id', $sistema->id)
-                ->with('permissions')
-                ->get()
-                ->flatMap(fn($r) => $r->permissions)
-                ->unique('id')
-                ->values()
-                ->map(fn($p) => [
-                    'id'     => $p->id,
-                    'nombre' => $p->nombre,
-                    'codigo' => $p->codigo,
-                ]);
+            $permisos = $this->buildPermisos($user, $sistema);
         }
 
         $centrosCosto = $this->centrosCostoDeUsuario($user->sucursal_id);
@@ -380,6 +358,29 @@ class AuthController extends Controller
     }
 
     // ─── Helpers ───────────────────────────────────────────────────────────────
+
+    /** Fusiona permisos del rol + permisos directos por usuario para un sistema dado */
+    private function buildPermisos(User $user, \App\Models\System $sistema): \Illuminate\Support\Collection
+    {
+        $permisosRol = $user->roles()
+            ->where('system_id', $sistema->id)
+            ->with('permissions')
+            ->get()
+            ->flatMap(fn($r) => $r->permissions);
+
+        $permisosDirectos = $user->directPermissions()
+            ->where('permissions.system_id', $sistema->id)
+            ->get();
+
+        return $permisosRol->concat($permisosDirectos)
+            ->unique('id')
+            ->values()
+            ->map(fn($p) => [
+                'id'     => $p->id,
+                'nombre' => $p->nombre,
+                'codigo' => $p->codigo,
+            ]);
+    }
 
     private function centrosCostoDeUsuario(?int $sucursalId): array
     {

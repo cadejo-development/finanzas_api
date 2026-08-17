@@ -372,6 +372,14 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::post('users/{userId}/roles/{roleId}',    [AdminController::class, 'asignarRol']);
     Route::delete('users/{userId}/roles/{roleId}',  [AdminController::class, 'quitarRol']);
 
+    // Permisos directos por usuario
+    Route::get('users/{userId}/permisos',            [AdminController::class, 'getPermisosUsuario']);
+    Route::post('users/{userId}/permisos/{permId}',  [AdminController::class, 'asignarPermiso']);
+    Route::delete('users/{userId}/permisos/{permId}',[AdminController::class, 'quitarPermiso']);
+
+    // Listar permisos disponibles por sistema
+    Route::get('permisos',                           [AdminController::class, 'permisos']);
+
     // Sucursales adicionales (multi-sucursal)
     Route::get('users/{userId}/sucursales',          [AdminController::class, 'getSucursalesUsuario']);
     Route::put('users/{userId}/sucursales',          [AdminController::class, 'setSucursalesUsuario']);

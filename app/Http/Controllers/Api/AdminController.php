@@ -440,6 +440,60 @@ class AdminController extends Controller
     }
 
     // ──────────────────────────────────────────────────────────────
+    // PERMISOS DIRECTOS POR USUARIO
+    // ──────────────────────────────────────────────────────────────
+
+    /** GET /api/admin/permisos?sistema=compras */
+    public function permisos(Request $request): JsonResponse
+    {
+        $query = $this->db()->table('permissions as p')
+            ->join('systems as s', 's.id', '=', 'p.system_id')
+            ->select('p.id', 'p.nombre', 'p.codigo', 's.codigo as sistema');
+
+        if ($request->filled('sistema')) {
+            $query->where('s.codigo', $request->query('sistema'));
+        }
+
+        return response()->json(['data' => $query->orderBy('s.codigo')->orderBy('p.nombre')->get()]);
+    }
+
+    /** GET /api/admin/users/{userId}/permisos */
+    public function getPermisosUsuario(int $userId): JsonResponse
+    {
+        $permisos = $this->db()->table('permission_user as pu')
+            ->join('permissions as p', 'p.id', '=', 'pu.permission_id')
+            ->join('systems as s', 's.id', '=', 'p.system_id')
+            ->where('pu.user_id', $userId)
+            ->select('p.id', 'p.nombre', 'p.codigo', 's.codigo as sistema', 'pu.created_at', 'pu.aud_usuario')
+            ->get();
+
+        return response()->json(['data' => $permisos]);
+    }
+
+    /** POST /api/admin/users/{userId}/permisos/{permId} */
+    public function asignarPermiso(Request $request, int $userId, int $permId): JsonResponse
+    {
+        $this->db()->table('permission_user')->insertOrIgnore([
+            'user_id'      => $userId,
+            'permission_id'=> $permId,
+            'aud_usuario'  => $request->user()->email,
+            'created_at'   => now(),
+            'updated_at'   => now(),
+        ]);
+        return response()->json(['message' => 'Permiso asignado.']);
+    }
+
+    /** DELETE /api/admin/users/{userId}/permisos/{permId} */
+    public function quitarPermiso(int $userId, int $permId): JsonResponse
+    {
+        $this->db()->table('permission_user')
+            ->where('user_id', $userId)
+            ->where('permission_id', $permId)
+            ->delete();
+        return response()->json(['message' => 'Permiso removido.']);
+    }
+
+    // ──────────────────────────────────────────────────────────────
     // SISTEMAS
     // ──────────────────────────────────────────────────────────────
 

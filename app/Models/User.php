@@ -56,6 +56,14 @@ class User extends Authenticatable
         return array_values(array_unique(array_merge($ids, $adicionales)));
     }
 
+    /** Permisos directos asignados al usuario (sin depender del rol) */
+    public function directPermissions()
+    {
+        return $this->belongsToMany(Permission::class, 'permission_user', 'user_id', 'permission_id')
+            ->withPivot('aud_usuario')
+            ->withTimestamps();
+    }
+
     /** Roles del usuario (all systems) */
     public function roles()
     {
@@ -80,9 +88,19 @@ class User extends Authenticatable
         return $query->exists();
     }
 
-    /** Verifica si el usuario tiene un permiso por código */
+    /** Verifica si el usuario tiene un permiso por código (vía rol o asignación directa) */
     public function hasPermission(string $permissionCodigo, int $systemId = null): bool
     {
+        // Permisos directos por usuario
+        $directQuery = $this->directPermissions()->where('permissions.codigo', $permissionCodigo);
+        if ($systemId) {
+            $directQuery->where('permissions.system_id', $systemId);
+        }
+        if ($directQuery->exists()) {
+            return true;
+        }
+
+        // Permisos heredados del rol
         foreach ($this->roles as $role) {
             if ($systemId && $role->system_id !== $systemId) {
                 continue;
