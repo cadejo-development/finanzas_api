@@ -1141,6 +1141,26 @@ class AuditoriaRecetasController extends Controller
         return response()->json(['message' => 'Respuesta registrada.', 'data' => $this->formatAuditoria($auditoria, $sucursales)]);
     }
 
+    // ── POST /api/compras/auditorias/{id}/reabrir ───────────────────
+    public function reabrir(Request $request, int $id): JsonResponse
+    {
+        $auditoria = AuditoriaReceta::findOrFail($id);
+
+        if ($auditoria->estado !== 'pendiente_respuesta') {
+            return response()->json(['message' => 'Solo se pueden reabrir auditorías en estado "pendiente_respuesta".'], 422);
+        }
+
+        $auditoria->update([
+            'estado'       => 'borrador',
+            'submitted_at' => null,
+        ]);
+
+        $sucursales = DB::connection('pgsql')->table('sucursales')
+            ->where('id', $auditoria->sucursal_id)->pluck('nombre', 'id');
+
+        return response()->json(['message' => 'Auditoría reabierta.', 'data' => $this->formatAuditoria($auditoria, $sucursales)]);
+    }
+
     // ── POST /api/compras/auditorias/{id}/cerrar ────────────────────
     public function cerrar(Request $request, int $id): JsonResponse
     {

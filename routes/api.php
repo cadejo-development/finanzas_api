@@ -242,6 +242,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('auditorias/{id}/items',                             [AuditoriaRecetasController::class, 'itemsShow']);
     Route::post('auditorias/{id}/items',                            [AuditoriaRecetasController::class, 'itemsSave']);
     Route::post('auditorias/{id}/responder',                        [AuditoriaRecetasController::class, 'responder']);
+    Route::post('auditorias/{id}/reabrir',                          [AuditoriaRecetasController::class, 'reabrir']);
     Route::post('auditorias/{id}/cerrar',                           [AuditoriaRecetasController::class, 'cerrar']);
     Route::post('auditorias/{id}/pdf',                              [AuditoriaRecetasController::class, 'pdf']);
     // Multi-receta (nuevo formato visita)
