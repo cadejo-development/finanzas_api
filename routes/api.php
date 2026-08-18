@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\Compras\PedidosController;
 use App\Http\Controllers\Api\Compras\RecetasController;
 use App\Http\Controllers\Api\Compras\RecetaCategoriasController;
 use App\Http\Controllers\Api\Compras\AuditoriaRecetasController;
+use App\Http\Controllers\Api\Compras\AuditoriaConteoController;
 use App\Http\Controllers\Api\Compras\InventarioController;
 use App\Http\Controllers\Api\Compras\InventarioReporteController;
 use App\Http\Controllers\Api\Compras\ExportBriloController;
@@ -297,6 +298,13 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::post('inventario/solicitar-correccion',                       [InventarioController::class, 'solicitarCorreccion']);
     Route::post('inventario/solicitudes-correccion/{id}/aprobar',        [InventarioController::class, 'aprobarCorreccion']);
     Route::post('inventario/solicitudes-correccion/{id}/rechazar',       [InventarioController::class, 'rechazarCorreccion']);
+
+    // Auditoría de conteo mensual
+    Route::get('inventario/auditoria-conteo',                            [AuditoriaConteoController::class, 'getAuditoria']);
+    Route::post('inventario/auditoria-conteo/iniciar',                   [AuditoriaConteoController::class, 'iniciar']);
+    Route::put('inventario/auditoria-conteo/{id}/item/{productoId}',     [AuditoriaConteoController::class, 'actualizarItem']);
+    Route::post('inventario/auditoria-conteo/{id}/cerrar',               [AuditoriaConteoController::class, 'cerrar']);
+    Route::post('inventario/auditoria-conteo/{id}/responder',            [AuditoriaConteoController::class, 'responder']);
 
     // ─── Producción Cervecera ────────────────────────────────────────────────
     Route::prefix('brew')->group(function () {
