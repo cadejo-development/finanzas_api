@@ -4,6 +4,7 @@ namespace App\Mail\Compras;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -24,6 +25,7 @@ class AuditoriaConteoNotificacion extends Mailable
     {
         return new Envelope(
             subject: "Auditoría de conteo completada — {$this->sucursalNombre} ({$this->fecha})",
+            cc: [new Address('marcelaorellana@cervezacadejo.com', 'Ana Marcela Orellana')],
         );
     }
 

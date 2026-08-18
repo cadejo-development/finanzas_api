@@ -4,6 +4,7 @@ namespace App\Mail\Compras;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -25,6 +26,7 @@ class RespuestaAuditoriaConteoNotificacion extends Mailable
         $accion = $this->decision === 'aprobada' ? 'aprobada' : 'rechazada';
         return new Envelope(
             subject: "Auditoría de conteo {$accion} — {$this->sucursalNombre} ({$this->fecha})",
+            cc: [new Address('marcelaorellana@cervezacadejo.com', 'Ana Marcela Orellana')],
         );
     }
 
