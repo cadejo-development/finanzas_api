@@ -311,6 +311,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::post('inventario/auditoria-conteo/iniciar',                   [AuditoriaConteoController::class, 'iniciar']);
     Route::put('inventario/auditoria-conteo/{id}/item/{productoId}',     [AuditoriaConteoController::class, 'actualizarItem']);
     Route::post('inventario/auditoria-conteo/{id}/cerrar',               [AuditoriaConteoController::class, 'cerrar']);
+    Route::post('inventario/auditoria-conteo/{id}/reabrir',              [AuditoriaConteoController::class, 'reabrir']);
     Route::post('inventario/auditoria-conteo/{id}/responder',            [AuditoriaConteoController::class, 'responder']);
 
     // ─── Producción Cervecera ────────────────────────────────────────────────

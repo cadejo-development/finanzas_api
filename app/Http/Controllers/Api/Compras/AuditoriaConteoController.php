@@ -312,6 +312,37 @@ class AuditoriaConteoController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // POST /api/compras/inventario/auditoria-conteo/{id}/reabrir
+    // Regresa la auditoría cerrada a estado "activa"
+    // ─────────────────────────────────────────────────────────────────────────
+    public function reabrir(int $auditoriaId): JsonResponse
+    {
+        $auditoria = DB::connection('compras')
+            ->table('conteo_auditorias')
+            ->where('id', $auditoriaId)
+            ->first();
+
+        if (!$auditoria) {
+            return response()->json(['success' => false, 'message' => 'Auditoría no encontrada.'], 404);
+        }
+
+        if ($auditoria->estado !== 'cerrada') {
+            return response()->json(['success' => false, 'message' => 'Solo se pueden reabrir auditorías cerradas.'], 422);
+        }
+
+        DB::connection('compras')->table('conteo_auditorias')
+            ->where('id', $auditoriaId)
+            ->update([
+                'estado'       => 'activa',
+                'firma'        => null,
+                'cerrado_at'   => null,
+                'updated_at'   => now(),
+            ]);
+
+        return $this->_buildResponse($auditoriaId);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Helper: devuelve el payload completo de una auditoría por ID
     // ─────────────────────────────────────────────────────────────────────────
     private function _buildResponse(int $auditoriaId): JsonResponse
