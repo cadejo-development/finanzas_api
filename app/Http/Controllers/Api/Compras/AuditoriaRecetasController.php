@@ -295,22 +295,27 @@ class AuditoriaRecetasController extends Controller
             }
 
             // Calcular calificación del recipe item
+            // Fórmula: cumplePeso / (totalMax - naPeso) × 100
             $criterioIds = collect($validated['items'])->pluck('criterio_id')->filter()->all();
             $pesos = AuditoriaCriterio::whereIn('id', $criterioIds)
                 ->get(['id', 'peso'])
                 ->keyBy('id');
 
-            $totalPeso = $pesoObtenido = $evaluados = 0;
+            $totalMax = $naPeso = $pesoObtenido = $evaluados = 0;
             foreach ($validated['items'] as $item) {
                 $resultado = $item['resultado'] ?? null;
-                if (!$resultado || $resultado === 'na') continue;
                 $peso = $pesos[$item['criterio_id']]?->peso ?? 1;
-                $totalPeso += $peso;
+                $totalMax += $peso;
+                if ($resultado === 'na')     { $naPeso += $peso; continue; }
+                if (!$resultado)             continue;
                 if ($resultado === 'cumple') $pesoObtenido += $peso;
                 $evaluados++;
             }
 
-            $calificacion  = $evaluados > 0 ? round(($pesoObtenido / $totalPeso) * 100, 1) : null;
+            $denominador  = $totalMax - $naPeso;
+            $calificacion = ($evaluados > 0 && $denominador > 0)
+                ? round(($pesoObtenido / $denominador) * 100, 1)
+                : null;
             $clasificacion = $this->calcularClasificacion($calificacion, $auditoria->tipo);
 
             $recetaItem->update([
@@ -796,24 +801,28 @@ class AuditoriaRecetasController extends Controller
                 }
             }
 
-            // Calcular calificación: peso cumplido / peso total (N/A y sin evaluar no cuentan)
+            // Calcular calificación: cumplePeso / (totalMax - naPeso) × 100
             $criterioIds = collect($validated['items'])->pluck('criterio_id')->filter()->all();
             $pesos = AuditoriaCriterio::whereIn('id', $criterioIds)
                 ->get(['id', 'peso'])
                 ->keyBy('id');
 
-            $totalPeso = $pesoObtenido = $evaluados = 0;
+            $totalMax = $naPeso = $pesoObtenido = $evaluados = 0;
 
             foreach ($validated['items'] as $item) {
                 $resultado = $item['resultado'] ?? null;
-                if (!$resultado || $resultado === 'na') continue;
                 $peso = $pesos[$item['criterio_id']]?->peso ?? 1;
-                $totalPeso += $peso;
+                $totalMax += $peso;
+                if ($resultado === 'na')     { $naPeso += $peso; continue; }
+                if (!$resultado)             continue;
                 if ($resultado === 'cumple') $pesoObtenido += $peso;
                 $evaluados++;
             }
 
-            $calificacion  = $evaluados > 0 ? round(($pesoObtenido / $totalPeso) * 100, 1) : null;
+            $denominador  = $totalMax - $naPeso;
+            $calificacion = ($evaluados > 0 && $denominador > 0)
+                ? round(($pesoObtenido / $denominador) * 100, 1)
+                : null;
             $clasificacion = $this->calcularClasificacion($calificacion, $auditoria->tipo);
 
             // Estado según tipo: calidad usa borrador/pendiente_respuesta; operaciones usa evaluada
