@@ -44,4 +44,9 @@ class AuditoriaReceta extends Model
     {
         return $this->hasMany(AuditoriaFoto::class, 'auditoria_id')->orderBy('orden');
     }
+
+    public function recetaItems()
+    {
+        return $this->hasMany(AuditoriaRecetaItem::class, 'auditoria_id')->orderBy('orden');
+    }
 }

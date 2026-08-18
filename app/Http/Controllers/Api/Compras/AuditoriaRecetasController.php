@@ -8,6 +8,7 @@ use App\Models\AuditoriaFoto;
 use App\Models\AuditoriaItem;
 use App\Models\AuditoriaCriterio;
 use App\Models\AuditoriaReceta;
+use App\Models\AuditoriaRecetaItem;
 use App\Models\Empleado;
 use App\Models\Estacion;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -33,6 +34,7 @@ class AuditoriaRecetasController extends Controller
         $tipo = $request->query('tipo');
 
         $query = AuditoriaReceta::with(['estacion', 'receta', 'fotos'])
+            ->withCount('recetaItems')
             ->orderByDesc('fecha')
             ->orderByDesc('hora');
 
@@ -129,11 +131,203 @@ class AuditoriaRecetasController extends Controller
     // ── GET /api/compras/auditorias/{id} ─────────────────────────────
     public function show(int $id): JsonResponse
     {
-        $auditoria  = AuditoriaReceta::with(['estacion', 'receta', 'fotos'])->findOrFail($id);
+        $auditoria  = AuditoriaReceta::with([
+            'estacion', 'receta', 'fotos',
+            'recetaItems.receta', 'recetaItems.estacion',
+        ])->findOrFail($id);
         $sucursales = DB::connection('pgsql')->table('sucursales')
             ->where('id', $auditoria->sucursal_id)->pluck('nombre', 'id');
 
         return response()->json(['data' => $this->formatAuditoria($auditoria, $sucursales)]);
+    }
+
+    // ── POST /api/compras/auditorias/{id}/recetas ────────────────────
+    public function addRecetaItem(Request $request, int $id): JsonResponse
+    {
+        $auditoria = AuditoriaReceta::findOrFail($id);
+
+        if ($auditoria->receta_id !== null) {
+            return response()->json(['message' => 'Esta es una auditoría de formato antiguo (receta única). No admite recetas adicionales.'], 422);
+        }
+
+        $validated = $request->validate([
+            'receta_id'          => 'required|integer|exists:compras.recetas,id',
+            'tipo_receta'        => 'nullable|in:plato,sub_receta',
+            'estacion_id'        => 'nullable|integer|exists:compras.estaciones,id',
+            'responsable_id'     => 'nullable|integer',
+            'responsable_nombre' => 'nullable|string|max:200',
+            'notas'              => 'nullable|string|max:2000',
+        ]);
+
+        $orden = AuditoriaRecetaItem::where('auditoria_id', $auditoria->id)->count();
+
+        $item = AuditoriaRecetaItem::create([
+            'auditoria_id'       => $auditoria->id,
+            'receta_id'          => $validated['receta_id'],
+            'tipo_receta'        => $validated['tipo_receta'] ?? 'plato',
+            'estacion_id'        => $validated['estacion_id'] ?? null,
+            'responsable_id'     => $validated['responsable_id'] ?? null,
+            'responsable_nombre' => $validated['responsable_nombre'] ?? null,
+            'notas'              => $validated['notas'] ?? null,
+            'orden'              => $orden,
+        ]);
+
+        $item->load(['receta', 'estacion']);
+
+        return response()->json(['data' => $this->formatRecetaItem($item)], 201);
+    }
+
+    // ── PUT /api/compras/auditorias/{id}/recetas/{itemId} ────────────
+    public function updateRecetaItem(Request $request, int $id, int $itemId): JsonResponse
+    {
+        $item = AuditoriaRecetaItem::where('auditoria_id', $id)->findOrFail($itemId);
+
+        $validated = $request->validate([
+            'estacion_id'        => 'nullable|integer|exists:compras.estaciones,id',
+            'responsable_id'     => 'nullable|integer',
+            'responsable_nombre' => 'nullable|string|max:200',
+            'notas'              => 'nullable|string|max:2000',
+        ]);
+
+        $item->update($validated);
+        $item->load(['receta', 'estacion']);
+
+        return response()->json(['data' => $this->formatRecetaItem($item)]);
+    }
+
+    // ── DELETE /api/compras/auditorias/{id}/recetas/{itemId} ─────────
+    public function removeRecetaItem(int $id, int $itemId): JsonResponse
+    {
+        $item = AuditoriaRecetaItem::where('auditoria_id', $id)->findOrFail($itemId);
+
+        DB::connection('compras')->transaction(function () use ($item, $id) {
+            // Borrar fotos de sección de este recipe item
+            AuditoriaFoto::where('auditoria_id', $id)
+                ->where('receta_item_id', $item->id)
+                ->delete();
+
+            // Borrar auditoria_items de este recipe item
+            AuditoriaItem::where('auditoria_id', $id)
+                ->where('receta_item_id', $item->id)
+                ->delete();
+
+            $item->delete();
+
+            // Recalcular score global
+            $this->recalcularScoreGlobal($id);
+        });
+
+        return response()->json(['message' => 'Receta eliminada de la auditoría.']);
+    }
+
+    // ── GET /api/compras/auditorias/{id}/recetas/{itemId}/items ──────
+    public function itemsRecetaShow(int $id, int $itemId): JsonResponse
+    {
+        AuditoriaReceta::findOrFail($id);
+        AuditoriaRecetaItem::where('auditoria_id', $id)->findOrFail($itemId);
+
+        $items = AuditoriaItem::where('auditoria_id', $id)
+            ->where('receta_item_id', $itemId)
+            ->with('criterio')
+            ->get()
+            ->map(fn ($i) => [
+                'criterio_id'   => $i->criterio_id,
+                'categoria'     => $i->criterio?->categoria,
+                'nombre'        => $i->criterio?->nombre,
+                'resultado'     => $i->resultado,
+                'observaciones' => $i->observaciones,
+                'foto_url'      => $i->foto_url ? $this->presignS3Url($i->foto_url) : null,
+            ]);
+
+        return response()->json(['data' => $items]);
+    }
+
+    // ── POST /api/compras/auditorias/{id}/recetas/{itemId}/items ─────
+    public function itemsRecetaSave(Request $request, int $id, int $itemId): JsonResponse
+    {
+        $auditoria  = AuditoriaReceta::findOrFail($id);
+        $recetaItem = AuditoriaRecetaItem::where('auditoria_id', $id)->findOrFail($itemId);
+
+        $validated = $request->validate([
+            'items'                 => 'required|array',
+            'items.*.criterio_id'   => 'required|integer|exists:compras.auditoria_criterios,id',
+            'items.*.resultado'     => 'nullable|in:cumple,no_cumple,na',
+            'items.*.observaciones' => 'nullable|string|max:500',
+            'items.*.foto_url'      => 'nullable|string|max:1000',
+            'secciones_fotos'       => 'nullable|array',
+            'secciones_fotos.*'     => 'array',
+            'secciones_fotos.*.*'   => 'string|max:1000',
+        ]);
+
+        DB::connection('compras')->transaction(function () use ($auditoria, $recetaItem, $validated, $id, $itemId) {
+            // Guardar items con receta_item_id
+            foreach ($validated['items'] as $item) {
+                AuditoriaItem::updateOrCreate(
+                    ['auditoria_id' => $id, 'criterio_id' => $item['criterio_id'], 'receta_item_id' => $itemId],
+                    [
+                        'resultado'     => $item['resultado'] ?? null,
+                        'observaciones' => $item['observaciones'] ?? null,
+                        'foto_url'      => $item['foto_url'] ?? null,
+                    ]
+                );
+            }
+
+            // Fotos por sección de esta receta: descripcion = 'ri:{itemId}:sec:NombreSeccion'
+            if (!empty($validated['secciones_fotos'])) {
+                $prefix = "ri:{$itemId}:sec:";
+                $seccionNames = array_map(fn ($s) => $prefix . $s, array_keys($validated['secciones_fotos']));
+                AuditoriaFoto::where('auditoria_id', $id)
+                    ->where('receta_item_id', $itemId)
+                    ->whereIn('descripcion', $seccionNames)
+                    ->delete();
+
+                foreach ($validated['secciones_fotos'] as $seccion => $urls) {
+                    foreach ($urls as $idx => $url) {
+                        AuditoriaFoto::create([
+                            'auditoria_id'  => $id,
+                            'receta_item_id' => $itemId,
+                            'url'           => $url,
+                            'descripcion'   => $prefix . $seccion,
+                            'orden'         => $idx,
+                        ]);
+                    }
+                }
+            }
+
+            // Calcular calificación del recipe item
+            $criterioIds = collect($validated['items'])->pluck('criterio_id')->filter()->all();
+            $pesos = AuditoriaCriterio::whereIn('id', $criterioIds)
+                ->get(['id', 'peso'])
+                ->keyBy('id');
+
+            $totalPeso = $pesoObtenido = $evaluados = 0;
+            foreach ($validated['items'] as $item) {
+                $resultado = $item['resultado'] ?? null;
+                if (!$resultado || $resultado === 'na') continue;
+                $peso = $pesos[$item['criterio_id']]?->peso ?? 1;
+                $totalPeso += $peso;
+                if ($resultado === 'cumple') $pesoObtenido += $peso;
+                $evaluados++;
+            }
+
+            $calificacion  = $evaluados > 0 ? round(($pesoObtenido / $totalPeso) * 100, 1) : null;
+            $clasificacion = $this->calcularClasificacion($calificacion, $auditoria->tipo);
+
+            $recetaItem->update([
+                'calificacion'  => $calificacion,
+                'clasificacion' => $clasificacion,
+            ]);
+
+            // Recalcular score global de la auditoría
+            $this->recalcularScoreGlobal($id);
+        });
+
+        $recetaItem->refresh();
+
+        return response()->json([
+            'calificacion'  => $recetaItem->calificacion,
+            'clasificacion' => $recetaItem->clasificacion,
+        ]);
     }
 
     // ── DELETE /api/compras/auditorias/{id} ──────────────────────────
@@ -480,7 +674,82 @@ class AuditoriaRecetasController extends Controller
     public function itemsSave(Request $request, int $id): JsonResponse
     {
         $auditoria = AuditoriaReceta::findOrFail($id);
+        $submit    = $request->boolean('submit', false);
 
+        // ── Auditoría multi-receta (nuevo formato) ────────────────────
+        // Las recetas individuales se guardan vía /recetas/{itemId}/items.
+        // Este endpoint solo se usa para: notas generales, fotos generales y submit final.
+        if ($auditoria->receta_id === null) {
+            $validated = $request->validate([
+                'items'                   => 'nullable|array',
+                'observaciones_generales' => 'nullable|string|max:5000',
+                'acciones_correctivas'    => 'nullable|string|max:5000',
+                'secciones_fotos'         => 'nullable|array',
+                'submit'                  => 'nullable|boolean',
+            ]);
+
+            DB::connection('compras')->transaction(function () use ($auditoria, $validated, $submit) {
+                // Fotos generales de la visita (descripcion = null)
+                if (!empty($validated['secciones_fotos'])) {
+                    $seccionNames = array_map(fn ($s) => 'sec:' . $s, array_keys($validated['secciones_fotos']));
+                    AuditoriaFoto::where('auditoria_id', $auditoria->id)
+                        ->whereNull('receta_item_id')
+                        ->whereIn('descripcion', $seccionNames)
+                        ->delete();
+
+                    foreach ($validated['secciones_fotos'] as $seccion => $urls) {
+                        foreach ($urls as $idx => $url) {
+                            AuditoriaFoto::create([
+                                'auditoria_id' => $auditoria->id,
+                                'url'          => $url,
+                                'descripcion'  => 'sec:' . $seccion,
+                                'orden'        => $idx,
+                            ]);
+                        }
+                    }
+                }
+
+                $updates = [
+                    'observaciones_generales' => $validated['observaciones_generales'] ?? $auditoria->observaciones_generales,
+                    'acciones_correctivas'    => $validated['acciones_correctivas']    ?? $auditoria->acciones_correctivas,
+                ];
+
+                if ($submit) {
+                    // Score global = promedio de todas las recetas evaluadas
+                    $promedio = DB::connection('compras')
+                        ->table('auditoria_receta_items')
+                        ->where('auditoria_id', $auditoria->id)
+                        ->whereNotNull('calificacion')
+                        ->avg('calificacion');
+
+                    $calificacion  = $promedio !== null ? round((float) $promedio, 1) : null;
+                    $clasificacion = $this->calcularClasificacion($calificacion, $auditoria->tipo);
+
+                    $nuevoEstado = match(true) {
+                        in_array($auditoria->estado, ['respondida', 'cerrada']) => $auditoria->estado,
+                        $auditoria->tipo === 'calidad' && $submit               => 'pendiente_respuesta',
+                        $auditoria->tipo === 'calidad'                          => 'borrador',
+                        $submit                                                  => 'evaluada',
+                        default                                                  => 'borrador',
+                    };
+
+                    $updates['calificacion']  = $calificacion;
+                    $updates['clasificacion'] = $clasificacion;
+                    $updates['estado']        = $nuevoEstado;
+
+                    if ($auditoria->tipo === 'calidad' && !$auditoria->submitted_at) {
+                        $updates['submitted_at']       = now();
+                        $updates['gerente_deadline_at'] = now()->addHours(48);
+                    }
+                }
+
+                $auditoria->update($updates);
+            });
+
+            return response()->json(['message' => $submit ? 'Auditoría finalizada.' : 'Guardado.']);
+        }
+
+        // ── Auditoría formato antiguo (receta única) ──────────────────
         $validated = $request->validate([
             'items'                       => 'required|array',
             'items.*.criterio_id'         => 'required|integer|exists:compras.auditoria_criterios,id',
@@ -494,12 +763,11 @@ class AuditoriaRecetasController extends Controller
             'secciones_fotos.*.*'         => 'string|max:1000',
             'submit'                      => 'nullable|boolean',
         ]);
-        $submit = $request->boolean('submit', false);
 
         DB::connection('compras')->transaction(function () use ($auditoria, $validated, $submit) {
             foreach ($validated['items'] as $item) {
                 AuditoriaItem::updateOrCreate(
-                    ['auditoria_id' => $auditoria->id, 'criterio_id' => $item['criterio_id']],
+                    ['auditoria_id' => $auditoria->id, 'criterio_id' => $item['criterio_id'], 'receta_item_id' => null],
                     [
                         'resultado'     => $item['resultado'] ?? null,
                         'observaciones' => $item['observaciones'] ?? null,
@@ -512,6 +780,7 @@ class AuditoriaRecetasController extends Controller
             if (!empty($validated['secciones_fotos'])) {
                 $seccionNames = array_map(fn ($s) => 'sec:' . $s, array_keys($validated['secciones_fotos']));
                 AuditoriaFoto::where('auditoria_id', $auditoria->id)
+                    ->whereNull('receta_item_id')
                     ->whereIn('descripcion', $seccionNames)
                     ->delete();
 
@@ -527,49 +796,25 @@ class AuditoriaRecetasController extends Controller
                 }
             }
 
-            // Calcular calificación: cumple / (cumple + no_cumple) × 100 (N/A y sin evaluar no cuentan)
+            // Calcular calificación: peso cumplido / peso total (N/A y sin evaluar no cuentan)
             $criterioIds = collect($validated['items'])->pluck('criterio_id')->filter()->all();
             $pesos = AuditoriaCriterio::whereIn('id', $criterioIds)
                 ->get(['id', 'peso'])
                 ->keyBy('id');
 
-            $totalPeso    = 0;
-            $pesoObtenido = 0;
-            $evaluados    = 0;
+            $totalPeso = $pesoObtenido = $evaluados = 0;
 
             foreach ($validated['items'] as $item) {
                 $resultado = $item['resultado'] ?? null;
                 if (!$resultado || $resultado === 'na') continue;
                 $peso = $pesos[$item['criterio_id']]?->peso ?? 1;
                 $totalPeso += $peso;
-                if ($resultado === 'cumple') {
-                    $pesoObtenido += $peso;
-                }
+                if ($resultado === 'cumple') $pesoObtenido += $peso;
                 $evaluados++;
             }
 
-            $calificacion = $evaluados > 0
-                ? round(($pesoObtenido / $totalPeso) * 100, 1)
-                : null;
-
-            // Clasificación según umbrales por tipo de auditoría
-            $clasificacion = null;
-            if ($calificacion !== null) {
-                if ($auditoria->tipo === 'operaciones') {
-                    // Escala oficial Lourdes: 20+30+20+20+10 = 100 pts
-                    if ($calificacion >= 98)      $clasificacion = 'Excelente';
-                    elseif ($calificacion >= 90)  $clasificacion = 'Muy Bueno';
-                    elseif ($calificacion >= 80)  $clasificacion = 'Bueno';
-                    elseif ($calificacion >= 70)  $clasificacion = 'Aceptable';
-                    else                          $clasificacion = 'Deficiente';
-                } else {
-                    // Escala calidad
-                    if ($calificacion >= 90)      $clasificacion = 'Excelente';
-                    elseif ($calificacion >= 75)  $clasificacion = 'Bueno';
-                    elseif ($calificacion >= 60)  $clasificacion = 'Aceptable';
-                    else                          $clasificacion = 'Deficiente';
-                }
-            }
+            $calificacion  = $evaluados > 0 ? round(($pesoObtenido / $totalPeso) * 100, 1) : null;
+            $clasificacion = $this->calcularClasificacion($calificacion, $auditoria->tipo);
 
             // Estado según tipo: calidad usa borrador/pendiente_respuesta; operaciones usa evaluada
             // Si la auditoría ya está en respondida/cerrada, preservar ese estado (edición por Kristian)
@@ -965,8 +1210,67 @@ class AuditoriaRecetasController extends Controller
                     'descripcion' => $f->descripcion,
                   ])
                 : [],
+            'receta_items'             => $a->relationLoaded('recetaItems')
+                ? $a->recetaItems->map(fn ($ri) => $this->formatRecetaItem($ri))->values()
+                : [],
+            'receta_items_count'       => $a->relationLoaded('recetaItems')
+                ? $a->recetaItems->count()
+                : ($a->receta_items_count ?? null),
+            'es_multi_receta'          => $a->receta_id === null,
             'created_at'               => $a->created_at?->toIso8601String(),
         ];
+    }
+
+    private function formatRecetaItem(AuditoriaRecetaItem $ri): array
+    {
+        return [
+            'id'                 => $ri->id,
+            'receta_id'          => $ri->receta_id,
+            'receta_nombre'      => $ri->receta?->nombre,
+            'tipo_receta'        => $ri->tipo_receta,
+            'estacion_id'        => $ri->estacion_id,
+            'estacion_nombre'    => $ri->estacion?->nombre,
+            'responsable_id'     => $ri->responsable_id,
+            'responsable_nombre' => $ri->responsable_nombre,
+            'calificacion'       => $ri->calificacion !== null ? (float) $ri->calificacion : null,
+            'clasificacion'      => $ri->clasificacion,
+            'notas'              => $ri->notas,
+            'orden'              => $ri->orden,
+        ];
+    }
+
+    private function calcularClasificacion(?float $calificacion, ?string $tipo): ?string
+    {
+        if ($calificacion === null) return null;
+        if ($tipo === 'operaciones') {
+            if ($calificacion >= 98) return 'Excelente';
+            if ($calificacion >= 90) return 'Muy Bueno';
+            if ($calificacion >= 80) return 'Bueno';
+            if ($calificacion >= 70) return 'Aceptable';
+            return 'Deficiente';
+        }
+        if ($calificacion >= 90) return 'Excelente';
+        if ($calificacion >= 75) return 'Bueno';
+        if ($calificacion >= 60) return 'Aceptable';
+        return 'Deficiente';
+    }
+
+    private function recalcularScoreGlobal(int $auditoriaId): void
+    {
+        $promedio = DB::connection('compras')
+            ->table('auditoria_receta_items')
+            ->where('auditoria_id', $auditoriaId)
+            ->whereNotNull('calificacion')
+            ->avg('calificacion');
+
+        $auditoria     = AuditoriaReceta::find($auditoriaId);
+        $calificacion  = $promedio !== null ? round((float) $promedio, 1) : null;
+        $clasificacion = $this->calcularClasificacion($calificacion, $auditoria?->tipo);
+
+        AuditoriaReceta::where('id', $auditoriaId)->update([
+            'calificacion'  => $calificacion,
+            'clasificacion' => $clasificacion,
+        ]);
     }
 
     private function notificarKristian(AuditoriaReceta $auditoria, string $sucursalNombre, bool $apeló): void
