@@ -391,16 +391,26 @@ class InventarioController extends Controller
             ->exists();
 
         if ($tieneConteoPrevio) {
-            $authUser   = Auth::user();
-            $esAdmin    = $authUser && (
+            $authUser  = Auth::user();
+            $esAdmin   = $authUser && (
                 $authUser->hasRole('admin_compras') ||
                 $authUser->hasRole('gerencia_financiera') ||
                 $authUser->hasRole('dir_comercial')
             );
-            if (!$esAdmin) {
+            $esAuditor = $authUser && $authUser->hasPermission('puede_auditar_conteo');
+
+            // Auditor puede re-aplicar si hay una reapertura registrada en las últimas 2 horas
+            $tieneReapertura = ($esAuditor || $esAdmin) && DB::connection('compras')
+                ->table('conteo_reaperturas')
+                ->where('sucursal_id', $sucursalId)
+                ->where('fecha_conteo', $fecha)
+                ->where('created_at', '>=', now()->subHours(2))
+                ->exists();
+
+            if (!$esAdmin && !$tieneReapertura) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'El conteo de este día ya fue aplicado para esta sucursal. No es posible modificarlo.',
+                    'message' => 'El conteo de este día ya fue aplicado. Solo un auditor puede reabrirlo.',
                 ], 422);
             }
         }
@@ -819,7 +829,8 @@ class InventarioController extends Controller
             ->get();
 
         // Por producto: último movimiento gana (puede haber varios en el día)
-        $byProd = [];
+        $byProd    = [];
+        $appliedAt = null; // timestamp del conteo más reciente del día
         foreach ($movs as $mov) {
             $d = is_string($mov->detalle) ? json_decode($mov->detalle, true) : (array)($mov->detalle ?? []);
             $byProd[$mov->producto_id] = [
@@ -827,9 +838,223 @@ class InventarioController extends Controller
                 'total_contado' => $d['total_contado'] ?? null,
                 'secciones'     => $d['secciones']     ?? null,
             ];
+            if (!$appliedAt || $mov->created_at > $appliedAt) {
+                $appliedAt = $mov->created_at;
+            }
         }
 
-        return response()->json(['success' => true, 'data' => array_values($byProd)]);
+        return response()->json([
+            'success'    => true,
+            'data'       => array_values($byProd),
+            'applied_at' => $appliedAt,
+        ]);
+    }
+
+    // POST /api/compras/inventario/reabrir-conteo
+    // Auditor reabre un conteo cerrado (dentro de 2 horas). Registra motivo.
+    public function reabrirConteo(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'sucursal_id'  => 'required|integer',
+            'fecha_conteo' => 'required|date',
+            'motivo'       => 'required|string|max:1000',
+        ]);
+
+        $authUser = Auth::user();
+        $esAdmin  = $authUser->hasRole('admin_compras') || $authUser->hasRole('gerencia_financiera') || $authUser->hasRole('dir_comercial');
+        $esAuditor = $authUser->hasPermission('puede_auditar_conteo');
+
+        if (!$esAdmin && !$esAuditor) {
+            return response()->json(['success' => false, 'message' => 'No tienes permiso para reabrir conteos.'], 403);
+        }
+
+        $sucursalId = (int) $validated['sucursal_id'];
+        $fecha      = $validated['fecha_conteo'];
+
+        // Verificar que existe un conteo para ese día
+        $ultimoConteo = DB::connection('compras')
+            ->table('movimientos_inventario')
+            ->where('sucursal_id', $sucursalId)
+            ->where('tipo', 'conteo_fisico')
+            ->where('fecha', $fecha)
+            ->orderByDesc('created_at')
+            ->value('created_at');
+
+        if (!$ultimoConteo) {
+            return response()->json(['success' => false, 'message' => 'No existe conteo para esa fecha.'], 422);
+        }
+
+        // Ventana de 2 horas para no-admins
+        if (!$esAdmin) {
+            $aplicadoAt = \Carbon\Carbon::parse($ultimoConteo);
+            if ($aplicadoAt->diffInMinutes(now()) > 120) {
+                return response()->json(['success' => false, 'message' => 'La ventana de 2 horas para reabrir el conteo ha expirado.'], 422);
+            }
+        }
+
+        DB::connection('compras')->table('conteo_reaperturas')->insert([
+            'sucursal_id'  => $sucursalId,
+            'fecha_conteo' => $fecha,
+            'motivo'       => $validated['motivo'],
+            'aud_usuario'  => $authUser->email,
+            'created_at'   => now(),
+            'updated_at'   => now(),
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Conteo reabierto. Puedes volver a aplicar el conteo.']);
+    }
+
+    // GET /api/compras/inventario/solicitudes-correccion
+    public function getSolicitudesCorreccion(Request $request): JsonResponse
+    {
+        $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
+        $estado     = $request->query('estado', 'pendiente');
+
+        $q = DB::connection('compras')
+            ->table('solicitudes_correccion_conteo as s')
+            ->join('productos as p', 'p.id', '=', 's.producto_id')
+            ->select('s.*', 'p.nombre as producto_nombre', 'p.codigo as producto_codigo')
+            ->where('s.estado', $estado)
+            ->when($sucursalId, fn ($q) => $q->where('s.sucursal_id', $sucursalId))
+            ->orderByDesc('s.created_at')
+            ->get();
+
+        return response()->json(['success' => true, 'data' => $q]);
+    }
+
+    // POST /api/compras/inventario/solicitar-correccion
+    public function solicitarCorreccion(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'sucursal_id'    => 'required|integer',
+            'fecha_conteo'   => 'required|date',
+            'producto_id'    => 'required|integer',
+            'cantidad_nueva' => 'required|numeric|min:0',
+            'unidad'         => 'required|string|max:30',
+            'motivo'         => 'required|string|max:1000',
+        ]);
+
+        $validated['solicitado_por'] = Auth::user()->email;
+        $validated['estado']         = 'pendiente';
+        $validated['created_at']     = now();
+        $validated['updated_at']     = now();
+
+        $id = DB::connection('compras')
+            ->table('solicitudes_correccion_conteo')
+            ->insertGetId($validated);
+
+        return response()->json(['success' => true, 'id' => $id, 'message' => 'Solicitud de corrección enviada al auditor.']);
+    }
+
+    // POST /api/compras/inventario/solicitudes-correccion/{id}/aprobar
+    public function aprobarCorreccion(Request $request, int $id): JsonResponse
+    {
+        $authUser = Auth::user();
+        $esAdmin  = $authUser->hasRole('admin_compras') || $authUser->hasRole('gerencia_financiera') || $authUser->hasRole('dir_comercial');
+        $esAuditor = $authUser->hasPermission('puede_auditar_conteo');
+        if (!$esAdmin && !$esAuditor) {
+            return response()->json(['success' => false, 'message' => 'No autorizado.'], 403);
+        }
+
+        $sol = DB::connection('compras')
+            ->table('solicitudes_correccion_conteo')
+            ->where('id', $id)
+            ->where('estado', 'pendiente')
+            ->first();
+
+        if (!$sol) {
+            return response()->json(['success' => false, 'message' => 'Solicitud no encontrada o ya procesada.'], 404);
+        }
+
+        // Calcular stock actual y diferencia para generar el ajuste
+        $inv = Inventario::where('sucursal_id', $sol->sucursal_id)
+            ->where('producto_id', $sol->producto_id)
+            ->first();
+
+        if (!$inv) {
+            return response()->json(['success' => false, 'message' => 'Producto no tiene inventario en esa sucursal.'], 422);
+        }
+
+        $producto = DB::connection('compras')->table('productos')->where('id', $sol->producto_id)->first();
+        $factor   = max((float) ($producto->factor_conversion ?? 1), 0.0001);
+
+        $movBase = DB::connection('compras')
+            ->table('movimientos_inventario')
+            ->where('sucursal_id', $sol->sucursal_id)
+            ->where('producto_id', $sol->producto_id)
+            ->where('tipo', '!=', 'carga_inicial')
+            ->sum('cantidad_base');
+
+        $stockActualBase  = $inv->cantidad_inicial_base + (float) $movBase;
+        $cantadaNuevaBase = (float) $sol->cantidad_nueva * $factor;
+        $diferenciaBase   = $cantadaNuevaBase - $stockActualBase;
+
+        DB::connection('compras')->beginTransaction();
+        try {
+            MovimientoInventario::create([
+                'sucursal_id'     => $sol->sucursal_id,
+                'producto_id'     => $sol->producto_id,
+                'tipo'            => 'correccion_conteo',
+                'cantidad'        => round($diferenciaBase / $factor, 4),
+                'unidad'          => $sol->unidad,
+                'cantidad_base'   => round($diferenciaBase, 6),
+                'motivo'          => "Corrección de conteo aprobada — {$sol->fecha_conteo}: {$sol->motivo}",
+                'fecha'           => $sol->fecha_conteo,
+                'referencia_tipo' => 'correccion',
+                'detalle'         => [
+                    'total_contado'    => round((float) $sol->cantidad_nueva, 4),
+                    'stock_anterior'   => round($stockActualBase / $factor, 4),
+                    'solicitud_id'     => $id,
+                    'aprobado_por'     => $authUser->email,
+                ],
+                'aud_usuario' => $authUser->email,
+            ]);
+
+            DB::connection('compras')->table('solicitudes_correccion_conteo')
+                ->where('id', $id)
+                ->update([
+                    'estado'       => 'aprobado',
+                    'revisado_por' => $authUser->email,
+                    'updated_at'   => now(),
+                ]);
+
+            DB::connection('compras')->commit();
+        } catch (\Throwable $e) {
+            DB::connection('compras')->rollBack();
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+
+        return response()->json(['success' => true, 'message' => 'Corrección aprobada y ajuste aplicado.']);
+    }
+
+    // POST /api/compras/inventario/solicitudes-correccion/{id}/rechazar
+    public function rechazarCorreccion(Request $request, int $id): JsonResponse
+    {
+        $authUser = Auth::user();
+        $esAdmin  = $authUser->hasRole('admin_compras') || $authUser->hasRole('gerencia_financiera') || $authUser->hasRole('dir_comercial');
+        $esAuditor = $authUser->hasPermission('puede_auditar_conteo');
+        if (!$esAdmin && !$esAuditor) {
+            return response()->json(['success' => false, 'message' => 'No autorizado.'], 403);
+        }
+
+        $validated = $request->validate(['motivo_rechazo' => 'nullable|string|max:500']);
+
+        $updated = DB::connection('compras')
+            ->table('solicitudes_correccion_conteo')
+            ->where('id', $id)
+            ->where('estado', 'pendiente')
+            ->update([
+                'estado'          => 'rechazado',
+                'revisado_por'    => $authUser->email,
+                'motivo_rechazo'  => $validated['motivo_rechazo'] ?? null,
+                'updated_at'      => now(),
+            ]);
+
+        if (!$updated) {
+            return response()->json(['success' => false, 'message' => 'Solicitud no encontrada o ya procesada.'], 404);
+        }
+
+        return response()->json(['success' => true, 'message' => 'Solicitud rechazada.']);
     }
 
     // GET /api/compras/inventario/borradores-activos?sucursal_id=X
