@@ -333,10 +333,10 @@ class AuditoriaConteoController extends Controller
         DB::connection('compras')->table('conteo_auditorias')
             ->where('id', $auditoriaId)
             ->update([
-                'estado'       => 'activa',
-                'firma'        => null,
-                'cerrado_at'   => null,
-                'updated_at'   => now(),
+                'estado'          => 'activa',
+                'firma_auditoria' => null,
+                'cerrado_at'      => null,
+                'updated_at'      => now(),
             ]);
 
         return $this->_buildResponse($auditoriaId);
