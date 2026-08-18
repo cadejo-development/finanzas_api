@@ -734,7 +734,7 @@ class AuditoriaRecetasController extends Controller
                         in_array($auditoria->estado, ['respondida', 'cerrada']) => $auditoria->estado,
                         $auditoria->tipo === 'calidad' && $submit               => 'pendiente_respuesta',
                         $auditoria->tipo === 'calidad'                          => 'borrador',
-                        $submit                                                  => 'evaluada',
+                        $submit                                                  => 'pendiente_respuesta',
                         default                                                  => 'borrador',
                     };
 
@@ -742,9 +742,11 @@ class AuditoriaRecetasController extends Controller
                     $updates['clasificacion'] = $clasificacion;
                     $updates['estado']        = $nuevoEstado;
 
-                    if ($auditoria->tipo === 'calidad' && !$auditoria->submitted_at) {
-                        $updates['submitted_at']       = now();
-                        $updates['gerente_deadline_at'] = now()->addHours(48);
+                    if ($submit && !$auditoria->submitted_at) {
+                        $updates['submitted_at'] = now();
+                        if ($auditoria->tipo === 'calidad') {
+                            $updates['gerente_deadline_at'] = now()->addHours(48);
+                        }
                     }
                 }
 
@@ -1095,15 +1097,15 @@ class AuditoriaRecetasController extends Controller
     {
         $auditoria = AuditoriaReceta::findOrFail($id);
 
-        if ($auditoria->tipo !== 'calidad') {
-            return response()->json(['message' => 'Solo aplica para auditorías de calidad.'], 422);
+        if (!in_array($auditoria->tipo, ['calidad', 'operaciones'])) {
+            return response()->json(['message' => 'Tipo de auditoría no soportado.'], 422);
         }
 
         if ($auditoria->estado !== 'pendiente_respuesta') {
             return response()->json(['message' => 'Esta auditoría ya no acepta respuestas.'], 422);
         }
 
-        if ($auditoria->gerente_deadline_at && now()->gt($auditoria->gerente_deadline_at)) {
+        if ($auditoria->tipo === 'calidad' && $auditoria->gerente_deadline_at && now()->gt($auditoria->gerente_deadline_at)) {
             return response()->json(['message' => 'El plazo de 48 horas para apelar ha vencido.'], 422);
         }
 
@@ -1113,21 +1115,25 @@ class AuditoriaRecetasController extends Controller
 
         $user = $request->user();
 
-        $auditoria->update([
+        $updates = [
             'comentario_gerente'    => $validated['comentario_gerente'],
             'respondido_por_id'     => $user?->id,
             'respondido_por_nombre' => $user?->name,
             'respondido_at'         => now(),
             'estado'                => 'respondida',
             'gerente_respondio'     => true,
-            'kristian_notificado_at' => now(),
-            'kristian_deadline_at'  => now()->addHours(48),
-        ]);
+        ];
+        if ($auditoria->tipo === 'calidad') {
+            $updates['kristian_notificado_at'] = now();
+            $updates['kristian_deadline_at']   = now()->addHours(48);
+        }
+        $auditoria->update($updates);
 
-        $sucursalNombre = DB::connection('pgsql')
-            ->table('sucursales')->where('id', $auditoria->sucursal_id)->value('nombre') ?? 'Sucursal';
-
-        $this->notificarKristian($auditoria, $sucursalNombre, apeló: true);
+        if ($auditoria->tipo === 'calidad') {
+            $sucursalNombre = DB::connection('pgsql')
+                ->table('sucursales')->where('id', $auditoria->sucursal_id)->value('nombre') ?? 'Sucursal';
+            $this->notificarKristian($auditoria, $sucursalNombre, apeló: true);
+        }
 
         $sucursales = DB::connection('pgsql')->table('sucursales')
             ->where('id', $auditoria->sucursal_id)->pluck('nombre', 'id');
