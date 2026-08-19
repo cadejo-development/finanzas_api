@@ -681,10 +681,11 @@ class AuditoriaRecetasController extends Controller
         $auditoria = AuditoriaReceta::findOrFail($id);
         $submit    = $request->boolean('submit', false);
 
-        // ── Auditoría multi-receta (nuevo formato) ────────────────────
+        // ── Auditoría multi-receta (nuevo formato, solo operaciones) ──────────────
         // Las recetas individuales se guardan vía /recetas/{itemId}/items.
         // Este endpoint solo se usa para: notas generales, fotos generales y submit final.
-        if ($auditoria->receta_id === null) {
+        // Las auditorías de calidad tienen receta_id=null pero usan el formato antiguo de criterios directos.
+        if ($auditoria->receta_id === null && $auditoria->tipo !== 'calidad') {
             $validated = $request->validate([
                 'items'                   => 'nullable|array',
                 'observaciones_generales' => 'nullable|string|max:5000',
