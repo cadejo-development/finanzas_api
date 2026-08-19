@@ -376,17 +376,20 @@ class InventarioController extends Controller
             'items.*.cantidad_contada'  => 'required|numeric|min:0',
             'items.*.unidad'            => 'required|string|max:30',
             'items.*.secciones'         => 'nullable|array',
+            'tipo_conteo'               => 'nullable|in:conteo_fisico,conteo_mensual',
         ]);
 
-        $sucursalId = (int) $validated['sucursal_id'];
-        $fecha      = $validated['fecha_conteo'];
-        $usuario    = Auth::user()->email;
+        $sucursalId  = (int) $validated['sucursal_id'];
+        $fecha       = $validated['fecha_conteo'];
+        $usuario     = Auth::user()->email;
+        $tipoConteo  = $validated['tipo_conteo'] ?? 'conteo_fisico';
 
         // Bloquear re-aplicación para gerentes: solo admins pueden re-aplicar el mismo día
+        // El bloqueo es independiente por tipo: diario (conteo_fisico) y mensual (conteo_mensual) no se interfieren
         $tieneConteoPrevio = DB::connection('compras')
             ->table('movimientos_inventario')
             ->where('sucursal_id', $sucursalId)
-            ->where('tipo', 'conteo_fisico')
+            ->where('tipo', $tipoConteo)
             ->where('fecha', $fecha)
             ->exists();
 
@@ -485,14 +488,15 @@ class InventarioController extends Controller
 
                 // Siempre crear movimiento para dejar registro de total_contado,
                 // aunque diferencia sea 0 (no afecta stock, permite mostrar en histórico)
+                $motivoLabel = $tipoConteo === 'conteo_mensual' ? 'Conteo mensual' : 'Conteo físico';
                 MovimientoInventario::create([
                     'sucursal_id'     => $sucursalId,
                     'producto_id'     => $pid,
-                    'tipo'            => 'conteo_fisico',
+                    'tipo'            => $tipoConteo,
                     'cantidad'        => round($diferenciaBase / $factor, 4),
                     'unidad'          => $item['unidad'],
                     'cantidad_base'   => round($diferenciaBase, 6),
-                    'motivo'          => "Conteo físico — {$fecha}",
+                    'motivo'          => "{$motivoLabel} — {$fecha}",
                     'fecha'           => $fecha,
                     'referencia_tipo' => 'conteo',
                     'detalle'         => $detalle,
@@ -816,13 +820,16 @@ class InventarioController extends Controller
 
         $sucursalId = (int) $request->query('sucursal_id');
         $fecha      = $request->query('fecha');
+        $tipo       = in_array($request->query('tipo_conteo'), ['conteo_fisico', 'conteo_mensual'])
+                        ? $request->query('tipo_conteo')
+                        : 'conteo_fisico';
 
-        // Trae el último movimiento de conteo_fisico por producto para esa fecha
+        // Trae el último movimiento del tipo indicado por producto para esa fecha
         $movs = DB::connection('compras')
             ->table('movimientos_inventario as m')
             ->join('productos as p', 'p.id', '=', 'm.producto_id')
             ->where('m.sucursal_id', $sucursalId)
-            ->where('m.tipo', 'conteo_fisico')
+            ->where('m.tipo', $tipo)
             ->where('m.fecha', $fecha)
             ->select('m.producto_id', 'm.detalle', 'm.created_at', 'p.factor_conversion', 'p.unidad')
             ->orderBy('m.created_at')
@@ -1171,9 +1178,13 @@ class InventarioController extends Controller
             return response()->json(['data' => []]);
         }
 
+        $tipoFechas = in_array($request->query('tipo_conteo'), ['conteo_fisico', 'conteo_mensual'])
+                        ? $request->query('tipo_conteo')
+                        : 'conteo_fisico';
+
         $fechas = DB::connection('compras')
             ->table('movimientos_inventario')
-            ->where('tipo', 'conteo_fisico')
+            ->where('tipo', $tipoFechas)
             ->where('sucursal_id', $sucursalId)
             ->selectRaw('DATE(fecha)::text AS fecha')
             ->groupBy(DB::raw('DATE(fecha)'))

@@ -93,7 +93,7 @@ class AuditoriaConteoController extends Controller
             ->table('movimientos_inventario as m')
             ->join('productos as p', 'p.id', '=', 'm.producto_id')
             ->where('m.sucursal_id', $sucursalId)
-            ->where('m.tipo', 'conteo_fisico')
+            ->where('m.tipo', 'conteo_mensual')
             ->where('m.fecha', $fecha)
             ->select('m.producto_id', 'p.nombre as producto_nombre', 'm.detalle', 'p.unidad as p_unidad', 'm.unidad', 'm.created_at')
             ->orderBy('m.created_at')
