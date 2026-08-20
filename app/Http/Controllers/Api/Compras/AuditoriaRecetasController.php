@@ -773,16 +773,25 @@ class AuditoriaRecetasController extends Controller
         ]);
 
         DB::connection('compras')->transaction(function () use ($auditoria, $validated, $submit) {
-            foreach ($validated['items'] as $item) {
-                AuditoriaItem::updateOrCreate(
-                    ['auditoria_id' => $auditoria->id, 'criterio_id' => $item['criterio_id'], 'receta_item_id' => null],
-                    [
-                        'resultado'     => $item['resultado'] ?? null,
-                        'observaciones' => $item['observaciones'] ?? null,
-                        'foto_url'      => $item['foto_url'] ?? null,
-                    ]
-                );
-            }
+            // updateOrCreate falla con NULL porque genera WHERE receta_item_id = NULL (sin IS NULL).
+            // Usamos upsert nativo de PostgreSQL (INSERT ON CONFLICT DO UPDATE).
+            $now = now();
+            $rows = array_map(fn ($item) => [
+                'auditoria_id'   => $auditoria->id,
+                'criterio_id'    => $item['criterio_id'],
+                'receta_item_id' => null,
+                'resultado'      => $item['resultado'] ?? null,
+                'observaciones'  => $item['observaciones'] ?? null,
+                'foto_url'       => $item['foto_url'] ?? null,
+                'created_at'     => $now,
+                'updated_at'     => $now,
+            ], $validated['items']);
+
+            DB::connection('compras')->table('auditoria_items')->upsert(
+                $rows,
+                ['auditoria_id', 'criterio_id'],          // columnas del unique constraint
+                ['resultado', 'observaciones', 'foto_url', 'updated_at'] // columnas a actualizar
+            );
 
             // Fotos por sección: descripcion = 'sec:NombreSeccion'
             if (!empty($validated['secciones_fotos'])) {
