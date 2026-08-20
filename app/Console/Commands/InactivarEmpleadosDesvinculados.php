@@ -29,10 +29,12 @@ class InactivarEmpleadosDesvinculados extends Command
         $dryRun = $this->option('dry-run');
 
         // Primero: IDs de empleados que aún están activos (conexión core pgsql)
+        // Se convierten a string porque empleado_id en desvinculaciones es text
         $activosIds = DB::connection('pgsql')
             ->table('empleados')
             ->where('activo', true)
             ->pluck('id')
+            ->map(fn($id) => (string) $id)
             ->all();
 
         if (empty($activosIds)) {
