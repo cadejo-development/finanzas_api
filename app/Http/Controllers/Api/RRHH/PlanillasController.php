@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\RRHH;
 
+use App\Models\Asueto;
 use App\Models\RRHH\Amonestacion;
 use App\Models\RRHH\AusenciaInjustificada;
 use App\Models\RRHH\DiaSuspension;
@@ -186,6 +187,10 @@ class PlanillasController extends RRHHBaseController
             $ausencias     = $this->getAusencias($empIds, $fechaInicio, $fechaFin);
             $suspensiones  = $this->getSuspensiones($empIds, $fechaInicio, $fechaFin);
 
+            // Cargar asuetos del período y mapa de empleados con horario normal esos días
+            $asuetos        = $this->getAsuetosEnRango($fechaInicio, $fechaFin);
+            $horariosAsueto = $this->getHorariosNormalEnAsuetos($empIds, $asuetos);
+
             // Cargar órdenes de descuento activas del período
             $ordenesMap      = $this->getOrdenesActivasMap($empIds, $fechaInicio->toDateString(), $quincena);
             $bonificacionesMap = $this->getBonificacionesMap($empIds, $fechaInicio, $fechaFin);
@@ -229,6 +234,21 @@ class PlanillasController extends RRHHBaseController
                     $resultado = $this->calc->calcularPlanillaEmpleado(
                         $salBase, (float) $diasLab, $diasQuincena, $ordenes, $bonificEmp
                     );
+
+                    // Asuetos: empleados con horario 'normal' ese día cobran 100% extra
+                    $geoDptoEmp    = $emp['geo_departamento_id'] ?? null;
+                    $diasAsueto    = $this->contarAsuetosEmpleado(
+                        (int) $eid, $geoDptoEmp, $asuetos, $horariosAsueto
+                    );
+                    $salarioAsueto = $diasAsueto > 0
+                        ? round(($salBase / 30) * $diasAsueto, 2)
+                        : 0.0;
+
+                    $resultado['dias_asueto']    = $diasAsueto;
+                    $resultado['salario_asueto'] = $salarioAsueto;
+                    if ($salarioAsueto > 0) {
+                        $resultado['salario_neto'] = round($resultado['salario_neto'] + $salarioAsueto, 2);
+                    }
 
                     // Anotar días de suspensión en detalle para trazabilidad
                     $diasSusp = $suspensiones
@@ -348,6 +368,8 @@ class PlanillasController extends RRHHBaseController
                 'dias_laborados'            => (float) $l->dias_laborados,
                 'salario_base'              => (float) $l->salario_base,
                 'salario_proporcional'      => (float) $l->salario_proporcional,
+                'dias_asueto'               => (float) ($l->dias_asueto ?? 0),
+                'salario_asueto'            => (float) ($l->salario_asueto ?? 0),
                 'afp_empleado'              => (float) $l->afp_empleado,
                 'isss_empleado'             => (float) $l->isss_empleado,
                 'renta'                     => (float) $l->renta,
@@ -394,13 +416,14 @@ class PlanillasController extends RRHHBaseController
 
         $query = DB::connection('pgsql')
             ->table('empleados as e')
+            ->leftJoin('sucursales as s', 's.id', '=', 'e.sucursal_id')
             ->where(function ($q) use ($desvinculadosIds) {
                 $q->where('e.activo', true);
                 if (!empty($desvinculadosIds)) {
                     $q->orWhereIn('e.id', $desvinculadosIds);
                 }
             })
-            ->select('e.id', 'e.salario_base');
+            ->select('e.id', 'e.salario_base', 's.geo_departamento_id');
 
         if ($sucursalId) {
             $query->where('e.sucursal_id', $sucursalId);
@@ -712,6 +735,76 @@ class PlanillasController extends RRHHBaseController
         $filename = "boleta_{$empleado->codigo}_Q{$planilla->quincena}_{$planilla->anio}_{$planilla->mes}.pdf";
 
         return $pdf->download($filename);
+    }
+
+    /**
+     * Todos los asuetos activos dentro de un rango de fechas (sin filtrar por sucursal).
+     * El filtro por geo_departamento se hace por empleado en memoria.
+     */
+    private function getAsuetosEnRango(Carbon $desde, Carbon $hasta): \Illuminate\Support\Collection
+    {
+        return Asueto::where('activo', true)
+            ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->get(['id', 'fecha', 'tipo', 'geo_departamento_id']);
+    }
+
+    /**
+     * Mapa empleado_id → [fecha_string, ...] de los días de asueto donde el empleado
+     * tiene horario tipo='normal' (es decir, estuvo en servicio ese día).
+     */
+    private function getHorariosNormalEnAsuetos(array $empIds, \Illuminate\Support\Collection $asuetos): array
+    {
+        if (empty($empIds) || $asuetos->isEmpty()) return [];
+
+        $fechas = $asuetos
+            ->map(fn ($a) => $a->fecha instanceof \Carbon\Carbon ? $a->fecha->toDateString() : substr((string) $a->fecha, 0, 10))
+            ->unique()
+            ->values()
+            ->all();
+
+        $map = [];
+        DB::connection('pgsql')
+            ->table('horarios_empleado')
+            ->whereIn('empleado_id', $empIds)
+            ->whereIn('fecha', $fechas)
+            ->where('tipo', 'normal')
+            ->select('empleado_id', 'fecha')
+            ->get()
+            ->each(function ($r) use (&$map) {
+                $map[(int) $r->empleado_id][] = substr((string) $r->fecha, 0, 10);
+            });
+
+        return $map;
+    }
+
+    /**
+     * Cuenta cuántos asuetos del período aplican a un empleado Y tiene horario normal.
+     */
+    private function contarAsuetosEmpleado(
+        int $empId,
+        ?int $geoDptoId,
+        \Illuminate\Support\Collection $asuetos,
+        array $horariosAsueto
+    ): int {
+        $fechasNormal = $horariosAsueto[$empId] ?? [];
+        if (empty($fechasNormal)) return 0;
+
+        $count = 0;
+        foreach ($asuetos as $asueto) {
+            $fecha = $asueto->fecha instanceof \Carbon\Carbon
+                ? $asueto->fecha->toDateString()
+                : substr((string) $asueto->fecha, 0, 10);
+
+            $aplica = $asueto->tipo === 'nacional'
+                || ($asueto->tipo === 'departamental'
+                    && $geoDptoId
+                    && (int) $asueto->geo_departamento_id === $geoDptoId);
+
+            if ($aplica && in_array($fecha, $fechasNormal)) {
+                $count++;
+            }
+        }
+        return $count;
     }
 
     /**

@@ -167,9 +167,16 @@ hr.divider { border: none; border-top: 1.5px solid #1a3a5c; margin: 8px 0 12px 0
             <td class="r" style="color:#888;font-size:8.5px">${{ number_format($linea->salario_proporcional, 2) }}</td>
           </tr>
           @endif
+          @php $salAsueto = (float)($linea->salario_asueto ?? 0); @endphp
+          @if($salAsueto > 0)
+          <tr>
+            <td>Pago de asueto ({{ number_format((float)($linea->dias_asueto ?? 0), 0) }} día(s))</td>
+            <td class="r">${{ number_format($salAsueto, 2) }}</td>
+          </tr>
+          @endif
           <tr class="total">
             <td>Total Ingresos:</td>
-            <td class="r">${{ number_format($linea->salario_proporcional, 2) }}</td>
+            <td class="r">${{ number_format($linea->salario_proporcional + $salAsueto, 2) }}</td>
           </tr>
         </tbody>
       </table>
