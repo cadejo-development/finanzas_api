@@ -405,6 +405,10 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::get('users/{userId}/sucursales',          [AdminController::class, 'getSucursalesUsuario']);
     Route::put('users/{userId}/sucursales',          [AdminController::class, 'setSucursalesUsuario']);
 
+    // Asignaciones inventario por rol (contador_inv / auditor_inv)
+    Route::get('users/{userId}/inventario-sucursales', [AdminController::class, 'getInventarioSucursales']);
+    Route::put('users/{userId}/inventario-sucursales', [AdminController::class, 'setInventarioSucursales']);
+
     // Sistemas
     Route::get('sistemas',              [AdminController::class, 'sistemas']);
     Route::patch('sistemas/{id}',       [AdminController::class, 'updateSistema']);

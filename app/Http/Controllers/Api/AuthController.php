@@ -99,34 +99,53 @@ class AuthController extends Controller
             $sucursalNombre = Sucursal::find($sucursalIdEfectivo)?->nombre;
         }
 
+        // Para sistema=compras incluir sucursales de inventario (contador_inv / auditor_inv)
+        $inventarioSucursales = null;
+        if ($sistemaCodigo === 'compras') {
+            $inventarioSucursales = DB::table('inventario_sucursal_roles as isr')
+                ->join('sucursales as s', 's.id', '=', 'isr.sucursal_id')
+                ->where('isr.user_id', $user->id)
+                ->where('isr.activo', true)
+                ->select('isr.sucursal_id as id', 's.nombre', 'isr.rol')
+                ->orderBy('isr.rol')
+                ->orderBy('s.nombre')
+                ->get();
+        }
+
+        $loginUser = [
+            'id'                    => $user->id,
+            'name'                  => $user->name,
+            'email'                 => $user->email,
+            'activo'                => $user->activo,
+            'sucursal_id'           => $sucursalIdEfectivo,
+            'sucursal'              => $sucursalNombre,
+            'sucursales_ids'        => $todasSucursalesIds,
+            'sucursales'            => $todasSucursales,
+            'roles'                 => $roles,
+            'permisos'              => $permisos,
+            'centros_costo'         => $centrosCosto,
+            'is_portal_admin'       => $user->hasRole('portal_admin'),
+            'force_password_change' => (function () use ($user): bool {
+                try {
+                    return $user->force_password_change
+                        || Hash::check('C@dejo2026', $user->password)
+                        || Hash::check('Cadejo2026', $user->password);
+                } catch (\RuntimeException) {
+                    return true; // Hash no reconocido → forzar cambio de contraseña
+                }
+            })(),
+            'empleado_id'           => $empleadoId,
+            'departamento_codigo'   => $departamentoCodigo,
+        ];
+
+        if ($inventarioSucursales !== null) {
+            $loginUser['inventario_sucursales'] = $inventarioSucursales;
+        }
+
         return response()->json([
             'success' => true,
             'token'   => $token,
-            'user'    => [
-                'id'                    => $user->id,
-                'name'                  => $user->name,
-                'email'                 => $user->email,
-                'activo'                => $user->activo,
-                'sucursal_id'           => $sucursalIdEfectivo,
-                'sucursal'              => $sucursalNombre,
-                'sucursales_ids'        => $todasSucursalesIds,
-                'sucursales'            => $todasSucursales,
-                'roles'                 => $roles,
-                'permisos'              => $permisos,
-                'centros_costo'         => $centrosCosto,
-                'is_portal_admin'       => $user->hasRole('portal_admin'),
-                'force_password_change' => (function () use ($user): bool {
-                    try {
-                        return $user->force_password_change
-                            || Hash::check('C@dejo2026', $user->password)
-                            || Hash::check('Cadejo2026', $user->password);
-                    } catch (\RuntimeException) {
-                        return true; // Hash no reconocido → forzar cambio de contraseña
-                    }
-                })(),
-                'empleado_id'           => $empleadoId,
-                'departamento_codigo'   => $departamentoCodigo,
-            ],
+            'user'    => $loginUser,
         ]);
     }
 
@@ -336,24 +355,43 @@ class AuthController extends Controller
             $sucursalNombre = Sucursal::find($sucursalIdEfectivo)?->nombre;
         }
 
+        // Para sistema=compras, incluir sucursales de inventario (contador_inv / auditor_inv)
+        $inventarioSucursales = null;
+        if ($sistemaCodigo === 'compras') {
+            $inventarioSucursales = DB::table('inventario_sucursal_roles as isr')
+                ->join('sucursales as s', 's.id', '=', 'isr.sucursal_id')
+                ->where('isr.user_id', $user->id)
+                ->where('isr.activo', true)
+                ->select('isr.sucursal_id as id', 's.nombre', 'isr.rol')
+                ->orderBy('isr.rol')
+                ->orderBy('s.nombre')
+                ->get();
+        }
+
+        $responseUser = [
+            'id'              => $user->id,
+            'name'            => $user->name,
+            'email'           => $user->email,
+            'activo'          => $user->activo,
+            'sucursal_id'     => $sucursalIdEfectivo,
+            'sucursal'        => $sucursalNombre,
+            'sucursales_ids'  => $todasSucursalesIds,
+            'sucursales'      => $todasSucursales,
+            'roles'           => $roles,
+            'permisos'        => $permisos,
+            'centros_costo'   => $centrosCosto,
+            'is_portal_admin' => $user->hasRole('portal_admin'),
+            'empleado_id'     => $empleadoId,
+            'departamento_codigo' => $departamentoCodigo,
+        ];
+
+        if ($inventarioSucursales !== null) {
+            $responseUser['inventario_sucursales'] = $inventarioSucursales;
+        }
+
         return response()->json([
             'success' => true,
-            'user'    => [
-                'id'              => $user->id,
-                'name'            => $user->name,
-                'email'           => $user->email,
-                'activo'          => $user->activo,
-                'sucursal_id'     => $sucursalIdEfectivo,
-                'sucursal'        => $sucursalNombre,
-                'sucursales_ids'  => $todasSucursalesIds,
-                'sucursales'      => $todasSucursales,
-                'roles'           => $roles,
-                'permisos'        => $permisos,
-                'centros_costo'   => $centrosCosto,
-                'is_portal_admin' => $user->hasRole('portal_admin'),
-                'empleado_id'     => $empleadoId,
-                'departamento_codigo' => $departamentoCodigo,
-            ],
+            'user'    => $responseUser,
         ]);
     }
 

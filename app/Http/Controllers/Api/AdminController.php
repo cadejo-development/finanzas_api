@@ -73,6 +73,7 @@ class AdminController extends Controller
         // Decorar: tiene_usuario, roles del usuario
         $userIds = collect($empleados->items())->pluck('user_id')->filter()->values()->toArray();
         $rolesMap = [];
+        $inventarioSucursalesMap = [];
         if (!empty($userIds)) {
             $rows = $this->db()->table('role_user as ru')
                 ->join('roles as r', 'r.id', '=', 'ru.role_id')
@@ -88,9 +89,24 @@ class AdminController extends Controller
                     'sistema'=> $row->sistema,
                 ];
             }
+
+            $invRows = $this->db()->table('inventario_sucursal_roles as isr')
+                ->join('sucursales as s', 's.id', '=', 'isr.sucursal_id')
+                ->whereIn('isr.user_id', $userIds)
+                ->where('isr.activo', true)
+                ->select('isr.user_id', 'isr.sucursal_id', 's.nombre as sucursal_nombre', 'isr.rol')
+                ->orderBy('isr.rol')->orderBy('s.nombre')
+                ->get();
+            foreach ($invRows as $r) {
+                $inventarioSucursalesMap[$r->user_id][] = [
+                    'sucursal_id'    => $r->sucursal_id,
+                    'sucursal_nombre'=> $r->sucursal_nombre,
+                    'rol'            => $r->rol,
+                ];
+            }
         }
 
-        $items = collect($empleados->items())->map(function ($e) use ($rolesMap) {
+        $items = collect($empleados->items())->map(function ($e) use ($rolesMap, $inventarioSucursalesMap) {
             return [
                 'empleado_id'     => $e->empleado_id,
                 'codigo'          => $e->codigo,
@@ -105,11 +121,12 @@ class AdminController extends Controller
                 'empleado_activo' => $e->empleado_activo,
                 'tiene_usuario'   => !is_null($e->user_id),
                 'user'            => $e->user_id ? [
-                    'id'     => $e->user_id,
-                    'name'   => $e->user_name,
-                    'email'  => $e->user_email,
-                    'activo' => (bool) $e->user_activo,
-                    'roles'  => $rolesMap[$e->user_id] ?? [],
+                    'id'                   => $e->user_id,
+                    'name'                 => $e->user_name,
+                    'email'                => $e->user_email,
+                    'activo'               => (bool) $e->user_activo,
+                    'roles'                => $rolesMap[$e->user_id] ?? [],
+                    'inventario_sucursales'=> $inventarioSucursalesMap[$e->user_id] ?? [],
                 ] : null,
             ];
         });
@@ -437,6 +454,63 @@ class AdminController extends Controller
     {
         $this->db()->table('role_user')->where('user_id', $userId)->where('role_id', $roleId)->delete();
         return response()->json(['message' => 'Rol removido.']);
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // ASIGNACIONES INVENTARIO (contador_inv / auditor_inv)
+    // ──────────────────────────────────────────────────────────────
+
+    /** GET /api/admin/users/{userId}/inventario-sucursales */
+    public function getInventarioSucursales(int $userId): JsonResponse
+    {
+        $asignaciones = $this->db()
+            ->table('inventario_sucursal_roles as isr')
+            ->join('sucursales as s', 's.id', '=', 'isr.sucursal_id')
+            ->where('isr.user_id', $userId)
+            ->select('isr.id', 'isr.sucursal_id', 's.nombre as sucursal_nombre', 'isr.rol', 'isr.activo')
+            ->orderBy('isr.rol')
+            ->orderBy('s.nombre')
+            ->get();
+
+        return response()->json(['data' => $asignaciones]);
+    }
+
+    /** PUT /api/admin/users/{userId}/inventario-sucursales */
+    public function setInventarioSucursales(Request $request, int $userId): JsonResponse
+    {
+        $data = $request->validate([
+            'rol'            => 'required|in:contador,auditor',
+            'sucursal_ids'   => 'present|array',
+            'sucursal_ids.*' => 'integer|exists:pgsql.sucursales,id',
+        ]);
+
+        abort_unless($this->db()->table('users')->where('id', $userId)->exists(), 404);
+
+        $rol = $data['rol'];
+        $ids = $data['sucursal_ids'];
+
+        $this->db()->table('inventario_sucursal_roles')
+            ->where('user_id', $userId)
+            ->where('rol', $rol)
+            ->delete();
+
+        if (!empty($ids)) {
+            $now  = now();
+            $audU = $request->user()->email;
+            $rows = array_map(fn ($sid) => [
+                'user_id'      => $userId,
+                'sucursal_id'  => $sid,
+                'rol'          => $rol,
+                'activo'       => true,
+                'asignado_por' => $audU,
+                'created_at'   => $now,
+                'updated_at'   => $now,
+            ], $ids);
+
+            $this->db()->table('inventario_sucursal_roles')->insert($rows);
+        }
+
+        return response()->json(['message' => 'Asignaciones guardadas.']);
     }
 
     // ──────────────────────────────────────────────────────────────
