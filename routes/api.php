@@ -57,6 +57,7 @@ use App\Http\Controllers\Api\RRHH\PlantillaContratoController;
 use App\Http\Controllers\Api\RRHH\ContratoEmpleadoController;
 use App\Http\Controllers\Api\RRHH\PropinasController;
 use App\Http\Controllers\Api\RRHH\PropinasMantenimientoController;
+use App\Http\Controllers\Api\RRHH\AsuetosController;
 
 // ─── Geo catálogos El Salvador (público, sin auth) ────────────────────────
 Route::prefix('geo')->group(function () {
@@ -429,6 +430,10 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     // Calendario de equipo
     Route::get('calendario', [CalendarioController::class, 'index']);
 
+    // Asuetos — lectura para todos los roles RRHH
+    Route::get('asuetos',       [AsuetosController::class, 'index']);
+    Route::get('asuetos/rango', [AsuetosController::class, 'porSucursalRango']);
+
     // Historial unificado
     Route::get('historial', [HistorialController::class, 'index']);
 
@@ -696,6 +701,13 @@ Route::prefix('rrhh/propinas')->middleware(['auth:sanctum', 'role:rrhh_admin'])-
     Route::put('{id}/detalles/{detalleId}',                [PropinasController::class, 'updateDetalle']);
     Route::post('{id}/aprobar',                            [PropinasController::class, 'aprobar']);
     Route::post('{id}/integrar-planilla',                  [PropinasController::class, 'integrarAPlanilla']);
+});
+
+// ─── RRHH Asuetos — gestión (solo rrhh_admin) ────────────────────────────────
+Route::prefix('rrhh/asuetos')->middleware(['auth:sanctum', 'role:rrhh_admin'])->group(function () {
+    Route::post('',        [AsuetosController::class, 'store']);
+    Route::put('{id}',     [AsuetosController::class, 'update']);
+    Route::delete('{id}',  [AsuetosController::class, 'destroy']);
 });
 
 // ─── Compras Admin — ViewAs ───────────────────────────────────────────────────
