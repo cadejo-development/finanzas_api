@@ -8,6 +8,7 @@ use App\Models\System;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ViewAsController extends Controller
 {
@@ -78,19 +79,28 @@ class ViewAsController extends Controller
         $todasSucursales   = Sucursal::whereIn('id', $todasIds)->orderBy('nombre')->get()
             ->map(fn ($s) => ['id' => $s->id, 'nombre' => $s->nombre]);
 
+        $inventarioSucursales = DB::table('inventario_sucursal_roles as isr')
+            ->join('sucursales as s', 's.id', '=', 'isr.sucursal_id')
+            ->where('isr.user_id', $user->id)
+            ->where('isr.activo', true)
+            ->select('isr.sucursal_id as id', 's.nombre', 'isr.rol')
+            ->orderBy('isr.rol')->orderBy('s.nombre')
+            ->get();
+
         return response()->json([
             'success' => true,
             'user'    => [
-                'id'             => $user->id,
-                'name'           => $user->name,
-                'email'          => $user->email,
-                'activo'         => $user->activo,
-                'sucursal_id'    => $user->sucursal_id,
-                'sucursal'       => $sucursalNombre,
-                'sucursales_ids' => $todasIds,
-                'sucursales'     => $todasSucursales,
-                'roles'          => $roles->values(),
-                'permisos'       => $permisos->values(),
+                'id'                   => $user->id,
+                'name'                 => $user->name,
+                'email'                => $user->email,
+                'activo'               => $user->activo,
+                'sucursal_id'          => $user->sucursal_id,
+                'sucursal'             => $sucursalNombre,
+                'sucursales_ids'       => $todasIds,
+                'sucursales'           => $todasSucursales,
+                'roles'                => $roles->values(),
+                'permisos'             => $permisos->values(),
+                'inventario_sucursales'=> $inventarioSucursales,
             ],
         ]);
     }
