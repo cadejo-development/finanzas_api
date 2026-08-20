@@ -58,6 +58,7 @@ use App\Http\Controllers\Api\RRHH\ContratoEmpleadoController;
 use App\Http\Controllers\Api\RRHH\PropinasController;
 use App\Http\Controllers\Api\RRHH\PropinasMantenimientoController;
 use App\Http\Controllers\Api\RRHH\AsuetosController;
+use App\Http\Controllers\Api\RRHH\HorasExtrasController;
 
 // ─── Geo catálogos El Salvador (público, sin auth) ────────────────────────
 Route::prefix('geo')->group(function () {
@@ -701,6 +702,21 @@ Route::prefix('rrhh/propinas')->middleware(['auth:sanctum', 'role:rrhh_admin'])-
     Route::put('{id}/detalles/{detalleId}',                [PropinasController::class, 'updateDetalle']);
     Route::post('{id}/aprobar',                            [PropinasController::class, 'aprobar']);
     Route::post('{id}/integrar-planilla',                  [PropinasController::class, 'integrarAPlanilla']);
+});
+
+// ─── RRHH Horas Extras (todos los roles RRHH) ────────────────────────────────
+Route::prefix('rrhh/horas-extras')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,rrhh_admin,empleado,gerencia_ops,rrhh_analista,rrhh_analista_jr', 'view-as'])->group(function () {
+    // IMPORTANTE: rutas estáticas antes de {id}
+    Route::get('pendientes',        [HorasExtrasController::class, 'pendientes']);
+    Route::get('config',            [HorasExtrasController::class, 'configIndex']);
+    Route::get('',                  [HorasExtrasController::class, 'index']);
+    Route::post('',                 [HorasExtrasController::class, 'store']);
+    Route::get('{id}',              [HorasExtrasController::class, 'show']);
+    Route::post('{id}/aprobar',     [HorasExtrasController::class, 'aprobar']);
+    Route::post('{id}/rechazar',    [HorasExtrasController::class, 'rechazar']);
+    // Config update (solo rrhh_admin, pero en el mismo prefix para compartir middleware base)
+    Route::put('config/{deptId}',   [HorasExtrasController::class, 'configUpdate'])
+        ->middleware('role:rrhh_admin');
 });
 
 // ─── RRHH Asuetos — gestión (solo rrhh_admin) ────────────────────────────────
