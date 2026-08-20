@@ -18,6 +18,7 @@ class PlanillaLinea extends Model
         'afp_patronal', 'isss_patronal', 'insaforp_patronal', 'total_patronal',
         'costo_total', 'detalle_descuentos', 'notas',
         'dias_asueto', 'salario_asueto',
+        'horas_extras', 'monto_horas_extras',
     ];
 
     protected $casts = [
@@ -39,6 +40,8 @@ class PlanillaLinea extends Model
         'detalle_descuentos'        => 'array',
         'dias_asueto'               => 'decimal:2',
         'salario_asueto'            => 'decimal:2',
+        'horas_extras'              => 'decimal:2',
+        'monto_horas_extras'        => 'decimal:2',
     ];
 
     public function planilla()

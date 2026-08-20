@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\RRHH;
 
 use App\Models\Asueto;
 use App\Models\RRHH\Amonestacion;
+use App\Models\RRHH\HorasExtrasSolicitud;
 use App\Models\RRHH\AusenciaInjustificada;
 use App\Models\RRHH\DiaSuspension;
 use App\Models\RRHH\Incapacidad;
@@ -191,6 +192,9 @@ class PlanillasController extends RRHHBaseController
             $asuetos        = $this->getAsuetosEnRango($fechaInicio, $fechaFin);
             $horariosAsueto = $this->getHorariosNormalEnAsuetos($empIds, $asuetos);
 
+            // Cargar horas extras aprobadas para esta quincena de pago
+            $horasExtrasMap = $this->getHorasExtrasMap($empIds, $anio, $mes, $quincena);
+
             // Cargar órdenes de descuento activas del período
             $ordenesMap      = $this->getOrdenesActivasMap($empIds, $fechaInicio->toDateString(), $quincena);
             $bonificacionesMap = $this->getBonificacionesMap($empIds, $fechaInicio, $fechaFin);
@@ -248,6 +252,18 @@ class PlanillasController extends RRHHBaseController
                     $resultado['salario_asueto'] = $salarioAsueto;
                     if ($salarioAsueto > 0) {
                         $resultado['salario_neto'] = round($resultado['salario_neto'] + $salarioAsueto, 2);
+                    }
+
+                    // Horas extras aprobadas para esta quincena (tarifa doble = salBase/240 × 2)
+                    $horasExtrasEmp   = (float) ($horasExtrasMap[$eid] ?? 0);
+                    $montoHorasExtras = $horasExtrasEmp > 0
+                        ? round(($salBase / 240) * 2 * $horasExtrasEmp, 2)
+                        : 0.0;
+
+                    $resultado['horas_extras']       = round($horasExtrasEmp, 2);
+                    $resultado['monto_horas_extras']  = $montoHorasExtras;
+                    if ($montoHorasExtras > 0) {
+                        $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoHorasExtras, 2);
                     }
 
                     // Anotar días de suspensión en detalle para trazabilidad
@@ -370,6 +386,8 @@ class PlanillasController extends RRHHBaseController
                 'salario_proporcional'      => (float) $l->salario_proporcional,
                 'dias_asueto'               => (float) ($l->dias_asueto ?? 0),
                 'salario_asueto'            => (float) ($l->salario_asueto ?? 0),
+                'horas_extras'              => (float) ($l->horas_extras ?? 0),
+                'monto_horas_extras'        => (float) ($l->monto_horas_extras ?? 0),
                 'afp_empleado'              => (float) $l->afp_empleado,
                 'isss_empleado'             => (float) $l->isss_empleado,
                 'renta'                     => (float) $l->renta,
@@ -735,6 +753,30 @@ class PlanillasController extends RRHHBaseController
         $filename = "boleta_{$empleado->codigo}_Q{$planilla->quincena}_{$planilla->anio}_{$planilla->mes}.pdf";
 
         return $pdf->download($filename);
+    }
+
+    /**
+     * Mapa empleado_id → total de horas_extras aprobadas cuya quincena de pago es la dada.
+     * Tarifa doble: salario_mensual / 240 × 2 × horas (cálculo en el caller).
+     */
+    private function getHorasExtrasMap(array $empIds, int $anio, int $mes, int $quincena): array
+    {
+        if (empty($empIds)) return [];
+
+        $map = [];
+        HorasExtrasSolicitud::where('estado', 'aprobada')
+            ->where('quincena_pago_anio', $anio)
+            ->where('quincena_pago_mes', $mes)
+            ->where('quincena_pago_num', $quincena)
+            ->whereIn('empleado_id', $empIds)
+            ->select('empleado_id', 'horas')
+            ->get()
+            ->each(function ($r) use (&$map) {
+                $eid = (int) $r->empleado_id;
+                $map[$eid] = ($map[$eid] ?? 0.0) + (float) $r->horas;
+            });
+
+        return $map;
     }
 
     /**
