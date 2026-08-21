@@ -337,6 +337,14 @@ class ReportesRRHHController extends RRHHBaseController
 
     // ─── Endpoint: Horas Quincena ─────────────────────────────────────────────
 
+    /**
+     * Reporte completo: días trabajados, horas laboradas, extras y nocturnidades.
+     *
+     * Para empleados operativos (con horarios_empleado): horas calculadas del schedule.
+     * Para empleados administrativos (sin horarios): base = días laborables × 8h,
+     * extras = solicitudes aprobadas de horas extras en la quincena.
+     * Ambos grupos descuentan permisos sin goce e incapacidades por horas.
+     */
     public function horasQuincena(Request $request): JsonResponse
     {
         try {
@@ -349,29 +357,71 @@ class ReportesRRHHController extends RRHHBaseController
             $deptoId    = $request->query('departamento_id');
 
             [$desde, $hasta] = $this->calc->rangoQuincena($anio, $mes, $quincena);
+            $diasQuincena    = PlanillaCalculatorService::DIAS_QUINCENA;
 
             $empleados = $this->getEmpleadosFiltrados($subordinadosIds, $sucursalId, $deptoId);
             $empIds    = collect($empleados)->pluck('id')->toArray();
 
-            $detalle = $this->getHorasDetalle($empIds, $desde, $hasta);
+            // Ausencias (para días no trabajados y descuento de horas)
+            $permisosAct = $this->getPermisos($empIds, $desde, $hasta);
+            $incapAct    = $this->getIncapacidades($empIds, $desde, $hasta);
+            $vacacAct    = $this->getVacaciones($empIds, $desde, $hasta);
+            $ausAct      = $this->getAusencias($empIds, $desde, $hasta);
+
+            // Horas de horarios (empleados operativos con schedule)
+            $horasDetalle = $this->getHorasDetalle($empIds, $desde, $hasta);
+
+            // Extras de solicitudes aprobadas (principalmente admin sin horarios)
+            $extrasMap = $this->getHorasExtrasSolicitudes($empIds, $anio, $mes, $quincena);
+
+            // Días laborables Mon-Fri en el período (base para admin)
+            $diasLaborables = $this->diasLaborablesEnPeriodo($desde, $hasta);
 
             $reporte = [];
             foreach ($empleados as $emp) {
                 $eid = $emp['id'];
-                $d   = $detalle[$eid] ?? ['laboradas' => 0, 'nocturnas' => 0, 'extra' => 0];
-                $pct = $d['laboradas'] > 0 ? round($d['nocturnas'] / $d['laboradas'] * 100, 1) : 0;
+
+                // Días no trabajados
+                $noTrabajados = $this->calcDiasNoTrabajadosDescuentos(
+                    $eid, $permisosAct, $incapAct, $vacacAct, $ausAct, $desde, $hasta
+                );
+
+                $horarios = $horasDetalle[$eid] ?? null;
+                $tieneHorarios = $horarios !== null && $horarios['laboradas'] > 0;
+
+                if ($tieneHorarios) {
+                    // Operativo: el horario ya omite los días de ausencia, sin resta adicional
+                    $hLaboradas = $horarios['laboradas'];
+                    $hNocturnas = $horarios['nocturnas'];
+                    $hExtra     = $horarios['extra'] + ($extrasMap[$eid] ?? 0);
+                } else {
+                    // Admin sin horarios: base días laborables × 8h, restar permisos e incapacidades
+                    $horasAusencia = $this->calcHorasAusencias($eid, $permisosAct, $incapAct, $desde, $hasta);
+                    $hLaboradas = max(0.0, $diasLaborables * 8.0 - $horasAusencia);
+                    $hNocturnas = 0.0;
+                    $hExtra     = $extrasMap[$eid] ?? 0;
+                }
+
+                $hLaboradas = round($hLaboradas, 2);
+                $pct = $hLaboradas > 0 ? round($hNocturnas / $hLaboradas * 100, 1) : 0;
+
                 $reporte[] = [
-                    'empleado_id'     => $eid,
-                    'codigo'          => $emp['codigo'] ?? null,
-                    'nombre'          => $emp['nombre'] ?? '—',
-                    'sucursal'        => $emp['sucursal'] ?? null,
-                    'sucursal_tipo'   => $emp['sucursal_tipo'] ?? null,
-                    'departamento'    => $emp['departamento'] ?? null,
-                    'cargo'           => $emp['cargo'] ?? null,
-                    'horas_laboradas' => round($d['laboradas'], 2),
-                    'horas_nocturnas' => round($d['nocturnas'], 2),
-                    'horas_extra'     => round($d['extra'], 2),
-                    'pct_nocturnas'   => $pct,
+                    'empleado_id'        => $eid,
+                    'codigo'             => $emp['codigo'] ?? null,
+                    'nombre'             => $emp['nombre'] ?? '—',
+                    'sucursal'           => $emp['sucursal'] ?? null,
+                    'sucursal_tipo'      => $emp['sucursal_tipo'] ?? null,
+                    'departamento'       => $emp['departamento'] ?? null,
+                    'cargo'              => $emp['cargo'] ?? null,
+                    'dias_quincena'      => $diasQuincena,
+                    'dias_no_trabajados' => $noTrabajados['total'],
+                    'dias_trabajados'    => max(0, $diasQuincena - $noTrabajados['total']),
+                    'detalles'           => $noTrabajados['detalles'],
+                    'horas_laboradas'    => $hLaboradas,
+                    'horas_nocturnas'    => round($hNocturnas, 2),
+                    'horas_extra'        => round($hExtra, 2),
+                    'pct_nocturnas'      => $pct,
+                    'es_admin'           => !$tieneHorarios,
                 ];
             }
 
@@ -379,11 +429,12 @@ class ReportesRRHHController extends RRHHBaseController
                 'success' => true,
                 'data'    => $reporte,
                 'meta'    => [
-                    'anio'     => $anio,
-                    'mes'      => $mes,
-                    'quincena' => $quincena,
-                    'desde'    => $desde->toDateString(),
-                    'hasta'    => $hasta->toDateString(),
+                    'anio'            => $anio,
+                    'mes'             => $mes,
+                    'quincena'        => $quincena,
+                    'desde'           => $desde->toDateString(),
+                    'hasta'           => $hasta->toDateString(),
+                    'dias_laborables' => $diasLaborables,
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -393,6 +444,83 @@ class ReportesRRHHController extends RRHHBaseController
                 'file'    => $e->getFile() . ':' . $e->getLine(),
             ], 500);
         }
+    }
+
+    /**
+     * Horas extras de solicitudes aprobadas para una quincena de trabajo.
+     * Agrupa por empleado_id y suma las horas.
+     */
+    private function getHorasExtrasSolicitudes(array $empIds, int $anio, int $mes, int $quincena): array
+    {
+        if (empty($empIds)) return [];
+
+        $rows = DB::connection('rrhh')
+            ->table('horas_extras_solicitudes')
+            ->whereIn('empleado_id', $empIds)
+            ->where('estado', 'aprobada')
+            ->where('quincena_trabajo_anio', $anio)
+            ->where('quincena_trabajo_mes',  $mes)
+            ->where('quincena_trabajo_num',  $quincena)
+            ->get(['empleado_id', 'horas']);
+
+        $result = [];
+        foreach ($rows as $r) {
+            $eid = (int) $r->empleado_id;
+            $result[$eid] = ($result[$eid] ?? 0.0) + (float) $r->horas;
+        }
+        return $result;
+    }
+
+    /**
+     * Cuenta días laborables (lunes–viernes) entre $desde y $hasta inclusive.
+     */
+    private function diasLaborablesEnPeriodo(Carbon $desde, Carbon $hasta): int
+    {
+        $count   = 0;
+        $current = $desde->copy();
+        while ($current->lte($hasta)) {
+            if (!$current->isSaturday() && !$current->isSunday()) {
+                $count++;
+            }
+            $current->addDay();
+        }
+        return $count;
+    }
+
+    /**
+     * Horas de ausencia que reducen las horas laboradas (8h por día ausente):
+     *   - Permisos sin goce
+     *   - Incapacidades privadas
+     *   - Incapacidades ISSS días > 3
+     */
+    private function calcHorasAusencias(
+        int $eid,
+        $permisos,
+        $incapacidades,
+        Carbon $desde,
+        Carbon $hasta
+    ): float {
+        $horas = 0.0;
+
+        foreach ($permisos->where('empleado_id', $eid) as $p) {
+            if ($p->tipoPermiso && $p->tipoPermiso->categoria === 'sin_goce') {
+                $dias = (float) ($p->dias ?? ($p->horas_solicitadas ? $p->horas_solicitadas / 8 : 0));
+                $horas += $dias * 8;
+            }
+        }
+
+        foreach ($incapacidades->where('empleado_id', $eid) as $inc) {
+            $diasEnQ   = $this->diasSolapados($inc->fecha_inicio, $inc->fecha_fin, $desde, $hasta);
+            $totalDias = (int) $inc->dias;
+            if ($inc->tipo_institucion === 'privada') {
+                $horas += $diasEnQ * 8;
+            } elseif ($inc->tipo_institucion === 'isss') {
+                $descuento = max(0, min($totalDias - 3, $diasEnQ));
+                $horas += $descuento * 8;
+            }
+        }
+
+        return $horas;
     }
 
     /**
