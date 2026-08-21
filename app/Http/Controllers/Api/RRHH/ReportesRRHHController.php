@@ -335,6 +335,131 @@ class ReportesRRHHController extends RRHHBaseController
         return max(0, $start->diffInDays($end) + 1);
     }
 
+    // ─── Endpoint: Horas Quincena ─────────────────────────────────────────────
+
+    public function horasQuincena(Request $request): JsonResponse
+    {
+        try {
+            $subordinadosIds = $this->getSubordinadosIds();
+
+            $anio      = (int) ($request->query('anio', now()->year));
+            $mes       = (int) ($request->query('mes', now()->month));
+            $quincena  = (int) ($request->query('quincena', now()->day <= 15 ? 1 : 2));
+            $sucursalId = $request->query('sucursal_id');
+            $deptoId    = $request->query('departamento_id');
+
+            [$desde, $hasta] = $this->calc->rangoQuincena($anio, $mes, $quincena);
+
+            $empleados = $this->getEmpleadosFiltrados($subordinadosIds, $sucursalId, $deptoId);
+            $empIds    = collect($empleados)->pluck('id')->toArray();
+
+            $detalle = $this->getHorasDetalle($empIds, $desde, $hasta);
+
+            $reporte = [];
+            foreach ($empleados as $emp) {
+                $eid = $emp['id'];
+                $d   = $detalle[$eid] ?? ['laboradas' => 0, 'nocturnas' => 0, 'extra' => 0];
+                $pct = $d['laboradas'] > 0 ? round($d['nocturnas'] / $d['laboradas'] * 100, 1) : 0;
+                $reporte[] = [
+                    'empleado_id'     => $eid,
+                    'codigo'          => $emp['codigo'] ?? null,
+                    'nombre'          => $emp['nombre'] ?? '—',
+                    'sucursal'        => $emp['sucursal'] ?? null,
+                    'sucursal_tipo'   => $emp['sucursal_tipo'] ?? null,
+                    'departamento'    => $emp['departamento'] ?? null,
+                    'cargo'           => $emp['cargo'] ?? null,
+                    'horas_laboradas' => round($d['laboradas'], 2),
+                    'horas_nocturnas' => round($d['nocturnas'], 2),
+                    'horas_extra'     => round($d['extra'], 2),
+                    'pct_nocturnas'   => $pct,
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'data'    => $reporte,
+                'meta'    => [
+                    'anio'     => $anio,
+                    'mes'      => $mes,
+                    'quincena' => $quincena,
+                    'desde'    => $desde->toDateString(),
+                    'hasta'    => $hasta->toDateString(),
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'file'    => $e->getFile() . ':' . $e->getLine(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Devuelve horas_laboradas, horas_nocturnas y horas_extra por empleado.
+     * Consolidado: una sola pasada sobre horarios_empleado.
+     *
+     * @return array<int, array{laboradas:float, nocturnas:float, extra:float}>
+     */
+    private function getHorasDetalle(array $empIds, Carbon $desde, Carbon $hasta): array
+    {
+        if (empty($empIds)) return [];
+
+        $horarios = DB::connection('pgsql')
+            ->table('horarios_empleado')
+            ->whereIn('empleado_id', $empIds)
+            ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->where('tipo', 'normal')
+            ->whereNotNull('hora_inicio')
+            ->whereNotNull('hora_fin')
+            ->get(['empleado_id', 'fecha', 'hora_inicio', 'hora_fin']);
+
+        $timeToMins = function (string $t): int {
+            [$hh, $mm] = array_pad(explode(':', $t), 2, '0');
+            return (int) $hh * 60 + (int) $mm;
+        };
+
+        $noctMins = function (int $inicio, int $fin): int {
+            $noct = 0;
+            if ($inicio < 6 * 60) $noct += min($fin, 6 * 60) - $inicio;
+            $z2s = max($inicio, 19 * 60); $z2e = min($fin, 24 * 60);
+            if ($z2e > $z2s) $noct += $z2e - $z2s;
+            if ($fin > 24 * 60) $noct += min($fin, 30 * 60) - 24 * 60;
+            return $noct;
+        };
+
+        // Agrupar por empleado → fecha → turnos (para calcular extras correctamente)
+        $byEmpDia = [];
+        foreach ($horarios as $h) {
+            $byEmpDia[(int) $h->empleado_id][$h->fecha][] = $h;
+        }
+
+        $result = [];
+        foreach ($byEmpDia as $eid => $dias) {
+            $result[$eid] = ['laboradas' => 0.0, 'nocturnas' => 0.0, 'extra' => 0.0];
+            foreach ($dias as $turnos) {
+                $totalMinDia  = 0;
+                $totalNoctDia = 0;
+                foreach ($turnos as $t) {
+                    $ini = $timeToMins($t->hora_inicio);
+                    $fin = $timeToMins($t->hora_fin);
+                    if ($fin <= $ini) $fin += 24 * 60;
+                    $totalMinDia  += ($fin - $ini);
+                    $totalNoctDia += $noctMins($ini, $fin);
+                }
+                $horasDia = $totalMinDia / 60;
+                $noctHrs  = $totalNoctDia / 60;
+                $maxHrs   = ($noctHrs > 4) ? 7 : 8;
+
+                $result[$eid]['laboradas'] += $horasDia;
+                $result[$eid]['nocturnas'] += $noctHrs;
+                $result[$eid]['extra']     += max(0.0, $horasDia - $maxHrs);
+            }
+        }
+
+        return $result;
+    }
+
     /**
      * Calcula horas nocturnas por empleado en la quincena (Art. 161 CT-SV).
      * Zonas: 00:00–06:00 y 19:00–24:00 (incluyendo crucen de medianoche).
