@@ -789,8 +789,8 @@ class AuditoriaRecetasController extends Controller
 
             DB::connection('compras')->table('auditoria_items')->upsert(
                 $rows,
-                ['auditoria_id', 'criterio_id'],          // columnas del unique constraint
-                ['resultado', 'observaciones', 'foto_url', 'updated_at'] // columnas a actualizar
+                ['auditoria_id', 'criterio_id', 'receta_item_id'], // índice único NULLS NOT DISTINCT
+                ['resultado', 'observaciones', 'foto_url', 'updated_at']
             );
 
             // Fotos por sección: descripcion = 'sec:NombreSeccion'
