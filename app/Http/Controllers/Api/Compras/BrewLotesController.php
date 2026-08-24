@@ -347,6 +347,7 @@ class BrewLotesController extends Controller
             'hora_inicio_general'   => 'nullable|string|max:8',
             'hora_fin_general'      => 'nullable|string|max:8',
             'oxig_nivel'            => 'nullable|string|max:200',
+            'molino_maltas_json'    => 'nullable|string',
             'macerado_pasos'        => 'array',
             'boil_pasos'            => 'array',
         ]);
