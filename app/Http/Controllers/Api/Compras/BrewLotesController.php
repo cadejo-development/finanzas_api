@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Compras;
 use App\Http\Controllers\Controller;
 use App\Models\BrewLote;
 use App\Models\BrewLoteIngrediente;
+use App\Models\BrewLoteFermPitchAdicional;
 use App\Models\BrewReceta;
 use App\Models\BrewLevaduraLote;
 use App\Models\BrewLevaduraPitch;
@@ -44,6 +45,7 @@ class BrewLotesController extends Controller
             'llenadoBotellas', 'llenadoBarriles',
             'llenadoBotellasCorridas', 'llenadoBarrilesCorridas',
             'levaduraPitches.levaduraLote',
+            'pitchesAdicionales',
             'ingredientes',
         ])->findOrFail($id);
 
@@ -51,7 +53,12 @@ class BrewLotesController extends Controller
         $this->syncIngredientesDesdeReceta($lote);
         $lote->load('ingredientes');
 
-        return array_merge($lote->toArray(), ['reporte' => $this->calcularReporte($lote)]);
+        $escala = $this->calcularEscalaBatch($lote);
+
+        return array_merge($lote->toArray(), [
+            'escala_batch' => round($escala, 4),
+            'reporte'      => $this->calcularReporte($lote),
+        ]);
     }
 
     /**
@@ -126,89 +133,90 @@ class BrewLotesController extends Controller
     }
 
     /**
+     * Devuelve el factor de escala del lote respecto al vol_preboil de la receta.
+     * Escala = vol_preboil_real_total / vol_preboil_receta.
+     * Retorna 1.0 si no hay datos suficientes (batch completo asumido).
+     */
+    private function calcularEscalaBatch(BrewLote $lote): float
+    {
+        $volReceta = (float) ($lote->receta->vol_preboil ?? 0);
+        if ($volReceta <= 0) return 1.0;
+
+        $cocciones = $lote->relationLoaded('cocciones') ? $lote->cocciones : $lote->cocciones()->get();
+        $volReal = $cocciones->sum(fn($c) => (float) ($c->vol_preboil_real ?? 0));
+        if ($volReal <= 0) return 1.0;
+
+        return $volReal / $volReceta;
+    }
+
+    /**
      * Sincroniza brew_lote_ingredientes con la receta actual.
-     * Solo crea registros que falten — nunca elimina ni sobreescribe estado/notas.
+     * - Crea ingredientes que falten (con cantidad escalada al batch real).
+     * - Actualiza cantidad_objetivo en ingredientes en estado 'pendiente'
+     *   cuando la escala del batch cambia (vol_preboil_real registrado).
+     * - Nunca toca ingredientes en proceso/parcial/agregado ni las notas.
      */
     private function syncIngredientesDesdeReceta(BrewLote $lote): void
     {
-        $existentes = $lote->ingredientes->map(fn($i) => $i->tipo . ':' . $i->nombre)->flip();
+        $escala     = $this->calcularEscalaBatch($lote);
+        $existentes = $lote->ingredientes->keyBy(fn($i) => $i->tipo . ':' . $i->nombre);
+        $insertar   = [];
+        $now        = now();
 
-        $insertar = [];
-        $now = now();
+        $items = [
+            ...collect($lote->receta->maltas)->map(fn($m) => [
+                'tipo'    => 'malta',
+                'nombre'  => $m->nombre,
+                'cant'    => $m->cantidad_lb,
+                'unidad'  => 'lb',
+                'detalle' => $m->proveedor,
+            ]),
+            ...collect($lote->receta->lupulos)->map(fn($l) => [
+                'tipo'    => 'lupulo',
+                'nombre'  => $l->nombre,
+                'cant'    => $l->cantidad_g,
+                'unidad'  => 'g',
+                'detalle' => trim(($l->uso ?? '') . ($l->tiempo_min ? ' ' . $l->tiempo_min . ' min' : '')),
+            ]),
+            ...collect($lote->receta->minerales)->map(fn($mn) => [
+                'tipo'    => 'mineral',
+                'nombre'  => $mn->nombre,
+                'cant'    => $mn->cantidad_g,
+                'unidad'  => 'g',
+                'detalle' => $mn->fase,
+            ]),
+            ...collect($lote->receta->levaduras)->map(fn($lv) => [
+                'tipo'    => 'levadura',
+                'nombre'  => $lv->nombre,
+                'cant'    => $lv->cantidad_g,
+                'unidad'  => 'g',
+                'detalle' => $lv->proveedor,
+            ]),
+        ];
 
-        foreach ($lote->receta->maltas as $m) {
-            if (empty($m->nombre)) continue;
-            $key = 'malta:' . $m->nombre;
+        foreach ($items as $item) {
+            if (empty($item['nombre'])) continue;
+            $key          = $item['tipo'] . ':' . $item['nombre'];
+            $cantEscalada = $item['cant'] !== null ? round($item['cant'] * $escala, 3) : null;
+
             if (!$existentes->has($key)) {
                 $insertar[] = [
                     'brew_lote_id'      => $lote->id,
-                    'tipo'              => 'malta',
-                    'nombre'            => $m->nombre,
-                    'cantidad_objetivo' => $m->cantidad_lb,
-                    'unidad'            => 'lb',
-                    'detalle'           => $m->proveedor,
+                    'tipo'              => $item['tipo'],
+                    'nombre'            => $item['nombre'],
+                    'cantidad_objetivo' => $cantEscalada,
+                    'unidad'            => $item['unidad'],
+                    'detalle'           => $item['detalle'],
                     'estado'            => 'pendiente',
                     'notas'             => null,
                     'created_at'        => $now,
                     'updated_at'        => $now,
                 ];
-            }
-        }
-
-        foreach ($lote->receta->lupulos as $l) {
-            if (empty($l->nombre)) continue;
-            $key = 'lupulo:' . $l->nombre;
-            if (!$existentes->has($key)) {
-                $insertar[] = [
-                    'brew_lote_id'      => $lote->id,
-                    'tipo'              => 'lupulo',
-                    'nombre'            => $l->nombre,
-                    'cantidad_objetivo' => $l->cantidad_g,
-                    'unidad'            => 'g',
-                    'detalle'           => trim(($l->uso ?? '') . ($l->tiempo_min ? ' ' . $l->tiempo_min . ' min' : '')),
-                    'estado'            => 'pendiente',
-                    'notas'             => null,
-                    'created_at'        => $now,
-                    'updated_at'        => $now,
-                ];
-            }
-        }
-
-        foreach ($lote->receta->minerales as $mn) {
-            if (empty($mn->nombre)) continue;
-            $key = 'mineral:' . $mn->nombre;
-            if (!$existentes->has($key)) {
-                $insertar[] = [
-                    'brew_lote_id'      => $lote->id,
-                    'tipo'              => 'mineral',
-                    'nombre'            => $mn->nombre,
-                    'cantidad_objetivo' => $mn->cantidad_g,
-                    'unidad'            => 'g',
-                    'detalle'           => $mn->fase,
-                    'estado'            => 'pendiente',
-                    'notas'             => null,
-                    'created_at'        => $now,
-                    'updated_at'        => $now,
-                ];
-            }
-        }
-
-        foreach ($lote->receta->levaduras as $lv) {
-            if (empty($lv->nombre)) continue;
-            $key = 'levadura:' . $lv->nombre;
-            if (!$existentes->has($key)) {
-                $insertar[] = [
-                    'brew_lote_id'      => $lote->id,
-                    'tipo'              => 'levadura',
-                    'nombre'            => $lv->nombre,
-                    'cantidad_objetivo' => $lv->cantidad_g,
-                    'unidad'            => 'g',
-                    'detalle'           => $lv->proveedor,
-                    'estado'            => 'pendiente',
-                    'notas'             => null,
-                    'created_at'        => $now,
-                    'updated_at'        => $now,
-                ];
+            } elseif ($existentes[$key]->estado === 'pendiente' && $cantEscalada !== null) {
+                // Actualizar solo si el trabajo no ha comenzado y la cantidad cambió
+                if ((float) $existentes[$key]->cantidad_objetivo !== $cantEscalada) {
+                    $existentes[$key]->update(['cantidad_objetivo' => $cantEscalada]);
+                }
             }
         }
 
@@ -336,6 +344,9 @@ class BrewLotesController extends Controller
             'wp_tiempo_min'         => 'nullable|integer|min:0',
             'wp_hora_inicio'        => 'nullable|string|max:8',
             'wp_hora_fin'           => 'nullable|string|max:8',
+            'hora_inicio_general'   => 'nullable|string|max:8',
+            'hora_fin_general'      => 'nullable|string|max:8',
+            'oxig_nivel'            => 'nullable|string|max:200',
             'macerado_pasos'        => 'array',
             'boil_pasos'            => 'array',
         ]);
@@ -680,7 +691,6 @@ class BrewLotesController extends Controller
 
     private function calcularReporte(BrewLote $lote): array
     {
-        $receta    = $lote->receta;
         $cocciones = $lote->relationLoaded('cocciones')
             ? $lote->cocciones
             : $lote->cocciones()->get();
@@ -693,7 +703,7 @@ class BrewLotesController extends Controller
         $volPostboil = $cocciones->sum(fn($c) => (float) ($c->vol_postboil_real ?? 0));
         $volBbt      = (float) ($filtr->vol_bbt_real ?? 0);
 
-        // Llenado
+        // Llenado — volumen desde tablas legacy (resumen multi-corrida)
         $volBotellas = 0;
         $volBarriles = 0;
         if ($botellas) {
@@ -705,16 +715,36 @@ class BrewLotesController extends Controller
         }
         $volTotal = $volBotellas + $volBarriles;
 
-        // Eficiencias (%)
-        $ef_coccion   = ($volPreboil > 0 && $volPostboil > 0) ? ($volPostboil / $volPreboil * 100) : null;
-        $ef_filtracion = ($volPostboil > 0 && $volBbt > 0)    ? ($volBbt / $volPostboil * 100)     : null;
-        $ef_llenado    = ($volBbt > 0 && $volTotal > 0)        ? ($volTotal / $volBbt * 100)         : null;
-        $ef_total      = ($volPreboil > 0 && $volTotal > 0)    ? ($volTotal / $volPreboil * 100)     : null;
+        // Eficiencias de proceso (%)
+        $ef_coccion    = ($volPreboil > 0  && $volPostboil > 0) ? ($volPostboil / $volPreboil * 100)  : null;
+        $ef_filtracion = ($volPostboil > 0 && $volBbt > 0)      ? ($volBbt / $volPostboil * 100)      : null;
+        $ef_total      = ($volPreboil > 0  && $volTotal > 0)    ? ($volTotal / $volPreboil * 100)     : null;
 
-        // Rendimiento botellas (botella buena / litro neto embotellado)
+        // Eficiencias de envasado — separadas por tipo y total
+        $ef_envasado_botellas = ($volBbt > 0 && $volBotellas > 0) ? ($volBotellas / $volBbt * 100) : null;
+        $ef_envasado_barriles = ($volBbt > 0 && $volBarriles > 0) ? ($volBarriles / $volBbt * 100) : null;
+        $ef_envasado_total    = ($volBbt > 0 && $volTotal > 0)    ? ($volTotal    / $volBbt * 100) : null;
+
+        // Eficiencia de barriles por corrida (volumen llenado / volumen BBT consumido)
+        $eficiencias_barriles_corridas = [];
+        $barrilesCorridasRel = $lote->relationLoaded('llenadoBarrilesCorridas')
+            ? $lote->llenadoBarrilesCorridas
+            : $lote->llenadoBarrilesCorridas()->get();
+        foreach ($barrilesCorridasRel as $corrida) {
+            $volRun    = ($corrida->barriles_6th ?? 0) * 19.8 + ($corrida->barriles_half ?? 0) * 58.7;
+            $volUsado  = ($corrida->bbt_vol_inicio ?? 0) - ($corrida->bbt_vol_fin ?? 0);
+            $eficiencias_barriles_corridas[] = [
+                'numero_corrida' => $corrida->numero_corrida,
+                'vol_barriles'   => round($volRun, 2),
+                'vol_bbt_usado'  => round($volUsado, 2),
+                'eficiencia'     => ($volUsado > 0) ? round($volRun / $volUsado * 100, 1) : null,
+            ];
+        }
+
+        // Rendimiento de embotellado (botellas buenas / litro neto usado en llenado)
         $rend_botellas = null;
-        if ($botellas && ($botellas->vol_inicio ?? 0) > 0 && ($botellas->vol_fin ?? 0) >= 0) {
-            $litrosNetos = ($botellas->vol_inicio - $botellas->vol_fin) * 1000 / 330;
+        if ($botellas && ($botellas->vol_inicio ?? 0) > 0) {
+            $litrosNetos = ($botellas->vol_inicio - ($botellas->vol_fin ?? 0)) * 1000 / 330;
             $rend_botellas = $litrosNetos > 0
                 ? round(($botellas->botellas_buenas ?? 0) / $litrosNetos * 100, 1)
                 : null;
@@ -722,26 +752,61 @@ class BrewLotesController extends Controller
 
         // ABV calculado desde OG/FG reales
         $coccion1 = $cocciones->first();
-        $og   = (float) ($lote->fermentacion->og_pitch ?? $coccion1?->og_real ?? 0);
-        $fg   = (float) ($botellas->fg_real ?? $barriles->fg_real ?? 0);
+        $og       = (float) ($lote->fermentacion->og_pitch ?? $coccion1?->og_real ?? 0);
+        $fg       = (float) ($botellas->fg_real ?? $barriles->fg_real ?? 0);
         $abv_real = ($og > 0 && $fg > 0) ? round(($og - $fg) * 131.25, 2) : null;
 
         return [
-            'vol_preboil'     => $volPreboil,
-            'vol_postboil'    => $volPostboil,
-            'vol_bbt'         => $volBbt,
-            'vol_botellas'    => round($volBotellas, 2),
-            'vol_barriles'    => round($volBarriles, 2),
-            'vol_total'       => round($volTotal, 2),
-            'ef_coccion'      => $ef_coccion    ? round($ef_coccion, 1)    : null,
-            'ef_filtracion'   => $ef_filtracion ? round($ef_filtracion, 1) : null,
-            'ef_llenado'      => $ef_llenado    ? round($ef_llenado, 1)    : null,
-            'ef_total'        => $ef_total      ? round($ef_total, 1)      : null,
-            'rend_botellas'   => $rend_botellas,
-            'abv_real'        => $abv_real,
-            'og_real'         => $og ?: null,
-            'fg_real'         => $fg ?: null,
+            'vol_preboil'               => $volPreboil,
+            'vol_postboil'              => $volPostboil,
+            'vol_bbt'                   => $volBbt,
+            'vol_botellas'              => round($volBotellas, 2),
+            'vol_barriles'              => round($volBarriles, 2),
+            'vol_total'                 => round($volTotal, 2),
+            'ef_coccion'                => $ef_coccion    ? round($ef_coccion, 1)    : null,
+            'ef_filtracion'             => $ef_filtracion ? round($ef_filtracion, 1) : null,
+            'ef_envasado_botellas'      => $ef_envasado_botellas ? round($ef_envasado_botellas, 1) : null,
+            'ef_envasado_barriles'      => $ef_envasado_barriles ? round($ef_envasado_barriles, 1) : null,
+            'ef_envasado_total'         => $ef_envasado_total    ? round($ef_envasado_total, 1)    : null,
+            'ef_llenado'                => $ef_envasado_total    ? round($ef_envasado_total, 1)    : null, // alias backward compat
+            'ef_total'                  => $ef_total      ? round($ef_total, 1)      : null,
+            'eficiencias_barriles_corridas' => $eficiencias_barriles_corridas,
+            'rend_botellas'             => $rend_botellas,
+            'abv_real'                  => $abv_real,
+            'og_real'                   => $og ?: null,
+            'fg_real'                   => $fg ?: null,
         ];
+    }
+
+    // ─── Pitches adicionales de levadura ─────────────────────────────────────
+
+    public function storeAdicionLevadura(Request $request, $id)
+    {
+        $lote = BrewLote::findOrFail($id);
+        $data = $request->validate([
+            'fecha'                 => 'required|date',
+            'tipo'                  => 'required|in:seca,repitch,liquida',
+            'levadura_nombre'       => 'required|string|max:120',
+            'cantidad'              => 'nullable|numeric|min:0',
+            'unidad'                => 'nullable|string|max:10',
+            'brew_levadura_lote_id' => 'nullable|exists:compras.brew_levadura_lotes,id',
+            'motivo'                => 'nullable|string|max:1000',
+            'notas'                 => 'nullable|string|max:1000',
+        ]);
+
+        $adicion = BrewLoteFermPitchAdicional::create(array_merge($data, [
+            'brew_lote_id' => $lote->id,
+            'unidad'       => $data['unidad'] ?? 'g',
+        ]));
+
+        return response()->json($adicion, 201);
+    }
+
+    public function destroyAdicionLevadura($id, $pid)
+    {
+        $adicion = BrewLoteFermPitchAdicional::where('brew_lote_id', $id)->findOrFail($pid);
+        $adicion->delete();
+        return response()->json(['ok' => true]);
     }
 
     // ─── Siguiente código de lote automático ─────────────────────────────────

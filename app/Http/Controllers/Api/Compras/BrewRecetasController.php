@@ -32,7 +32,38 @@ class BrewRecetasController extends Controller
             'maltas', 'lupulos', 'minerales', 'levaduras',
             'maceradoPasos', 'boilPasos', 'diasObjetivo',
         ])->findOrFail($id);
-        return $receta;
+
+        $data       = $receta->toArray();
+        $volPreboil = (float) ($receta->vol_preboil ?? 0);
+
+        // rendimiento_por_litro = cantidad_ingrediente / vol_preboil_receta (para Brilo)
+        if ($volPreboil > 0) {
+            $data['maltas'] = collect($data['maltas'])->map(function ($m) use ($volPreboil) {
+                $m['rendimiento_por_litro'] = isset($m['cantidad_lb'])
+                    ? round((float) $m['cantidad_lb'] / $volPreboil, 4) : null;
+                return $m;
+            })->all();
+
+            $data['lupulos'] = collect($data['lupulos'])->map(function ($l) use ($volPreboil) {
+                $l['rendimiento_por_litro'] = isset($l['cantidad_g'])
+                    ? round((float) $l['cantidad_g'] / $volPreboil, 4) : null;
+                return $l;
+            })->all();
+
+            $data['minerales'] = collect($data['minerales'])->map(function ($m) use ($volPreboil) {
+                $m['rendimiento_por_litro'] = isset($m['cantidad_g'])
+                    ? round((float) $m['cantidad_g'] / $volPreboil, 4) : null;
+                return $m;
+            })->all();
+
+            $data['levaduras'] = collect($data['levaduras'])->map(function ($l) use ($volPreboil) {
+                $l['rendimiento_por_litro'] = isset($l['cantidad_g'])
+                    ? round((float) $l['cantidad_g'] / $volPreboil, 4) : null;
+                return $l;
+            })->all();
+        }
+
+        return $data;
     }
 
     // GET /api/compras/brew/recetas/{id}/dias-objetivo

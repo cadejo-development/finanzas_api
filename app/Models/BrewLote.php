@@ -29,4 +29,5 @@ class BrewLote extends Model
     public function boilPasos()      { return $this->hasMany(BrewLoteBoilPaso::class, 'brew_lote_id')->orderBy('orden'); }
     public function levaduraPitches() { return $this->hasMany(BrewLevaduraPitch::class, 'brew_lote_id')->orderBy('fecha'); }
     public function ingredientes()    { return $this->hasMany(BrewLoteIngrediente::class, 'brew_lote_id')->orderByRaw("CASE tipo WHEN 'malta' THEN 1 WHEN 'mineral' THEN 2 WHEN 'lupulo' THEN 3 WHEN 'levadura' THEN 4 ELSE 5 END")->orderBy('id'); }
+    public function pitchesAdicionales() { return $this->hasMany(BrewLoteFermPitchAdicional::class, 'brew_lote_id')->orderBy('fecha')->orderBy('id'); }
 }
