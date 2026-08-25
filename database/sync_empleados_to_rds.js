@@ -898,49 +898,74 @@ async function run() {
         }
       }
 
-      // Crear ingresos_personal para empleados nuevos
-      if (paraInsertar.length) {
-        try {
-          const codigos = paraInsertar.map(r => r[0]);
-          const empRes  = await pg.query(
-            `SELECT e.id, e.nombres, e.apellidos, e.fecha_ingreso,
-                    c.nombre AS cargo_nombre, s.nombre AS sucursal_nombre
-             FROM empleados e
-             LEFT JOIN cargos c     ON c.id = e.cargo_id
-             LEFT JOIN sucursales s ON s.id = e.sucursal_id
-             WHERE e.codigo = ANY($1)`,
-            [codigos]
+      // Reconciliar ingresos_personal — corre siempre, no solo para nuevos.
+      // Cubre: (a) empleados recién insertados en este run, (b) empleados que ya
+      // estaban en RDS pero su registro de ingreso nunca fue creado (fallo anterior,
+      // rehire, corrección de fecha_ingreso, etc.).
+      try {
+        // 1. Empleados activos con fecha_ingreso reciente (últimos 60 días)
+        const { rows: empRecientes } = await pg.query(`
+          SELECT e.id, e.nombres, e.apellidos, e.fecha_ingreso,
+                 c.nombre AS cargo_nombre, s.nombre AS sucursal_nombre
+          FROM empleados e
+          LEFT JOIN cargos c     ON c.id = e.cargo_id
+          LEFT JOIN sucursales s ON s.id = e.sucursal_id
+          WHERE e.activo = true
+            AND e.fecha_ingreso >= NOW() - INTERVAL '60 days'
+        `);
+
+        if (empRecientes.length) {
+          // 2. De esos, cuáles ya tienen ingresos_personal en rrhh_db
+          const empIds = empRecientes.map(r => r.id);
+          const { rows: conIngreso } = await pgRrhh.query(
+            `SELECT DISTINCT empleado_id FROM ingresos_personal WHERE empleado_id = ANY($1)`,
+            [empIds]
           );
-          if (empRes.rows.length) {
-            const empIds = empRes.rows.map(r => r.id);
-            const yaExistenRes = await pgRrhh.query(
-              `SELECT DISTINCT empleado_id FROM ingresos_personal WHERE empleado_id = ANY($1)`,
-              [empIds]
+          const conIngresoSet = new Set(conIngreso.map(r => String(r.empleado_id)));
+          const sinIngreso    = empRecientes.filter(r => !conIngresoSet.has(String(r.id)));
+
+          let ingReconciliados = 0;
+          for (const r of sinIngreso) {
+            const nombre = `${r.nombres} ${r.apellidos}`.trim();
+            const fi     = fmtDate(r.fecha_ingreso);
+            const ingRes = await pgRrhh.query(
+              `INSERT INTO ingresos_personal
+                 (empleado_id, empleado_nombre, cargo_nombre, sucursal_nombre,
+                  fecha_ingreso, confirmacion, aud_usuario, created_at, updated_at)
+               VALUES ($1,$2,$3,$4,$5,'pendiente',$6,$7,$7)
+               ON CONFLICT DO NOTHING
+               RETURNING id`,
+              [r.id, nombre, r.cargo_nombre, r.sucursal_nombre, fi, AUD, NOW]
             );
-            const yaExisten = new Set(yaExistenRes.rows.map(r => r.empleado_id));
-            const sinIngreso = empRes.rows.filter(r => !yaExisten.has(r.id));
-            if (sinIngreso.length) {
-              const params = [];
-              const rowParts = sinIngreso.map(r => {
-                const nombre = `${r.nombres} ${r.apellidos}`.trim();
-                params.push(r.id, nombre, r.cargo_nombre, r.sucursal_nombre,
-                            fmtDate(r.fecha_ingreso), 'pendiente', AUD, NOW, NOW);
-                const n = params.length;
-                return `($${n-8},$${n-7},$${n-6},$${n-5},$${n-4},$${n-3},$${n-2},$${n-1},$${n})`;
-              });
+            if (ingRes.rows.length) {
+              const ingresoId = ingRes.rows[0].id;
+              const fechaFin  = fi ? (() => {
+                const d = new Date(fi + 'T12:00:00Z');
+                d.setUTCDate(d.getUTCDate() + 30);
+                return d.toISOString().slice(0, 10);
+              })() : null;
               await pgRrhh.query(
-                `INSERT INTO ingresos_personal
-                   (empleado_id, empleado_nombre, cargo_nombre, sucursal_nombre,
-                    fecha_ingreso, confirmacion, aud_usuario, created_at, updated_at)
-                 VALUES ${rowParts.join(',')}`,
-                params
+                `INSERT INTO periodos_prueba
+                   (ingreso_id, empleado_id, fecha_inicio, fecha_fin_estimada,
+                    estado, aud_usuario, created_at, updated_at)
+                 VALUES ($1,$2,$3,$4,'en_prueba',$5,$6,$6)
+                 ON CONFLICT DO NOTHING`,
+                [ingresoId, r.id, fi, fechaFin, AUD, NOW]
               );
-              log(`${sinIngreso.length} registro(s) de ingreso creados en ingresos_personal.`);
+              ingReconciliados++;
             }
           }
-        } catch (e) {
-          log(`AVISO: No se pudieron crear ingresos_personal automáticos: ${e.message}`);
+
+          if (ingReconciliados > 0) {
+            log(`${ingReconciliados} registro(s) de ingreso reconciliados en ingresos_personal.`);
+          } else {
+            log('ingresos_personal: todos los empleados recientes ya tienen registro.');
+          }
+        } else {
+          log('ingresos_personal: sin empleados activos recientes que revisar.');
         }
+      } catch (e) {
+        log(`ERROR reconciliando ingresos_personal: ${e.message}`);
       }
 
       const total   = await pg.query('SELECT COUNT(*) FROM empleados');
