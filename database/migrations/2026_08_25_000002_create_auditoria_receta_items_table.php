@@ -10,6 +10,7 @@ return new class extends Migration
 
     public function up(): void
     {
+        if (Schema::connection('compras')->hasTable('auditoria_receta_items')) return;
         Schema::connection('compras')->create('auditoria_receta_items', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('auditoria_id');
