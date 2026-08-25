@@ -11,6 +11,6 @@ class AuditoriaFoto extends Model
     protected $table      = 'auditoria_fotos';
 
     protected $fillable = [
-        'auditoria_id', 'url', 'descripcion', 'orden',
+        'auditoria_id', 'receta_item_id', 'url', 'descripcion', 'orden',
     ];
 }
