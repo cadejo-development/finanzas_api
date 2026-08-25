@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manual de Usuario — Sistema de Talento Humano</title>
+  <style>
+    /* ── Reset y tipografía ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --brand:    #1a3c2b;
+      --brand-lt: #2d6a4f;
+      --accent:   #f4a020;
+      --text:     #1f2937;
+      --muted:    #6b7280;
+      --border:   #d1d5db;
+      --bg-alt:   #f9fafb;
+      --bg-code:  #f3f4f6;
+      --success:  #16a34a;
+      --warning:  #ca8a04;
+      --danger:   #dc2626;
+      --info:     #2563eb;
+    }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text);
+      background: #fff;
+    }
+
+    /* ── Portada ────────────────────────────────────────────────── */
+    .cover {
+      background: linear-gradient(135deg, var(--brand) 0%, var(--brand-lt) 100%);
+      color: #fff;
+      padding: 80px 60px;
+      page-break-after: always;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .cover .logo { font-size: 11px; letter-spacing: 4px; text-transform: uppercase; opacity: .7; margin-bottom: 48px; }
+    .cover h1 { font-size: 38px; font-weight: 700; line-height: 1.2; margin-bottom: 16px; }
+    .cover .subtitle { font-size: 18px; opacity: .85; margin-bottom: 48px; }
+    .cover .meta { font-size: 12px; opacity: .6; border-top: 1px solid rgba(255,255,255,.3); padding-top: 24px; }
+    .cover .meta span { margin-right: 32px; }
+
+    /* ── Índice ────────────────────────────────────────────────── */
+    .toc {
+      padding: 60px;
+      page-break-after: always;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .toc h2 { font-size: 22px; color: var(--brand); border-bottom: 3px solid var(--accent); padding-bottom: 8px; margin-bottom: 32px; }
+    .toc ol { padding-left: 0; list-style: none; }
+    .toc > ol > li { margin-bottom: 12px; }
+    .toc > ol > li > a { font-size: 15px; font-weight: 600; color: var(--brand); text-decoration: none; }
+    .toc > ol > li > a:hover { text-decoration: underline; }
+    .toc .toc-sub { list-style: none; padding-left: 24px; margin-top: 6px; }
+    .toc .toc-sub li { margin-bottom: 4px; }
+    .toc .toc-sub a { font-size: 13px; color: var(--muted); text-decoration: none; }
+    .toc .toc-sub a:hover { color: var(--brand-lt); text-decoration: underline; }
+    .toc .toc-num { display: inline-block; width: 28px; color: var(--accent); font-weight: 700; }
+
+    /* ── Layout general de contenido ───────────────────────────── */
+    .content {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 60px;
+    }
+
+    /* ── Secciones ─────────────────────────────────────────────── */
+    .section {
+      page-break-before: always;
+      padding-top: 20px;
+    }
+    .section:first-of-type { page-break-before: avoid; }
+
+    /* ── Headings ──────────────────────────────────────────────── */
+    h1 { font-size: 28px; color: var(--brand); margin-bottom: 12px; }
+    h2 {
+      font-size: 20px;
+      color: var(--brand);
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 8px;
+      margin: 40px 0 20px;
+    }
+    h3 { font-size: 15px; font-weight: 700; color: var(--brand-lt); margin: 28px 0 12px; }
+    h4 { font-size: 13px; font-weight: 700; color: var(--text); margin: 20px 0 8px; }
+
+    .section-header {
+      background: linear-gradient(90deg, var(--brand) 0%, var(--brand-lt) 100%);
+      color: #fff;
+      padding: 20px 28px;
+      border-radius: 8px;
+      margin-bottom: 32px;
+    }
+    .section-header h2 {
+      border: none;
+      color: #fff;
+      margin: 0 0 4px;
+      padding: 0;
+      font-size: 22px;
+    }
+    .section-header p { opacity: .85; font-size: 13px; margin: 0; }
+
+    /* ── Párrafos y listas ─────────────────────────────────────── */
+    p { margin-bottom: 12px; }
+    ul, ol { padding-left: 24px; margin-bottom: 16px; }
+    li { margin-bottom: 6px; }
+
+    /* ── Tablas ────────────────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 13px; }
+    th { background: var(--brand); color: #fff; padding: 10px 14px; text-align: left; font-weight: 600; }
+    td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:nth-child(even) td { background: var(--bg-alt); }
+    tr:hover td { background: #e8f4ec; }
+
+    /* ── Badges de rol ─────────────────────────────────────────── */
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 600;
+      margin: 1px 2px;
+    }
+    .badge-admin   { background: #fef3c7; color: #92400e; }
+    .badge-analista{ background: #dbeafe; color: #1e40af; }
+    .badge-jefatura{ background: #f3e8ff; color: #6b21a8; }
+    .badge-empleado{ background: #dcfce7; color: #166534; }
+
+    /* ── Callouts ──────────────────────────────────────────────── */
+    .callout {
+      border-left: 4px solid;
+      padding: 12px 16px;
+      border-radius: 0 6px 6px 0;
+      margin: 20px 0;
+      font-size: 13px;
+    }
+    .callout-info    { border-color: var(--info);    background: #eff6ff; }
+    .callout-success { border-color: var(--success); background: #f0fdf4; }
+    .callout-warning { border-color: var(--warning); background: #fefce8; }
+    .callout-danger  { border-color: var(--danger);  background: #fef2f2; }
+    .callout strong  { display: block; margin-bottom: 4px; }
+
+    /* ── Flujo de pasos ────────────────────────────────────────── */
+    .steps { list-style: none; padding: 0; margin: 20px 0; }
+    .steps li {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      align-items: flex-start;
+    }
+    .step-num {
+      flex-shrink: 0;
+      width: 28px; height: 28px;
+      background: var(--brand);
+      color: #fff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .step-body { flex: 1; padding-top: 4px; }
+    .step-body strong { display: block; margin-bottom: 2px; }
+
+    /* ── Estado badges ─────────────────────────────────────────── */
+    .estado {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .estado-pendiente { background: #fef3c7; color: #92400e; }
+    .estado-aprobado  { background: #dcfce7; color: #166534; }
+    .estado-rechazado { background: #fee2e2; color: #991b1b; }
+    .estado-activo    { background: #dbeafe; color: #1e40af; }
+
+    /* ── Pantallas simuladas ───────────────────────────────────── */
+    .screen-mock {
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 20px 0;
+      font-size: 12px;
+    }
+    .screen-header {
+      background: var(--bg-alt);
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .screen-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .screen-body { padding: 16px; }
+
+    /* ── Print ─────────────────────────────────────────────────── */
+    @media print {
+      .cover { min-height: auto; padding: 60px 40px; }
+      .toc, .content { padding: 40px; }
+      h2 { page-break-after: avoid; }
+      h3 { page-break-after: avoid; }
+      table { page-break-inside: auto; }
+      tr { page-break-inside: avoid; }
+      .callout { page-break-inside: avoid; }
+      .steps li { page-break-inside: avoid; }
+      a { text-decoration: none; color: inherit; }
+    }
+
+    @page { margin: 18mm 16mm; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════ PORTADA -->
+<div class="cover">
+  <div class="logo">Cadejo Brewing Company · Talento Humano</div>
+  <h1>Manual de Usuario<br>Sistema de Talento Humano</h1>
+  <p class="subtitle">Guía completa para colaboradores, jefaturas y equipo de RRHH</p>
+  <div class="meta">
+    <span>Versión 1.0</span>
+    <span>Julio 2026</span>
+    <span>Equipo de Tecnología</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ ÍNDICE -->
+<div class="toc">
+  <h2>Tabla de Contenidos</h2>
+  <ol>
+    <li>
+      <a href="#sec-intro"><span class="toc-num">1.</span> Introducción y Acceso al Sistema</a>
+      <ul class="toc-sub">
+        <li><a href="#sec-login">1.1 Iniciar Sesión</a></li>
+        <li><a href="#sec-roles">1.2 Roles y Permisos</a></li>
+        <li><a href="#sec-dashboard">1.3 Panel de Control</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#sec-autoservicio"><span class="toc-num">2.</span> Autoservicio del Colaborador</a>
+      <ul class="toc-sub">
+        <li><a href="#sec-permisos">2.1 Solicitar Permiso</a></li>
+        <li><a href="#sec-vacaciones">2.2 Solicitar Vacaciones</a></li>
+        <li><a href="#sec-incapacidades">2.3 Registrar Incapacidad</a></li>
+        <li><a href="#sec-mi-horario">2.4 Mi Horario</a></li>
+        <li><a href="#sec-mi-expediente">2.5 Mi Expediente</a></li>
+        <li><a href="#sec-mis-descuentos">2.6 Órdenes de Descuento</a></li>
+        <li><a href="#sec-mis-bonificaciones">2.7 Bonificaciones</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#sec-jefatura"><span class="toc-num">3.</span> Módulos de Jefatura</a>
+      <ul class="toc-sub">
+        <li><a href="#sec-aprobar-solicitudes">3.1 Aprobar Solicitudes del Equipo</a></li>
+        <li><a href="#sec-horarios-admin">3.2 Gestión de Horarios</a></li>
+        <li><a href="#sec-reportes">3.3 Reportes</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#sec-analistas"><span class="toc-num">4.</span> Módulos de Analistas RRHH</a>
+      <ul class="toc-sub">
+        <li><a href="#sec-ausencias">4.1 Ausencias Injustificadas</a></li>
+        <li><a href="#sec-amonestaciones">4.2 Amonestaciones</a></li>
+        <li><a href="#sec-desvinculaciones">4.3 Desvinculaciones</a></li>
+        <li><a href="#sec-traslados">4.4 Traslados</a></li>
+        <li><a href="#sec-salarios">4.5 Cambios Salariales</a></li>
+        <li><a href="#sec-expedientes-admin">4.6 Expedientes de Empleados</a></li>
+        <li><a href="#sec-historial">4.7 Historial de Acciones</a></li>
+        <li><a href="#sec-onboarding">4.8 Ingreso de Personal</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#sec-admin"><span class="toc-num">5.</span> Módulos Administrativos (Admin RRHH)</a>
+      <ul class="toc-sub">
+        <li><a href="#sec-planillas">5.1 Planillas y Nómina</a></li>
+        <li><a href="#sec-kpi">5.2 KPIs y Bonificaciones</a></li>
+        <li><a href="#sec-organigrama">5.3 Organigrama</a></li>
+        <li><a href="#sec-puestos">5.4 Catálogo de Puestos</a></li>
+        <li><a href="#sec-plazas">5.5 Catálogo de Plazas</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#sec-faq"><span class="toc-num">6.</span> Preguntas Frecuentes</a>
+    </li>
+  </ol>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ CONTENIDO -->
+<div class="content">
+
+<!-- ─────────────────────────────────────── SECCIÓN 1: INTRODUCCIÓN -->
+<div class="section" id="sec-intro">
+  <div class="section-header">
+    <h2>1. Introducción y Acceso al Sistema</h2>
+    <p>Cómo ingresar al sistema y entender los niveles de acceso</p>
+  </div>
+
+  <h3 id="sec-login">1.1 Iniciar Sesión</h3>
+
+  <p>El Sistema de Talento Humano está disponible en <strong>talentohumano.cervezacadejo.com</strong>. Para ingresar necesitas las credenciales que te proporcionó el equipo de RRHH.</p>
+
+  <ol class="steps">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Abre el navegador</strong>
+        Ingresa a <em>talentohumano.cervezacadejo.com</em>. Se mostrará la pantalla de inicio de sesión.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Ingresa tus credenciales</strong>
+        Escribe tu correo electrónico corporativo y la contraseña asignada.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Primer ingreso</strong>
+        Si es tu primera vez, el sistema te pedirá cambiar la contraseña temporal por una definitiva (mínimo 8 caracteres).
+      </div>
+    </li>
+    <li>
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <strong>Recuperación de contraseña</strong>
+        Si olvidaste tu contraseña, haz clic en "¿Olvidaste tu contraseña?" e ingresa tu correo electrónico. Recibirás un código de 6 dígitos válido por 60 minutos.
+      </div>
+    </li>
+  </ol>
+
+  <div class="callout callout-info">
+    <strong>Acceso desde otros sistemas</strong>
+    Si tu empresa usa el portal principal, puedes ingresar directamente al Sistema de Talento Humano sin necesidad de volver a hacer login — el sistema reconoce tu sesión automáticamente (SSO).
+  </div>
+
+  <h3 id="sec-roles">1.2 Roles y Niveles de Acceso</h3>
+
+  <p>El sistema tiene diferentes niveles de acceso según tu rol en la empresa. El menú lateral mostrará únicamente las opciones disponibles para tu rol.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Rol</th>
+        <th>Descripción</th>
+        <th>Acceso</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="badge badge-admin">Admin RRHH</span></td>
+        <td>Administrador del sistema RRHH</td>
+        <td>Acceso total: planillas, KPIs, configuración</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-admin">Gerencia Ops</span></td>
+        <td>Gerencia de Operaciones</td>
+        <td>Acceso completo de gestión (sin planillas)</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-jefatura">Jefatura</span></td>
+        <td>Jefes de departamento/sucursal</td>
+        <td>Gestión de su equipo: horarios, reportes, aprobaciones</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-analista">Analista Sr</span></td>
+        <td>Analista RRHH Senior</td>
+        <td>Todos los módulos operativos incluyendo salarios y organigrama</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-analista">Analista Jr</span></td>
+        <td>Analista RRHH Junior</td>
+        <td>Permisos, incapacidades, expedientes, puestos y plazas</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-empleado">Colaborador</span></td>
+        <td>Empleado regular</td>
+        <td>Solo autoservicio: sus propias solicitudes y expediente</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3 id="sec-dashboard">1.3 Panel de Control (Dashboard)</h3>
+
+  <p>Al ingresar al sistema se muestra el Panel de Control con un resumen de tu situación actual:</p>
+
+  <ul>
+    <li><strong>Colaboradores</strong>: ven sus solicitudes pendientes, saldo de vacaciones y próximos eventos del calendario</li>
+    <li><strong>Jefaturas</strong>: además ven las solicitudes de aprobación pendientes de su equipo</li>
+    <li><strong>Analistas y Admin</strong>: ven estadísticas globales, acciones recientes y alertas del sistema</li>
+  </ul>
+</div>
+
+<!-- ─────────────────────────────────────── SECCIÓN 2: AUTOSERVICIO -->
+<div class="section" id="sec-autoservicio">
+  <div class="section-header">
+    <h2>2. Autoservicio del Colaborador</h2>
+    <p>Módulos disponibles para todos los colaboradores autenticados</p>
+  </div>
+
+  <h3 id="sec-permisos">2.1 Solicitar Permiso</h3>
+
+  <p>Desde el menú lateral selecciona <strong>Permisos</strong>. Aquí puedes ver todas tus solicitudes anteriores y crear nuevas.</p>
+
+  <ol class="steps">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Haz clic en "Nueva Solicitud"</strong>
+        Se abre un formulario para ingresar los datos del permiso.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Selecciona el tipo de permiso</strong>
+        Personal, médico, familiar, etc. Cada tipo puede tener requisitos diferentes.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Ingresa las fechas y motivo</strong>
+        Indica las fechas de inicio y fin del permiso y escribe una descripción del motivo.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <strong>Adjunta documento (si se requiere)</strong>
+        Algunos tipos de permiso requieren un documento de soporte (constancia médica, etc.).
+      </div>
+    </li>
+    <li>
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <strong>Envía la solicitud</strong>
+        Tu jefe inmediato recibirá un correo para aprobar o rechazar. Recibirás notificación cuando se resuelva.
+      </div>
+    </li>
+  </ol>
+
+  <h4>Estados de una solicitud</h4>
+  <p>
+    <span class="estado estado-pendiente">Pendiente</span> — En espera de revisión por tu jefe &nbsp;
+    <span class="estado estado-aprobado">Aprobado</span> — Permiso autorizado &nbsp;
+    <span class="estado estado-rechazado">Rechazado</span> — No autorizado (puedes ver el motivo)
+  </p>
+
+  <div class="callout callout-info">
+    <strong>Aprobación directa por correo</strong>
+    Tu jefe puede aprobar o rechazar la solicitud directamente desde el correo que recibe, sin necesidad de ingresar al sistema.
+  </div>
+
+  <h3 id="sec-vacaciones">2.2 Solicitar Vacaciones</h3>
+
+  <p>Desde el menú lateral selecciona <strong>Vacaciones</strong>. Antes de crear la solicitud, verifica tu saldo de días disponibles en la parte superior de la pantalla.</p>
+
+  <ol class="steps">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Revisa tu saldo</strong>
+        El sistema muestra los días disponibles, días tomados y días pendientes de aprobación.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Haz clic en "Solicitar Vacaciones"</strong>
+        Selecciona la fecha de inicio y la fecha de regreso. El sistema calcula automáticamente los días hábiles.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Confirma y envía</strong>
+        La solicitud pasa a estado "Pendiente" hasta que tu jefe la revise.
+      </div>
+    </li>
+  </ol>
+
+  <div class="callout callout-warning">
+    <strong>Importante</strong>
+    No puedes solicitar más días de los que tienes disponibles. Si necesitas vacaciones anticipadas, habla directamente con RRHH.
+  </div>
+
+  <h3 id="sec-incapacidades">2.3 Registrar Incapacidad</h3>
+
+  <p>Si estuviste incapacitado, debes registrarlo en el sistema con el documento médico correspondiente. Esto es obligatorio para que la ausencia quede justificada en tu planilla.</p>
+
+  <ol class="steps">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Ve a "Incapacidades"</strong>
+        Haz clic en "Registrar Incapacidad".
+      </div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Selecciona el tipo</strong>
+        ISSS, médico particular, accidente laboral, maternidad, etc.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Indica las fechas y adjunta el documento</strong>
+        Sube la constancia médica o comprobante del ISSS en formato PDF o imagen.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <strong>Guarda el registro</strong>
+        La incapacidad no requiere aprobación pero sí se notifica a tu jefe automáticamente.
+      </div>
+    </li>
+  </ol>
+
+  <h3 id="sec-mi-horario">2.4 Mi Horario</h3>
+
+  <p>En la sección <strong>Mi Horario</strong> puedes ver:</p>
+  <ul>
+    <li>Tu horario de trabajo asignado (días, hora de entrada y salida)</li>
+    <li>El calendario mensual del equipo con permisos y vacaciones aprobadas</li>
+    <li>Días feriados del mes</li>
+  </ul>
+
+  <p>Si crees que tu horario no es correcto, comunícate con tu jefe para que lo actualice.</p>
+
+  <h3 id="sec-mi-expediente">2.5 Mi Expediente</h3>
+
+  <p>El expediente digital es tu archivo personal en el sistema. Contiene toda tu información laboral y personal. Accede desde el menú lateral haciendo clic en <strong>Mi Expediente</strong>.</p>
+
+  <p>El expediente está organizado en pestañas:</p>
+
+  <table>
+    <thead>
+      <tr><th>Pestaña</th><th>Contenido</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Datos Personales</td><td>DUI, NIT, ISSS, AFP, fecha de nacimiento, estado civil</td></tr>
+      <tr><td>Contactos</td><td>Teléfonos personales y contacto de emergencia</td></tr>
+      <tr><td>Direcciones</td><td>Residencia actual y domicilio permanente</td></tr>
+      <tr><td>Documentos</td><td>Fotos de DUI, pasaporte y otros documentos de identidad</td></tr>
+      <tr><td>Estudios</td><td>Títulos académicos y certificaciones con sus atestados</td></tr>
+      <tr><td>Idiomas</td><td>Idiomas que hablas/escribes con nivel de dominio</td></tr>
+      <tr><td>Experiencia Laboral</td><td>Empleos anteriores con referencias</td></tr>
+      <tr><td>Cuentas Bancarias</td><td>Cuenta(s) donde recibes tu salario</td></tr>
+      <tr><td>Archivos</td><td>Documentos adjuntos (contratos, constancias, etc.)</td></tr>
+      <tr><td>Historial</td><td>Timeline de todas las acciones de personal registradas</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-info">
+    <strong>¿Puedo editar mi expediente?</strong>
+    Puedes actualizar tu información de contacto y datos de emergencia. Para cambios en documentos de identidad (DUI, NIT) o información académica, comunícate con un analista de RRHH.
+  </div>
+
+  <h3 id="sec-mis-descuentos">2.6 Órdenes de Descuento</h3>
+
+  <p>Si tienes préstamos, anticipos u otros descuentos en planilla, puedes ver el detalle en <strong>Órdenes de Descuento</strong>:</p>
+  <ul>
+    <li>Monto total, cuotas pagadas y saldo pendiente</li>
+    <li>Estado de cada orden (activa, suspendida, finalizada)</li>
+    <li>Historial de pagos por quincena</li>
+  </ul>
+
+  <h3 id="sec-mis-bonificaciones">2.7 Bonificaciones</h3>
+
+  <p>En la sección <strong>Bonificaciones</strong> puedes ver el estado de tus bonificaciones solicitadas o asignadas:</p>
+  <ul>
+    <li>Tipo de bonificación y monto</li>
+    <li>Estado: Pendiente de aprobación, Aprobada, Rechazada o Aplicada en planilla</li>
+    <li>En qué quincena fue o será aplicada</li>
+  </ul>
+</div>
+
+<!-- ─────────────────────────────────────── SECCIÓN 3: JEFATURA -->
+<div class="section" id="sec-jefatura">
+  <div class="section-header">
+    <h2>3. Módulos de Jefatura</h2>
+    <p>Funciones disponibles para jefes de departamento y gerencias</p>
+  </div>
+
+  <h3 id="sec-aprobar-solicitudes">3.1 Aprobar Solicitudes del Equipo</h3>
+
+  <p>Cuando un colaborador de tu equipo envía una solicitud de permiso o vacaciones, recibirás un correo electrónico con los botones para aprobar o rechazar. También puedes gestionarlo desde el sistema:</p>
+
+  <ol class="steps">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Ve al módulo correspondiente</strong>
+        Por ejemplo: <em>Permisos</em> → verás las solicitudes de todo tu equipo.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Filtra por estado "Pendiente"</strong>
+        Las solicitudes que requieren tu atención aparecen primero.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Haz clic en la solicitud para ver el detalle</strong>
+        Revisa la información del empleado, fechas y motivo.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <strong>Aprueba o rechaza</strong>
+        Al rechazar, puedes escribir el motivo para que el colaborador lo reciba por correo.
+      </div>
+    </li>
+  </ol>
+
+  <div class="callout callout-success">
+    <strong>Aprobación desde el correo</strong>
+    Puedes aprobar o rechazar directamente desde el email sin entrar al sistema. Los botones del correo son válidos por 5 días desde que se envió la solicitud.
+  </div>
+
+  <h3 id="sec-horarios-admin">3.2 Gestión de Horarios</h3>
+
+  <p>Desde <strong>Horarios</strong> puedes asignar horarios de trabajo a los miembros de tu equipo.</p>
+
+  <ol class="steps">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Ve a "Horarios"</strong>
+        Verás la lista de horarios disponibles y los empleados de tu equipo asignados a cada uno.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Selecciona un empleado</strong>
+        Haz clic en el nombre del empleado para ver su horario actual.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Asigna el nuevo horario</strong>
+        Selecciona el horario de la lista y confirma la fecha de inicio. Si el empleado ya tenía otro horario, se cierra automáticamente.
+      </div>
+    </li>
+  </ol>
+
+  <h3 id="sec-reportes">3.3 Reportes</h3>
+
+  <p>La sección <strong>Reportes</strong> genera un resumen consolidado del período seleccionado para tu equipo:</p>
+  <ul>
+    <li>Total de colaboradores activos</li>
+    <li>Movimientos del período (ingresos, salidas)</li>
+    <li>Resumen de ausencias y permisos</li>
+    <li>Totales de planilla (si tienes acceso)</li>
+  </ul>
+
+  <p>Selecciona el período (quincena) y la sucursal, luego haz clic en <strong>Generar Reporte</strong>. Puedes exportarlo a Excel o imprimirlo.</p>
+</div>
+
+<!-- ─────────────────────────────────────── SECCIÓN 4: ANALISTAS -->
+<div class="section" id="sec-analistas">
+  <div class="section-header">
+    <h2>4. Módulos de Analistas RRHH</h2>
+    <p>Funciones de gestión de personal disponibles para analistas (Sr y Jr según el módulo)</p>
+  </div>
+
+  <h3 id="sec-ausencias">4.1 Ausencias Injustificadas</h3>
+
+  <p>Registra los días en que un colaborador no se presentó sin justificación. Estos registros impactan directamente el descuento en planilla del período.</p>
+
+  <ol class="steps">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>Ve a "Ausencias Injustificadas"</strong></div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Registra la ausencia</strong>
+        Selecciona el empleado, la fecha y agrega una observación.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Si el empleado presenta justificación posterior</strong>
+        Usa el botón "Regularizar" para marcar la ausencia como justificada y que no impacte la planilla.
+      </div>
+    </li>
+  </ol>
+
+  <div class="callout callout-warning">
+    <strong>Vínculo con planilla</strong>
+    Las ausencias injustificadas se procesan automáticamente al generar la planilla del período. Asegúrate de registrarlas antes de generar la planilla quincenal.
+  </div>
+
+  <h3 id="sec-amonestaciones">4.2 Amonestaciones</h3>
+
+  <p>Registro formal de faltas disciplinarias. El sistema genera automáticamente un documento PDF de amonestación.</p>
+
+  <ol class="steps">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Selecciona al empleado y el tipo de falta</strong>
+        Los tipos de falta tienen diferentes niveles de gravedad: Leve, Grave y Muy Grave.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Describe los hechos</strong>
+        Ingresa la descripción detallada de la falta en el campo correspondiente.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Define la consecuencia</strong>
+        Si aplica, indica los días de suspensión o suspensión de propina.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <strong>Guarda y descarga el PDF</strong>
+        El sistema genera el documento de amonestación. Puedes descargarlo para que el colaborador lo firme.
+      </div>
+    </li>
+  </ol>
+
+  <table>
+    <thead>
+      <tr><th>Gravedad</th><th>Flujo de aprobación</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Leve</td>
+        <td>Aprobación automática. Se notifica al empleado y al supervisor.</td>
+      </tr>
+      <tr>
+        <td>Grave (suspensión de propina)</td>
+        <td>Requiere aprobación de Gerencia de Operaciones (email con botones).</td>
+      </tr>
+      <tr>
+        <td>Muy Grave</td>
+        <td>Requiere aprobación de la Jefa de RRHH (email con botones).</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3 id="sec-desvinculaciones">4.3 Desvinculaciones</h3>
+
+  <p>Registra la salida de un colaborador de la empresa, ya sea por despido o renuncia.</p>
+
+  <div class="callout callout-danger">
+    <strong>Acción irreversible</strong>
+    Al confirmar una desvinculación, el colaborador queda inactivo en el sistema. Verifica todos los datos antes de confirmar.
+  </div>
+
+  <ol class="steps">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Selecciona el tipo</strong>
+        "Despidos" para salidas involuntarias o "Renuncias" para salidas voluntarias.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Busca al colaborador y completa el formulario</strong>
+        Selecciona el motivo de desvinculación, la fecha de salida y agrega observaciones.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Genera la carta de finiquito</strong>
+        El sistema genera el documento automáticamente. Descárgalo para el proceso de firma.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <strong>Confirma la desvinculación</strong>
+        Al confirmar, se notifica automáticamente a todos los administradores de RRHH.
+      </div>
+    </li>
+  </ol>
+
+  <h3 id="sec-traslados">4.4 Traslados</h3>
+
+  <p>Registra el cambio de sucursal, departamento o cargo de un colaborador.</p>
+
+  <ol class="steps">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Selecciona al colaborador y el tipo de cambio</strong>
+        Puede ser traslado de sucursal, cambio de departamento o cambio de cargo.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Indica el destino y la fecha efectiva</strong>
+        La fecha efectiva determina cuándo entra en vigor el cambio para efectos de planilla.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Guarda el traslado</strong>
+        Si el traslado requiere reconfiguración de accesos, el equipo de Informática recibirá un correo automáticamente.
+      </div>
+    </li>
+  </ol>
+
+  <h3 id="sec-salarios">4.5 Cambios Salariales</h3>
+
+  <p>Registra incrementos o nivelaciones de salario. <em>Disponible solo para Analistas Sr y Admin.</em></p>
+
+  <table>
+    <thead>
+      <tr><th>Tipo</th><th>Descripción</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Aumento Salarial</td>
+        <td>Incremento porcentual o por monto fijo sobre el salario actual. Aplica por mérito o ajuste de costo de vida.</td>
+      </tr>
+      <tr>
+        <td>Nivelación Salarial</td>
+        <td>Ajuste para llevar el salario del colaborador a la banda salarial definida para su puesto.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <ol class="steps">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Selecciona al colaborador y el tipo de cambio</strong>
+        Ingresa el salario nuevo o el porcentaje de incremento.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Sube el documento firmado</strong>
+        Genera el documento de cambio salarial, obten la firma del colaborador y súbelo al sistema.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Confirma el cambio</strong>
+        El nuevo salario se aplicará desde la siguiente planilla.
+      </div>
+    </li>
+  </ol>
+
+  <h3 id="sec-expedientes-admin">4.6 Expedientes de Empleados</h3>
+
+  <p>En <strong>Expedientes</strong> puedes ver y editar el expediente de cualquier colaborador activo.</p>
+
+  <ol class="steps">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Busca al colaborador</strong>
+        Usa el buscador por nombre o código de empleado.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Selecciona la pestaña que necesitas editar</strong>
+        Datos Personales, Documentos, Estudios, etc.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Edita y guarda</strong>
+        Para documentos con archivo adjunto (estudios, documentos de identidad), sube el archivo en la misma pantalla.
+      </div>
+    </li>
+  </ol>
+
+  <h3 id="sec-historial">4.7 Historial de Acciones</h3>
+
+  <p>La sección <strong>Historial</strong> muestra un registro inmutable de todas las acciones registradas en el sistema. Útil para auditorías y seguimiento.</p>
+
+  <p>Puedes filtrar por:</p>
+  <ul>
+    <li>Colaborador específico</li>
+    <li>Tipo de acción (permiso, amonestación, traslado, etc.)</li>
+    <li>Rango de fechas</li>
+  </ul>
+
+  <p>Cada registro muestra quién realizó la acción, cuándo y todos los datos relevantes del momento.</p>
+
+  <h3 id="sec-onboarding">4.8 Ingreso de Personal (Onboarding)</h3>
+
+  <p>El proceso de incorporación de nuevos colaboradores se hace en cuatro etapas:</p>
+
+  <ol class="steps">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Generar el QR de Pre-registro</strong>
+        Ve a <em>Administración → Pre-registro QR</em>. Haz clic en "Generar QR". El sistema crea un código QR único válido por 72 horas.
+        <br><small style="color:var(--muted)">Solo disponible para Analistas Sr y Admin.</small>
+      </div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>El candidato completa su formulario</strong>
+        Entrega el QR al candidato. Al escanearlo desde su celular, se abre un formulario donde completa todos sus datos personales, estudios y documentos. No necesita crear cuenta.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Revisión en "Ingreso de Personal"</strong>
+        Una vez que el candidato envíe el formulario, aparecerá en la lista de <em>Ingreso de Personal</em>. Revisa y edita los datos si es necesario. Evalúa los criterios del período de prueba.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <strong>Confirmar el ingreso</strong>
+        Haz clic en "Confirmar Ingreso" para activar al colaborador en el sistema. Genera y entrega el contrato laboral firmado.
+      </div>
+    </li>
+  </ol>
+</div>
+
+<!-- ─────────────────────────────────────── SECCIÓN 5: ADMIN -->
+<div class="section" id="sec-admin">
+  <div class="section-header">
+    <h2>5. Módulos Administrativos</h2>
+    <p>Funciones exclusivas del Administrador RRHH</p>
+  </div>
+
+  <h3 id="sec-planillas">5.1 Planillas y Nómina</h3>
+
+  <p>El módulo de <strong>Planillas</strong> gestiona el procesamiento quincenal de la nómina.</p>
+
+  <ol class="steps">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Inicia el proceso de planilla</strong>
+        Ve a <em>Planillas</em> y haz clic en "Generar Nueva Planilla". Selecciona el período (quincena).
+      </div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>El sistema calcula automáticamente</strong>
+        Se crean líneas individuales por cada empleado activo con el desglose de:
+        deducciones ISSS, AFP, renta ISR, ausencias del período, acreedores y órdenes de descuento.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Revisa y ajusta</strong>
+        Si alguna línea requiere un ajuste manual, puedes editarla directamente en la tabla. Registra siempre el motivo del ajuste.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <strong>Aprueba la planilla</strong>
+        Al hacer clic en "Aprobar Planilla", esta se bloquea y ya no puede editarse.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <strong>Exporta y distribuye</strong>
+        Descarga el Excel para contabilidad. Genera las boletas individuales en PDF para cada colaborador.
+      </div>
+    </li>
+  </ol>
+
+  <h4>Mantenimiento de Planilla</h4>
+  <p>En <em>Planillas → Mantenimiento</em> puedes configurar los parámetros del cálculo:</p>
+  <ul>
+    <li><strong>Tabla de renta ISR</strong>: Rangos y tasas del impuesto sobre la renta</li>
+    <li><strong>Acreedores</strong>: ISSS, AFP, bancos, cooperativas</li>
+    <li><strong>Órdenes permanentes</strong>: Descuentos fijos recurrentes por empleado</li>
+  </ul>
+
+  <div class="callout callout-warning">
+    <strong>Antes de generar la planilla</strong>
+    Asegúrate de que todas las ausencias injustificadas del período estén registradas y que los cambios salariales del período estén confirmados.
+  </div>
+
+  <h3 id="sec-kpi">5.2 KPIs y Bonificaciones</h3>
+
+  <p>En <strong>KPIs y Plantillas</strong> defines los indicadores de desempeño por cargo:</p>
+
+  <ol class="steps">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Crea una plantilla KPI</strong>
+        Selecciona el cargo al que aplica y agrega los indicadores (nombre, meta, peso porcentual).
+      </div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Activa la plantilla</strong>
+        Una vez activa, aplica a todos los empleados con ese cargo en el sistema.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Registra los resultados</strong>
+        Al cerrar el período de evaluación, los jefes ingresan los resultados de cada indicador por colaborador.
+      </div>
+    </li>
+  </ol>
+
+  <h3 id="sec-organigrama">5.3 Organigrama</h3>
+
+  <p>La sección <strong>Organigrama</strong> muestra la estructura jerárquica de la empresa en formato de árbol. Desde aquí puedes:</p>
+  <ul>
+    <li>Ver todos los departamentos y su jerarquía</li>
+    <li>Asignar o cambiar el jefe de un departamento</li>
+    <li>Agregar o mover empleados entre departamentos</li>
+    <li>Crear nuevos departamentos o unidades</li>
+  </ul>
+
+  <div class="callout callout-danger">
+    <strong>Impacto en autorización</strong>
+    La jerarquía del organigrama define qué empleados puede ver y gestionar cada jefatura. Un cambio en la estructura puede afectar el acceso de múltiples usuarios. Realiza cambios con cuidado.
+  </div>
+
+  <h3 id="sec-puestos">5.4 Catálogo de Puestos</h3>
+
+  <p>Define los puestos de trabajo existentes en la empresa. Cada puesto tiene:</p>
+  <ul>
+    <li>Nombre y descripción del rol</li>
+    <li>Banda salarial (mínimo y máximo)</li>
+    <li>Headcount autorizado (número máximo de personas en ese puesto)</li>
+  </ul>
+
+  <p>Cuando el número de personas activas en un puesto supera el headcount autorizado, el sistema muestra una alerta visual.</p>
+
+  <h3 id="sec-plazas">5.5 Catálogo de Plazas</h3>
+
+  <p>Las plazas son las posiciones individuales dentro de un puesto. Cada plaza puede estar <strong>ocupada</strong> o <strong>vacante</strong>.</p>
+
+  <p>Puedes ver:</p>
+  <ul>
+    <li>El estado actual de cada plaza (ocupada / vacante)</li>
+    <li>El colaborador que la ocupa actualmente</li>
+    <li>El historial completo de quién ha ocupado esa plaza</li>
+    <li>El tiempo que el colaborador actual lleva en la plaza</li>
+  </ul>
+</div>
+
+<!-- ─────────────────────────────────────── SECCIÓN 6: FAQ -->
+<div class="section" id="sec-faq">
+  <div class="section-header">
+    <h2>6. Preguntas Frecuentes</h2>
+    <p>Respuestas a las dudas más comunes sobre el uso del sistema</p>
+  </div>
+
+  <h3>Sobre el inicio de sesión</h3>
+
+  <h4>¿Qué hago si olvidé mi contraseña?</h4>
+  <p>En la pantalla de login, haz clic en "¿Olvidaste tu contraseña?" e ingresa tu correo corporativo. Recibirás un código de 6 dígitos válido por 60 minutos. Con ese código podrás crear una nueva contraseña.</p>
+
+  <h4>¿Por qué me pide cambiar la contraseña al entrar?</h4>
+  <p>Por seguridad, el sistema detecta que estás usando una contraseña temporal o una contraseña predeterminada. Debes establecer una contraseña personal de al menos 8 caracteres.</p>
+
+  <h4>¿Puedo tener la sesión abierta en varios dispositivos?</h4>
+  <p>Sí. El sistema permite múltiples sesiones activas. Al cerrar sesión en un dispositivo, solo se cierra esa sesión específica.</p>
+
+  <h3>Sobre permisos y vacaciones</h3>
+
+  <h4>¿Cuánto tiempo tarda mi jefe en recibir el correo de aprobación?</h4>
+  <p>El correo se envía de inmediato al crear la solicitud. Si tu jefe no lo recibe, pídele que revise la carpeta de spam o que busque la solicitud directamente en el sistema.</p>
+
+  <h4>¿Puedo modificar una solicitud después de enviarla?</h4>
+  <p>Solo puedes modificar o cancelar una solicitud mientras está en estado "Pendiente". Una vez aprobada o rechazada, debes comunicarte con RRHH para hacer cambios.</p>
+
+  <h4>¿Mis días de permiso aparecen descontados de las vacaciones?</h4>
+  <p>No. Los permisos y las vacaciones tienen saldos separados según el tipo de permiso. Los permisos personales, médicos, etc. tienen sus propios saldos independientes de los días de vacaciones anuales.</p>
+
+  <h3>Sobre el expediente</h3>
+
+  <h4>¿Quién puede ver mi expediente?</h4>
+  <p>Solo tú, los analistas de RRHH, tu jefe inmediato y los administradores del sistema tienen acceso a tu expediente. Ningún otro colaborador puede verlo.</p>
+
+  <h4>¿Los documentos que subo al expediente están seguros?</h4>
+  <p>Sí. Los documentos se almacenan en Amazon S3 con cifrado y solo son accesibles mediante enlaces temporales con expiración. Nadie puede acceder a ellos con una URL directa.</p>
+
+  <h3>Sobre la planilla</h3>
+
+  <h4>¿En qué momento se descuentan las ausencias?</h4>
+  <p>Las ausencias injustificadas registradas antes de que se genere la planilla del período se descuentan automáticamente. Si la ausencia se registra después de que la planilla ya fue aprobada, aplica en el siguiente período.</p>
+
+  <h4>¿Cómo puedo ver el detalle de mi boleta de pago?</h4>
+  <p>Comunícate con el administrador de RRHH para que te genere y envíe la boleta en PDF. En el futuro, este acceso puede habilitarse directamente desde tu perfil.</p>
+
+  <h3>Problemas técnicos</h3>
+
+  <h4>El sistema carga muy lento, ¿qué hago?</h4>
+  <p>El sistema corre en la nube (AWS). Si experimentas lentitud, espera 30-60 segundos — puede ser un arranque en frío del servidor. Si el problema persiste, comunícate con el equipo de Tecnología.</p>
+
+  <h4>No veo en el menú la opción que necesito</h4>
+  <p>Las opciones del menú dependen de tu rol. Si crees que deberías tener acceso a algo que no ves, comunícate con el administrador de RRHH para que revise tus permisos.</p>
+
+  <h4>Recibí un error al guardar un registro, ¿qué hago?</h4>
+  <p>Anota el mensaje de error exacto y el módulo donde ocurrió. Reporta el problema al equipo de Tecnología con esa información para que puedan investigarlo.</p>
+
+  <hr style="margin: 40px 0; border: none; border-top: 1px solid var(--border);" />
+
+  <p style="text-align:center; color: var(--muted); font-size: 12px;">
+    Manual de Usuario — Sistema de Talento Humano v1.0 · Cadejo Brewing Company · Julio 2026<br>
+    Para soporte técnico: <strong>soporteit@cervezacadejo.com</strong>
+  </p>
+</div>
+
+</div><!-- /content -->
+</body>
+</html>

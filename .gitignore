@@ -31,3 +31,4 @@ storage/fonts/*.json
 # Scripts de base de datos de uso interno / diagnóstico
 # (nunca subir: pueden contener datos sensibles o lógica de un solo uso)
 database/_*.js
+!database/_dbLogger.js

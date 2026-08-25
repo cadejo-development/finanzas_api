@@ -8,7 +8,15 @@
       "PowerShell(Get-ScheduledTaskInfo -TaskName \"LaravelScheduler-FinanzasAPI\")",
       "PowerShell(Get-ScheduledTask -TaskName \"LaravelScheduler-FinanzasAPI\")",
       "PowerShell(schtasks /query /tn \"LaravelScheduler-FinanzasAPI\" /fo LIST)",
-      "PowerShell(& \"C:\\\\Users\\\\administrator\\\\.config\\\\herd\\\\bin\\\\php83.bat\" \"C:\\\\Users\\\\administrator\\\\check_receta_44871.php\" 2>&1)"
+      "PowerShell(& \"C:\\\\Users\\\\administrator\\\\.config\\\\herd\\\\bin\\\\php83.bat\" \"C:\\\\Users\\\\administrator\\\\check_receta_44871.php\" 2>&1)",
+      "Bash(node -e ' *)",
+      "Read(//c//**)",
+      "Bash(git commit -m ' *)",
+      "PowerShell(Get-ChildItem \"$env:USERPROFILE\\\\AppData\\\\Local\\\\Herd\" -Recurse -Filter \"php.exe\" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName)",
+      "PowerShell(Get-ChildItem \"C:\\\\Program Files\\\\Herd\" -Recurse -Filter \"php.exe\" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName; Get-ChildItem \"$env:USERPROFILE\\\\.config\\\\herd\" -ErrorAction SilentlyContinue | Select-Object Name | Select-Object -First 5)",
+      "PowerShell(Get-ChildItem \"$env:USERPROFILE\\\\.config\\\\herd\\\\bin\" -ErrorAction SilentlyContinue | Select-Object Name)",
+      "PowerShell($php = \"$env:USERPROFILE\\\\.config\\\\herd\\\\bin\\\\php83\\\\php.exe\"; cd \"C:\\\\Users\\\\administrator\\\\finanzas_api\"; & $php artisan rrhh:inactivar-desvinculados --dry-run 2>&1)",
+      "PowerShell(head)"
     ]
   }
 }

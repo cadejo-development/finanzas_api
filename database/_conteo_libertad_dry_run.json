@@ -1,0 +1,3290 @@
+{
+  "fecha": "2026-06-29",
+  "sucursal_id": 3,
+  "items": [
+    {
+      "producto_id": "16962",
+      "codigo": "MR0801014",
+      "nombre": "FILETE DE PESCADO",
+      "cantidad_contada": 159.78,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 134.61,
+        "CUARTO FRIO": 6.97,
+        "COCINA": 18.2
+      }
+    },
+    {
+      "producto_id": "16860",
+      "codigo": "MR0801001",
+      "nombre": "SALMON FRESCO",
+      "cantidad_contada": 30.76,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 7.5,
+        "CUARTO FRIO": 17.88,
+        "COCINA": 5.38
+      }
+    },
+    {
+      "producto_id": "16754",
+      "codigo": "MR1001001",
+      "nombre": "PAPAS CONGELADAS",
+      "cantidad_contada": 1487.52,
+      "unidad": "oz",
+      "secciones": {
+        "FRIOS": 320,
+        "CUARTO FRIO": 1060.64,
+        "COCINA": 106.88
+      }
+    },
+    {
+      "producto_id": "17183",
+      "codigo": "MR0522039",
+      "nombre": "CAMARON U11",
+      "cantidad_contada": 37.86,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 8.54,
+        "CUARTO FRIO": 23,
+        "COCINA": 6.32
+      }
+    },
+    {
+      "producto_id": "16956",
+      "codigo": "MR0801010",
+      "nombre": "MEJILLONES",
+      "cantidad_contada": 31.57,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 7.7,
+        "CUARTO FRIO": 22,
+        "COCINA": 1.87
+      }
+    },
+    {
+      "producto_id": "17239",
+      "codigo": "CP0104006",
+      "nombre": "CP FILETE LOMO AGUJA 8OZ",
+      "cantidad_contada": 106.5,
+      "unidad": "u",
+      "secciones": {
+        "FRIOS": 52,
+        "COCINA": 54.5
+      }
+    },
+    {
+      "producto_id": "16935",
+      "codigo": "MR0704003",
+      "nombre": "QUESO MOZZARELLA RALLADO",
+      "cantidad_contada": 65.61,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 62.39,
+        "COCINA": 3.22
+      }
+    },
+    {
+      "producto_id": "17275",
+      "codigo": "MR0901021",
+      "nombre": "TOSTONES",
+      "cantidad_contada": 51.99,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 45,
+        "COCINA": 6.99
+      }
+    },
+    {
+      "producto_id": "16830",
+      "codigo": "MR0801006",
+      "nombre": "CAMARON 36/40",
+      "cantidad_contada": 206.53,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 177.88,
+        "CUARTO FRIO": 12.12,
+        "COCINA": 16.53
+      }
+    },
+    {
+      "producto_id": "17310",
+      "codigo": "MR0101009",
+      "nombre": "GUACAMOLE TERMINADO",
+      "cantidad_contada": 11.28,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 9.399999999999999,
+        "COCINA": 1.88
+      }
+    },
+    {
+      "producto_id": "16954",
+      "codigo": "MR0801017",
+      "nombre": "ALMEJA",
+      "cantidad_contada": 50.59,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 37.21,
+        "CUARTO FRIO": 7,
+        "COCINA": 6.38
+      }
+    },
+    {
+      "producto_id": "16925",
+      "codigo": "MR1104003",
+      "nombre": "FLAMINGO TRIPLE SEC",
+      "cantidad_contada": 2.35,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 2,
+        "FRIOS": 0.35
+      }
+    },
+    {
+      "producto_id": "17049",
+      "codigo": "MR0501054",
+      "nombre": "EJOTE",
+      "cantidad_contada": 18.47,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 16.08,
+        "COCINA": 2.39
+      }
+    },
+    {
+      "producto_id": "16851",
+      "codigo": "MR0401003",
+      "nombre": "CHORIZO PARRILLADA GAUCHA",
+      "cantidad_contada": 32.52,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 30.72,
+        "COCINA": 1.8
+      }
+    },
+    {
+      "producto_id": "16853",
+      "codigo": "MR0501002",
+      "nombre": "CAMOTE ROJO",
+      "cantidad_contada": 25.02,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 5.77,
+        "CUARTO FRIO": 14.25,
+        "COCINA": 5
+      }
+    },
+    {
+      "producto_id": "16770",
+      "codigo": "MR0301019",
+      "nombre": "SALSA KETCHUP",
+      "cantidad_contada": 56.38,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 54.01,
+        "COCINA": 2.37
+      }
+    },
+    {
+      "producto_id": "17246",
+      "codigo": "CP0200008",
+      "nombre": "CP ADEREZO CHIPOTLE",
+      "cantidad_contada": 2,
+      "unidad": "galon",
+      "secciones": {
+        "CUARTO FRIO": 1.5,
+        "COCINA": 0.5
+      }
+    },
+    {
+      "producto_id": "16765",
+      "codigo": "MR0302002",
+      "nombre": "AJO PICADO EN ACEITE",
+      "cantidad_contada": 9.44,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 8,
+        "COCINA": 1.44
+      }
+    },
+    {
+      "producto_id": "16723",
+      "codigo": "MR0101003",
+      "nombre": "PECHUGA DESHUESADA DE POLLO",
+      "cantidad_contada": 27.99,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 17.72,
+        "COCINA": 10.27
+      }
+    },
+    {
+      "producto_id": "17012",
+      "codigo": "MR1201080",
+      "nombre": "VODKA BATEO (SMIRNOFF RED)",
+      "cantidad_contada": 3.5875,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 3.5,
+        "FRIOS": 0.08750000000000001
+      }
+    },
+    {
+      "producto_id": "17200",
+      "codigo": "MR1403122",
+      "nombre": "TEQUILA BATEO (JARANA)",
+      "cantidad_contada": 5.5,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 5.25,
+        "FRIOS": 0.25
+      }
+    },
+    {
+      "producto_id": "16789",
+      "codigo": "MR1201011",
+      "nombre": "TEQUILA HERRADURA REPOSADO",
+      "cantidad_contada": 0.56,
+      "unidad": "lt",
+      "secciones": {
+        "FRIOS": 0.56
+      }
+    },
+    {
+      "producto_id": "17223",
+      "codigo": "MR1403115",
+      "nombre": "SANGRIA TINTA",
+      "cantidad_contada": 1.75,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 0.75,
+        "FRIOS": 0.25,
+        "CUARTO FRIO": 0.75
+      }
+    },
+    {
+      "producto_id": "17332",
+      "codigo": "CP0200016",
+      "nombre": "CP SALSA JALEA DE FRUTOS",
+      "cantidad_contada": 1.5,
+      "unidad": "galon",
+      "secciones": {
+        "FRIOS": 1,
+        "COCINA": 0.5
+      }
+    },
+    {
+      "producto_id": "16779",
+      "codigo": "MR1101008",
+      "nombre": "AGUA MINERAL LATA",
+      "cantidad_contada": 46,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 24,
+        "FRIOS": 22
+      }
+    },
+    {
+      "producto_id": "16722",
+      "codigo": "MR0101002",
+      "nombre": "ALA FRESCA",
+      "cantidad_contada": 32.48,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 27.46,
+        "COCINA": 5.02
+      }
+    },
+    {
+      "producto_id": "16850",
+      "codigo": "MR0604001",
+      "nombre": "TORTILLA DE MAIZ ARTESANAL",
+      "cantidad_contada": 285,
+      "unidad": "u",
+      "secciones": {
+        "FRIOS": 150,
+        "COCINA": 135
+      }
+    },
+    {
+      "producto_id": "16924",
+      "codigo": "MR1201002",
+      "nombre": "RON BLANCO BATEO (BACARDI)",
+      "cantidad_contada": 2.8875,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 1.75,
+        "FRIOS": 1.1375
+      }
+    },
+    {
+      "producto_id": "17330",
+      "codigo": "CP0200014",
+      "nombre": "CP SALSA RANCH",
+      "cantidad_contada": 2.5,
+      "unidad": "galon",
+      "secciones": {
+        "CUARTO FRIO": 2,
+        "COCINA": 0.5
+      }
+    },
+    {
+      "producto_id": "16868",
+      "codigo": "MR1101015",
+      "nombre": "SODA SEVEN UP LATA",
+      "cantidad_contada": 38,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 24,
+        "FRIOS": 14
+      }
+    },
+    {
+      "producto_id": "17059",
+      "codigo": "MR0704022",
+      "nombre": "QUESO PARMESANO",
+      "cantidad_contada": 45.6,
+      "unidad": "oz",
+      "secciones": {
+        "CUARTO FRIO": 32,
+        "COCINA": 13.6
+      }
+    },
+    {
+      "producto_id": "17189",
+      "codigo": "MR1201118",
+      "nombre": "TEQUILA CUERVO 1800 CRISTALINO",
+      "cantidad_contada": 0.56,
+      "unidad": "lt",
+      "secciones": {
+        "FRIOS": 0.56
+      }
+    },
+    {
+      "producto_id": "17248",
+      "codigo": "CP0200010",
+      "nombre": "CP SALSA PIZZA",
+      "cantidad_contada": 2.425,
+      "unidad": "galon",
+      "secciones": {
+        "CUARTO FRIO": 2,
+        "COCINA": 0.425
+      }
+    },
+    {
+      "producto_id": "18245",
+      "codigo": "MR01250825",
+      "nombre": "ARROZ BLANCO",
+      "cantidad_contada": 39.19,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 20,
+        "CUARTO FRIO": 16.34,
+        "COCINA": 2.85
+      }
+    },
+    {
+      "producto_id": "18499",
+      "codigo": "MR0801012",
+      "nombre": "CABEZA DE PESCADO",
+      "cantidad_contada": 11.38,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 6.38,
+        "COCINA": 5
+      }
+    },
+    {
+      "producto_id": "16740",
+      "codigo": "MR0502005",
+      "nombre": "CILANTRO",
+      "cantidad_contada": 4.92,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 4.92
+      }
+    },
+    {
+      "producto_id": "16912",
+      "codigo": "MP0301012",
+      "nombre": "HORCHATA EN POLVO",
+      "cantidad_contada": 4.5,
+      "unidad": "lb",
+      "secciones": {
+        "SECOS": 3,
+        "FRIOS": 1.5
+      }
+    },
+    {
+      "producto_id": "16718",
+      "codigo": "MR0702002",
+      "nombre": "LECHE ENTERA",
+      "cantidad_contada": 7.3,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 6,
+        "FRIOS": 1,
+        "COCINA": 0.3
+      }
+    },
+    {
+      "producto_id": "17470",
+      "codigo": "PM01251210",
+      "nombre": "CAMISA BEST CRAFTBEER T-XXL",
+      "cantidad_contada": 2,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 2
+      }
+    },
+    {
+      "producto_id": "16751",
+      "codigo": "MR0501026",
+      "nombre": "TOMATE DE ENSALADA",
+      "cantidad_contada": 8.68,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 0.91,
+        "CUARTO FRIO": 7.77
+      }
+    },
+    {
+      "producto_id": "17241",
+      "codigo": "CP0101006",
+      "nombre": "CP CHIMICHURRI",
+      "cantidad_contada": 0.875,
+      "unidad": "galon",
+      "secciones": {
+        "CUARTO FRIO": 0.5,
+        "COCINA": 0.375
+      }
+    },
+    {
+      "producto_id": "16730",
+      "codigo": "MR0601003",
+      "nombre": "PAPEL DE ARROZ",
+      "cantidad_contada": 83,
+      "unidad": "u",
+      "secciones": {
+        "FRIOS": 33,
+        "COCINA": 50
+      }
+    },
+    {
+      "producto_id": "16945",
+      "codigo": "MR1103001",
+      "nombre": "PULPA DE COCO MEDIO GALON",
+      "cantidad_contada": 4.914,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 3.78,
+        "FRIOS": 1.134
+      }
+    },
+    {
+      "producto_id": "16757",
+      "codigo": "MR1102009",
+      "nombre": "JUGO DE LIMON GAL",
+      "cantidad_contada": 17.7682,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 16.253999999999998,
+        "COCINA": 1.5142
+      }
+    },
+    {
+      "producto_id": "16774",
+      "codigo": "MR0302024",
+      "nombre": "MIEL DE ABEJA",
+      "cantidad_contada": 1.2,
+      "unidad": "lt",
+      "secciones": {
+        "FRIOS": 0.96,
+        "COCINA": 0.24
+      }
+    },
+    {
+      "producto_id": "16776",
+      "codigo": "MR0302023",
+      "nombre": "MANTEQUILLA DE MANI",
+      "cantidad_contada": 4.09,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 2.5,
+        "COCINA": 1.59
+      }
+    },
+    {
+      "producto_id": "17282",
+      "codigo": "MR0301024",
+      "nombre": "LECHE DE COCO",
+      "cantidad_contada": 1.4752,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 1.209,
+        "COCINA": 0.2662
+      }
+    },
+    {
+      "producto_id": "17472",
+      "codigo": "PM01251208",
+      "nombre": "CAMISA BEST CRAFTBEER T-L",
+      "cantidad_contada": 3,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 3
+      }
+    },
+    {
+      "producto_id": "16738",
+      "codigo": "MR0501010",
+      "nombre": "CHILE VERDE",
+      "cantidad_contada": 14.73,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 14.73
+      }
+    },
+    {
+      "producto_id": "17345",
+      "codigo": "PM0101512",
+      "nombre": "CAMISA LEYENDA HECHA CERVEZA T-M",
+      "cantidad_contada": 2,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 2
+      }
+    },
+    {
+      "producto_id": "16784",
+      "codigo": "MR1201008",
+      "nombre": "VODKA GREY GOOSE",
+      "cantidad_contada": 0.3,
+      "unidad": "lt",
+      "secciones": {
+        "FRIOS": 0.3
+      }
+    },
+    {
+      "producto_id": "18297",
+      "codigo": "MR0301021",
+      "nombre": "VINAGRE BLANCO GOURMET",
+      "cantidad_contada": 8.31,
+      "unidad": "lt",
+      "secciones": {
+        "FRIOS": 7.56,
+        "COCINA": 0.75
+      }
+    },
+    {
+      "producto_id": "17902",
+      "codigo": "PT0102071",
+      "nombre": "AGUA FRESKA TAMARINDO BOT. 330 ML",
+      "cantidad_contada": 43,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 43
+      }
+    },
+    {
+      "producto_id": "17090",
+      "codigo": "PT0201050",
+      "nombre": "CERVEZA NACIONAL BOT. 330 ML",
+      "cantidad_contada": 94,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 22,
+        "FRIOS": 72
+      }
+    },
+    {
+      "producto_id": "17190",
+      "codigo": "MR1201119",
+      "nombre": "TEQUILA CUERVO 1800",
+      "cantidad_contada": 1,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 0.75,
+        "FRIOS": 0.25
+      }
+    },
+    {
+      "producto_id": "18346",
+      "codigo": "MR0304008",
+      "nombre": "CONSOME DE CAMARON",
+      "cantidad_contada": 19.75,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 15,
+        "COCINA": 4.75
+      }
+    },
+    {
+      "producto_id": "16764",
+      "codigo": "MR0301020",
+      "nombre": "VINAGRE BALSAMICO",
+      "cantidad_contada": 0.45,
+      "unidad": "lt",
+      "secciones": {
+        "COCINA": 0.45
+      }
+    },
+    {
+      "producto_id": "17242",
+      "codigo": "CP0200003",
+      "nombre": "CP SALSA BBQ",
+      "cantidad_contada": 1,
+      "unidad": "galon",
+      "secciones": {
+        "CUARTO FRIO": 1
+      }
+    },
+    {
+      "producto_id": "17198",
+      "codigo": "MR1403120",
+      "nombre": "VINO ESPUMOSO SAN LUIS BRUTT",
+      "cantidad_contada": 1.15,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 0.75,
+        "FRIOS": 0.4
+      }
+    },
+    {
+      "producto_id": "17291",
+      "codigo": "PM0104036",
+      "nombre": "GORRA NEGRA LETRAS NEGRAS",
+      "cantidad_contada": 1,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 1
+      }
+    },
+    {
+      "producto_id": "17126",
+      "codigo": "PT1002009",
+      "nombre": "AGUA DURA MARACUYÁ - CB BOT. 330 ML",
+      "cantidad_contada": 10,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 3,
+        "FRIOS": 7
+      }
+    },
+    {
+      "producto_id": "16756",
+      "codigo": "MR1102005",
+      "nombre": "JUGO DE NARANJA GALON",
+      "cantidad_contada": 2.262,
+      "unidad": "lt",
+      "secciones": {
+        "FRIOS": 1.512,
+        "COCINA": 0.75
+      }
+    },
+    {
+      "producto_id": "16773",
+      "codigo": "MR0301012",
+      "nombre": "MOSTAZA GOURMET",
+      "cantidad_contada": 9.3039,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 6.6139,
+        "COCINA": 2.69
+      }
+    },
+    {
+      "producto_id": "16960",
+      "codigo": "MR14030118",
+      "nombre": "VINO BLANCO COCINA",
+      "cantidad_contada": 0.6375,
+      "unidad": "lt",
+      "secciones": {
+        "COCINA": 0.6375
+      }
+    },
+    {
+      "producto_id": "16864",
+      "codigo": "MR1102007",
+      "nombre": "JUGO DE  PIÑA JUMEX 1 LITRO",
+      "cantidad_contada": 2.2,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 2,
+        "FRIOS": 0.2
+      }
+    },
+    {
+      "producto_id": "17901",
+      "codigo": "PT0102070",
+      "nombre": "AGUA FRESKA FRESA SANDIA BOT. 330 ML",
+      "cantidad_contada": 66,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 42,
+        "FRIOS": 24
+      }
+    },
+    {
+      "producto_id": "16777",
+      "codigo": "MR1101010",
+      "nombre": "AGUA TONICA",
+      "cantidad_contada": 16,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 10,
+        "FRIOS": 6
+      }
+    },
+    {
+      "producto_id": "16732",
+      "codigo": "MR0502002",
+      "nombre": "ALBAHACA",
+      "cantidad_contada": 8,
+      "unidad": "oz",
+      "secciones": {
+        "CUARTO FRIO": 8
+      }
+    },
+    {
+      "producto_id": "17051",
+      "codigo": "PT0201030",
+      "nombre": "CERVEZA SKYHOPPER BOT. 330 ML",
+      "cantidad_contada": 72,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 48,
+        "FRIOS": 24
+      }
+    },
+    {
+      "producto_id": "16758",
+      "codigo": "MR0304006",
+      "nombre": "SAL FINA",
+      "cantidad_contada": 10.58,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 10.58
+      }
+    },
+    {
+      "producto_id": "16857",
+      "codigo": "MR0401015",
+      "nombre": "JAMON VIRGINIA",
+      "cantidad_contada": 4.32,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 2,
+        "COCINA": 2.32
+      }
+    },
+    {
+      "producto_id": "16719",
+      "codigo": "MR0101001",
+      "nombre": "HUEVOS",
+      "cantidad_contada": 19,
+      "unidad": "u",
+      "secciones": {
+        "COCINA": 19
+      }
+    },
+    {
+      "producto_id": "16825",
+      "codigo": "MR0704014",
+      "nombre": "QUESO IZALQUEÑO",
+      "cantidad_contada": 24.51,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 21.35,
+        "COCINA": 3.16
+      }
+    },
+    {
+      "producto_id": "16761",
+      "codigo": "MR0302003",
+      "nombre": "AJO MOLIDO EN POLVO",
+      "cantidad_contada": 5.69,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 4.4,
+        "COCINA": 1.29
+      }
+    },
+    {
+      "producto_id": "18310",
+      "codigo": "MR0302009",
+      "nombre": "CHILE CHIPOTLE",
+      "cantidad_contada": 2.9101,
+      "unidad": "lb",
+      "secciones": {
+        "SECOS": 2.9101
+      }
+    },
+    {
+      "producto_id": "16778",
+      "codigo": "MR1102006",
+      "nombre": "JUGO DE TOMATE JUMEX 1 LITRO",
+      "cantidad_contada": 5.8,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 5,
+        "FRIOS": 0.8
+      }
+    },
+    {
+      "producto_id": "16826",
+      "codigo": "MR0305004",
+      "nombre": "TE NEGRO",
+      "cantidad_contada": 42,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 20,
+        "FRIOS": 22
+      }
+    },
+    {
+      "producto_id": "17187",
+      "codigo": "MR1201116",
+      "nombre": "VODKA TITO´S",
+      "cantidad_contada": 1.05,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 0.75,
+        "FRIOS": 0.3
+      }
+    },
+    {
+      "producto_id": "17274",
+      "codigo": "MR0302044",
+      "nombre": "AJONJOLI NEGRO",
+      "cantidad_contada": 0.68,
+      "unidad": "lb",
+      "secciones": {
+        "COCINA": 0.68
+      }
+    },
+    {
+      "producto_id": "16976",
+      "codigo": "PT0301050",
+      "nombre": "CERVEZA NACIONAL DRAFT",
+      "cantidad_contada": 2127.4436,
+      "unidad": "oz",
+      "secciones": {
+        "SECOS": 3.21
+      }
+    },
+    {
+      "producto_id": "17228",
+      "codigo": "CP0300002",
+      "nombre": "CP QUESABROSO",
+      "cantidad_contada": 10,
+      "unidad": "u",
+      "secciones": {
+        "FRIOS": 8,
+        "COCINA": 2
+      }
+    },
+    {
+      "producto_id": "18575",
+      "codigo": "MR0502014",
+      "nombre": "MILTOMATE",
+      "cantidad_contada": 5.19,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 3.95,
+        "COCINA": 1.24
+      }
+    },
+    {
+      "producto_id": "16847",
+      "codigo": "MR0704010",
+      "nombre": "QUESO DE MANTEQUILLA",
+      "cantidad_contada": 12.69,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 10.5,
+        "COCINA": 2.19
+      }
+    },
+    {
+      "producto_id": "17180",
+      "codigo": "MR0522034",
+      "nombre": "PAN BOLLO",
+      "cantidad_contada": 41,
+      "unidad": "u",
+      "secciones": {
+        "CUARTO FRIO": 36,
+        "COCINA": 5
+      }
+    },
+    {
+      "producto_id": "28687",
+      "codigo": "PM0501074",
+      "nombre": "STICKER CADEJO",
+      "cantidad_contada": 6,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 6
+      }
+    },
+    {
+      "producto_id": "18458",
+      "codigo": "MR0201008",
+      "nombre": "PEPERONI",
+      "cantidad_contada": 5.72,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 5,
+        "COCINA": 0.72
+      }
+    },
+    {
+      "producto_id": "16766",
+      "codigo": "MR0301015",
+      "nombre": "SALSA DE SOYA GOURMET",
+      "cantidad_contada": 5.67,
+      "unidad": "lt",
+      "secciones": {
+        "FRIOS": 3.78,
+        "COCINA": 1.89
+      }
+    },
+    {
+      "producto_id": "16781",
+      "codigo": "MR1201014",
+      "nombre": "WHISKEY JOHNNIE WALKER BLACK",
+      "cantidad_contada": 1.05,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 0.75,
+        "FRIOS": 0.3
+      }
+    },
+    {
+      "producto_id": "17191",
+      "codigo": "MR1201122",
+      "nombre": "AMARETTO DISARONNO",
+      "cantidad_contada": 1.12,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 0.7,
+        "FRIOS": 0.42
+      }
+    },
+    {
+      "producto_id": "16759",
+      "codigo": "MR0302017",
+      "nombre": "PIMENTON ESPAÑOL O PAPRIKA",
+      "cantidad_contada": 0.62,
+      "unidad": "lb",
+      "secciones": {
+        "COCINA": 0.62
+      }
+    },
+    {
+      "producto_id": "16966",
+      "codigo": "MR0401006",
+      "nombre": "CHORIZO DESAYUNO NUREMBERG",
+      "cantidad_contada": 20,
+      "unidad": "u",
+      "secciones": {
+        "COCINA": 20
+      }
+    },
+    {
+      "producto_id": "28708",
+      "codigo": "PM0501105",
+      "nombre": "LLAVERO DESTAPADOR - clásico vintage",
+      "cantidad_contada": 1,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 1
+      }
+    },
+    {
+      "producto_id": "17108",
+      "codigo": "PT1003001",
+      "nombre": "AGUA DURA COCO DRAFT",
+      "cantidad_contada": 0,
+      "unidad": "oz",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17109",
+      "codigo": "PT1003002",
+      "nombre": "AGUA DURA LIMON DRAFT",
+      "cantidad_contada": 0,
+      "unidad": "oz",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17110",
+      "codigo": "PT1003003",
+      "nombre": "AGUA DURA MARACUYA DRAFT",
+      "cantidad_contada": 0,
+      "unidad": "oz",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16891",
+      "codigo": "PT0301009",
+      "nombre": "CERVEZA CALABAZA DRAFT",
+      "cantidad_contada": 0,
+      "unidad": "oz",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17428",
+      "codigo": "PT03251001",
+      "nombre": "CERVEZA DU HAST DRAFT",
+      "cantidad_contada": 0,
+      "unidad": "oz",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17448",
+      "codigo": "PT03251201",
+      "nombre": "CERVEZA LA BELGONA DRAFT",
+      "cantidad_contada": 0,
+      "unidad": "oz",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17416",
+      "codigo": "PT03250901",
+      "nombre": "CERVEZA LA POLKA DRAFT",
+      "cantidad_contada": 0,
+      "unidad": "oz",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16894",
+      "codigo": "PT0301010",
+      "nombre": "CERVEZA LUPE REYES DRAFT",
+      "cantidad_contada": 0,
+      "unidad": "oz",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16785",
+      "codigo": "MR1201001",
+      "nombre": "GIN BOMBAY",
+      "cantidad_contada": 0.25,
+      "unidad": "lt",
+      "secciones": {
+        "FRIOS": 0.25
+      }
+    },
+    {
+      "producto_id": "28659",
+      "codigo": "PM03260101",
+      "nombre": "ALBUM MUNDIAL CADEJO",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17073",
+      "codigo": "PM0101452",
+      "nombre": "CAMISA ALIENS T-L",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17474",
+      "codigo": "PM01251206",
+      "nombre": "CAMISA BEST CRAFTBEER T-S",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "28391",
+      "codigo": "PM0101426",
+      "nombre": "CAMISA ENCUARENTENADO MUJER T-L",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "28392",
+      "codigo": "PM0101427",
+      "nombre": "CAMISA ENCUARENTENADO MUJER T-XL",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17421",
+      "codigo": "PM01250903",
+      "nombre": "CAMISA ESCUDO T-L",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17420",
+      "codigo": "PM01250902",
+      "nombre": "CAMISA ESCUDO T-M",
+      "cantidad_contada": 1,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 1
+      }
+    },
+    {
+      "producto_id": "17419",
+      "codigo": "PM01250901",
+      "nombre": "CAMISA ESCUDO T-S",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17422",
+      "codigo": "PM01250904",
+      "nombre": "CAMISA ESCUDO T-XL",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17423",
+      "codigo": "PM01250905",
+      "nombre": "CAMISA ESCUDO T-XXL",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17016",
+      "codigo": "PM0101324",
+      "nombre": "CAMISA HOMBRE BARBA DE LUPULO T-M",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17015",
+      "codigo": "PM0101323",
+      "nombre": "CAMISA HOMBRE BARBA DE LUPULO T-S",
+      "cantidad_contada": 8,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 8
+      }
+    },
+    {
+      "producto_id": "16877",
+      "codigo": "PM0101049",
+      "nombre": "CAMISA HOMBRE LOGO CADEJO T-L",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16876",
+      "codigo": "PM0101047",
+      "nombre": "CAMISA HOMBRE LOGO CADEJO T-M",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16875",
+      "codigo": "PM0101045",
+      "nombre": "CAMISA HOMBRE LOGO CADEJO T-S",
+      "cantidad_contada": 2,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 2
+      }
+    },
+    {
+      "producto_id": "16878",
+      "codigo": "PM0101051",
+      "nombre": "CAMISA HOMBRE LOGO CADEJO T-XL",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16879",
+      "codigo": "PM0101053",
+      "nombre": "CAMISA HOMBRE LOGO CADEJO T-XXL",
+      "cantidad_contada": 2,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 2
+      }
+    },
+    {
+      "producto_id": "17346",
+      "codigo": "PM0101513",
+      "nombre": "CAMISA LEYENDA HECHA CERVEZA T-L",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17344",
+      "codigo": "PM0101511",
+      "nombre": "CAMISA LEYENDA HECHA CERVEZA T-S",
+      "cantidad_contada": 3,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 3
+      }
+    },
+    {
+      "producto_id": "17347",
+      "codigo": "PM0101514",
+      "nombre": "CAMISA LEYENDA HECHA CERVEZA T-XL",
+      "cantidad_contada": 3,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 3
+      }
+    },
+    {
+      "producto_id": "17348",
+      "codigo": "PM0101515",
+      "nombre": "CAMISA LEYENDA HECHA CERVEZA T-XXL",
+      "cantidad_contada": 1,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 1
+      }
+    },
+    {
+      "producto_id": "17067",
+      "codigo": "PM0101429",
+      "nombre": "CAMISA LUPULO HOMBRES T-M",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17066",
+      "codigo": "PM0101428",
+      "nombre": "CAMISA LUPULO HOMBRES T-S",
+      "cantidad_contada": 4,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 4
+      }
+    },
+    {
+      "producto_id": "17069",
+      "codigo": "PM0101431",
+      "nombre": "CAMISA LUPULO HOMBRES T-XL",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17476",
+      "codigo": "PM01251204",
+      "nombre": "CAMISA NAVE E BIRRIA T-XL",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17475",
+      "codigo": "PM01251205",
+      "nombre": "CAMISA NAVE E BIRRIA T-XXL",
+      "cantidad_contada": 4,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 4
+      }
+    },
+    {
+      "producto_id": "17081",
+      "codigo": "PM0101460",
+      "nombre": "CAMISA PATE CHUCHO T-S",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17084",
+      "codigo": "PM0101463",
+      "nombre": "CAMISA PATE CHUCHO T-XL",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17112",
+      "codigo": "PM0101464",
+      "nombre": "CAMISA PATE CHUCHO T-XXL",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17115",
+      "codigo": "PM0101467",
+      "nombre": "CAMISA SURF Y BIRRIA T-L",
+      "cantidad_contada": 1,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 1
+      }
+    },
+    {
+      "producto_id": "17114",
+      "codigo": "PM0101466",
+      "nombre": "CAMISA SURF Y BIRRIA T-M",
+      "cantidad_contada": 1,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 1
+      }
+    },
+    {
+      "producto_id": "17113",
+      "codigo": "PM0101465",
+      "nombre": "CAMISA SURF Y BIRRIA T-S",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17116",
+      "codigo": "PM0101468",
+      "nombre": "CAMISA SURF Y BIRRIA T-XL",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17117",
+      "codigo": "PM0101469",
+      "nombre": "CAMISA SURF Y BIRRIA T-XXL",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17469",
+      "codigo": "PM01251212",
+      "nombre": "CAMISA VASO COOL T-M",
+      "cantidad_contada": 6,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 6
+      }
+    },
+    {
+      "producto_id": "17465",
+      "codigo": "PM01251211",
+      "nombre": "CAMISA VASO COOL T-S",
+      "cantidad_contada": 3,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 3
+      }
+    },
+    {
+      "producto_id": "17467",
+      "codigo": "PM01251214",
+      "nombre": "CAMISA VASO COOL T-XL",
+      "cantidad_contada": 3,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 3
+      }
+    },
+    {
+      "producto_id": "16809",
+      "codigo": "PT0201009",
+      "nombre": "CERVEZA CALABAZA BOT. 330 ML",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16808",
+      "codigo": "PT0201008",
+      "nombre": "CERVEZA OKTOBERFEST BOT. 330 ML",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16803",
+      "codigo": "PT0201002",
+      "nombre": "CERVEZA WAPA BOT. 330 ML",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17289",
+      "codigo": "PM0104034",
+      "nombre": "GORRA BASEBALL MORADA",
+      "cantidad_contada": 7,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 7
+      }
+    },
+    {
+      "producto_id": "17290",
+      "codigo": "PM0104035",
+      "nombre": "GORRA BASEBALL OLIVO",
+      "cantidad_contada": 1,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 1
+      }
+    },
+    {
+      "producto_id": "17293",
+      "codigo": "PM0104038",
+      "nombre": "GORRA HIGH GRAVITY",
+      "cantidad_contada": 3,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 3
+      }
+    },
+    {
+      "producto_id": "17294",
+      "codigo": "PM0104039",
+      "nombre": "GORRA TRUCKER AZUL",
+      "cantidad_contada": 8,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 8
+      }
+    },
+    {
+      "producto_id": "17295",
+      "codigo": "PM0104040",
+      "nombre": "GORRA TRUCKER CAMO",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17296",
+      "codigo": "PM0104041",
+      "nombre": "GORRA TRUCKER ROJA",
+      "cantidad_contada": 13,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 13
+      }
+    },
+    {
+      "producto_id": "17297",
+      "codigo": "PM0104042",
+      "nombre": "GORRA TRUCKER ROSADA",
+      "cantidad_contada": 2,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 2
+      }
+    },
+    {
+      "producto_id": "16900",
+      "codigo": "PM0302001",
+      "nombre": "GROWLER METALICO 2 LT",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17438",
+      "codigo": "MR13251111",
+      "nombre": "JARRA CERVEZA ARTESANAL",
+      "cantidad_contada": 31,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 31
+      }
+    },
+    {
+      "producto_id": "28673",
+      "codigo": "PM0501002",
+      "nombre": "LANYARD PARA CARNET",
+      "cantidad_contada": 8,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 8
+      }
+    },
+    {
+      "producto_id": "16854",
+      "codigo": "PM0501005",
+      "nombre": "LLAVERO DESTAPADOR -  LOGO CADEJO",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "28660",
+      "codigo": "PM03260102",
+      "nombre": "STICKER MUNDIAL CADEJO",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17033",
+      "codigo": "PM0501106",
+      "nombre": "TIN TACKER 40 cm",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17856",
+      "codigo": "PM0501092",
+      "nombre": "TOTEBAG CADEJO",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17434",
+      "codigo": "MR02251103",
+      "nombre": "ATUN ROJO LOMO",
+      "cantidad_contada": 0,
+      "unidad": "lb",
+      "secciones": {}
+    },
+    {
+      "producto_id": "18554",
+      "codigo": "MR0501038",
+      "nombre": "BANANO",
+      "cantidad_contada": 0,
+      "unidad": "lb",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16734",
+      "codigo": "MR0501004",
+      "nombre": "CEBOLLA BLANCA",
+      "cantidad_contada": 0,
+      "unidad": "lb",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17176",
+      "codigo": "MR0522030",
+      "nombre": "CREMA DE LECHE VERSATIE",
+      "cantidad_contada": 0,
+      "unidad": "lt",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16742",
+      "codigo": "MR0501012",
+      "nombre": "FRESAS",
+      "cantidad_contada": 0,
+      "unidad": "lb",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16743",
+      "codigo": "MR0501014",
+      "nombre": "LECHUGA ESCAROLA VERDE",
+      "cantidad_contada": 0,
+      "unidad": "lb",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16748",
+      "codigo": "MR0502008",
+      "nombre": "PEREJIL COLOCHO",
+      "cantidad_contada": 0,
+      "unidad": "lb",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16852",
+      "codigo": "MR0501022",
+      "nombre": "RABANO",
+      "cantidad_contada": 0,
+      "unidad": "lb",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16958",
+      "codigo": "MR0801015",
+      "nombre": "TINTA DE CALAMAR",
+      "cantidad_contada": 35,
+      "unidad": "u",
+      "secciones": {
+        "FRIOS": 26,
+        "COCINA": 9
+      }
+    },
+    {
+      "producto_id": "16763",
+      "codigo": "MR0301004",
+      "nombre": "ACEITE VEGETAL PARA FREIDORA",
+      "cantidad_contada": 0,
+      "unidad": "lt",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17030",
+      "codigo": "MR0305033",
+      "nombre": "AJO ENTERO NATURAL",
+      "cantidad_contada": 0,
+      "unidad": "lb",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16961",
+      "codigo": "MR0302034",
+      "nombre": "ARROZ PRECOCIDO",
+      "cantidad_contada": 0,
+      "unidad": "lb",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16775",
+      "codigo": "MR0302027",
+      "nombre": "CHOCOLATE LIQUIDO",
+      "cantidad_contada": 0,
+      "unidad": "oz",
+      "secciones": {}
+    },
+    {
+      "producto_id": "18236",
+      "codigo": "MR0101019",
+      "nombre": "GELATINA FRUTAS",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16916",
+      "codigo": "MR0602001",
+      "nombre": "HARINA TRIGO SEMI FUERTE",
+      "cantidad_contada": 0,
+      "unidad": "lb",
+      "secciones": {}
+    },
+    {
+      "producto_id": "18546",
+      "codigo": "MR0501030",
+      "nombre": "PLATANO VERDE",
+      "cantidad_contada": 0,
+      "unidad": "lb",
+      "secciones": {}
+    },
+    {
+      "producto_id": "18293",
+      "codigo": "MR0301017",
+      "nombre": "SALSA INGLESA L & P",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "18372",
+      "codigo": "MR0522021",
+      "nombre": "PASTA ANCHOAS",
+      "cantidad_contada": 6,
+      "unidad": "oz",
+      "secciones": {
+        "FRIOS": 6
+      }
+    },
+    {
+      "producto_id": "18529",
+      "codigo": "MR0501013",
+      "nombre": "JENGIBRE FRESCO",
+      "cantidad_contada": 1.59,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 1.59
+      }
+    },
+    {
+      "producto_id": "17125",
+      "codigo": "PT1002008",
+      "nombre": "AGUA DURA LIMON - CB BOT. 330 ML",
+      "cantidad_contada": 32,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 25,
+        "FRIOS": 7
+      }
+    },
+    {
+      "producto_id": "17202",
+      "codigo": "MR1104007",
+      "nombre": "LICOR DE MENTA",
+      "cantidad_contada": 0.6,
+      "unidad": "lt",
+      "secciones": {
+        "FRIOS": 0.6
+      }
+    },
+    {
+      "producto_id": "16858",
+      "codigo": "PM0501006",
+      "nombre": "DESTAPADOR TIPO BLADE PLANO",
+      "cantidad_contada": 12,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 12
+      }
+    },
+    {
+      "producto_id": "16802",
+      "codigo": "PT0201001",
+      "nombre": "CERVEZA ROJA BOT. 330 ML",
+      "cantidad_contada": 54,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 30,
+        "FRIOS": 24
+      }
+    },
+    {
+      "producto_id": "17175",
+      "codigo": "MR0502085",
+      "nombre": "ROMERO FRESCO",
+      "cantidad_contada": 0,
+      "unidad": "lb",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17003",
+      "codigo": "PT0801069",
+      "nombre": "SODA DRAFT TAMARINDO",
+      "cantidad_contada": 2405.8007,
+      "unidad": "oz",
+      "secciones": {
+        "FRIOS": 3.63
+      }
+    },
+    {
+      "producto_id": "18289",
+      "codigo": "MR0301011",
+      "nombre": "MOSTAZA DIJON",
+      "cantidad_contada": 1.06,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 0.75,
+        "COCINA": 0.31
+      }
+    },
+    {
+      "producto_id": "16737",
+      "codigo": "MR0501008",
+      "nombre": "CHILE JALAPEÑO",
+      "cantidad_contada": 0,
+      "unidad": "lb",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17029",
+      "codigo": "MR0305029",
+      "nombre": "TE DE MANZANILLA",
+      "cantidad_contada": 75,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 75
+      }
+    },
+    {
+      "producto_id": "17227",
+      "codigo": "CP0300001",
+      "nombre": "CP BROWNIE",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "38405",
+      "codigo": "PM03260501",
+      "nombre": "POSTALES CADEJO",
+      "cantidad_contada": 89,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 89
+      }
+    },
+    {
+      "producto_id": "16804",
+      "codigo": "PT0201003",
+      "nombre": "CERVEZA NEGRA BOT. 330 ML",
+      "cantidad_contada": 62,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 38,
+        "FRIOS": 24
+      }
+    },
+    {
+      "producto_id": "17903",
+      "codigo": "PT0102072",
+      "nombre": "AGUA FRESKA MANGO MARACUYA BOT. 330 ML",
+      "cantidad_contada": 57,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 33,
+        "FRIOS": 24
+      }
+    },
+    {
+      "producto_id": "16930",
+      "codigo": "PR0101003",
+      "nombre": "MASA PIZZA RECETA",
+      "cantidad_contada": 504,
+      "unidad": "oz",
+      "secciones": {
+        "FRIOS": 210,
+        "CUARTO FRIO": 98,
+        "COCINA": 196
+      }
+    },
+    {
+      "producto_id": "17250",
+      "codigo": "CP0300003",
+      "nombre": "CP QUESADILLA",
+      "cantidad_contada": 4,
+      "unidad": "u",
+      "secciones": {
+        "COCINA": 4
+      }
+    },
+    {
+      "producto_id": "17060",
+      "codigo": "MR0501059",
+      "nombre": "CHILE EN ESCAMAS",
+      "cantidad_contada": 1.09,
+      "unidad": "lb",
+      "secciones": {
+        "COCINA": 1.09
+      }
+    },
+    {
+      "producto_id": "16838",
+      "codigo": "PM0203002",
+      "nombre": "POSA VASO CARTON INDIVIDUAL",
+      "cantidad_contada": 30,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 30
+      }
+    },
+    {
+      "producto_id": "16869",
+      "codigo": "MR1101017",
+      "nombre": "SODA UVA LATA",
+      "cantidad_contada": 67,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 48,
+        "FRIOS": 19
+      }
+    },
+    {
+      "producto_id": "16969",
+      "codigo": "MR0301023",
+      "nombre": "MIEL DE MAPLE",
+      "cantidad_contada": 2.65,
+      "unidad": "lt",
+      "secciones": {
+        "COCINA": 2.65
+      }
+    },
+    {
+      "producto_id": "17351",
+      "codigo": "PT0201040",
+      "nombre": "CERVEZA RUBIA BOT. 330 ML",
+      "cantidad_contada": 32,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 25,
+        "FRIOS": 7
+      }
+    },
+    {
+      "producto_id": "16938",
+      "codigo": "PT0301030",
+      "nombre": "CERVEZA SKYHOPPER DRAFT",
+      "cantidad_contada": 2319.6425,
+      "unidad": "oz",
+      "secciones": {
+        "SECOS": 3.5
+      }
+    },
+    {
+      "producto_id": "16726",
+      "codigo": "MR0302025",
+      "nombre": "MIGA DE MANI",
+      "cantidad_contada": 4.25,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 3,
+        "COCINA": 1.25
+      }
+    },
+    {
+      "producto_id": "17366",
+      "codigo": "MR01250829",
+      "nombre": "CREMA DE COCO",
+      "cantidad_contada": 0.93,
+      "unidad": "lb",
+      "secciones": {
+        "SECOS": 0.93
+      }
+    },
+    {
+      "producto_id": "16856",
+      "codigo": "ME0301001",
+      "nombre": "ENVASE GROWLER 1 LT LIMPIO",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17222",
+      "codigo": "MR1201156",
+      "nombre": "GIN BEEFEATER",
+      "cantidad_contada": 1.1,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 1,
+        "FRIOS": 0.1
+      }
+    },
+    {
+      "producto_id": "17324",
+      "codigo": "MR1201241",
+      "nombre": "KAHLUA",
+      "cantidad_contada": 0.4,
+      "unidad": "lt",
+      "secciones": {
+        "FRIOS": 0.4
+      }
+    },
+    {
+      "producto_id": "18551",
+      "codigo": "MR0501035",
+      "nombre": "PAPAYA MADURA",
+      "cantidad_contada": 3.46,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 3.46
+      }
+    },
+    {
+      "producto_id": "17120",
+      "codigo": "MR1201112",
+      "nombre": "BAILEY'S",
+      "cantidad_contada": 0.75,
+      "unidad": "lt",
+      "secciones": {
+        "FRIOS": 0.75
+      }
+    },
+    {
+      "producto_id": "16755",
+      "codigo": "MR0704012",
+      "nombre": "QUESO CHEDDAR LATA",
+      "cantidad_contada": 2.8,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 1.89,
+        "COCINA": 0.91
+      }
+    },
+    {
+      "producto_id": "17124",
+      "codigo": "PT1002007",
+      "nombre": "AGUA DURA COCO - CB BOT. 330 ML",
+      "cantidad_contada": 39,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 32,
+        "FRIOS": 7
+      }
+    },
+    {
+      "producto_id": "16780",
+      "codigo": "MR1101009",
+      "nombre": "BOTELLA CON AGUA 500 ml",
+      "cantidad_contada": 23,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 12,
+        "FRIOS": 11
+      }
+    },
+    {
+      "producto_id": "17339",
+      "codigo": "PM0501087",
+      "nombre": "STICKER VARIOS CADEJO",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16749",
+      "codigo": "MR0501024",
+      "nombre": "REPOLLO MORADO",
+      "cantidad_contada": 23.23,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 3.3,
+        "COCINA": 19.93
+      }
+    },
+    {
+      "producto_id": "16885",
+      "codigo": "PT0301005",
+      "nombre": "CERVEZA POOH DRAFT",
+      "cantidad_contada": 3128.2036,
+      "unidad": "oz",
+      "secciones": {
+        "SECOS": 4.72
+      }
+    },
+    {
+      "producto_id": "16943",
+      "codigo": "PT0301024",
+      "nombre": "CERVEZA KOLOSCHA DRAFT",
+      "cantidad_contada": 53.0204,
+      "unidad": "oz",
+      "secciones": {
+        "SECOS": 0.08
+      }
+    },
+    {
+      "producto_id": "18343",
+      "codigo": "MR0304004",
+      "nombre": "SAL CON CEBOLLA",
+      "cantidad_contada": 1.79,
+      "unidad": "lb",
+      "secciones": {
+        "COCINA": 1.79
+      }
+    },
+    {
+      "producto_id": "16927",
+      "codigo": "MR0601004",
+      "nombre": "GALLETA OREO CHOCOLATE",
+      "cantidad_contada": 59.5,
+      "unidad": "u",
+      "secciones": {
+        "FRIOS": 36,
+        "COCINA": 23.5
+      }
+    },
+    {
+      "producto_id": "16865",
+      "codigo": "MR1101012",
+      "nombre": "SODA PEPSI LATA",
+      "cantidad_contada": 39,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 24,
+        "FRIOS": 15
+      }
+    },
+    {
+      "producto_id": "16859",
+      "codigo": "PM0501007",
+      "nombre": "DESTAPADOR TIPO PUSH BOTELLA",
+      "cantidad_contada": 3,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 3
+      }
+    },
+    {
+      "producto_id": "16731",
+      "codigo": "MR0601001",
+      "nombre": "FIDEOS DE ARROZ",
+      "cantidad_contada": 2,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 1,
+        "CUARTO FRIO": 1
+      }
+    },
+    {
+      "producto_id": "16993",
+      "codigo": "MR0901002",
+      "nombre": "PLATANO FRITO",
+      "cantidad_contada": 6,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 6
+      }
+    },
+    {
+      "producto_id": "16769",
+      "codigo": "MR0301018",
+      "nombre": "SALSA INGLESA MC",
+      "cantidad_contada": 5.67,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 3.78,
+        "FRIOS": 1.89
+      }
+    },
+    {
+      "producto_id": "17486",
+      "codigo": "BR02260201",
+      "nombre": "GIN BATEO (MG MANUEL GIRO)",
+      "cantidad_contada": 2.06,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 1.5,
+        "FRIOS": 0.56
+      }
+    },
+    {
+      "producto_id": "16833",
+      "codigo": "MR0703002",
+      "nombre": "CREMA PURA ESPECIAL",
+      "cantidad_contada": 9.1,
+      "unidad": "lt",
+      "secciones": {
+        "CUARTO FRIO": 9.1
+      }
+    },
+    {
+      "producto_id": "16884",
+      "codigo": "PT0301003",
+      "nombre": "CERVEZA NEGRA  DRAFT",
+      "cantidad_contada": 2419.0558,
+      "unidad": "oz",
+      "secciones": {
+        "SECOS": 3.65
+      }
+    },
+    {
+      "producto_id": "16886",
+      "codigo": "PT0301023",
+      "nombre": "CERVEZA CON ALQUIMIA DRAFT",
+      "cantidad_contada": 46.3929,
+      "unidad": "oz",
+      "secciones": {
+        "SECOS": 0.07
+      }
+    },
+    {
+      "producto_id": "16951",
+      "codigo": "MR1103005",
+      "nombre": "PULPA PIÑA COLADA MEDIO GALON",
+      "cantidad_contada": 8.316,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 7.56,
+        "FRIOS": 0.756
+      }
+    },
+    {
+      "producto_id": "16807",
+      "codigo": "PT0201006",
+      "nombre": "CERVEZA SUEGRA BOT. 330 ML",
+      "cantidad_contada": 56,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 32,
+        "FRIOS": 24
+      }
+    },
+    {
+      "producto_id": "16787",
+      "codigo": "MR1201018",
+      "nombre": "RON ZACAPA 23",
+      "cantidad_contada": 1.05,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 0.75,
+        "FRIOS": 0.3
+      }
+    },
+    {
+      "producto_id": "16952",
+      "codigo": "MR1103008",
+      "nombre": "PULPA MANGO MEDIO GALON",
+      "cantidad_contada": 0,
+      "unidad": "lt",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16988",
+      "codigo": "PT0801068",
+      "nombre": "SODA DRAFT FRESA SANDIA",
+      "cantidad_contada": 2544.9792,
+      "unidad": "oz",
+      "secciones": {
+        "FRIOS": 3.84
+      }
+    },
+    {
+      "producto_id": "17292",
+      "codigo": "PM0104037",
+      "nombre": "GORRA NEGRA LOGO BLANCO",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17308",
+      "codigo": "MR1201227",
+      "nombre": "VINO FRONTERA CYT ROSADO",
+      "cantidad_contada": 2.1,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 1.5,
+        "FRIOS": 0.6
+      }
+    },
+    {
+      "producto_id": "16946",
+      "codigo": "MR1103004",
+      "nombre": "PULPA DE ARRAYAN MEDIO GALON",
+      "cantidad_contada": 1.134,
+      "unidad": "lt",
+      "secciones": {
+        "FRIOS": 1.134
+      }
+    },
+    {
+      "producto_id": "16805",
+      "codigo": "PT0201004",
+      "nombre": "CERVEZA MERA BELGA BOT. 330 ML",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16947",
+      "codigo": "MR1103009",
+      "nombre": "PULPA DE SANDIA MEDIO GALON",
+      "cantidad_contada": 0.756,
+      "unidad": "lt",
+      "secciones": {
+        "FRIOS": 0.756
+      }
+    },
+    {
+      "producto_id": "17186",
+      "codigo": "MR1201115",
+      "nombre": "WHISKEY OLD PARR 12",
+      "cantidad_contada": 1.875,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 1.5,
+        "FRIOS": 0.375
+      }
+    },
+    {
+      "producto_id": "19338",
+      "codigo": "PT0301038",
+      "nombre": "CERVEZA XOC-ALE DRAFT",
+      "cantidad_contada": 1928.6171,
+      "unidad": "oz",
+      "secciones": {
+        "SECOS": 2.91
+      }
+    },
+    {
+      "producto_id": "18589",
+      "codigo": "MR0522023",
+      "nombre": "LECHE CONDENSADA",
+      "cantidad_contada": 0.87,
+      "unidad": "lb",
+      "secciones": {
+        "SECOS": 0.87
+      }
+    },
+    {
+      "producto_id": "17341",
+      "codigo": "CP0200018",
+      "nombre": "CP SALSA TORONJA",
+      "cantidad_contada": 1.25,
+      "unidad": "galon",
+      "secciones": {
+        "FRIOS": 1,
+        "COCINA": 0.25
+      }
+    },
+    {
+      "producto_id": "16910",
+      "codigo": "CP0104005",
+      "nombre": "CP PATTIE DE RES 6 OZ",
+      "cantidad_contada": 41,
+      "unidad": "u",
+      "secciones": {
+        "FRIOS": 25,
+        "COCINA": 16
+      }
+    },
+    {
+      "producto_id": "17068",
+      "codigo": "PM0101430",
+      "nombre": "CAMISA LUPULO HOMBRES T-L",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16970",
+      "codigo": "MR1001003",
+      "nombre": "HASHBROWN TATER TOTS",
+      "cantidad_contada": 23.09,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 20,
+        "COCINA": 3.09
+      }
+    },
+    {
+      "producto_id": "18323",
+      "codigo": "MR0302026",
+      "nombre": "GLUTAMATO MONOSODICO AJINOMOTO",
+      "cantidad_contada": 0,
+      "unidad": "lb",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17082",
+      "codigo": "PM0101461",
+      "nombre": "CAMISA PATE CHUCHO T-M",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17083",
+      "codigo": "PM0101462",
+      "nombre": "CAMISA PATE CHUCHO T-L",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17478",
+      "codigo": "PM01251202",
+      "nombre": "CAMISA NAVE E BIRRIA T-M",
+      "cantidad_contada": 2,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 2
+      }
+    },
+    {
+      "producto_id": "17477",
+      "codigo": "PM01251203",
+      "nombre": "CAMISA NAVE E BIRRIA T-L",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17464",
+      "codigo": "PM01251201",
+      "nombre": "CAMISA NAVE E BIRRIA T-S",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17468",
+      "codigo": "PM01251213",
+      "nombre": "CAMISA VASO COOL T-L",
+      "cantidad_contada": 3,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 3
+      }
+    },
+    {
+      "producto_id": "17471",
+      "codigo": "PM01251209",
+      "nombre": "CAMISA BEST CRAFTBEER T-XL",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "17473",
+      "codigo": "PM01251207",
+      "nombre": "CAMISA BEST CRAFTBEER T-M",
+      "cantidad_contada": 1,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 1
+      }
+    },
+    {
+      "producto_id": "17307",
+      "codigo": "MR1201226",
+      "nombre": "VINO FRONTERA CYT CABERNET SAUVIGNON",
+      "cantidad_contada": 2.25,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 1.5,
+        "FRIOS": 0.75
+      }
+    },
+    {
+      "producto_id": "17197",
+      "codigo": "MR1403119",
+      "nombre": "APPEROL",
+      "cantidad_contada": 1.06,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 0.75,
+        "FRIOS": 0.31
+      }
+    },
+    {
+      "producto_id": "16936",
+      "codigo": "MR0704004",
+      "nombre": "QUESO MOZZARELLA REBANADO",
+      "cantidad_contada": 7,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 6,
+        "COCINA": 1
+      }
+    },
+    {
+      "producto_id": "17283",
+      "codigo": "MR0302065",
+      "nombre": "FETUCCINI ROMA",
+      "cantidad_contada": 8.94,
+      "unidad": "lb",
+      "secciones": {
+        "SECOS": 4.13,
+        "CUARTO FRIO": 1.92,
+        "COCINA": 2.89
+      }
+    },
+    {
+      "producto_id": "18344",
+      "codigo": "MR0304005",
+      "nombre": "SAL CORRIENTE",
+      "cantidad_contada": 6.42,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 6.42
+      }
+    },
+    {
+      "producto_id": "17234",
+      "codigo": "CP0104004",
+      "nombre": "CP CARNE PICADA",
+      "cantidad_contada": 96,
+      "unidad": "oz",
+      "secciones": {
+        "FRIOS": 80,
+        "COCINA": 16
+      }
+    },
+    {
+      "producto_id": "16822",
+      "codigo": "MR0701001",
+      "nombre": "SORBETE VAINILLA",
+      "cantidad_contada": 15.16,
+      "unidad": "lt",
+      "secciones": {
+        "FRIOS": 7.58,
+        "COCINA": 7.58
+      }
+    },
+    {
+      "producto_id": "16760",
+      "codigo": "MR0302021",
+      "nombre": "PIMIENTA NEGRA MOLIDA",
+      "cantidad_contada": 2.07,
+      "unidad": "lb",
+      "secciones": {
+        "COCINA": 2.07
+      }
+    },
+    {
+      "producto_id": "16980",
+      "codigo": "MR0301070",
+      "nombre": "PIÑA ENTERA",
+      "cantidad_contada": 21.42,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 20.27,
+        "COCINA": 1.15
+      }
+    },
+    {
+      "producto_id": "17185",
+      "codigo": "MR1201114",
+      "nombre": "WHISKEY BUCHANANS 12",
+      "cantidad_contada": 1.8,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 1.5,
+        "FRIOS": 0.3
+      }
+    },
+    {
+      "producto_id": "16887",
+      "codigo": "PT0301006",
+      "nombre": "CERVEZA SUEGRA DRAFT",
+      "cantidad_contada": 2366.0353,
+      "unidad": "oz",
+      "secciones": {
+        "SECOS": 3.57
+      }
+    },
+    {
+      "producto_id": "16788",
+      "codigo": "MR1201003",
+      "nombre": "RON BOTRAN 12 AÑOS",
+      "cantidad_contada": 1.05,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 0.75,
+        "FRIOS": 0.3
+      }
+    },
+    {
+      "producto_id": "17243",
+      "codigo": "CP0200004",
+      "nombre": "CP SALSA BUFALO",
+      "cantidad_contada": 0.5,
+      "unidad": "galon",
+      "secciones": {
+        "CUARTO FRIO": 0.5
+      }
+    },
+    {
+      "producto_id": "16862",
+      "codigo": "MR0302001",
+      "nombre": "ACEITUNA NEGRA ENTERA",
+      "cantidad_contada": 4.88,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 2.18,
+        "COCINA": 2.7
+      }
+    },
+    {
+      "producto_id": "17225",
+      "codigo": "MR1403116",
+      "nombre": "SANGRIA BLANCA",
+      "cantidad_contada": 2.1,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 1.5,
+        "FRIOS": 0.6
+      }
+    },
+    {
+      "producto_id": "16846",
+      "codigo": "MR0502006",
+      "nombre": "HIERBABUENA",
+      "cantidad_contada": 2.5,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 2.5
+      }
+    },
+    {
+      "producto_id": "16733",
+      "codigo": "MR0502003",
+      "nombre": "APIO",
+      "cantidad_contada": 21.85,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 20.89,
+        "COCINA": 0.96
+      }
+    },
+    {
+      "producto_id": "16915",
+      "codigo": "MR0502004",
+      "nombre": "ARUGULA",
+      "cantidad_contada": 0.475,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 0.475
+      }
+    },
+    {
+      "producto_id": "16717",
+      "codigo": "MR0704006",
+      "nombre": "QUESO PROCESADO REBANADO",
+      "cantidad_contada": 4.03,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 2.64,
+        "COCINA": 1.39
+      }
+    },
+    {
+      "producto_id": "16883",
+      "codigo": "PT0301001",
+      "nombre": "CERVEZA ROJA DRAFT",
+      "cantidad_contada": 5056.8207,
+      "unidad": "oz",
+      "secciones": {
+        "SECOS": 7.63
+      }
+    },
+    {
+      "producto_id": "17331",
+      "codigo": "CP0200015",
+      "nombre": "CP SALSA PESTO",
+      "cantidad_contada": 1.37,
+      "unidad": "galon",
+      "secciones": {
+        "FRIOS": 1,
+        "COCINA": 0.37
+      }
+    },
+    {
+      "producto_id": "16866",
+      "codigo": "MR1101013",
+      "nombre": "SODA PEPSI BLACK / LIGHT",
+      "cantidad_contada": 91,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 48,
+        "FRIOS": 43
+      }
+    },
+    {
+      "producto_id": "16806",
+      "codigo": "PT0201005",
+      "nombre": "CERVEZA POOH BOT. 330 ML",
+      "cantidad_contada": 84,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 36,
+        "FRIOS": 48
+      }
+    },
+    {
+      "producto_id": "17240",
+      "codigo": "CP0102004",
+      "nombre": "CP PULLED PORK",
+      "cantidad_contada": 9.68,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 5.54,
+        "COCINA": 4.14
+      }
+    },
+    {
+      "producto_id": "28662",
+      "codigo": "PM03260301",
+      "nombre": "PELOTA FUTBOL MUNDIAL",
+      "cantidad_contada": 13,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 13
+      }
+    },
+    {
+      "producto_id": "17159",
+      "codigo": "MR0322009",
+      "nombre": "CRUTONES",
+      "cantidad_contada": 0.78,
+      "unidad": "lb",
+      "secciones": {
+        "COCINA": 0.78
+      }
+    },
+    {
+      "producto_id": "17001",
+      "codigo": "PT0815018",
+      "nombre": "SODA DRAFT MANGO MARACUYA",
+      "cantidad_contada": 1915.362,
+      "unidad": "oz",
+      "secciones": {
+        "FRIOS": 2.89
+      }
+    },
+    {
+      "producto_id": "17309",
+      "codigo": "MR1201228",
+      "nombre": "VINO FRONTERA CYT BLANCO",
+      "cantidad_contada": 3.41,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 1.5,
+        "FRIOS": 0.41,
+        "CUARTO FRIO": 1.5
+      }
+    },
+    {
+      "producto_id": "16955",
+      "codigo": "MR0801016",
+      "nombre": "JAIBA",
+      "cantidad_contada": 84,
+      "unidad": "u",
+      "secciones": {
+        "FRIOS": 22,
+        "CUARTO FRIO": 30,
+        "COCINA": 32
+      }
+    },
+    {
+      "producto_id": "16815",
+      "codigo": "MR0501001",
+      "nombre": "AGUACATE",
+      "cantidad_contada": 8.57,
+      "unidad": "lb",
+      "secciones": {
+        "COCINA": 8.57
+      }
+    },
+    {
+      "producto_id": "17466",
+      "codigo": "PM01251215",
+      "nombre": "CAMISA VASO COOL T-XXL",
+      "cantidad_contada": 1,
+      "unidad": "u",
+      "secciones": {
+        "SECOS": 1
+      }
+    },
+    {
+      "producto_id": "16768",
+      "codigo": "MR0301005",
+      "nombre": "MAYONESA",
+      "cantidad_contada": 26.4716,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 19.8416,
+        "COCINA": 6.63
+      }
+    },
+    {
+      "producto_id": "28664",
+      "codigo": "PM03260400",
+      "nombre": "PAQUETE STICKER VARIOS 5U",
+      "cantidad_contada": 18,
+      "unidad": "paquete",
+      "secciones": {
+        "SECOS": 18
+      }
+    },
+    {
+      "producto_id": "16729",
+      "codigo": "MR0604002",
+      "nombre": "TORTILLA DE MAIZ PARA TACO",
+      "cantidad_contada": 283,
+      "unidad": "u",
+      "secciones": {
+        "FRIOS": 200,
+        "COCINA": 83
+      }
+    },
+    {
+      "producto_id": "17160",
+      "codigo": "MR0322011",
+      "nombre": "NUECES",
+      "cantidad_contada": 1.07,
+      "unidad": "lb",
+      "secciones": {
+        "COCINA": 1.07
+      }
+    },
+    {
+      "producto_id": "17224",
+      "codigo": "MR1403117",
+      "nombre": "SANGRIA ROSADA",
+      "cantidad_contada": 2.175,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 1.5,
+        "FRIOS": 0.675
+      }
+    },
+    {
+      "producto_id": "16721",
+      "codigo": "MR0302005",
+      "nombre": "ALCAPARRAS",
+      "cantidad_contada": 7.07,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 5.55,
+        "COCINA": 1.52
+      }
+    },
+    {
+      "producto_id": "16968",
+      "codigo": "MR0501036",
+      "nombre": "TOMATE CHERRY ROJO",
+      "cantidad_contada": 9.35,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 8,
+        "COCINA": 1.35
+      }
+    },
+    {
+      "producto_id": "16834",
+      "codigo": "MR1201012",
+      "nombre": "WHISKEY JACK DANIELS",
+      "cantidad_contada": 1.4625,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 0.75,
+        "FRIOS": 0.7125
+      }
+    },
+    {
+      "producto_id": "18349",
+      "codigo": "MR0305015",
+      "nombre": "CREMA DE MARISCOS EN SOBRES",
+      "cantidad_contada": 10,
+      "unidad": "u",
+      "secciones": {
+        "COCINA": 10
+      }
+    },
+    {
+      "producto_id": "16747",
+      "codigo": "MR0501020",
+      "nombre": "PEPINO",
+      "cantidad_contada": 9.09,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 9.09
+      }
+    },
+    {
+      "producto_id": "16793",
+      "codigo": "MR0302008",
+      "nombre": "CHERRY SIN TALLO",
+      "cantidad_contada": 2.75,
+      "unidad": "lb",
+      "secciones": {
+        "SECOS": 2.75
+      }
+    },
+    {
+      "producto_id": "17244",
+      "codigo": "CP0200006",
+      "nombre": "CP SALSA AJO PARMESANO",
+      "cantidad_contada": 1,
+      "unidad": "galon",
+      "secciones": {
+        "CUARTO FRIO": 0.5,
+        "COCINA": 0.5
+      }
+    },
+    {
+      "producto_id": "16967",
+      "codigo": "MR1103006",
+      "nombre": "PULPA MARACUYA MEDIO GALON",
+      "cantidad_contada": 5.103,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 3.78,
+        "FRIOS": 1.323
+      }
+    },
+    {
+      "producto_id": "17210",
+      "codigo": "MR0101005",
+      "nombre": "CANELA EN POLVO",
+      "cantidad_contada": 0,
+      "unidad": "lb",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16881",
+      "codigo": "PT0301002",
+      "nombre": "CERVEZA WAPA DRAFT",
+      "cantidad_contada": 1723.163,
+      "unidad": "oz",
+      "secciones": {
+        "SECOS": 2.6
+      }
+    },
+    {
+      "producto_id": "16926",
+      "codigo": "MR0602005",
+      "nombre": "MEZCLA PANCAKE",
+      "cantidad_contada": 7.64,
+      "unidad": "lb",
+      "secciones": {
+        "COCINA": 7.64
+      }
+    },
+    {
+      "producto_id": "18583",
+      "codigo": "MR0601045",
+      "nombre": "ESPINACA",
+      "cantidad_contada": 2.48,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 2.48
+      }
+    },
+    {
+      "producto_id": "16989",
+      "codigo": "MR0502013",
+      "nombre": "COCO",
+      "cantidad_contada": 0,
+      "unidad": "u",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16992",
+      "codigo": "MR0901001",
+      "nombre": "FRIJOLES MOLIDOS",
+      "cantidad_contada": 6.88,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 4.47,
+        "COCINA": 2.41
+      }
+    },
+    {
+      "producto_id": "16882",
+      "codigo": "PT0301004",
+      "nombre": "CERVEZA BELGA DRAFT",
+      "cantidad_contada": 1994.8925,
+      "unidad": "oz",
+      "secciones": {
+        "SECOS": 3.01
+      }
+    },
+    {
+      "producto_id": "16914",
+      "codigo": "MR1104002",
+      "nombre": "FLAMINGO BLUE CURACAO",
+      "cantidad_contada": 0.5,
+      "unidad": "lt",
+      "secciones": {
+        "FRIOS": 0.5
+      }
+    },
+    {
+      "producto_id": "16744",
+      "codigo": "MR0501015",
+      "nombre": "LECHUGA ROMANA",
+      "cantidad_contada": 3.62,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 3.62
+      }
+    },
+    {
+      "producto_id": "16819",
+      "codigo": "MR0603001",
+      "nombre": "PAN HAMBURGUESA",
+      "cantidad_contada": 43,
+      "unidad": "u",
+      "secciones": {
+        "CUARTO FRIO": 25,
+        "COCINA": 18
+      }
+    },
+    {
+      "producto_id": "17177",
+      "codigo": "MR0522032",
+      "nombre": "MANTEQUILLA SIN SAL",
+      "cantidad_contada": 9.61,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 9.61
+      }
+    },
+    {
+      "producto_id": "16950",
+      "codigo": "MR1103002",
+      "nombre": "PULPA FRESA MEDIO GALON",
+      "cantidad_contada": 2.646,
+      "unidad": "lt",
+      "secciones": {
+        "SECOS": 1.89,
+        "FRIOS": 0.756
+      }
+    },
+    {
+      "producto_id": "16917",
+      "codigo": "MR1104001",
+      "nombre": "MADRILEÑA GRANADINA",
+      "cantidad_contada": 0,
+      "unidad": "lt",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16720",
+      "codigo": "MR0302016",
+      "nombre": "PEPINILLOS ENTEROS",
+      "cantidad_contada": 8.13,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 5.88,
+        "COCINA": 2.25
+      }
+    },
+    {
+      "producto_id": "16953",
+      "codigo": "MR0801019",
+      "nombre": "CURVINA ENTERA",
+      "cantidad_contada": 97,
+      "unidad": "u",
+      "secciones": {
+        "FRIOS": 10,
+        "CUARTO FRIO": 62,
+        "COCINA": 25
+      }
+    },
+    {
+      "producto_id": "16772",
+      "codigo": "MR0301001",
+      "nombre": "ACEITE DE AJONJOLI",
+      "cantidad_contada": 0,
+      "unidad": "lt",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16752",
+      "codigo": "MR0501029",
+      "nombre": "ZANAHORIA",
+      "cantidad_contada": 5.49,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 2.64,
+        "COCINA": 2.85
+      }
+    },
+    {
+      "producto_id": "16831",
+      "codigo": "MR0401007",
+      "nombre": "TOCINO",
+      "cantidad_contada": 5.72,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 4.4,
+        "COCINA": 1.32
+      }
+    },
+    {
+      "producto_id": "16820",
+      "codigo": "MR0301003",
+      "nombre": "ACEITE DE OLIVA",
+      "cantidad_contada": 2.7,
+      "unidad": "lt",
+      "secciones": {
+        "COCINA": 2.7
+      }
+    },
+    {
+      "producto_id": "16937",
+      "codigo": "CP0101010",
+      "nombre": "CP SAZON CADEJO",
+      "cantidad_contada": 3.42,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 2,
+        "COCINA": 1.42
+      }
+    },
+    {
+      "producto_id": "17415",
+      "codigo": "CP01250901",
+      "nombre": "CP BONELESS PORCION",
+      "cantidad_contada": 17,
+      "unidad": "porcion",
+      "secciones": {
+        "CUARTO FRIO": 17
+      }
+    },
+    {
+      "producto_id": "16739",
+      "codigo": "MR0501009",
+      "nombre": "CHILE ROJO",
+      "cantidad_contada": 1.25,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 1.25
+      }
+    },
+    {
+      "producto_id": "16974",
+      "codigo": "MR0305009",
+      "nombre": "CAFE MOLIDO CLIENTES",
+      "cantidad_contada": 0,
+      "unidad": "oz",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16783",
+      "codigo": "MR1201005",
+      "nombre": "VODKA FINLANDIA",
+      "cantidad_contada": 0,
+      "unidad": "lt",
+      "secciones": {}
+    },
+    {
+      "producto_id": "16741",
+      "codigo": "MR0501037",
+      "nombre": "ELOTE AMARILLO ENTERO",
+      "cantidad_contada": 31,
+      "unidad": "u",
+      "secciones": {
+        "CUARTO FRIO": 28,
+        "COCINA": 3
+      }
+    },
+    {
+      "producto_id": "16750",
+      "codigo": "MR0501025",
+      "nombre": "TOMATE DE COCINA",
+      "cantidad_contada": 25.23,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 10.95,
+        "CUARTO FRIO": 9,
+        "COCINA": 5.28
+      }
+    },
+    {
+      "producto_id": "16829",
+      "codigo": "MR0603006",
+      "nombre": "PANKO BREAD CRUMBS",
+      "cantidad_contada": 45.83,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 40,
+        "COCINA": 5.83
+      }
+    },
+    {
+      "producto_id": "16855",
+      "codigo": "MR0602002",
+      "nombre": "HARINA TRIGO SUAVE",
+      "cantidad_contada": 78.1,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 50,
+        "COCINA": 28.1
+      }
+    },
+    {
+      "producto_id": "16735",
+      "codigo": "MR0501005",
+      "nombre": "CEBOLLA MORADA",
+      "cantidad_contada": 21.655,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 2.67,
+        "CUARTO FRIO": 9.135,
+        "COCINA": 9.85
+      }
+    },
+    {
+      "producto_id": "16762",
+      "codigo": "MR0303002",
+      "nombre": "AZUCAR BLANCA",
+      "cantidad_contada": 68.41,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 66,
+        "COCINA": 2.41
+      }
+    },
+    {
+      "producto_id": "16745",
+      "codigo": "MR0501016",
+      "nombre": "LIMON PERSICO",
+      "cantidad_contada": 44.94,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 44.94
+      }
+    },
+    {
+      "producto_id": "17285",
+      "codigo": "MR0801026",
+      "nombre": "PESCADETAS",
+      "cantidad_contada": 28.53,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 9.41,
+        "CUARTO FRIO": 10,
+        "COCINA": 9.12
+      }
+    },
+    {
+      "producto_id": "17172",
+      "codigo": "MR0522008",
+      "nombre": "BROCCOLI",
+      "cantidad_contada": 14.7,
+      "unidad": "lb",
+      "secciones": {
+        "CUARTO FRIO": 13.15,
+        "COCINA": 1.55
+      }
+    },
+    {
+      "producto_id": "16746",
+      "codigo": "MR0501019",
+      "nombre": "PAPA SOLOMA",
+      "cantidad_contada": 63.88,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 6.58,
+        "CUARTO FRIO": 51.14,
+        "COCINA": 6.16
+      }
+    },
+    {
+      "producto_id": "16957",
+      "codigo": "MR0801011",
+      "nombre": "COLA DE LANGOSTA",
+      "cantidad_contada": 120.5,
+      "unidad": "u",
+      "secciones": {
+        "FRIOS": 89,
+        "CUARTO FRIO": 21,
+        "COCINA": 10.5
+      }
+    },
+    {
+      "producto_id": "17284",
+      "codigo": "MR0801027",
+      "nombre": "CALAMAR",
+      "cantidad_contada": 104.31,
+      "unidad": "lb",
+      "secciones": {
+        "FRIOS": 63.75,
+        "CUARTO FRIO": 21.95,
+        "COCINA": 18.61
+      }
+    },
+    {
+      "producto_id": "18373",
+      "codigo": "MR0522028",
+      "nombre": "ACEITE VEGETAL PARA COCINAR",
+      "cantidad_contada": 93.75,
+      "unidad": "lt",
+      "secciones": {
+        "FRIOS": 37.5,
+        "COCINA": 56.25
+      }
+    }
+  ],
+  "no_encontrados": [],
+  "sin_conversion": []
+}

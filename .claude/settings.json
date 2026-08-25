@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($php = \"$env:USERPROFILE\\\\.config\\\\herd\\\\bin\\\\php84\\\\php.exe\"; Set-Location \"c:\\\\Users\\\\administrator\\\\finanzas_api\"; & $php artisan migrate --path=database/migrations/2026_08_11_000002_add_cantidad_real_to_brew_lote_ingredientes.php --force 2>&1)",
+      "Bash(git commit -m ' *)",
+      "PowerShell($php = \"$env:USERPROFILE\\\\.config\\\\herd\\\\bin\\\\php84\\\\php.exe\"; Set-Location \"c:\\\\Users\\\\administrator\\\\finanzas_api\"; & $php artisan migrate --path=database/migrations/2026_08_11_000003_seed_aditivos_brew_ingredientes.php --force 2>&1)",
+      "PowerShell(& \"$env:USERPROFILE\\\\.config\\\\herd\\\\bin\\\\php84\\\\php.exe\" \"c:\\\\Users\\\\administrator\\\\finanzas_api\\\\artisan\" migrate --path=database/migrations/2026_08_11_000004_add_numero_coccion_to_brew_pasos.php --force 2>&1)",
+      "Bash(git commit -m 'feat\\(brew\\): UI multi-coccion con tabs y backing store por coccion *)",
+      "PowerShell(& \"$env:USERPROFILE\\\\.config\\\\herd\\\\bin\\\\php84\\\\php.exe\" \"c:\\\\Users\\\\administrator\\\\finanzas_api\\\\artisan\" migrate --force 2>&1)",
+      "PowerShell(& \"$env:USERPROFILE\\\\.config\\\\herd\\\\bin\\\\php84\\\\php.exe\" \"c:\\\\Users\\\\administrator\\\\finanzas_api\\\\artisan\" migrate --path=database/migrations/2026_08_11_000005_add_missing_proceso_fields_to_brew_lote_coccion.php --force 2>&1)",
+      "PowerShell(& \"$env:USERPROFILE\\\\.config\\\\herd\\\\bin\\\\php84\\\\php.exe\" \"c:\\\\Users\\\\administrator\\\\finanzas_api\\\\artisan\" migrate --path=database/migrations/2026_08_11_000006_add_remaining_proceso_fields.php --force 2>&1)",
+      "PowerShell(Get-ChildItem \"$env:USERPROFILE\\\\.config\\\\herd\\\\bin\" -ErrorAction SilentlyContinue | Select-Object Name; Get-ChildItem \"C:\\\\Program Files\\\\Herd\" -Recurse -Filter \"php.exe\" -ErrorAction SilentlyContinue -Depth 5 | Select-Object FullName | Select-Object -First 3)",
+      "Bash(grep -E \"^DB_HOST$|^DB_HOST_RRHH|^DB_HOST_COMPRAS\" \"c:/Users/administrator/finanzas_api/.env\")",
+      "Bash(node -e ' *)",
+      "Bash(xargs grep -l \"auditoria\\\\|Auditoria\")",
+      "PowerShell(& \"C:\\\\Users\\\\administrator\\\\.config\\\\herd\\\\bin\\\\php84\\\\php.exe\" \"C:\\\\Users\\\\administrator\\\\finanzas_api\\\\artisan\" migrate --path=\"database/migrations/2026_08_25_000002_create_auditoria_receta_items_table.php\" --path=\"database/migrations/2026_08_25_000003_create_auditoria_receta_criterios_table.php\" --force 2>&1)",
+      "PowerShell(& \"C:\\\\Users\\\\administrator\\\\.config\\\\herd\\\\bin\\\\php84\\\\php.exe\" \"C:\\\\Users\\\\administrator\\\\finanzas_api\\\\artisan\" tinker 2>&1)",
+      "PowerShell(& \"C:\\\\Users\\\\administrator\\\\.config\\\\herd\\\\bin\\\\php84\\\\php.exe\" \"C:\\\\Users\\\\administrator\\\\finanzas_api\\\\artisan\" migrate --path=\"database/migrations/2026_08_25_000004_fix_es_multi_receta_existing_records.php\" --force 2>&1)",
+      "PowerShell(& \"C:\\\\Users\\\\administrator\\\\.config\\\\herd\\\\bin\\\\php84\\\\php.exe\" \"C:\\\\Users\\\\administrator\\\\finanzas_api\\\\artisan\" migrate --path=\"database/migrations/2026_08_25_000005_check_audit_101.php\" --force 2>&1)",
+      "Bash(rm \"c:\\\\Users\\\\administrator\\\\finanzas_api\\\\database\\\\migrations\\\\2026_08_25_000005_check_audit_101.php\")",
+      "PowerShell(& \"C:\\\\Users\\\\administrator\\\\.config\\\\herd\\\\bin\\\\php84\\\\php.exe\" \"C:\\\\Users\\\\administrator\\\\finanzas_api\\\\artisan\" migrate --path=\"database/migrations/2026_08_25_000006_check_criteria_and_names.php\" --force 2>&1)",
+      "PowerShell(& \"C:\\\\Users\\\\administrator\\\\.config\\\\herd\\\\bin\\\\php84\\\\php.exe\" \"C:\\\\Users\\\\administrator\\\\finanzas_api\\\\artisan\" migrate --path=\"database/migrations/2026_08_25_000007_add_receta_nombre_to_auditoria_receta_items.php\" --force 2>&1)"
+    ]
+  }
+}

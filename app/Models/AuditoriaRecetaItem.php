@@ -11,8 +11,8 @@ class AuditoriaRecetaItem extends Model
 
     protected $fillable = [
         'auditoria_id', 'receta_id', 'tipo_receta', 'estacion_id',
-        'responsable_id', 'responsable_nombre', 'calificacion', 'clasificacion',
-        'notas', 'orden',
+        'responsable_id', 'responsable_nombre', 'receta_nombre',
+        'calificacion', 'clasificacion', 'notas', 'orden',
     ];
 
     protected $casts = [
@@ -34,8 +34,8 @@ class AuditoriaRecetaItem extends Model
         return $this->belongsTo(Estacion::class, 'estacion_id');
     }
 
-    public function items()
+    public function criterios()
     {
-        return $this->hasMany(AuditoriaItem::class, 'receta_item_id');
+        return $this->hasMany(AuditoriaRecetaCriterio::class, 'receta_item_id');
     }
 }

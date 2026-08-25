@@ -1,0 +1,2391 @@
+{
+  "meta": {
+    "id": "1",
+    "usuario": "gerentelalibertad@cervezacadejo.com",
+    "fecha_conteo": "2026-07-27T06:00:00.000Z",
+    "updated_at": "2026-07-27T17:09:54.000Z"
+  },
+  "payload": {
+    "extras": {
+      "16732": [
+        {
+          "tipo": "empaque",
+          "factor": 16,
+          "cantidad": 0.5,
+          "tipoLabel": "caja ×1Libra"
+        }
+      ],
+      "16764": [
+        {
+          "tipo": "empaque",
+          "factor": 0.5,
+          "cantidad": 0.2,
+          "tipoLabel": "botella ×0.50lt"
+        }
+      ],
+      "16766": [
+        {
+          "tipo": "empaque",
+          "factor": 3.7854099999999997,
+          "cantidad": 0.25,
+          "tipoLabel": "botella ×1Galón"
+        }
+      ],
+      "16774": [
+        {
+          "tipo": "empaque",
+          "factor": 0.96,
+          "cantidad": 0.45,
+          "tipoLabel": "botella ×0.96lt"
+        }
+      ],
+      "16775": [
+        {
+          "tipo": "empaque",
+          "factor": 24,
+          "cantidad": 1,
+          "tipoLabel": "botella ×24oz"
+        },
+        {
+          "tipo": "empaque",
+          "factor": 24,
+          "cantidad": 3,
+          "tipoLabel": "botella ×24oz"
+        }
+      ],
+      "16781": [
+        {
+          "tipo": "empaque",
+          "factor": 0.75,
+          "cantidad": 0.3,
+          "tipoLabel": "botella ×0.75Litro"
+        }
+      ],
+      "16784": [
+        {
+          "tipo": "empaque",
+          "factor": 0.75,
+          "cantidad": 0.45,
+          "tipoLabel": "botella ×0.75lt"
+        }
+      ],
+      "16834": [
+        {
+          "tipo": "empaque",
+          "factor": 0.75,
+          "cantidad": 0.85,
+          "tipoLabel": "botella ×0.75lt"
+        }
+      ],
+      "16881": [
+        {
+          "tipo": "barril",
+          "factor": 3122.87892,
+          "cantidad": 1,
+          "tipoLabel": "4🛢+45.17lb"
+        }
+      ],
+      "16882": [
+        {
+          "tipo": "barril",
+          "factor": 1489.297,
+          "cantidad": 1,
+          "tipoLabel": "2🛢+24.95lb"
+        }
+      ],
+      "16883": [
+        {
+          "tipo": "barril",
+          "factor": 3697.11276,
+          "cantidad": 1,
+          "tipoLabel": "5🛢+39.36lb"
+        }
+      ],
+      "16884": [
+        {
+          "tipo": "barril",
+          "factor": 1007.54568,
+          "cantidad": 1,
+          "tipoLabel": "1🛢+36.83lb"
+        }
+      ],
+      "16885": [
+        {
+          "tipo": "barril",
+          "factor": 2851.83048,
+          "cantidad": 1,
+          "tipoLabel": "4🛢+27.38lb"
+        }
+      ],
+      "16887": [
+        {
+          "tipo": "barril",
+          "factor": 2237.06888,
+          "cantidad": 1,
+          "tipoLabel": "3🛢+30.53lb"
+        }
+      ],
+      "16938": [
+        {
+          "tipo": "barril",
+          "factor": 1319.2742400000002,
+          "cantidad": 1,
+          "tipoLabel": "1🛢+57.29lb"
+        }
+      ],
+      "16969": [
+        {
+          "tipo": "empaque",
+          "factor": 3.7854099999999997,
+          "cantidad": 0.4,
+          "tipoLabel": "botella ×1Galón"
+        }
+      ],
+      "16976": [
+        {
+          "tipo": "barril",
+          "factor": 1661.9208800000001,
+          "cantidad": 1,
+          "tipoLabel": "2🛢+36.28lb"
+        }
+      ],
+      "16988": [
+        {
+          "tipo": "barril",
+          "factor": 874.68776,
+          "cantidad": 1,
+          "tipoLabel": "1🛢+28.11lb"
+        }
+      ],
+      "17001": [
+        {
+          "tipo": "barril",
+          "factor": 1155.94432,
+          "cantidad": 1,
+          "tipoLabel": "1🛢+46.57lb"
+        }
+      ],
+      "17003": [
+        {
+          "tipo": "barril",
+          "factor": 1448.61688,
+          "cantidad": 1,
+          "tipoLabel": "2🛢+22.28lb"
+        }
+      ],
+      "17120": [
+        {
+          "tipo": "empaque",
+          "factor": 0.75,
+          "cantidad": 0.8,
+          "tipoLabel": "botella ×0.75lt"
+        }
+      ],
+      "17234": [
+        {
+          "tipo": "empaque",
+          "factor": 16,
+          "cantidad": 1.13,
+          "tipoLabel": "caja ×1Libra"
+        },
+        {
+          "tipo": "empaque",
+          "factor": 16,
+          "cantidad": 5.5,
+          "tipoLabel": "caja ×1Libra"
+        }
+      ],
+      "17282": [
+        {
+          "tipo": "empaque",
+          "factor": 0.40397401,
+          "cantidad": 0.4,
+          "tipoLabel": "lata ×13.66Oz fluida"
+        }
+      ],
+      "17324": [
+        {
+          "tipo": "empaque",
+          "factor": 1,
+          "cantidad": 0.45,
+          "tipoLabel": "botella ×1lt"
+        }
+      ],
+      "17486": [
+        {
+          "tipo": "empaque",
+          "factor": 0.7,
+          "cantidad": 0.5,
+          "tipoLabel": "botella ×0.70lt"
+        }
+      ],
+      "19338": [
+        {
+          "tipo": "barril",
+          "factor": 1338.15588,
+          "cantidad": 1,
+          "tipoLabel": "2🛢+15.03lb"
+        }
+      ]
+    },
+    "contado": {
+      "16717": {
+        "COCINA": null
+      },
+      "16718": {
+        "CUARTO FRIO": null
+      },
+      "16719": {
+        "CUARTO FRIO": null
+      },
+      "16720": {
+        "SECOS": "1",
+        "COCINA": "3.20"
+      },
+      "16721": {
+        "SECOS": null,
+        "COCINA": "1.35"
+      },
+      "16722": {
+        "FREEZER": null
+      },
+      "16723": {
+        "COCINA": "6.50",
+        "FREEZER": null
+      },
+      "16726": {
+        "SECOS": null,
+        "COCINA": "0.58"
+      },
+      "16729": {
+        "COCINA": null,
+        "CUARTO FRIO": null
+      },
+      "16730": {
+        "SECOS": null,
+        "COCINA": "12"
+      },
+      "16731": {
+        "SECOS": null,
+        "COCINA": "1"
+      },
+      "16732": {
+        "CUARTO FRIO": null
+      },
+      "16733": {
+        "CUARTO FRIO": null
+      },
+      "16735": {
+        "COCINA": null,
+        "CUARTO FRIO": null
+      },
+      "16737": {
+        "CUARTO FRIO": null
+      },
+      "16738": {
+        "CUARTO FRIO": null
+      },
+      "16739": {
+        "CUARTO FRIO": null
+      },
+      "16740": {
+        "CUARTO FRIO": null
+      },
+      "16741": {
+        "CUARTO FRIO": null
+      },
+      "16744": {
+        "CUARTO FRIO": null
+      },
+      "16745": {
+        "CUARTO FRIO": null
+      },
+      "16746": {
+        "COCINA": "2.30",
+        "FREEZER": null,
+        "CUARTO FRIO": null
+      },
+      "16747": {
+        "CUARTO FRIO": null
+      },
+      "16749": {
+        "COCINA": null
+      },
+      "16750": {
+        "COCINA": null,
+        "CUARTO FRIO": null
+      },
+      "16751": {
+        "CUARTO FRIO": null
+      },
+      "16752": {
+        "CUARTO FRIO": null
+      },
+      "16754": {
+        "COCINA": "1.51",
+        "FREEZER": null
+      },
+      "16755": {
+        "CUARTO FRIO": null
+      },
+      "16756": {
+        "BAR": null,
+        "CUARTO FRIO": null
+      },
+      "16757": {
+        "CUARTO FRIO": "11.35"
+      },
+      "16759": {
+        "SECOS": null,
+        "COCINA": "1.10"
+      },
+      "16760": {
+        "COCINA": "2"
+      },
+      "16761": {
+        "SECOS": "4.4",
+        "COCINA": "1.59"
+      },
+      "16762": {
+        "SECOS": "33",
+        "COCINA": "1.18"
+      },
+      "16764": {
+        "SECOS": null
+      },
+      "16765": {
+        "SECOS": null,
+        "COCINA": "1.46"
+      },
+      "16766": {
+        "BAR": "0.8"
+      },
+      "16768": {
+        "SECOS": "5"
+      },
+      "16769": {
+        "BAR": null,
+        "SECOS": "1"
+      },
+      "16770": {
+        "SECOS": "9"
+      },
+      "16772": {
+        "SECOS": "1"
+      },
+      "16773": {
+        "SECOS": "1",
+        "COCINA": "2.53"
+      },
+      "16774": {
+        "SECOS": null
+      },
+      "16776": {
+        "COCINA": null
+      },
+      "16777": {
+        "BAR": null,
+        "CUARTO FRIO": null
+      },
+      "16778": {
+        "BAR": null,
+        "CUARTO FRIO": "4"
+      },
+      "16779": {
+        "BAR": null,
+        "SECOS": null
+      },
+      "16780": {
+        "BAR": null,
+        "SECOS": "108"
+      },
+      "16781": {
+        "SECOS": null
+      },
+      "16784": {
+        "SECOS": "1.5"
+      },
+      "16785": {
+        "BAR": "0.45",
+        "SECOS": "1"
+      },
+      "16787": {
+        "BAR": null,
+        "SECOS": null
+      },
+      "16788": {
+        "BAR": "0.5",
+        "SECOS": null
+      },
+      "16789": {
+        "BAR": null,
+        "SECOS": null
+      },
+      "16802": {
+        "CAJA": null
+      },
+      "16804": {
+        "CAJA": null
+      },
+      "16805": {
+        "CAJA": null
+      },
+      "16806": {
+        "CAJA": null,
+        "SECOS": null
+      },
+      "16807": {
+        "CAJA": null
+      },
+      "16819": {
+        "COCINA": "10",
+        "CUARTO FRIO": null
+      },
+      "16820": {
+        "COCINA": null
+      },
+      "16822": {
+        "COCINA": null,
+        "FREEZER": null
+      },
+      "16825": {
+        "COCINA": null,
+        "CUARTO FRIO": null
+      },
+      "16826": {
+        "BAR": null,
+        "SECOS": null
+      },
+      "16829": {
+        "SECOS": null,
+        "COCINA": null
+      },
+      "16830": {
+        "COCINA": null,
+        "FREEZER": null
+      },
+      "16831": {
+        "COCINA": null,
+        "FREEZER": null
+      },
+      "16833": {
+        "CUARTO FRIO": "20"
+      },
+      "16846": {
+        "CAJA": null,
+        "CUARTO FRIO": null
+      },
+      "16847": {
+        "COCINA": "3.41",
+        "CUARTO FRIO": "10.5"
+      },
+      "16850": {
+        "COCINA": null,
+        "FREEZER": null
+      },
+      "16851": {
+        "COCINA": null,
+        "FREEZER": null
+      },
+      "16853": {
+        "COCINA": null,
+        "CUARTO FRIO": null
+      },
+      "16855": {
+        "SECOS": "50",
+        "COCINA": null
+      },
+      "16857": {
+        "COCINA": "1.23",
+        "FREEZER": null
+      },
+      "16859": {
+        "CAJA": null
+      },
+      "16860": {
+        "COCINA": "3.17",
+        "FREEZER": null
+      },
+      "16862": {
+        "COCINA": "1.50"
+      },
+      "16864": {
+        "BAR": null,
+        "CUARTO FRIO": null
+      },
+      "16865": {
+        "BAR": null,
+        "SECOS": null
+      },
+      "16866": {
+        "BAR": null,
+        "SECOS": null
+      },
+      "16868": {
+        "BAR": null,
+        "SECOS": null
+      },
+      "16869": {
+        "BAR": null,
+        "SECOS": null
+      },
+      "16875": {
+        "CAJA": null
+      },
+      "16876": {
+        "CAJA": null
+      },
+      "16877": {
+        "CAJA": null
+      },
+      "16878": {
+        "CAJA": null
+      },
+      "16879": {
+        "CAJA": null
+      },
+      "16910": {
+        "COCINA": "16",
+        "FREEZER": null
+      },
+      "16912": {
+        "SECOS": null
+      },
+      "16914": {
+        "BAR": null
+      },
+      "16915": {
+        "COCINA": "0.50",
+        "CUARTO FRIO": null
+      },
+      "16917": {
+        "SECOS": null
+      },
+      "16924": {
+        "BAR": "0.9",
+        "SECOS": "2"
+      },
+      "16925": {
+        "BAR": null,
+        "SECOS": null
+      },
+      "16926": {
+        "COCINA": "7.45"
+      },
+      "16927": {
+        "SECOS": null,
+        "COCINA": "29.5"
+      },
+      "16930": {
+        "COCINA": "119",
+        "FREEZER": "25"
+      },
+      "16935": {
+        "COCINA": null,
+        "CUARTO FRIO": null
+      },
+      "16936": {
+        "COCINA": null,
+        "CUARTO FRIO": null
+      },
+      "16937": {
+        "SECOS": null,
+        "COCINA": "1.67"
+      },
+      "16945": {
+        "BAR": "0.20",
+        "CUARTO FRIO": null
+      },
+      "16946": {
+        "BAR": null
+      },
+      "16949": {
+        "BAR": "0.70"
+      },
+      "16950": {
+        "CUARTO FRIO": null
+      },
+      "16951": {
+        "BAR": null,
+        "CUARTO FRIO": null
+      },
+      "16952": {
+        "BAR": "0.85"
+      },
+      "16953": {
+        "COCINA": null,
+        "FREEZER": null
+      },
+      "16954": {
+        "COCINA": "3.99",
+        "FREEZER": null
+      },
+      "16955": {
+        "COCINA": null,
+        "FREEZER": null
+      },
+      "16956": {
+        "FREEZER": null
+      },
+      "16957": {
+        "COCINA": null,
+        "FREEZER": null
+      },
+      "16958": {
+        "COCINA": null,
+        "FREEZER": null
+      },
+      "16960": {
+        "SECOS": "1"
+      },
+      "16962": {
+        "COCINA": null,
+        "FREEZER": null,
+        "CUARTO FRIO": null
+      },
+      "16966": {
+        "FREEZER": null
+      },
+      "16967": {
+        "BAR": "0.40",
+        "CUARTO FRIO": null
+      },
+      "16968": {
+        "CUARTO FRIO": null
+      },
+      "16969": {
+        "SECOS": null
+      },
+      "16970": {
+        "COCINA": null,
+        "FREEZER": null
+      },
+      "16980": {
+        "CUARTO FRIO": null
+      },
+      "16989": {
+        "CUARTO FRIO": null
+      },
+      "16992": {
+        "FREEZER": null,
+        "CUARTO FRIO": null
+      },
+      "16993": {
+        "COCINA": null,
+        "FREEZER": "6"
+      },
+      "17012": {
+        "BAR": "0.75"
+      },
+      "17029": {
+        "BAR": null,
+        "SECOS": null
+      },
+      "17033": {
+        "CAJA": null
+      },
+      "17049": {
+        "CUARTO FRIO": null
+      },
+      "17051": {
+        "CAJA": null
+      },
+      "17059": {
+        "COCINA": "1",
+        "CUARTO FRIO": null
+      },
+      "17060": {
+        "COCINA": "0.78"
+      },
+      "17066": {
+        "CAJA": null
+      },
+      "17090": {
+        "CAJA": null
+      },
+      "17115": {
+        "CAJA": null
+      },
+      "17116": {
+        "CAJA": null
+      },
+      "17124": {
+        "BAR": null,
+        "CAJA": null,
+        "SECOS": "48"
+      },
+      "17125": {
+        "BAR": null,
+        "CAJA": null,
+        "SECOS": "24"
+      },
+      "17126": {
+        "BAR": null,
+        "CAJA": null
+      },
+      "17159": {
+        "COCINA": "1.75"
+      },
+      "17160": {
+        "SECOS": null,
+        "COCINA": "1.21"
+      },
+      "17172": {
+        "CUARTO FRIO": null
+      },
+      "17177": {
+        "CUARTO FRIO": null
+      },
+      "17180": {
+        "COCINA": null,
+        "CUARTO FRIO": null
+      },
+      "17183": {
+        "COCINA": null,
+        "FREEZER": "12"
+      },
+      "17185": {
+        "BAR": null,
+        "SECOS": null
+      },
+      "17186": {
+        "BAR": null,
+        "SECOS": null
+      },
+      "17187": {
+        "BAR": null,
+        "SECOS": "1"
+      },
+      "17189": {
+        "SECOS": null
+      },
+      "17190": {
+        "BAR": "0.45",
+        "SECOS": null
+      },
+      "17191": {
+        "BAR": "0.5",
+        "SECOS": null
+      },
+      "17197": {
+        "BAR": null,
+        "SECOS": null
+      },
+      "17198": {
+        "BAR": "0.45",
+        "SECOS": "2"
+      },
+      "17200": {
+        "BAR": null,
+        "SECOS": "1"
+      },
+      "17202": {
+        "BAR": null
+      },
+      "17210": {
+        "SECOS": null
+      },
+      "17222": {
+        "BAR": null,
+        "SECOS": null
+      },
+      "17223": {
+        "BAR": "0.55",
+        "SECOS": null,
+        "CUARTO FRIO": "2"
+      },
+      "17224": {
+        "BAR": "0.25",
+        "CUARTO FRIO": "2"
+      },
+      "17225": {
+        "BAR": null,
+        "CUARTO FRIO": "2"
+      },
+      "17227": {
+        "COCINA": "12",
+        "CUARTO FRIO": null
+      },
+      "17228": {
+        "COCINA": null,
+        "CUARTO FRIO": null
+      },
+      "17239": {
+        "COCINA": null,
+        "FREEZER": null
+      },
+      "17240": {
+        "COCINA": "2",
+        "FREEZER": null
+      },
+      "17241": {
+        "CUARTO FRIO": null
+      },
+      "17242": {
+        "CUARTO FRIO": null
+      },
+      "17243": {
+        "COCINA": null,
+        "CUARTO FRIO": null
+      },
+      "17244": {
+        "COCINA": null,
+        "CUARTO FRIO": null
+      },
+      "17246": {
+        "CUARTO FRIO": null
+      },
+      "17248": {
+        "COCINA": null,
+        "CUARTO FRIO": null
+      },
+      "17250": {
+        "COCINA": "2",
+        "CUARTO FRIO": null
+      },
+      "17274": {
+        "SECOS": null
+      },
+      "17275": {
+        "COCINA": null,
+        "FREEZER": null
+      },
+      "17282": {
+        "SECOS": null
+      },
+      "17283": {
+        "SECOS": null,
+        "COCINA": null,
+        "FREEZER": null
+      },
+      "17284": {
+        "COCINA": null,
+        "FREEZER": null
+      },
+      "17285": {
+        "COCINA": null,
+        "FREEZER": null
+      },
+      "17289": {
+        "CAJA": null
+      },
+      "17290": {
+        "CAJA": null
+      },
+      "17293": {
+        "CAJA": null
+      },
+      "17294": {
+        "CAJA": null
+      },
+      "17295": {
+        "CAJA": null
+      },
+      "17296": {
+        "CAJA": null
+      },
+      "17297": {
+        "CAJA": null
+      },
+      "17307": {
+        "BAR": "0.20",
+        "SECOS": "0.75",
+        "CUARTO FRIO": "2"
+      },
+      "17308": {
+        "BAR": "0.9",
+        "CUARTO FRIO": "1"
+      },
+      "17309": {
+        "BAR": "0.85",
+        "SECOS": null,
+        "CUARTO FRIO": "2"
+      },
+      "17310": {
+        "COCINA": "1.36",
+        "FREEZER": null
+      },
+      "17324": {
+        "SECOS": null
+      },
+      "17330": {
+        "COCINA": "0.25",
+        "CUARTO FRIO": null
+      },
+      "17331": {
+        "COCINA": "0.5",
+        "FREEZER": null
+      },
+      "17332": {
+        "COCINA": "0.25",
+        "FREEZER": null
+      },
+      "17341": {
+        "COCINA": "0.25",
+        "FREEZER": null
+      },
+      "17344": {
+        "CAJA": null
+      },
+      "17345": {
+        "CAJA": null
+      },
+      "17366": {
+        "SECOS": "3"
+      },
+      "17415": {
+        "COCINA": null,
+        "FREEZER": null
+      },
+      "17419": {
+        "CAJA": null
+      },
+      "17420": {
+        "CAJA": null
+      },
+      "17421": {
+        "CAJA": null
+      },
+      "17422": {
+        "CAJA": null
+      },
+      "17423": {
+        "CAJA": null
+      },
+      "17438": {
+        "CAJA": null
+      },
+      "17464": {
+        "CAJA": null
+      },
+      "17465": {
+        "CAJA": null
+      },
+      "17467": {
+        "CAJA": null
+      },
+      "17468": {
+        "CAJA": null
+      },
+      "17469": {
+        "CAJA": null
+      },
+      "17470": {
+        "CAJA": null
+      },
+      "17471": {
+        "CAJA": null
+      },
+      "17472": {
+        "CAJA": null
+      },
+      "17473": {
+        "CAJA": null
+      },
+      "17474": {
+        "CAJA": null
+      },
+      "17475": {
+        "CAJA": null
+      },
+      "17476": {
+        "CAJA": null
+      },
+      "17477": {
+        "CAJA": null
+      },
+      "17478": {
+        "CAJA": null
+      },
+      "17486": {
+        "SECOS": null
+      },
+      "17901": {
+        "CAJA": null
+      },
+      "17902": {
+        "CAJA": "56"
+      },
+      "17903": {
+        "CAJA": null
+      },
+      "18245": {
+        "SECOS": "15",
+        "COCINA": null,
+        "CUARTO FRIO": null
+      },
+      "18289": {
+        "COCINA": "0.45"
+      },
+      "18297": {
+        "SECOS": null
+      },
+      "18310": {
+        "SECOS": null
+      },
+      "18343": {
+        "COCINA": "1.36"
+      },
+      "18344": {
+        "SECOS": null
+      },
+      "18346": {
+        "COCINA": "5"
+      },
+      "18349": {
+        "SECOS": null,
+        "COCINA": null
+      },
+      "18372": {
+        "SECOS": null
+      },
+      "18373": {
+        "SECOS": null
+      },
+      "18458": {
+        "COCINA": "1.19"
+      },
+      "18499": {
+        "FREEZER": null
+      },
+      "18529": {
+        "CUARTO FRIO": null
+      },
+      "18575": {
+        "COCINA": null,
+        "FREEZER": null
+      },
+      "18583": {
+        "CUARTO FRIO": null
+      },
+      "18589": {
+        "SECOS": "3"
+      },
+      "28530": {
+        "CAJA": null
+      },
+      "28531": {
+        "CAJA": null
+      },
+      "28532": {
+        "CAJA": null
+      },
+      "28533": {
+        "CAJA": null
+      },
+      "28534": {
+        "CAJA": null
+      },
+      "28540": {
+        "CAJA": null
+      },
+      "28541": {
+        "CAJA": null
+      },
+      "28543": {
+        "CAJA": null
+      },
+      "28544": {
+        "CAJA": null
+      },
+      "28662": {
+        "CAJA": null
+      },
+      "28664": {
+        "CAJA": null
+      },
+      "28687": {
+        "CAJA": null
+      },
+      "38405": {
+        "CAJA": null
+      }
+    },
+    "secciones": [
+      "CAJA"
+    ],
+    "subtotales": {
+      "16717": {
+        "COCINA": [
+          1.67
+        ]
+      },
+      "16718": {
+        "CUARTO FRIO": [
+          8
+        ]
+      },
+      "16719": {
+        "CUARTO FRIO": [
+          250
+        ]
+      },
+      "16721": {
+        "SECOS": [
+          7.97
+        ]
+      },
+      "16722": {
+        "FREEZER": [
+          53.58
+        ]
+      },
+      "16723": {
+        "FREEZER": [
+          20.62
+        ]
+      },
+      "16726": {
+        "SECOS": [
+          2
+        ]
+      },
+      "16729": {
+        "COCINA": [
+          16
+        ],
+        "CUARTO FRIO": [
+          350
+        ]
+      },
+      "16730": {
+        "SECOS": [
+          99
+        ]
+      },
+      "16731": {
+        "SECOS": [
+          1
+        ]
+      },
+      "16732": {
+        "CUARTO FRIO": [
+          8
+        ]
+      },
+      "16733": {
+        "CUARTO FRIO": [
+          13.16
+        ]
+      },
+      "16735": {
+        "COCINA": [
+          8
+        ],
+        "CUARTO FRIO": [
+          51.46
+        ]
+      },
+      "16737": {
+        "CUARTO FRIO": [
+          1.16
+        ]
+      },
+      "16738": {
+        "CUARTO FRIO": [
+          15.81
+        ]
+      },
+      "16739": {
+        "CUARTO FRIO": [
+          18.18
+        ]
+      },
+      "16740": {
+        "CUARTO FRIO": [
+          6.3
+        ]
+      },
+      "16741": {
+        "CUARTO FRIO": [
+          97
+        ]
+      },
+      "16744": {
+        "CUARTO FRIO": [
+          10.78
+        ]
+      },
+      "16745": {
+        "CUARTO FRIO": [
+          42.34,
+          53.4
+        ]
+      },
+      "16746": {
+        "FREEZER": [
+          14.2
+        ],
+        "CUARTO FRIO": [
+          46.44
+        ]
+      },
+      "16747": {
+        "CUARTO FRIO": [
+          9.49
+        ]
+      },
+      "16749": {
+        "COCINA": [
+          20.62
+        ]
+      },
+      "16750": {
+        "COCINA": [
+          2.8
+        ],
+        "CUARTO FRIO": [
+          15.79
+        ]
+      },
+      "16751": {
+        "CUARTO FRIO": [
+          7.98
+        ]
+      },
+      "16752": {
+        "CUARTO FRIO": [
+          23.38
+        ]
+      },
+      "16754": {
+        "FREEZER": [
+          205
+        ]
+      },
+      "16755": {
+        "CUARTO FRIO": [
+          5.72
+        ]
+      },
+      "16756": {
+        "BAR": [
+          1
+        ],
+        "CUARTO FRIO": [
+          2
+        ]
+      },
+      "16759": {
+        "SECOS": [
+          2.2
+        ]
+      },
+      "16764": {
+        "SECOS": [
+          0.5
+        ]
+      },
+      "16765": {
+        "SECOS": [
+          8
+        ]
+      },
+      "16769": {
+        "BAR": [
+          0.5
+        ]
+      },
+      "16774": {
+        "SECOS": [
+          0.96
+        ]
+      },
+      "16776": {
+        "COCINA": [
+          1.5
+        ]
+      },
+      "16777": {
+        "BAR": [
+          6
+        ],
+        "CUARTO FRIO": [
+          6
+        ]
+      },
+      "16778": {
+        "BAR": [
+          0.8
+        ]
+      },
+      "16779": {
+        "BAR": [
+          27
+        ],
+        "SECOS": [
+          72
+        ]
+      },
+      "16780": {
+        "BAR": [
+          16
+        ]
+      },
+      "16781": {
+        "SECOS": [
+          0.75
+        ]
+      },
+      "16787": {
+        "BAR": [
+          0.25
+        ],
+        "SECOS": [
+          1
+        ]
+      },
+      "16788": {
+        "SECOS": [
+          1
+        ]
+      },
+      "16789": {
+        "BAR": [
+          0.7
+        ],
+        "SECOS": [
+          1
+        ]
+      },
+      "16802": {
+        "CAJA": [
+          16
+        ]
+      },
+      "16804": {
+        "CAJA": [
+          20
+        ]
+      },
+      "16805": {
+        "CAJA": [
+          62
+        ]
+      },
+      "16806": {
+        "CAJA": [
+          58
+        ],
+        "SECOS": [
+          24
+        ]
+      },
+      "16807": {
+        "CAJA": [
+          0
+        ]
+      },
+      "16819": {
+        "CUARTO FRIO": [
+          150
+        ]
+      },
+      "16820": {
+        "COCINA": [
+          2
+        ]
+      },
+      "16822": {
+        "COCINA": [
+          2
+        ],
+        "FREEZER": [
+          4
+        ]
+      },
+      "16825": {
+        "COCINA": [
+          1.57
+        ],
+        "CUARTO FRIO": [
+          19.74
+        ]
+      },
+      "16826": {
+        "BAR": [
+          18
+        ],
+        "SECOS": [
+          20
+        ]
+      },
+      "16829": {
+        "SECOS": [
+          20
+        ],
+        "COCINA": [
+          6
+        ]
+      },
+      "16830": {
+        "COCINA": [
+          6.4,
+          13.91,
+          4
+        ],
+        "FREEZER": [
+          18.46,
+          20.43,
+          3.78,
+          175
+        ]
+      },
+      "16831": {
+        "COCINA": [
+          2.3,
+          2.17
+        ],
+        "FREEZER": [
+          4.4
+        ]
+      },
+      "16846": {
+        "CAJA": [],
+        "CUARTO FRIO": [
+          2
+        ]
+      },
+      "16850": {
+        "COCINA": [
+          30
+        ],
+        "FREEZER": [
+          525
+        ]
+      },
+      "16851": {
+        "COCINA": [
+          5
+        ],
+        "FREEZER": [
+          36,
+          5.35
+        ]
+      },
+      "16853": {
+        "COCINA": [
+          5
+        ],
+        "CUARTO FRIO": [
+          50.78
+        ]
+      },
+      "16855": {
+        "COCINA": [
+          32
+        ]
+      },
+      "16857": {
+        "FREEZER": [
+          4
+        ]
+      },
+      "16859": {
+        "CAJA": [
+          1
+        ]
+      },
+      "16860": {
+        "FREEZER": [
+          13.58
+        ]
+      },
+      "16864": {
+        "BAR": [
+          0.6
+        ],
+        "CUARTO FRIO": [
+          4
+        ]
+      },
+      "16865": {
+        "BAR": [
+          21
+        ],
+        "SECOS": [
+          120
+        ]
+      },
+      "16866": {
+        "BAR": [
+          27
+        ],
+        "SECOS": [
+          72
+        ]
+      },
+      "16868": {
+        "BAR": [
+          28
+        ],
+        "SECOS": [
+          24
+        ]
+      },
+      "16869": {
+        "BAR": [
+          34
+        ],
+        "SECOS": [
+          48
+        ]
+      },
+      "16875": {
+        "CAJA": [
+          2
+        ]
+      },
+      "16876": {
+        "CAJA": [
+          8
+        ]
+      },
+      "16877": {
+        "CAJA": [
+          4
+        ]
+      },
+      "16878": {
+        "CAJA": [
+          2
+        ]
+      },
+      "16879": {
+        "CAJA": [
+          4
+        ]
+      },
+      "16910": {
+        "FREEZER": [
+          110
+        ]
+      },
+      "16912": {
+        "SECOS": [
+          5
+        ]
+      },
+      "16914": {
+        "BAR": [
+          1
+        ]
+      },
+      "16915": {
+        "CUARTO FRIO": [
+          0.25
+        ]
+      },
+      "16917": {
+        "SECOS": [
+          2
+        ]
+      },
+      "16925": {
+        "BAR": [
+          0.55
+        ],
+        "SECOS": [
+          2
+        ]
+      },
+      "16927": {
+        "SECOS": [
+          36
+        ]
+      },
+      "16935": {
+        "COCINA": [
+          2.06
+        ],
+        "CUARTO FRIO": [
+          29.7
+        ]
+      },
+      "16936": {
+        "COCINA": [
+          1.48
+        ],
+        "CUARTO FRIO": [
+          7.48
+        ]
+      },
+      "16937": {
+        "SECOS": [
+          4
+        ]
+      },
+      "16945": {
+        "CUARTO FRIO": [
+          1
+        ]
+      },
+      "16946": {
+        "BAR": [
+          0.45
+        ]
+      },
+      "16950": {
+        "CUARTO FRIO": [
+          1
+        ]
+      },
+      "16951": {
+        "BAR": [
+          0.6
+        ],
+        "CUARTO FRIO": [
+          3
+        ]
+      },
+      "16953": {
+        "COCINA": [
+          17
+        ],
+        "FREEZER": [
+          5,
+          92
+        ]
+      },
+      "16954": {
+        "FREEZER": [
+          18.89,
+          19.45
+        ]
+      },
+      "16955": {
+        "COCINA": [
+          21
+        ],
+        "FREEZER": [
+          35,
+          50
+        ]
+      },
+      "16956": {
+        "FREEZER": [
+          20.57
+        ]
+      },
+      "16957": {
+        "COCINA": [
+          13
+        ],
+        "FREEZER": [
+          32,
+          2,
+          14
+        ]
+      },
+      "16958": {
+        "COCINA": [
+          12
+        ],
+        "FREEZER": [
+          50
+        ]
+      },
+      "16962": {
+        "COCINA": [
+          1.5,
+          7.69,
+          7.97,
+          4
+        ],
+        "FREEZER": [
+          18.46,
+          10.33
+        ],
+        "CUARTO FRIO": [
+          23
+        ]
+      },
+      "16966": {
+        "FREEZER": [
+          20
+        ]
+      },
+      "16967": {
+        "CUARTO FRIO": [
+          1
+        ]
+      },
+      "16968": {
+        "CUARTO FRIO": [
+          7
+        ]
+      },
+      "16969": {
+        "SECOS": [
+          3.78
+        ]
+      },
+      "16970": {
+        "COCINA": [
+          5
+        ],
+        "FREEZER": [
+          10
+        ]
+      },
+      "16980": {
+        "CUARTO FRIO": [
+          12.81
+        ]
+      },
+      "16989": {
+        "CUARTO FRIO": [
+          18
+        ]
+      },
+      "16992": {
+        "FREEZER": [
+          9.5
+        ],
+        "CUARTO FRIO": [
+          15.61
+        ]
+      },
+      "16993": {
+        "COCINA": [
+          2.55
+        ]
+      },
+      "17029": {
+        "BAR": [
+          9
+        ],
+        "SECOS": [
+          60
+        ]
+      },
+      "17033": {
+        "CAJA": [
+          5
+        ]
+      },
+      "17049": {
+        "CUARTO FRIO": [
+          3
+        ]
+      },
+      "17051": {
+        "CAJA": [
+          51
+        ]
+      },
+      "17059": {
+        "CUARTO FRIO": [
+          4
+        ]
+      },
+      "17066": {
+        "CAJA": [
+          4
+        ]
+      },
+      "17090": {
+        "CAJA": [
+          42
+        ]
+      },
+      "17115": {
+        "CAJA": [
+          3
+        ]
+      },
+      "17116": {
+        "CAJA": [
+          2
+        ]
+      },
+      "17124": {
+        "BAR": [
+          7
+        ],
+        "CAJA": [
+          13
+        ]
+      },
+      "17125": {
+        "BAR": [
+          7
+        ],
+        "CAJA": [
+          27
+        ]
+      },
+      "17126": {
+        "BAR": [
+          7
+        ],
+        "CAJA": [
+          18
+        ]
+      },
+      "17160": {
+        "SECOS": [
+          1
+        ]
+      },
+      "17172": {
+        "CUARTO FRIO": [
+          9.62
+        ]
+      },
+      "17177": {
+        "CUARTO FRIO": [
+          5
+        ]
+      },
+      "17180": {
+        "COCINA": [
+          5
+        ],
+        "CUARTO FRIO": [
+          108
+        ]
+      },
+      "17183": {
+        "COCINA": [
+          4.15
+        ]
+      },
+      "17185": {
+        "BAR": [
+          0.3
+        ],
+        "SECOS": [
+          1.5
+        ]
+      },
+      "17186": {
+        "BAR": [
+          0.35
+        ],
+        "SECOS": [
+          1.5
+        ]
+      },
+      "17187": {
+        "BAR": [
+          0.7
+        ]
+      },
+      "17189": {
+        "SECOS": [
+          2
+        ]
+      },
+      "17190": {
+        "SECOS": [
+          1
+        ]
+      },
+      "17191": {
+        "SECOS": [
+          0.7
+        ]
+      },
+      "17197": {
+        "BAR": [
+          0.2
+        ],
+        "SECOS": [
+          1
+        ]
+      },
+      "17200": {
+        "BAR": [
+          0.85
+        ]
+      },
+      "17202": {
+        "BAR": [
+          0.55
+        ]
+      },
+      "17210": {
+        "SECOS": [
+          3
+        ]
+      },
+      "17222": {
+        "BAR": [
+          0.1
+        ],
+        "SECOS": [
+          1
+        ]
+      },
+      "17223": {
+        "SECOS": [
+          2.25
+        ]
+      },
+      "17225": {
+        "BAR": [
+          0.25
+        ]
+      },
+      "17227": {
+        "CUARTO FRIO": [
+          20
+        ]
+      },
+      "17228": {
+        "COCINA": [
+          5
+        ],
+        "CUARTO FRIO": [
+          16
+        ]
+      },
+      "17239": {
+        "COCINA": [
+          19,
+          1.5
+        ],
+        "FREEZER": [
+          32
+        ]
+      },
+      "17240": {
+        "FREEZER": [
+          6
+        ]
+      },
+      "17241": {
+        "CUARTO FRIO": [
+          1
+        ]
+      },
+      "17242": {
+        "CUARTO FRIO": [
+          1
+        ]
+      },
+      "17243": {
+        "COCINA": [
+          0.5
+        ],
+        "CUARTO FRIO": [
+          0.5
+        ]
+      },
+      "17244": {
+        "COCINA": [
+          0.25,
+          0.5
+        ],
+        "CUARTO FRIO": [
+          1
+        ]
+      },
+      "17246": {
+        "CUARTO FRIO": [
+          4.5
+        ]
+      },
+      "17248": {
+        "COCINA": [
+          0.25
+        ],
+        "CUARTO FRIO": [
+          2.5
+        ]
+      },
+      "17250": {
+        "CUARTO FRIO": [
+          8
+        ]
+      },
+      "17274": {
+        "SECOS": [
+          2
+        ]
+      },
+      "17275": {
+        "COCINA": [
+          1.17
+        ],
+        "FREEZER": [
+          45
+        ]
+      },
+      "17282": {
+        "SECOS": [
+          3
+        ]
+      },
+      "17283": {
+        "SECOS": [
+          3.35
+        ],
+        "COCINA": [
+          2.11
+        ]
+      },
+      "17284": {
+        "COCINA": [
+          3,
+          3.78,
+          4
+        ],
+        "FREEZER": [
+          21.8,
+          18.46,
+          13.14,
+          25,
+          35
+        ]
+      },
+      "17285": {
+        "COCINA": [
+          4.17
+        ],
+        "FREEZER": [
+          2.94,
+          6.11,
+          20.4
+        ]
+      },
+      "17289": {
+        "CAJA": [
+          4
+        ]
+      },
+      "17290": {
+        "CAJA": [
+          3
+        ]
+      },
+      "17293": {
+        "CAJA": [
+          6
+        ]
+      },
+      "17294": {
+        "CAJA": [
+          7
+        ]
+      },
+      "17295": {
+        "CAJA": [
+          1
+        ]
+      },
+      "17296": {
+        "CAJA": [
+          10
+        ]
+      },
+      "17297": {
+        "CAJA": [
+          4
+        ]
+      },
+      "17309": {
+        "SECOS": [
+          0.75
+        ]
+      },
+      "17310": {
+        "FREEZER": [
+          16.92
+        ]
+      },
+      "17324": {
+        "SECOS": [
+          1
+        ]
+      },
+      "17330": {
+        "CUARTO FRIO": [
+          1.5
+        ]
+      },
+      "17331": {
+        "FREEZER": [
+          0.75
+        ]
+      },
+      "17332": {
+        "FREEZER": [
+          0.25
+        ]
+      },
+      "17341": {
+        "FREEZER": [
+          0.5
+        ]
+      },
+      "17344": {
+        "CAJA": [
+          2
+        ]
+      },
+      "17345": {
+        "CAJA": [
+          0
+        ]
+      },
+      "17415": {
+        "COCINA": [
+          10
+        ],
+        "FREEZER": [
+          30
+        ]
+      },
+      "17419": {
+        "CAJA": [
+          2
+        ]
+      },
+      "17420": {
+        "CAJA": [
+          7
+        ]
+      },
+      "17421": {
+        "CAJA": [
+          3
+        ]
+      },
+      "17422": {
+        "CAJA": [
+          5
+        ]
+      },
+      "17423": {
+        "CAJA": [
+          4
+        ]
+      },
+      "17438": {
+        "CAJA": [
+          16,
+          18,
+          9
+        ]
+      },
+      "17464": {
+        "CAJA": [
+          2
+        ]
+      },
+      "17465": {
+        "CAJA": [
+          5
+        ]
+      },
+      "17467": {
+        "CAJA": [
+          6
+        ]
+      },
+      "17468": {
+        "CAJA": [
+          6
+        ]
+      },
+      "17469": {
+        "CAJA": [
+          8
+        ]
+      },
+      "17470": {
+        "CAJA": [
+          2
+        ]
+      },
+      "17471": {
+        "CAJA": [
+          5
+        ]
+      },
+      "17472": {
+        "CAJA": [
+          3
+        ]
+      },
+      "17473": {
+        "CAJA": [
+          0
+        ]
+      },
+      "17474": {
+        "CAJA": [
+          0
+        ]
+      },
+      "17475": {
+        "CAJA": [
+          3
+        ]
+      },
+      "17476": {
+        "CAJA": [
+          6
+        ]
+      },
+      "17477": {
+        "CAJA": [
+          7
+        ]
+      },
+      "17478": {
+        "CAJA": [
+          2
+        ]
+      },
+      "17486": {
+        "SECOS": [
+          1.4
+        ]
+      },
+      "17901": {
+        "CAJA": [
+          32
+        ]
+      },
+      "17903": {
+        "CAJA": [
+          49
+        ]
+      },
+      "18245": {
+        "COCINA": [
+          2.03
+        ],
+        "CUARTO FRIO": [
+          4.44
+        ]
+      },
+      "18297": {
+        "SECOS": [
+          2
+        ]
+      },
+      "18310": {
+        "SECOS": [
+          6
+        ]
+      },
+      "18344": {
+        "SECOS": [
+          17
+        ]
+      },
+      "18349": {
+        "SECOS": [
+          20
+        ],
+        "COCINA": [
+          2
+        ]
+      },
+      "18372": {
+        "SECOS": [
+          12
+        ]
+      },
+      "18373": {
+        "SECOS": [
+          5,
+          3
+        ]
+      },
+      "18499": {
+        "FREEZER": [
+          5
+        ]
+      },
+      "18529": {
+        "CUARTO FRIO": [
+          1.91
+        ]
+      },
+      "18575": {
+        "COCINA": [
+          1.41
+        ],
+        "FREEZER": [
+          5.18
+        ]
+      },
+      "18583": {
+        "CUARTO FRIO": [
+          2
+        ]
+      },
+      "28530": {
+        "CAJA": [
+          2
+        ]
+      },
+      "28531": {
+        "CAJA": [
+          4
+        ]
+      },
+      "28532": {
+        "CAJA": [
+          3
+        ]
+      },
+      "28533": {
+        "CAJA": [
+          5
+        ]
+      },
+      "28534": {
+        "CAJA": [
+          4
+        ]
+      },
+      "28540": {
+        "CAJA": [
+          2
+        ]
+      },
+      "28541": {
+        "CAJA": [
+          5
+        ]
+      },
+      "28543": {
+        "CAJA": [
+          6
+        ]
+      },
+      "28544": {
+        "CAJA": [
+          4
+        ]
+      },
+      "28662": {
+        "CAJA": [
+          8,
+          7
+        ]
+      },
+      "28664": {
+        "CAJA": [
+          45
+        ]
+      },
+      "28687": {
+        "CAJA": [
+          6
+        ]
+      },
+      "38405": {
+        "CAJA": [
+          80
+        ]
+      }
+    }
+  }
+}

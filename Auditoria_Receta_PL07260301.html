@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auditoría — CADEJO CHOCOLATE DELIGHT (PL07260301)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0c0c0f; color: #e5e5e5; padding: 32px 24px; }
+  .container { max-width: 860px; margin: 0 auto; }
+
+  .header { margin-bottom: 32px; }
+  .header h1 { font-size: 22px; font-weight: 700; color: #f5f5f4; letter-spacing: -0.3px; }
+  .header .meta { margin-top: 6px; font-size: 13px; color: #78716c; }
+  .header .badge {
+    display: inline-block; margin-top: 10px;
+    background: #78350f22; border: 1px solid #92400e55; color: #d97706;
+    padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600;
+    letter-spacing: 0.5px; text-transform: uppercase;
+  }
+
+  .section-title {
+    font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+    color: #57534e; margin-bottom: 12px; padding-bottom: 8px;
+    border-bottom: 1px solid #1c1c1f;
+  }
+
+  /* Estado inicial */
+  .estado-inicial {
+    background: #111113; border: 1px solid #27272a; border-radius: 14px;
+    padding: 20px 24px; margin-bottom: 28px;
+  }
+  .estado-inicial .ing-grid { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .ing-chip {
+    background: #1c1c1f; border: 1px solid #3f3f46; border-radius: 8px;
+    padding: 6px 12px; font-size: 12px; color: #a1a1aa;
+  }
+  .ing-chip strong { color: #d4d4d8; font-weight: 600; display: block; font-size: 13px; }
+
+  /* Timeline */
+  .timeline { position: relative; padding-left: 28px; }
+  .timeline::before {
+    content: ''; position: absolute; left: 8px; top: 8px; bottom: 8px;
+    width: 1px; background: #27272a;
+  }
+  .event { position: relative; margin-bottom: 20px; }
+  .event-dot {
+    position: absolute; left: -24px; top: 4px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #3f3f46; border: 2px solid #27272a;
+  }
+  .event-dot.cambio { background: #f97316; border-color: #c2410c; }
+
+  .event-card {
+    background: #111113; border: 1px solid #27272a; border-radius: 12px;
+    padding: 14px 18px;
+  }
+  .event-card.cambio { border-color: #c2410c44; background: #111113; }
+
+  .event-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .event-date { font-size: 12px; font-weight: 600; color: #a1a1aa; font-variant-numeric: tabular-nums; }
+  .event-user { font-size: 11px; color: #57534e; }
+  .event-label-cambio {
+    margin-left: auto; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+    color: #f97316; background: #f9731611; border: 1px solid #c2410c44;
+    padding: 2px 8px; border-radius: 999px; text-transform: uppercase;
+  }
+  .event-label-resave {
+    margin-left: auto; font-size: 10px; color: #3f3f46;
+  }
+
+  .changes-list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .change-row {
+    display: flex; align-items: center; gap: 8px;
+    background: #0c0c0f; border: 1px solid #27272a; border-radius: 8px;
+    padding: 8px 12px;
+  }
+  .change-producto { font-size: 13px; font-weight: 600; color: #d4d4d8; flex: 1; }
+  .change-from { font-size: 12px; color: #ef4444; font-family: monospace; white-space: nowrap; }
+  .change-arrow { color: #3f3f46; font-size: 12px; }
+  .change-to { font-size: 12px; color: #22c55e; font-family: monospace; white-space: nowrap; }
+
+  /* Estado actual */
+  .estado-actual {
+    background: #0d1a0f; border: 1px solid #16a34a33; border-radius: 14px;
+    padding: 20px 24px; margin-top: 28px;
+  }
+  .estado-actual .section-title { color: #16a34a88; border-color: #16a34a22; }
+  .estado-actual .ing-grid { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .ing-chip-current {
+    background: #052e16; border: 1px solid #16a34a44; border-radius: 8px;
+    padding: 6px 12px; font-size: 12px; color: #86efac;
+  }
+  .ing-chip-current strong { color: #4ade80; font-weight: 600; display: block; font-size: 13px; }
+
+  .summary-box {
+    background: #111113; border: 1px solid #27272a; border-radius: 14px;
+    padding: 18px 22px; margin-bottom: 28px;
+    display: flex; gap: 24px; flex-wrap: wrap;
+  }
+  .stat { text-align: center; flex: 1; min-width: 80px; }
+  .stat-num { font-size: 28px; font-weight: 800; color: #f5f5f4; line-height: 1; }
+  .stat-num.orange { color: #f97316; }
+  .stat-label { font-size: 11px; color: #57534e; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .divider { width: 1px; background: #27272a; }
+
+  footer { margin-top: 32px; text-align: center; font-size: 11px; color: #3f3f46; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>Auditoría de Receta</h1>
+    <div class="meta">CADEJO CHOCOLATE DELIGHT &nbsp;·&nbsp; Código PL07260301</div>
+    <div class="meta" style="margin-top:4px">Generado el 22 de julio de 2026</div>
+    <div class="badge">Confidencial — Solo uso interno</div>
+  </div>
+
+  <!-- Resumen -->
+  <div class="summary-box">
+    <div class="stat">
+      <div class="stat-num">11</div>
+      <div class="stat-label">Eventos registrados</div>
+    </div>
+    <div class="divider"></div>
+    <div class="stat">
+      <div class="stat-num orange">2</div>
+      <div class="stat-label">Cambios reales</div>
+    </div>
+    <div class="divider"></div>
+    <div class="stat">
+      <div class="stat-num">4</div>
+      <div class="stat-label">Ingredientes</div>
+    </div>
+    <div class="divider"></div>
+    <div class="stat">
+      <div class="stat-num" style="font-size:16px;line-height:1.4">Abr – Jul<br>2026</div>
+      <div class="stat-label">Período</div>
+    </div>
+  </div>
+
+  <!-- Estado inicial -->
+  <div class="estado-inicial">
+    <div class="section-title">Estado inicial — antes del 13 de abril 2026</div>
+    <div class="ing-grid">
+      <div class="ing-chip"><strong>CHOCOLATE LÍQUIDO</strong>0.4940 oz</div>
+      <div class="ing-chip"><strong>SORBETE VAINILLA</strong>2.1870 oz fl</div>
+      <div class="ing-chip"><strong>MENTA FRESCA</strong>0.0710 oz</div>
+      <div class="ing-chip"><strong>PASTA DE PISTACHO</strong>1.0580 oz</div>
+    </div>
+  </div>
+
+  <!-- Timeline -->
+  <div class="section-title" style="margin-bottom:16px">Historial de eventos</div>
+  <div class="timeline">
+
+    <!-- v1 -->
+    <div class="event">
+      <div class="event-dot"></div>
+      <div class="event-card">
+        <div class="event-header">
+          <span class="event-date">13 abr 2026 &nbsp;15:42</span>
+          <span class="event-user">sync → lourdesreyes@cervezacadejo.com</span>
+          <span class="event-label-resave">Re-guardado sin cambios</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- v2 -->
+    <div class="event">
+      <div class="event-dot"></div>
+      <div class="event-card">
+        <div class="event-header">
+          <span class="event-date">17 abr 2026 &nbsp;13:56</span>
+          <span class="event-user">lourdesreyes@cervezacadejo.com</span>
+          <span class="event-label-resave">Re-guardado sin cambios</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- v3 -->
+    <div class="event">
+      <div class="event-dot"></div>
+      <div class="event-card">
+        <div class="event-header">
+          <span class="event-date">17 abr 2026 &nbsp;15:58</span>
+          <span class="event-user">kristian@cervezacadejo.com</span>
+          <span class="event-label-resave">Re-guardado sin cambios</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- v4 — CAMBIO REAL -->
+    <div class="event">
+      <div class="event-dot cambio"></div>
+      <div class="event-card cambio">
+        <div class="event-header">
+          <span class="event-date">25 abr 2026 &nbsp;13:04</span>
+          <span class="event-user">kristian@cervezacadejo.com</span>
+          <span class="event-label-cambio">Cambio de ingrediente</span>
+        </div>
+        <div class="changes-list">
+          <div class="change-row">
+            <div class="change-producto">PASTA DE PISTACHO</div>
+            <div class="change-from">1.0580 oz</div>
+            <div class="change-arrow">→</div>
+            <div class="change-to">0.5000 oz</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- v5 -->
+    <div class="event">
+      <div class="event-dot"></div>
+      <div class="event-card">
+        <div class="event-header">
+          <span class="event-date">13 may 2026 &nbsp;12:58</span>
+          <span class="event-user">lourdesreyes@cervezacadejo.com</span>
+          <span class="event-label-resave">Re-guardado sin cambios</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- v6 -->
+    <div class="event">
+      <div class="event-dot"></div>
+      <div class="event-card">
+        <div class="event-header">
+          <span class="event-date">18 may 2026 &nbsp;13:25</span>
+          <span class="event-user">lourdesreyes@cervezacadejo.com</span>
+          <span class="event-label-resave">Re-guardado sin cambios</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- v7 -->
+    <div class="event">
+      <div class="event-dot"></div>
+      <div class="event-card">
+        <div class="event-header">
+          <span class="event-date">20 may 2026 &nbsp;16:34</span>
+          <span class="event-user">lourdesreyes@cervezacadejo.com</span>
+          <span class="event-label-resave">Re-guardado sin cambios</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- v8 -->
+    <div class="event">
+      <div class="event-dot"></div>
+      <div class="event-card">
+        <div class="event-header">
+          <span class="event-date">22 may 2026 &nbsp;16:21</span>
+          <span class="event-user">lourdesreyes@cervezacadejo.com</span>
+          <span class="event-label-resave">Re-guardado sin cambios</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- v9 -->
+    <div class="event">
+      <div class="event-dot"></div>
+      <div class="event-card">
+        <div class="event-header">
+          <span class="event-date">26 may 2026 &nbsp;11:16</span>
+          <span class="event-user">kristian@cervezacadejo.com</span>
+          <span class="event-label-resave">Re-guardado sin cambios</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- v10 -->
+    <div class="event">
+      <div class="event-dot"></div>
+      <div class="event-card">
+        <div class="event-header">
+          <span class="event-date">8 jul 2026 &nbsp;11:01</span>
+          <span class="event-user">kristian@cervezacadejo.com</span>
+          <span class="event-label-resave">Re-guardado sin cambios</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- v11 — CAMBIO REAL -->
+    <div class="event">
+      <div class="event-dot cambio"></div>
+      <div class="event-card cambio">
+        <div class="event-header">
+          <span class="event-date">20 jul 2026 &nbsp;14:58</span>
+          <span class="event-user">lourdesreyes@cervezacadejo.com</span>
+          <span class="event-label-cambio">Cambio de ingredientes</span>
+        </div>
+        <div class="changes-list">
+          <div class="change-row">
+            <div class="change-producto">CHOCOLATE LÍQUIDO</div>
+            <div class="change-from">0.4940 oz</div>
+            <div class="change-arrow">→</div>
+            <div class="change-to">0.5000 oz</div>
+          </div>
+          <div class="change-row">
+            <div class="change-producto">SORBETE VAINILLA</div>
+            <div class="change-from">2.1870 oz fl</div>
+            <div class="change-arrow">→</div>
+            <div class="change-to">2.0000 oz fl</div>
+          </div>
+          <div class="change-row">
+            <div class="change-producto">MENTA FRESCA</div>
+            <div class="change-from">0.0710 oz</div>
+            <div class="change-arrow">→</div>
+            <div class="change-to">0.0500 oz</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Estado actual -->
+  <div class="estado-actual">
+    <div class="section-title">Receta actual — al 20 de julio 2026</div>
+    <div class="ing-grid">
+      <div class="ing-chip-current"><strong>CHOCOLATE LÍQUIDO</strong>0.5000 oz</div>
+      <div class="ing-chip-current"><strong>SORBETE VAINILLA</strong>2.0000 oz fl</div>
+      <div class="ing-chip-current"><strong>MENTA FRESCA</strong>0.0500 oz</div>
+      <div class="ing-chip-current"><strong>PASTA DE PISTACHO</strong>0.5000 oz</div>
+    </div>
+  </div>
+
+  <footer>
+    Generado desde registros de auditoría del sistema &nbsp;·&nbsp; Los timestamps están en hora local (UTC-6)
+  </footer>
+
+</div>
+</body>
+</html>

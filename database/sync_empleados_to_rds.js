@@ -38,6 +38,8 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 const sql      = require('mssql');
 const { Pool } = require('pg');
 const bcrypt   = require('bcryptjs');
+const { createLogger } = require('./_dbLogger');
+const dbLog = createLogger('sync_empleados_to_rds.js');
 
 function fmtDate(d) {
   if (!d) return null;
@@ -328,6 +330,7 @@ async function crearCuentasEmpleados(pg) {
       creadas++;
     } catch (e) {
       log(`  ✗ Error al crear cuenta para ${nombre} <${email}>: ${e.message}`);
+      await dbLog.error('crearCuentasEmpleados', e, { nombre, email });
     }
   }
 
@@ -385,7 +388,36 @@ async function syncExpedientes(mssqlPool, pg, pgRrhh, codigoToId) {
     return { deptoId, muniId: null, distId: null };
   }
 
-  // 2. Consultar Brilo
+  // 2. Espejear TODOS los empleados de core_db → rrhh_db antes de tocar expedientes
+  // Necesario porque rrhh_db.empleados es un espejo nuevo; empleados creados antes
+  // de esta funcionalidad no existen allí y los FK de expediente_* explotan.
+  log('Sincronizando espejo de empleados (core_db → rrhh_db)...');
+  const { rows: todosEmps } = await pg.query(`
+    SELECT id, codigo, nombres, apellidos, email, cargo_id, sucursal_id,
+           activo, aud_usuario, created_at, updated_at, fecha_ingreso, salario_base
+    FROM empleados
+  `);
+  let espejoOk = 0;
+  for (const e of todosEmps) {
+    await pgRrhh.query(`
+      INSERT INTO empleados
+        (id, codigo, nombres, apellidos, email, cargo_id, sucursal_id, activo,
+         aud_usuario, created_at, updated_at, fecha_ingreso, salario_base, sync_excluido)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,false)
+      ON CONFLICT (id) DO UPDATE SET
+        nombres=EXCLUDED.nombres, apellidos=EXCLUDED.apellidos,
+        email=EXCLUDED.email, activo=EXCLUDED.activo,
+        cargo_id=EXCLUDED.cargo_id, sucursal_id=EXCLUDED.sucursal_id,
+        fecha_ingreso=EXCLUDED.fecha_ingreso, updated_at=EXCLUDED.updated_at
+    `, [e.id, e.codigo, e.nombres, e.apellidos, e.email ?? null,
+        e.cargo_id ?? null, e.sucursal_id ?? null, e.activo,
+        e.aud_usuario, e.created_at, e.updated_at, e.fecha_ingreso ?? null,
+        e.salario_base ?? null]);
+    espejoOk++;
+  }
+  log(`Espejo rrhh_db.empleados: ${espejoOk} upserted\n`);
+
+  // 3. Consultar Brilo
   log('Consultando Brilo (expediente)...');
   const { recordset: briloEmps } = await mssqlPool.request().query(Q_EXPEDIENTE);
   log(`Empleados activos en Brilo: ${briloEmps.length}`);
@@ -795,7 +827,7 @@ async function run() {
             await pg.query(
               `UPDATE empleados
                SET departamento_id = COALESCE($1, departamento_id),
-                   sucursal_id     = COALESCE(sucursal_id, $2),
+                   sucursal_id     = COALESCE($2, sucursal_id),
                    fecha_ingreso   = COALESCE($3, fecha_ingreso),
                    cargo_id        = COALESCE(cargo_id, $4),
                    salario_base    = COALESCE(salario_base, $5),
@@ -837,49 +869,108 @@ async function run() {
         log(`${insOk} empleados nuevos insertados.`);
       }
 
-      // Crear ingresos_personal para empleados nuevos
+      // Espejo de empleados nuevos en rrhh_db (el Observer de Laravel no corre desde Node)
       if (paraInsertar.length) {
         try {
           const codigos = paraInsertar.map(r => r[0]);
-          const empRes  = await pg.query(
-            `SELECT e.id, e.nombres, e.apellidos, e.fecha_ingreso,
-                    c.nombre AS cargo_nombre, s.nombre AS sucursal_nombre
-             FROM empleados e
-             LEFT JOIN cargos c     ON c.id = e.cargo_id
-             LEFT JOIN sucursales s ON s.id = e.sucursal_id
-             WHERE e.codigo = ANY($1)`,
+          const espejoRes = await pg.query(
+            `SELECT id, codigo, nombres, apellidos, email, cargo_id, sucursal_id,
+                    activo, aud_usuario, created_at, updated_at, fecha_ingreso, salario_base
+             FROM empleados WHERE codigo = ANY($1)`,
             [codigos]
           );
-          if (empRes.rows.length) {
-            const empIds = empRes.rows.map(r => r.id);
-            const yaExistenRes = await pgRrhh.query(
-              `SELECT DISTINCT empleado_id FROM ingresos_personal WHERE empleado_id = ANY($1)`,
-              [empIds]
+          for (const e of espejoRes.rows) {
+            await pgRrhh.query(
+              `INSERT INTO empleados
+                 (id, codigo, nombres, apellidos, email, cargo_id, sucursal_id, activo,
+                  aud_usuario, created_at, updated_at, fecha_ingreso, salario_base, sync_excluido)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,false)
+               ON CONFLICT (id) DO UPDATE SET
+                 nombres=EXCLUDED.nombres, apellidos=EXCLUDED.apellidos,
+                 email=EXCLUDED.email, activo=EXCLUDED.activo,
+                 updated_at=EXCLUDED.updated_at, fecha_ingreso=EXCLUDED.fecha_ingreso`,
+              [e.id, e.codigo, e.nombres, e.apellidos, e.email ?? null,
+               e.cargo_id ?? null, e.sucursal_id ?? null, e.activo,
+               e.aud_usuario, e.created_at, e.updated_at, e.fecha_ingreso ?? null,
+               e.salario_base ?? null]
             );
-            const yaExisten = new Set(yaExistenRes.rows.map(r => r.empleado_id));
-            const sinIngreso = empRes.rows.filter(r => !yaExisten.has(r.id));
-            if (sinIngreso.length) {
-              const params = [];
-              const rowParts = sinIngreso.map(r => {
-                const nombre = `${r.nombres} ${r.apellidos}`.trim();
-                params.push(r.id, nombre, r.cargo_nombre, r.sucursal_nombre,
-                            fmtDate(r.fecha_ingreso), 'pendiente', AUD, NOW, NOW);
-                const n = params.length;
-                return `($${n-8},$${n-7},$${n-6},$${n-5},$${n-4},$${n-3},$${n-2},$${n-1},$${n})`;
-              });
+          }
+          log(`${espejoRes.rows.length} empleados nuevos espejados en rrhh_db.empleados`);
+        } catch (e) {
+          log(`AVISO: No se pudo espejear empleados en rrhh_db: ${e.message}`);
+          await dbLog.warning('espejo_rrhh_empleados', e.message, { codigos: paraInsertar.map(r => r[0]) });
+        }
+      }
+
+      // Reconciliar ingresos_personal — corre siempre, no solo para nuevos.
+      // Cubre: (a) empleados recién insertados en este run, (b) empleados que ya
+      // estaban en RDS pero su registro de ingreso nunca fue creado (fallo anterior,
+      // rehire, corrección de fecha_ingreso, etc.).
+      try {
+        // 1. Empleados activos con fecha_ingreso reciente (últimos 60 días)
+        const { rows: empRecientes } = await pg.query(`
+          SELECT e.id, e.nombres, e.apellidos, e.fecha_ingreso,
+                 c.nombre AS cargo_nombre, s.nombre AS sucursal_nombre
+          FROM empleados e
+          LEFT JOIN cargos c     ON c.id = e.cargo_id
+          LEFT JOIN sucursales s ON s.id = e.sucursal_id
+          WHERE e.activo = true
+            AND e.fecha_ingreso >= NOW() - INTERVAL '60 days'
+        `);
+
+        if (empRecientes.length) {
+          // 2. De esos, cuáles ya tienen ingresos_personal en rrhh_db
+          const empIds = empRecientes.map(r => r.id);
+          const { rows: conIngreso } = await pgRrhh.query(
+            `SELECT DISTINCT empleado_id FROM ingresos_personal WHERE empleado_id = ANY($1)`,
+            [empIds]
+          );
+          const conIngresoSet = new Set(conIngreso.map(r => String(r.empleado_id)));
+          const sinIngreso    = empRecientes.filter(r => !conIngresoSet.has(String(r.id)));
+
+          let ingReconciliados = 0;
+          for (const r of sinIngreso) {
+            const nombre = `${r.nombres} ${r.apellidos}`.trim();
+            const fi     = fmtDate(r.fecha_ingreso);
+            const ingRes = await pgRrhh.query(
+              `INSERT INTO ingresos_personal
+                 (empleado_id, empleado_nombre, cargo_nombre, sucursal_nombre,
+                  fecha_ingreso, confirmacion, aud_usuario, created_at, updated_at)
+               VALUES ($1,$2,$3,$4,$5,'pendiente',$6,$7,$7)
+               ON CONFLICT DO NOTHING
+               RETURNING id`,
+              [r.id, nombre, r.cargo_nombre, r.sucursal_nombre, fi, AUD, NOW]
+            );
+            if (ingRes.rows.length) {
+              const ingresoId = ingRes.rows[0].id;
+              const fechaFin  = fi ? (() => {
+                const d = new Date(fi + 'T12:00:00Z');
+                d.setUTCDate(d.getUTCDate() + 30);
+                return d.toISOString().slice(0, 10);
+              })() : null;
               await pgRrhh.query(
-                `INSERT INTO ingresos_personal
-                   (empleado_id, empleado_nombre, cargo_nombre, sucursal_nombre,
-                    fecha_ingreso, confirmacion, aud_usuario, created_at, updated_at)
-                 VALUES ${rowParts.join(',')}`,
-                params
+                `INSERT INTO periodos_prueba
+                   (ingreso_id, empleado_id, fecha_inicio, fecha_fin_estimada,
+                    estado, aud_usuario, created_at, updated_at)
+                 VALUES ($1,$2,$3,$4,'en_prueba',$5,$6,$6)
+                 ON CONFLICT DO NOTHING`,
+                [ingresoId, r.id, fi, fechaFin, AUD, NOW]
               );
-              log(`${sinIngreso.length} registro(s) de ingreso creados en ingresos_personal.`);
+              ingReconciliados++;
             }
           }
-        } catch (e) {
-          log(`AVISO: No se pudieron crear ingresos_personal automáticos: ${e.message}`);
+
+          if (ingReconciliados > 0) {
+            log(`${ingReconciliados} registro(s) de ingreso reconciliados en ingresos_personal.`);
+          } else {
+            log('ingresos_personal: todos los empleados recientes ya tienen registro.');
+          }
+        } else {
+          log('ingresos_personal: sin empleados activos recientes que revisar.');
         }
+      } catch (e) {
+        log(`ERROR reconciliando ingresos_personal: ${e.message}`);
+        await dbLog.error('reconciliar_ingresos_personal', e);
       }
 
       const total   = await pg.query('SELECT COUNT(*) FROM empleados');
@@ -913,11 +1004,14 @@ async function run() {
 
   } finally {
     await Promise.all([mssqlPool.close(), pg.end(), pgRrhh.end()]).catch(() => {});
+    await dbLog.end();
     log('Conexiones cerradas.');
   }
 }
 
-run().catch(err => {
+run().catch(async err => {
   console.error('\nERROR:', err.message ?? err);
+  await dbLog.error('run', err).catch(() => {});
+  await dbLog.end().catch(() => {});
   process.exit(1);
 });
