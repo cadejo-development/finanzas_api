@@ -56,7 +56,7 @@ const cfgRst = {
 const pgConfig = {
   host:     process.env.DB_HOST,
   port:     5432,
-  database: 'compras_db',
+  database: process.env.DB_DATABASE_COMPRAS,
   user:     process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
   ssl:      { rejectUnauthorized: false },
