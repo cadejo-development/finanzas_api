@@ -837,6 +837,38 @@ async function run() {
         log(`${insOk} empleados nuevos insertados.`);
       }
 
+      // Espejo de empleados nuevos en rrhh_db (el Observer de Laravel no corre desde Node)
+      if (paraInsertar.length) {
+        try {
+          const codigos = paraInsertar.map(r => r[0]);
+          const espejoRes = await pg.query(
+            `SELECT id, codigo, nombres, apellidos, email, cargo_id, sucursal_id,
+                    activo, aud_usuario, created_at, updated_at, fecha_ingreso, salario_base
+             FROM empleados WHERE codigo = ANY($1)`,
+            [codigos]
+          );
+          for (const e of espejoRes.rows) {
+            await pgRrhh.query(
+              `INSERT INTO empleados
+                 (id, codigo, nombres, apellidos, email, cargo_id, sucursal_id, activo,
+                  aud_usuario, created_at, updated_at, fecha_ingreso, salario_base, sync_excluido)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,false)
+               ON CONFLICT (id) DO UPDATE SET
+                 nombres=EXCLUDED.nombres, apellidos=EXCLUDED.apellidos,
+                 email=EXCLUDED.email, activo=EXCLUDED.activo,
+                 updated_at=EXCLUDED.updated_at, fecha_ingreso=EXCLUDED.fecha_ingreso`,
+              [e.id, e.codigo, e.nombres, e.apellidos, e.email ?? null,
+               e.cargo_id ?? null, e.sucursal_id ?? null, e.activo,
+               e.aud_usuario, e.created_at, e.updated_at, e.fecha_ingreso ?? null,
+               e.salario_base ?? null]
+            );
+          }
+          log(`${espejoRes.rows.length} empleados nuevos espejados en rrhh_db.empleados`);
+        } catch (e) {
+          log(`AVISO: No se pudo espejear empleados en rrhh_db: ${e.message}`);
+        }
+      }
+
       // Crear ingresos_personal para empleados nuevos
       if (paraInsertar.length) {
         try {
