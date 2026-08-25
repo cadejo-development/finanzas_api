@@ -1304,106 +1304,101 @@ class AuditoriaRecetasController extends Controller
     // ── GET /api/compras/auditorias/{id}/recetas/{itemId}/items ──────
     public function recetaItemsShow(int $id, int $itemId): JsonResponse
     {
+        AuditoriaReceta::findOrFail($id);
         AuditoriaRecetaItem::where('auditoria_id', $id)->findOrFail($itemId);
 
-        $criterios = AuditoriaRecetaCriterio::where('receta_item_id', $itemId)
+        $items = AuditoriaItem::where('auditoria_id', $id)
+            ->where('receta_item_id', $itemId)
             ->with('criterio')
             ->get()
-            ->map(fn ($c) => [
-                'criterio_id'   => $c->criterio_id,
-                'categoria'     => $c->criterio?->categoria,
-                'nombre'        => $c->criterio?->nombre,
-                'resultado'     => $c->resultado,
-                'observaciones' => $c->observaciones,
-                'foto_url'      => $c->foto_url ? $this->presignS3Url($c->foto_url) : null,
+            ->map(fn ($i) => [
+                'criterio_id'   => $i->criterio_id,
+                'categoria'     => $i->criterio?->categoria,
+                'nombre'        => $i->criterio?->nombre,
+                'resultado'     => $i->resultado,
+                'observaciones' => $i->observaciones,
+                'foto_url'      => $i->foto_url ? $this->presignS3Url($i->foto_url) : null,
             ]);
 
-        return response()->json(['data' => $criterios]);
+        return response()->json(['data' => $items]);
     }
 
     // ── POST /api/compras/auditorias/{id}/recetas/{itemId}/items ─────
     public function recetaItemsSave(Request $request, int $id, int $itemId): JsonResponse
     {
-        $auditoria = AuditoriaReceta::findOrFail($id);
-        $item      = AuditoriaRecetaItem::where('auditoria_id', $id)->findOrFail($itemId);
+        $auditoria  = AuditoriaReceta::findOrFail($id);
+        $recetaItem = AuditoriaRecetaItem::where('auditoria_id', $id)->findOrFail($itemId);
 
         $validated = $request->validate([
-            'items'                   => 'required|array',
-            'items.*.criterio_id'     => 'required|integer|exists:compras.auditoria_criterios,id',
-            'items.*.resultado'       => 'nullable|in:cumple,no_cumple,na',
-            'items.*.observaciones'   => 'nullable|string|max:500',
-            'secciones_fotos'         => 'nullable|array',
-            'secciones_fotos.*'       => 'array',
-            'secciones_fotos.*.*'     => 'string|max:1000',
+            'items'                 => 'required|array',
+            'items.*.criterio_id'   => 'required|integer|exists:compras.auditoria_criterios,id',
+            'items.*.resultado'     => 'nullable|in:cumple,no_cumple,na',
+            'items.*.observaciones' => 'nullable|string|max:500',
+            'items.*.foto_url'      => 'nullable|string|max:1000',
+            'secciones_fotos'       => 'nullable|array',
+            'secciones_fotos.*'     => 'array',
+            'secciones_fotos.*.*'   => 'string|max:1000',
         ]);
 
-        DB::connection('compras')->transaction(function () use ($auditoria, $item, $validated) {
-            foreach ($validated['items'] as $crit) {
-                AuditoriaRecetaCriterio::updateOrCreate(
-                    ['receta_item_id' => $item->id, 'criterio_id' => $crit['criterio_id']],
+        DB::connection('compras')->transaction(function () use ($auditoria, $recetaItem, $validated, $id, $itemId) {
+            foreach ($validated['items'] as $item) {
+                AuditoriaItem::updateOrCreate(
+                    ['auditoria_id' => $id, 'criterio_id' => $item['criterio_id'], 'receta_item_id' => $itemId],
                     [
-                        'auditoria_id'  => $auditoria->id,
-                        'resultado'     => $crit['resultado'] ?? null,
-                        'observaciones' => $crit['observaciones'] ?? null,
+                        'resultado'     => $item['resultado'] ?? null,
+                        'observaciones' => $item['observaciones'] ?? null,
+                        'foto_url'      => $item['foto_url'] ?? null,
                     ]
                 );
             }
 
-            // Fotos por sección con prefijo ri:{itemId}:sec:{categoria}
             if (!empty($validated['secciones_fotos'])) {
+                $prefix = "ri:{$itemId}:sec:";
+                $seccionNames = array_map(fn ($s) => $prefix . $s, array_keys($validated['secciones_fotos']));
+                AuditoriaFoto::where('auditoria_id', $id)
+                    ->where('receta_item_id', $itemId)
+                    ->whereIn('descripcion', $seccionNames)
+                    ->delete();
+
                 foreach ($validated['secciones_fotos'] as $seccion => $urls) {
-                    $descripcion = "ri:{$item->id}:sec:{$seccion}";
-                    AuditoriaFoto::where('auditoria_id', $auditoria->id)
-                        ->where('descripcion', $descripcion)
-                        ->delete();
                     foreach ($urls as $idx => $url) {
                         AuditoriaFoto::create([
-                            'auditoria_id' => $auditoria->id,
-                            'url'          => $url,
-                            'descripcion'  => $descripcion,
-                            'orden'        => $idx,
+                            'auditoria_id'   => $id,
+                            'receta_item_id' => $itemId,
+                            'url'            => $url,
+                            'descripcion'    => $prefix . $seccion,
+                            'orden'          => $idx,
                         ]);
                     }
                 }
             }
 
-            // Calcular calificación de esta receta
             $criterioIds = collect($validated['items'])->pluck('criterio_id')->filter()->all();
-            $pesos = AuditoriaCriterio::whereIn('id', $criterioIds)
-                ->get(['id', 'peso'])
-                ->keyBy('id');
+            $pesos = AuditoriaCriterio::whereIn('id', $criterioIds)->get(['id', 'peso'])->keyBy('id');
 
-            $totalPeso = 0; $pesoObtenido = 0; $evaluados = 0;
-            foreach ($validated['items'] as $crit) {
-                $resultado = $crit['resultado'] ?? null;
-                if (!$resultado || $resultado === 'na') continue;
-                $peso = $pesos[$crit['criterio_id']]?->peso ?? 1;
-                $totalPeso    += $peso;
-                $pesoObtenido += ($resultado === 'cumple') ? $peso : 0;
+            $totalMax = $naPeso = $pesoObtenido = $evaluados = 0;
+            foreach ($validated['items'] as $item) {
+                $resultado = $item['resultado'] ?? null;
+                $peso = $pesos[$item['criterio_id']]?->peso ?? 1;
+                $totalMax += $peso;
+                if ($resultado === 'na')     { $naPeso += $peso; continue; }
+                if (!$resultado)             continue;
+                if ($resultado === 'cumple') $pesoObtenido += $peso;
                 $evaluados++;
             }
 
-            $calificacion = $evaluados > 0 ? round(($pesoObtenido / $totalPeso) * 100, 1) : null;
-            $clasificacion = null;
-            if ($calificacion !== null) {
-                if ($auditoria->tipo === 'operaciones') {
-                    if ($calificacion >= 98)      $clasificacion = 'Excelente';
-                    elseif ($calificacion >= 90)  $clasificacion = 'Muy Bueno';
-                    elseif ($calificacion >= 80)  $clasificacion = 'Bueno';
-                    elseif ($calificacion >= 70)  $clasificacion = 'Aceptable';
-                    else                          $clasificacion = 'Deficiente';
-                } else {
-                    if ($calificacion >= 90)      $clasificacion = 'Excelente';
-                    elseif ($calificacion >= 75)  $clasificacion = 'Bueno';
-                    elseif ($calificacion >= 60)  $clasificacion = 'Aceptable';
-                    else                          $clasificacion = 'Deficiente';
-                }
-            }
+            $denominador  = $totalMax - $naPeso;
+            $calificacion = ($evaluados > 0 && $denominador > 0)
+                ? round(($pesoObtenido / $denominador) * 100, 1)
+                : null;
+            $clasificacion = $this->calcularClasificacion($calificacion, $auditoria->tipo);
 
-            $item->update(['calificacion' => $calificacion, 'clasificacion' => $clasificacion]);
+            $recetaItem->update(['calificacion' => $calificacion, 'clasificacion' => $clasificacion]);
+            $this->recalcularScoreGlobal($id);
         });
 
-        return response()->json(['calificacion' => $item->calificacion, 'clasificacion' => $item->clasificacion]);
+        $recetaItem->refresh();
+        return response()->json(['calificacion' => $recetaItem->calificacion, 'clasificacion' => $recetaItem->clasificacion]);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────

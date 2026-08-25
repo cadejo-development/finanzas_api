@@ -10,7 +10,7 @@ class AuditoriaItem extends Model
     protected $table      = 'auditoria_items';
 
     protected $fillable = [
-        'auditoria_id', 'criterio_id', 'resultado', 'observaciones', 'foto_url',
+        'auditoria_id', 'criterio_id', 'resultado', 'observaciones', 'foto_url', 'receta_item_id',
     ];
 
     public function auditoria()
