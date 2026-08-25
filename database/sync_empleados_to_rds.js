@@ -385,7 +385,36 @@ async function syncExpedientes(mssqlPool, pg, pgRrhh, codigoToId) {
     return { deptoId, muniId: null, distId: null };
   }
 
-  // 2. Consultar Brilo
+  // 2. Espejear TODOS los empleados de core_db → rrhh_db antes de tocar expedientes
+  // Necesario porque rrhh_db.empleados es un espejo nuevo; empleados creados antes
+  // de esta funcionalidad no existen allí y los FK de expediente_* explotan.
+  log('Sincronizando espejo de empleados (core_db → rrhh_db)...');
+  const { rows: todosEmps } = await pg.query(`
+    SELECT id, codigo, nombres, apellidos, email, cargo_id, sucursal_id,
+           activo, aud_usuario, created_at, updated_at, fecha_ingreso, salario_base
+    FROM empleados
+  `);
+  let espejoOk = 0;
+  for (const e of todosEmps) {
+    await pgRrhh.query(`
+      INSERT INTO empleados
+        (id, codigo, nombres, apellidos, email, cargo_id, sucursal_id, activo,
+         aud_usuario, created_at, updated_at, fecha_ingreso, salario_base, sync_excluido)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,false)
+      ON CONFLICT (id) DO UPDATE SET
+        nombres=EXCLUDED.nombres, apellidos=EXCLUDED.apellidos,
+        email=EXCLUDED.email, activo=EXCLUDED.activo,
+        cargo_id=EXCLUDED.cargo_id, sucursal_id=EXCLUDED.sucursal_id,
+        fecha_ingreso=EXCLUDED.fecha_ingreso, updated_at=EXCLUDED.updated_at
+    `, [e.id, e.codigo, e.nombres, e.apellidos, e.email ?? null,
+        e.cargo_id ?? null, e.sucursal_id ?? null, e.activo,
+        e.aud_usuario, e.created_at, e.updated_at, e.fecha_ingreso ?? null,
+        e.salario_base ?? null]);
+    espejoOk++;
+  }
+  log(`Espejo rrhh_db.empleados: ${espejoOk} upserted\n`);
+
+  // 3. Consultar Brilo
   log('Consultando Brilo (expediente)...');
   const { recordset: briloEmps } = await mssqlPool.request().query(Q_EXPEDIENTE);
   log(`Empleados activos en Brilo: ${briloEmps.length}`);
