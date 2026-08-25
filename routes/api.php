@@ -240,9 +240,16 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::delete('auditorias/{id}',         [AuditoriaRecetasController::class, 'destroy']);
     Route::get('auditorias/{id}/items',      [AuditoriaRecetasController::class, 'itemsShow']);
     Route::post('auditorias/{id}/items',     [AuditoriaRecetasController::class, 'itemsSave']);
-    Route::post('auditorias/{id}/responder', [AuditoriaRecetasController::class, 'responder']);
-    Route::post('auditorias/{id}/cerrar',   [AuditoriaRecetasController::class, 'cerrar']);
-    Route::post('auditorias/{id}/pdf',      [AuditoriaRecetasController::class, 'pdf']);
+    Route::post('auditorias/{id}/responder',                         [AuditoriaRecetasController::class, 'responder']);
+    Route::post('auditorias/{id}/cerrar',                            [AuditoriaRecetasController::class, 'cerrar']);
+    Route::post('auditorias/{id}/reabrir',                           [AuditoriaRecetasController::class, 'reabrir']);
+    Route::post('auditorias/{id}/pdf',                               [AuditoriaRecetasController::class, 'pdf']);
+    // Multi-receta
+    Route::post('auditorias/{id}/recetas',                           [AuditoriaRecetasController::class, 'recetasStore']);
+    Route::put('auditorias/{id}/recetas/{itemId}',                   [AuditoriaRecetasController::class, 'recetasUpdate']);
+    Route::delete('auditorias/{id}/recetas/{itemId}',                [AuditoriaRecetasController::class, 'recetasDestroy']);
+    Route::get('auditorias/{id}/recetas/{itemId}/items',             [AuditoriaRecetasController::class, 'recetaItemsShow']);
+    Route::post('auditorias/{id}/recetas/{itemId}/items',            [AuditoriaRecetasController::class, 'recetaItemsSave']);
 
     // Ventas semanales
     Route::get('ventas',              [VentasController::class, 'index']);
