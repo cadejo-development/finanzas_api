@@ -4,6 +4,15 @@ on:
   schedule:
     - cron: '0 9 * * *'   # 3:00 AM El Salvador (UTC-6)
   workflow_dispatch:
+    inputs:
+      fecha:
+        description: 'Fecha kardex a usar (YYYY-MM-DD). Vacío = hoy.'
+        required: false
+        default: ''
+      sucursal_id:
+        description: 'Sucursal específica (ej: 4). Vacío = todas.'
+        required: false
+        default: ''
 
 jobs:
   sync:
@@ -64,7 +73,16 @@ jobs:
           done
 
       - name: Sync stock Brilo
-        run: node database/sync_brilo_stock_inventario.js --skip-if-today
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.sucursal_id }}" ]; then
+            ARGS="$ARGS ${{ github.event.inputs.sucursal_id }}"
+          fi
+          if [ -n "${{ github.event.inputs.fecha }}" ]; then
+            ARGS="$ARGS ${{ github.event.inputs.fecha }}"
+          fi
+          echo "Ejecutando: node database/sync_brilo_stock_inventario.js $ARGS"
+          node database/sync_brilo_stock_inventario.js $ARGS
 
       - name: Desconectar VPN
         if: always()
