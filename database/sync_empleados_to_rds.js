@@ -38,6 +38,8 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 const sql      = require('mssql');
 const { Pool } = require('pg');
 const bcrypt   = require('bcryptjs');
+const { createLogger } = require('./_dbLogger');
+const dbLog = createLogger('sync_empleados_to_rds.js');
 
 function fmtDate(d) {
   if (!d) return null;
@@ -328,6 +330,7 @@ async function crearCuentasEmpleados(pg) {
       creadas++;
     } catch (e) {
       log(`  ✗ Error al crear cuenta para ${nombre} <${email}>: ${e.message}`);
+      await dbLog.error('crearCuentasEmpleados', e, { nombre, email });
     }
   }
 
@@ -895,6 +898,7 @@ async function run() {
           log(`${espejoRes.rows.length} empleados nuevos espejados en rrhh_db.empleados`);
         } catch (e) {
           log(`AVISO: No se pudo espejear empleados en rrhh_db: ${e.message}`);
+          await dbLog.warning('espejo_rrhh_empleados', e.message, { codigos: paraInsertar.map(r => r[0]) });
         }
       }
 
@@ -966,6 +970,7 @@ async function run() {
         }
       } catch (e) {
         log(`ERROR reconciliando ingresos_personal: ${e.message}`);
+        await dbLog.error('reconciliar_ingresos_personal', e);
       }
 
       const total   = await pg.query('SELECT COUNT(*) FROM empleados');
@@ -999,11 +1004,14 @@ async function run() {
 
   } finally {
     await Promise.all([mssqlPool.close(), pg.end(), pgRrhh.end()]).catch(() => {});
+    await dbLog.end();
     log('Conexiones cerradas.');
   }
 }
 
-run().catch(err => {
+run().catch(async err => {
   console.error('\nERROR:', err.message ?? err);
+  await dbLog.error('run', err).catch(() => {});
+  await dbLog.end().catch(() => {});
   process.exit(1);
 });
