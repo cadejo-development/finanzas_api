@@ -6,7 +6,15 @@ on:
   workflow_dispatch:
     inputs:
       fecha:
-        description: 'Fecha kardex a usar (YYYY-MM-DD). Vacío = hoy.'
+        description: 'Fecha kardex Brilo (YYYY-MM-DD). Vacío = hoy.'
+        required: false
+        default: ''
+      fecha_registro:
+        description: 'Fecha a guardar en DB (YYYY-MM-DD). Vacío = igual que fecha kardex.'
+        required: false
+        default: ''
+      sync_at:
+        description: 'Timestamp sync_at en prod_seg_historico (ISO UTC, ej: 2026-08-25T09:00:00.000Z).'
         required: false
         default: ''
       sucursal_id:
@@ -80,6 +88,12 @@ jobs:
           fi
           if [ -n "${{ github.event.inputs.fecha }}" ]; then
             ARGS="$ARGS ${{ github.event.inputs.fecha }}"
+          fi
+          if [ -n "${{ github.event.inputs.fecha_registro }}" ]; then
+            ARGS="$ARGS --fecha-registro=${{ github.event.inputs.fecha_registro }}"
+          fi
+          if [ -n "${{ github.event.inputs.sync_at }}" ]; then
+            ARGS="$ARGS --sync-at=${{ github.event.inputs.sync_at }}"
           fi
           echo "Ejecutando: node database/sync_brilo_stock_inventario.js $ARGS"
           node database/sync_brilo_stock_inventario.js $ARGS

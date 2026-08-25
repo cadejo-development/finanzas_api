@@ -163,8 +163,8 @@ function buildKardexQuery(ubiId, fecha) {
 }
 
 // ── Insertar snapshot en prod_seg_historico ───────────────────────────────────
-async function guardarHistorico(pg, sucursalId, fecha, briloMap, isDryRun, syncAtOverride = null) {
-  const fechaStr = fecha.toISOString().split('T')[0];
+async function guardarHistorico(pg, sucursalId, fecha, briloMap, isDryRun, syncAtOverride = null, fechaRegistro = null) {
+  const fechaStr = (fechaRegistro ?? fecha).toISOString().split('T')[0];
   const syncAt   = syncAtOverride ?? new Date().toISOString();
 
   // Prod_seg products con su brilo_stock y último conteo físico del mes
@@ -216,7 +216,7 @@ async function guardarHistorico(pg, sucursalId, fecha, briloMap, isDryRun, syncA
 }
 
 // ── Sync de una sucursal ──────────────────────────────────────────────────────
-async function syncSucursal(pg, sucursalId, fechaKardex, isDryRun, syncAtOverride = null) {
+async function syncSucursal(pg, sucursalId, fechaKardex, isDryRun, syncAtOverride = null, fechaRegistro = null) {
   const mapeo = SUCURSAL_UBI_MAP[sucursalId];
   if (!mapeo) {
     console.log(`\n⚠️  sucursal_id=${sucursalId} no tiene mapeo Brilo — omitida`);
@@ -283,7 +283,7 @@ async function syncSucursal(pg, sucursalId, fechaKardex, isDryRun, syncAtOverrid
   }
 
   // Guardar histórico prod_seg
-  await guardarHistorico(pg, sucursalId, fechaKardex, briloMap, isDryRun, syncAtOverride);
+  await guardarHistorico(pg, sucursalId, fechaKardex, briloMap, isDryRun, syncAtOverride, fechaRegistro);
 
   return { actualizados, enCero, insertados };
 }
@@ -295,19 +295,23 @@ async function syncSucursal(pg, sucursalId, fechaKardex, isDryRun, syncAtOverrid
   const skipIfToday  = process.argv.includes('--skip-if-today');
   const sucursalArg = args.find(a => !isNaN(a) && /^\d+$/.test(a)) ? parseInt(args.find(a => !isNaN(a) && /^\d+$/.test(a)), 10) : null;
   const fechaArg    = args.find(a => /^\d{4}-\d{2}-\d{2}$/.test(a)) || null;
-  // --sync-at=2026-08-05T09:05:00.000Z  (ISO UTC) para fijar el timestamp en prod_seg_historico
-  const syncAtOverride = (args.find(a => a.startsWith('--sync-at=')) ?? '').split('=')[1] || null;
+  // --sync-at=2026-08-25T09:00:00.000Z  → fija sync_at en prod_seg_historico (ISO UTC)
+  const syncAtOverride     = (args.find(a => a.startsWith('--sync-at='))         ?? '').split('=')[1] || null;
+  // --fecha-registro=2026-08-25         → fecha que se guarda en DB (independiente del kardex)
+  const fechaRegistroArg   = (args.find(a => a.startsWith('--fecha-registro=')) ?? '').split('=')[1] || null;
 
-  const fechaKardex = fechaArg ? new Date(fechaArg + 'T12:00:00') : new Date();
+  const fechaKardex   = fechaArg        ? new Date(fechaArg        + 'T12:00:00') : new Date();
+  const fechaRegistro = fechaRegistroArg ? new Date(fechaRegistroArg + 'T12:00:00') : null;
   const sucursalIds = sucursalArg
     ? [sucursalArg]
     : Object.keys(SUCURSAL_UBI_MAP).map(Number);
 
   console.log(`\n${'█'.repeat(64)}`);
-  console.log(`  SYNC BRILO → compras_db${isDryRun ? '  [DRY RUN]' : ''}`);
-  console.log(`  Fecha kardex : ${fechaSQL(fechaKardex)}`);
-  console.log(`  Sucursales   : ${sucursalIds.join(', ')}`);
-  console.log(`  Timestamp    : ${syncAtOverride ?? new Date().toISOString()}${syncAtOverride ? ' (override)' : ''}`);
+  console.log(`  SYNC BRILO → ${process.env.DB_DATABASE_COMPRAS}${isDryRun ? '  [DRY RUN]' : ''}`);
+  console.log(`  Fecha kardex   : ${fechaSQL(fechaKardex)}`);
+  console.log(`  Fecha registro : ${fechaRegistro ? fechaRegistro.toISOString().split('T')[0] : '(= kardex)'}`);
+  console.log(`  Sucursales     : ${sucursalIds.join(', ')}`);
+  console.log(`  Timestamp      : ${syncAtOverride ?? new Date().toISOString()}${syncAtOverride ? ' (override)' : ''}`);
   console.log(`${'█'.repeat(64)}`);
 
   if (isDryRun) {
@@ -335,7 +339,7 @@ async function syncSucursal(pg, sucursalId, fechaKardex, isDryRun, syncAtOverrid
 
   for (const sucursalId of sucursalIds) {
     try {
-      const r = await syncSucursal(pg, sucursalId, fechaKardex, isDryRun, syncAtOverride);
+      const r = await syncSucursal(pg, sucursalId, fechaKardex, isDryRun, syncAtOverride, fechaRegistro);
       totalAct  += r.actualizados;
       totalCero += r.enCero;
       totalIns  += r.insertados;
