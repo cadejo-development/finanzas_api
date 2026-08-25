@@ -30,7 +30,7 @@ const sqlCfg = {
 
 const pgCfg = {
   host: process.env.DB_HOST, port: 5432,
-  database: 'compras_db', user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD,
+  database: process.env.DB_DATABASE_COMPRAS, user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false }, keepAlive: true,
   connectionTimeoutMillis: 30000, idleTimeoutMillis: 90000,
 };
