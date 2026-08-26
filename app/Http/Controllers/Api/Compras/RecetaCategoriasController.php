@@ -10,12 +10,30 @@ use Illuminate\Http\Request;
 class RecetaCategoriasController extends Controller
 {
     // GET /api/compras/receta-categorias
-    public function index(): JsonResponse
+    // Parámetros opcionales: ?sucursal_id=N  o  ?sucursal_ids[]=1&sucursal_ids[]=2
+    // Si se pasan, devuelve solo categorías con ≥1 receta activa para esa(s) sucursal(es).
+    public function index(Request $request): JsonResponse
     {
-        $categorias = RecetaCategoria::where('activa', true)
-            ->orderBy('orden')
-            ->orderBy('nombre')
-            ->get(['id', 'nombre']);
+        $sucursalId  = $request->integer('sucursal_id', 0) ?: null;
+        $sucursalIds = $request->input('sucursal_ids', []);
+        if (is_array($sucursalIds)) $sucursalIds = array_map('intval', array_filter($sucursalIds));
+
+        $query = RecetaCategoria::where('activa', true);
+
+        if ($sucursalId || count($sucursalIds)) {
+            $ids = $sucursalId ? [$sucursalId] : $sucursalIds;
+            $query->whereExists(function ($sub) use ($ids) {
+                $sub->from('recetas as r')
+                    ->join('receta_sucursal as rs', 'rs.receta_id', '=', 'r.id')
+                    ->whereColumn('r.categoria_id', 'receta_categorias.id')
+                    ->where('r.activa', true)
+                    ->where('rs.activa', true)
+                    ->whereIn('rs.sucursal_id', $ids)
+                    ->limit(1);
+            });
+        }
+
+        $categorias = $query->orderBy('orden')->orderBy('nombre')->get(['id', 'nombre']);
 
         return response()->json(['data' => $categorias]);
     }
