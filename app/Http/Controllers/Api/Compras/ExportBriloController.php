@@ -358,7 +358,10 @@ class ExportBriloController extends Controller
                     // sobre rendimiento_unidad de la sub-receta.
                     $briloIng  = $this->unidadACodigoBrilo($fila->unidad ?? 'u');
                     $rendim    = (float) ($fila->sub_rendimiento ?? 0);
-                    $unidadBase = $fila->cp_prod_unidad ?? $fila->sub_rendimiento_unidad;
+                    // Si hay rendimiento definido usar rendimiento_unidad; si no, unidad base del producto
+                    $unidadBase = ($rendim > 0 && $fila->sub_rendimiento_unidad)
+                        ? $fila->sub_rendimiento_unidad
+                        : ($fila->cp_prod_unidad ?? $fila->sub_rendimiento_unidad);
                     $briloRend  = $unidadBase ? $this->unidadACodigoBrilo($unidadBase) : 'UNID0029';
 
                     $cantBase = (float) $fila->cantidad_por_plato;
