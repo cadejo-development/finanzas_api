@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\Finanzas\SolicitudPagoController;
 use App\Http\Controllers\Api\Finanzas\SolicitudPagoDetalleController;
 use App\Http\Controllers\Api\Finanzas\SolicitudPagoAdjuntoController;
 use App\Http\Controllers\Api\Finanzas\PresupuestoUnidadController;
+use App\Http\Controllers\Api\Finanzas\ReportesContaController;
 use App\Http\Controllers\Api\Compras\VentasController;
 use App\Http\Controllers\Api\Compras\ProductosController;
 use App\Http\Controllers\Api\Compras\PedidosController;
@@ -156,6 +157,9 @@ Route::prefix('pagos')->middleware('auth:sanctum')->group(function () {
     Route::post('solicitudes-pago/{id}/observar',      [AprobacionController::class, 'observar']);
     Route::get('mis-aprobaciones',                [AprobacionController::class, 'misAprobaciones']);
     Route::get('reglas-aprobacion',               [ReglaAprobacionController::class, 'index']);
+
+    // Reportes Conta
+    Route::get('reportes/conta/facturas', [ReportesContaController::class, 'facturas']);
 
     // Presupuesto Unidad
     Route::get('mi-presupuesto', [PresupuestoUnidadController::class, 'miPresupuesto']);
