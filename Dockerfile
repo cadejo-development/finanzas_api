@@ -60,4 +60,4 @@ RUN cp .env.example .env && php artisan key:generate --force
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "php artisan migrate --force || true && php artisan migrate --path=database/migrations_rrhh --force || true && php artisan route:clear || true && php artisan optimize || true && exec supervisord -n -c /etc/supervisord.conf"]
+CMD ["sh", "-c", "php artisan migrate --force || true && php artisan migrate --path=database/migrations_rrhh --force || true && php artisan migrate --database=pagos --force || true && php artisan route:clear || true && php artisan optimize || true && exec supervisord -n -c /etc/supervisord.conf"]
