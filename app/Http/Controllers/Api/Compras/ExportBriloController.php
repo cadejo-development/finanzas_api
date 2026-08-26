@@ -353,11 +353,13 @@ class ExportBriloController extends Controller
                 $esCP = str_starts_with(strtoupper(trim($codIngrediente)), 'CP');
 
                 if ($esSub && !$esCP) {
-                    // Sub-recetas: columna E en la unidad base del producto en Brilo
-                    // (rendimiento_unidad: LIBRA, KG, etc. — NO siempre TANDA).
+                    // Sub-recetas: columna E en la unidad base del producto en Brilo.
+                    // Priorizar cp_prod_unidad (unidad base en catálogo productos, ej: 'lb')
+                    // sobre rendimiento_unidad de la sub-receta.
                     $briloIng  = $this->unidadACodigoBrilo($fila->unidad ?? 'u');
                     $rendim    = (float) ($fila->sub_rendimiento ?? 0);
-                    $briloRend = $this->unidadACodigoBrilo($fila->sub_rendimiento_unidad ?? 'u');
+                    $unidadBase = $fila->cp_prod_unidad ?? $fila->sub_rendimiento_unidad;
+                    $briloRend  = $unidadBase ? $this->unidadACodigoBrilo($unidadBase) : 'UNID0029';
 
                     $cantBase = (float) $fila->cantidad_por_plato;
 
