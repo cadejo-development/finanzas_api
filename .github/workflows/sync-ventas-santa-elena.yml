@@ -1,4 +1,4 @@
-name: Sync Ventas — Santa Elena
+name: Sync Ventas — Todas las Sucursales
 
 on:
   schedule:
@@ -9,6 +9,10 @@ on:
         description: 'Días hacia atrás a sincronizar (ej: 2 para ayer y anteayer)'
         required: false
         default: '7'
+      suc:
+        description: 'pg_id de una sucursal específica (vacío = todas)'
+        required: false
+        default: ''
       dry_run:
         description: 'Simular sin escribir en BD'
         required: false
@@ -76,16 +80,20 @@ jobs:
             sleep 1
           done
 
-      - name: Sync ventas Santa Elena
+      - name: Sync ventas todas las sucursales
         run: |
           DIAS="${{ github.event.inputs.dias || '7' }}"
           DRY="${{ github.event.inputs.dry_run || 'false' }}"
+          SUC="${{ github.event.inputs.suc || '' }}"
           ARGS="--dias=${DIAS}"
           if [ "$DRY" = "true" ]; then
             ARGS="$ARGS --dry-run"
           fi
-          echo "Ejecutando: node database/sync_ventas_santa_elena.js $ARGS"
-          node database/sync_ventas_santa_elena.js $ARGS
+          if [ -n "$SUC" ]; then
+            ARGS="$ARGS --suc=${SUC}"
+          fi
+          echo "Ejecutando: node database/sync_ventas_todas.js $ARGS"
+          node database/sync_ventas_todas.js $ARGS
 
       - name: Desconectar VPN
         if: always()
