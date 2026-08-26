@@ -372,8 +372,13 @@ class ExportBriloController extends Controller
                         }
                         $tandas = $cantBase / $rendim;
                     } else {
-                        // Sin rendimiento definido: asumir 1:1 (fallback)
-                        $tandas = (float) $fila->cantidad_por_plato;
+                        // Sin rendimiento: convertir a la unidad del rendimiento si hay conversión
+                        $cantBase = (float) $fila->cantidad_por_plato;
+                        if ($briloIng !== 'UNID0029' && $briloRend && $briloIng !== $briloRend) {
+                            $convertida = $this->convertirUnidad($cantBase, $briloIng, $briloRend);
+                            $cantBase   = $convertida ?? $cantBase;
+                        }
+                        $tandas = $cantBase;
                     }
 
                     $nombreIng = $fila->sub_nombre ?? '';
