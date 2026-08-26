@@ -353,33 +353,25 @@ class ExportBriloController extends Controller
                 $esCP = str_starts_with(strtoupper(trim($codIngrediente)), 'CP');
 
                 if ($esSub && !$esCP) {
-                    // Sub-recetas (SUBR) siempre se importan en Brilo como TANDA (UNID0029).
-                    // Cantidad Presentación = tandas necesarias = cantidad_por_plato / rendimiento_sub,
-                    // con conversión de unidades si la unidad del ingrediente ≠ unidad del rendimiento.
+                    // Sub-recetas: columna E en la unidad base del producto en Brilo
+                    // (rendimiento_unidad: LIBRA, KG, etc. — NO siempre TANDA).
                     $briloIng  = $this->unidadACodigoBrilo($fila->unidad ?? 'u');
                     $rendim    = (float) ($fila->sub_rendimiento ?? 0);
                     $briloRend = $this->unidadACodigoBrilo($fila->sub_rendimiento_unidad ?? 'u');
 
-                    if ($briloIng === 'UNID0029') {
-                        // La receta ya expresa la cantidad en tandas directamente
-                        $tandas = (float) $fila->cantidad_por_plato;
-                    } elseif ($rendim > 0) {
-                        // Convertir cantidad a la unidad del rendimiento si son distintas
-                        $cantBase = (float) $fila->cantidad_por_plato;
-                        if ($briloIng !== $briloRend) {
-                            $convertida = $this->convertirUnidad($cantBase, $briloIng, $briloRend);
-                            $cantBase   = $convertida ?? $cantBase;
-                        }
-                        $tandas = $cantBase / $rendim;
-                    } else {
-                        // Sin rendimiento: convertir a la unidad del rendimiento si hay conversión
-                        $cantBase = (float) $fila->cantidad_por_plato;
-                        if ($briloIng !== 'UNID0029' && $briloRend && $briloIng !== $briloRend) {
-                            $convertida = $this->convertirUnidad($cantBase, $briloIng, $briloRend);
-                            $cantBase   = $convertida ?? $cantBase;
-                        }
-                        $tandas = $cantBase;
+                    $cantBase = (float) $fila->cantidad_por_plato;
+
+                    if ($briloIng === 'UNID0029' && $rendim > 0 && $briloRend && $briloRend !== 'UNID0029') {
+                        // Cantidad en tandas → convertir a unidad física multiplicando por rendimiento
+                        // ej: 10 tandas × 0.0625 LB/tanda = 0.625 LB
+                        $cantBase = $cantBase * $rendim;
+                    } elseif ($briloIng !== 'UNID0029' && $briloIng !== $briloRend && $briloRend) {
+                        // Unidades distintas: convertir a rendimiento_unidad
+                        // ej: 10 OZ → 0.625 LB
+                        $convertida = $this->convertirUnidad($cantBase, $briloIng, $briloRend);
+                        $cantBase   = $convertida ?? $cantBase;
                     }
+                    // $cantBase ya en $briloRend — sin división por rendimiento
 
                     $nombreIng = $fila->sub_nombre ?? '';
                     fputcsv($handle, [
@@ -387,12 +379,12 @@ class ExportBriloController extends Controller
                         $fila->receta_nombre  ?? '',      // B
                         $codIngrediente,                  // C
                         $nombreIng,                       // D
-                        $this->formatNum($tandas),        // E Cantidad MP (TANDA es unidad base)
+                        $this->formatNum($cantBase),      // E Cantidad MP en unidad base del producto
                         'SI',                             // F
                         $detieneExp,                      // G
                         '',                               // H
-                        '',                               // I vacío (TANDA ya es unidad base del producto)
-                        '',                               // J vacío
+                        '',                               // I
+                        '',                               // J
                     ]);
                 } else {
                     // Productos (MR) y CPs: cantidad directa, con conversión de unidades si aplica
