@@ -159,7 +159,8 @@ Route::prefix('pagos')->middleware('auth:sanctum')->group(function () {
     Route::get('reglas-aprobacion',               [ReglaAprobacionController::class, 'index']);
 
     // Reportes Conta
-    Route::get('reportes/conta/facturas', [ReportesContaController::class, 'facturas']);
+    Route::get('reportes/conta/catalogos', [ReportesContaController::class, 'catalogos']);
+    Route::get('reportes/conta/facturas',  [ReportesContaController::class, 'facturas']);
 
     // Presupuesto Unidad
     Route::get('mi-presupuesto', [PresupuestoUnidadController::class, 'miPresupuesto']);
