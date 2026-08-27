@@ -33,11 +33,16 @@ phases:
       - docker push "$REPOSITORY_URI:$IMAGE_TAG"
       - echo "Push complete"
       - |
-        if [ -n "${APPRUNNER_SERVICE_ARN}" ]; then
+        BRANCH="${CODEBUILD_WEBHOOK_HEAD_REF#refs/heads/}"
+        if [ "$BRANCH" = "produccion" ] && [ -n "${APPRUNNER_SERVICE_ARN}" ]; then
           echo "Triggering App Runner deployment for $APPRUNNER_SERVICE_ARN"
           aws apprunner start-deployment \
             --service-arn "$APPRUNNER_SERVICE_ARN" \
-            --region "$AWS_DEFAULT_REGION"
+            --region "$AWS_DEFAULT_REGION" \
+            && echo "App Runner deployment triggered." \
+            || echo "App Runner no disponible para deploy ahora (posiblemente ya en curso) — se omite."
+        elif [ -n "${APPRUNNER_SERVICE_ARN}" ]; then
+          echo "Branch '$BRANCH' no es produccion — se omite trigger de App Runner."
         else
           echo "APPRUNNER_SERVICE_ARN not configured, skipping App Runner trigger"
         fi
