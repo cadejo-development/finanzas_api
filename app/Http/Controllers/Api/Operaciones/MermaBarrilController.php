@@ -437,59 +437,82 @@ class MermaBarrilController extends Controller
         $desde      = $request->query('desde', today()->startOfMonth()->toDateString());
         $hasta      = $request->query('hasta', today()->toDateString());
         $sucursalId = $request->query('sucursal_id');
-        $cervezaId  = $request->query('cerveza_id');
 
-        // Agregado de oz por inventario×cerveza en el rango
-        $query = DB::connection('compras')->table('merma_inventarios as i')
-            ->join('merma_inv_items as it', 'it.inventario_id', '=', 'i.id')
-            ->join('merma_cervezas as c', 'c.id', '=', 'it.cerveza_id')
-            ->leftJoin('merma_barriles_conectados as bc', 'bc.item_id', '=', 'it.id')
-            ->leftJoinSub(
-                DB::connection('compras')->table('merma_entradas')
-                  ->selectRaw('inventario_id, cerveza_id, SUM(cantidad) as qty_entradas, MAX(tamanio) as tam_entrada'),
-                'ent', function ($j) { $j->on('ent.inventario_id','=','i.id')->on('ent.cerveza_id','=','it.cerveza_id'); }
-            )
-            ->leftJoinSub(
-                DB::connection('compras')->table('merma_cocina')
-                  ->selectRaw('inventario_id, cerveza_id, SUM(oz_calculado) as oz_cocina'),
-                'coc', function ($j) { $j->on('coc.inventario_id','=','i.id')->on('coc.cerveza_id','=','it.cerveza_id'); }
-            )
-            ->leftJoinSub(
-                DB::connection('compras')->table('merma_otros_usos')
-                  ->selectRaw('inventario_id, cerveza_id, SUM(oz_calculado) as oz_otros'),
-                'otr', function ($j) { $j->on('otr.inventario_id','=','i.id')->on('otr.cerveza_id','=','it.cerveza_id'); }
-            )
-            ->leftJoinSub(
-                DB::connection('compras')->table('merma_ventas_brilo')
-                  ->selectRaw('inventario_id, cerveza_id, SUM(oz_efectivas) as oz_venta'),
-                'vb', function ($j) { $j->on('vb.inventario_id','=','i.id')->on('vb.cerveza_id','=','it.cerveza_id'); }
-            )
-            ->leftJoinSub(
-                DB::connection('compras')->table('merma_fisica')
-                  ->selectRaw('inventario_id, SUM(oz_calculado) as oz_merma_fisica'),
-                'mf', 'mf.inventario_id', '=', 'i.id'
-            )
-            ->whereBetween('i.fecha', [$desde, $hasta])
-            ->where('i.estado', 'aprobado')
-            ->selectRaw('
-                i.sucursal_id,
-                SUM(it.inicial_oz) as inicial_oz,
-                SUM(COALESCE(vb.oz_venta, 0)) as venta_oz,
-                SUM(COALESCE(coc.oz_cocina, 0)) as cocina_oz,
-                SUM(COALESCE(otr.oz_otros, 0)) as otros_oz,
-                SUM(COALESCE(mf.oz_merma_fisica, 0)) as merma_fisica_oz
-            ')
-            ->groupBy('i.sucursal_id');
+        $invs = DB::connection('compras')
+            ->table('merma_inventarios')
+            ->select('id', 'fecha')
+            ->whereBetween('fecha', [$desde, $hasta])
+            ->whereIn('estado', ['enviado', 'aprobado'])
+            ->when($sucursalId, fn($q) => $q->where('sucursal_id', $sucursalId))
+            ->get();
 
-        if ($sucursalId) $query->where('i.sucursal_id', $sucursalId);
-        if ($cervezaId)  $query->where('it.cerveza_id', $cervezaId);
+        if ($invs->isEmpty()) {
+            return response()->json([
+                'dias_registrados'   => 0,
+                'total_fisico_oz'    => 0,
+                'pct_merma_promedio' => 0,
+                'peor_dia'           => null,
+                'por_dia'            => [],
+            ]);
+        }
 
-        $rows = $query->get();
+        $ids = $invs->pluck('id')->toArray();
+
+        $fisicos = DB::connection('compras')->table('merma_inv_items')
+            ->selectRaw('inventario_id, SUM(inicial_oz) AS oz')
+            ->whereIn('inventario_id', $ids)
+            ->groupBy('inventario_id')->pluck('oz', 'inventario_id');
+
+        $ventas = DB::connection('compras')->table('merma_ventas_brilo')
+            ->selectRaw('inventario_id, SUM(oz_efectivas) AS oz')
+            ->whereIn('inventario_id', $ids)
+            ->groupBy('inventario_id')->pluck('oz', 'inventario_id');
+
+        $cocina = DB::connection('compras')->table('merma_cocina')
+            ->selectRaw('inventario_id, SUM(oz_calculado) AS oz')
+            ->whereIn('inventario_id', $ids)
+            ->groupBy('inventario_id')->pluck('oz', 'inventario_id');
+
+        $otros = DB::connection('compras')->table('merma_otros_usos')
+            ->selectRaw('inventario_id, SUM(oz_calculado) AS oz')
+            ->whereIn('inventario_id', $ids)
+            ->groupBy('inventario_id')->pluck('oz', 'inventario_id');
+
+        $mfisica = DB::connection('compras')->table('merma_fisica')
+            ->selectRaw('inventario_id, oz_calculado AS oz')
+            ->whereIn('inventario_id', $ids)
+            ->pluck('oz', 'inventario_id');
+
+        $porDia = $invs->map(function ($inv) use ($fisicos, $ventas, $cocina, $otros, $mfisica) {
+            $fisicoOz = (float)($fisicos[$inv->id] ?? 0);
+            $ventasOz = (float)($ventas[$inv->id]  ?? 0);
+            $cocinaOz = (float)($cocina[$inv->id]  ?? 0);
+            $otrosOz  = (float)($otros[$inv->id]   ?? 0);
+            $mfOz     = (float)($mfisica[$inv->id] ?? 0);
+            $netaOz   = $fisicoOz - $ventasOz - $cocinaOz - $otrosOz - $mfOz;
+            $pct      = $fisicoOz > 0 ? round($netaOz / $fisicoOz * 100, 2) : 0;
+
+            return [
+                'fecha'     => is_string($inv->fecha) ? $inv->fecha : (string)$inv->fecha,
+                'fisico_oz' => round($fisicoOz, 1),
+                'ventas_oz' => round($ventasOz, 1),
+                'neta_oz'   => round($netaOz,   1),
+                'pct'       => $pct,
+            ];
+        })->sortByDesc('fecha')->values();
+
+        $totalFisico = $porDia->sum('fisico_oz');
+        $pctPromedio = $porDia->count() > 0 ? round($porDia->avg('pct'), 2) : 0;
+        $peorDia     = $porDia->sortByDesc('pct')->first();
 
         return response()->json([
-            'desde'  => $desde,
-            'hasta'  => $hasta,
-            'data'   => $rows,
+            'dias_registrados'   => $porDia->count(),
+            'total_fisico_oz'    => round($totalFisico, 1),
+            'pct_merma_promedio' => $pctPromedio,
+            'peor_dia'           => $peorDia
+                ? ['fecha' => $peorDia['fecha'], 'pct' => $peorDia['pct']]
+                : null,
+            'por_dia'            => $porDia,
         ]);
     }
 
