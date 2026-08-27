@@ -113,6 +113,7 @@ class MermaBarrilController extends Controller
             'fisica',
             'cocina.cerveza',
             'otrosUsos.cerveza',
+            'ventasBrilo',
         ])
         ->where('sucursal_id', $sucursalId)
         ->where('fecha', today())
@@ -130,6 +131,7 @@ class MermaBarrilController extends Controller
             'fisica',
             'cocina.cerveza',
             'otrosUsos.cerveza',
+            'ventasBrilo',
             'auditLog',
         ])->findOrFail($id);
 
@@ -195,8 +197,10 @@ class MermaBarrilController extends Controller
         }
 
         return response()->json(
-            MermaInventario::with(['items.cerveza', 'items.barrilesConectados', 'fisica'])
-                           ->find($inv->id),
+            MermaInventario::with([
+                'items.cerveza', 'items.barrilesConectados',
+                'entradas', 'fisica', 'cocina', 'otrosUsos', 'ventasBrilo',
+            ])->find($inv->id),
             201
         );
     }
