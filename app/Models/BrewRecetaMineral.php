@@ -8,5 +8,5 @@ class BrewRecetaMineral extends Model
 {
     protected $connection = 'compras';
     protected $table = 'brew_receta_minerales';
-    protected $fillable = ['brew_receta_id', 'orden', 'nombre', 'cantidad_g', 'cantidad_sparge_g', 'fase'];
+    protected $fillable = ['brew_receta_id', 'orden', 'nombre', 'cantidad_g', 'cantidad_sparge_g', 'fase', 'brew_ingrediente_id'];
 }
