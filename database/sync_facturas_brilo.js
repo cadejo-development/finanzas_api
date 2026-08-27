@@ -51,9 +51,17 @@ const pg = new Pool({
 
 // Nombres de sucursales Brilo (informativo; no bloquea si no existe)
 const SUCURSAL_BRILO = {
-  1: 'ZONA ROSA', 6: 'LA LIBERTAD', 7: 'AEROPUERTO 1', 8: 'AEROPUERTO 2',
-  10: 'PASEO VENECIA', 11: 'SANTA ELENA', 12: 'HUIZUCAR', 13: 'OPICO',
-  16: 'MALCRIADAS', 19: 'CASA GUIROLA',
+   1: 'CASA MATRIZ',
+   3: 'ZONA ROSA',
+   6: 'LA LIBERTAD',
+   7: 'AEROPUERTO 1',
+   8: 'AEROPUERTO 2',
+  10: 'PASEO VENECIA',
+  11: 'SANTA ELENA',
+  12: 'HUIZUCAR',
+  13: 'OPICO',
+  16: 'MALCRIADAS',
+  19: 'CASA GUIROLA',
 };
 
 async function main() {
