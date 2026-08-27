@@ -49,19 +49,20 @@ const pg = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-// Nombres de sucursales Brilo (informativo; no bloquea si no existe)
+// Nombres de sucursales Brilo — verificados contra olComun.dbo.Sucursales
 const SUCURSAL_BRILO = {
-   1: 'CASA MATRIZ',
-   3: 'ZONA ROSA',
-   6: 'LA LIBERTAD',
-   7: 'AEROPUERTO 1',
-   8: 'AEROPUERTO 2',
-  10: 'PASEO VENECIA',
-  11: 'SANTA ELENA',
-  12: 'HUIZUCAR',
-  13: 'OPICO',
-  16: 'MALCRIADAS',
-  19: 'CASA GUIROLA',
+   1: 'FAB - ZONA ROSA',
+   2: 'RES - SANTA ROSA',
+   3: 'RES - ZONA ROSA',
+   6: 'RES - LA LIBERTAD',
+   7: 'RES - AEROPUERTO-1',
+   8: 'RES - AEROPUERTO-2',
+  10: 'RES - PASEO VENECIA',
+  11: 'RES - SANTA ELENA',
+  12: 'RES - HUIZUCAR',
+  13: 'RES - OPICO',
+  16: 'RES - MALCRIADAS AE2',
+  19: 'RES - CASA GUIROLA',
 };
 
 async function main() {
