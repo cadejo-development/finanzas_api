@@ -9,6 +9,23 @@ $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 $db = \DB::connection('compras');
 
+// ── GUARD: solo corre en entorno local ───────────────────────────────────────
+if (app()->environment() !== 'local') {
+    echo "ERROR: Este seed solo puede ejecutarse en entorno local (APP_ENV=local).\n";
+    echo "       En produccion destruiria todas las recetas reales.\n";
+    exit(1);
+}
+// Confirmacion extra
+echo "ADVERTENCIA: Este script BORRA TODAS las recetas y lotes de cerveza.\n";
+echo "Escribe 'CONFIRMAR' para continuar: ";
+$handle = fopen('php://stdin', 'r');
+$input  = trim(fgets($handle));
+fclose($handle);
+if ($input !== 'CONFIRMAR') {
+    echo "Cancelado.\n";
+    exit(0);
+}
+
 echo "=== SEED BREW DUMMY ===\n\n";
 
 // ── Limpiar tablas en orden ───────────────────────────────────────────────────
