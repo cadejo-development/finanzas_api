@@ -375,6 +375,57 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
             Route::get('ingredientes-boil',  [BrewCatalogosController::class, 'ingredientesBoil']);
         });
     });
+
+    // ── Merma de Barril ────────────────────────────────────────────────────
+    Route::prefix('merma-barril')->group(function () {
+        // Catálogos
+        Route::get('config',                    [MermaBarrilController::class, 'config']);
+        Route::put('config',                    [MermaBarrilController::class, 'updateConfig']);
+        Route::get('presentaciones',            [MermaBarrilController::class, 'presentaciones']);
+        Route::get('cervezas',                  [MermaBarrilController::class, 'cervezas']);
+        Route::get('cervezas/todas',            [MermaBarrilController::class, 'cervezasAll']);
+        Route::post('cervezas',                 [MermaBarrilController::class, 'storeCerveza']);
+        Route::put('cervezas/{id}',             [MermaBarrilController::class, 'updateCerveza']);
+
+        // Inventario
+        Route::get('inventarios/hoy',           [MermaBarrilController::class, 'inventarioHoy']);
+        Route::post('inventarios',              [MermaBarrilController::class, 'store']);
+        Route::get('inventarios/{id}',          [MermaBarrilController::class, 'show']);
+        Route::post('inventarios/{id}/cerrar',  [MermaBarrilController::class, 'cerrar']);
+        Route::post('inventarios/{id}/aprobar', [MermaBarrilController::class, 'aprobar']);
+
+        // Items por cerveza
+        Route::put('inventarios/{invId}/items/{itemId}', [MermaBarrilController::class, 'updateItem']);
+
+        // Barriles conectados
+        Route::post('inventarios/{invId}/items/{itemId}/kegs',          [MermaBarrilController::class, 'storeKeg']);
+        Route::put('inventarios/{invId}/items/{itemId}/kegs/{kegId}',   [MermaBarrilController::class, 'updateKeg']);
+        Route::delete('inventarios/{invId}/items/{itemId}/kegs/{kegId}',[MermaBarrilController::class, 'destroyKeg']);
+
+        // Entradas
+        Route::post('inventarios/{invId}/entradas',          [MermaBarrilController::class, 'storeEntrada']);
+        Route::delete('inventarios/{invId}/entradas/{id}',   [MermaBarrilController::class, 'destroyEntrada']);
+
+        // Merma física
+        Route::put('inventarios/{invId}/merma-fisica',       [MermaBarrilController::class, 'updateFisica']);
+
+        // Cocina
+        Route::post('inventarios/{invId}/cocina',            [MermaBarrilController::class, 'storeCocina']);
+        Route::delete('inventarios/{invId}/cocina/{id}',     [MermaBarrilController::class, 'destroyCocina']);
+
+        // Otros usos
+        Route::post('inventarios/{invId}/otros-usos',        [MermaBarrilController::class, 'storeOtroUso']);
+        Route::delete('inventarios/{invId}/otros-usos/{id}', [MermaBarrilController::class, 'destroyOtroUso']);
+
+        // Ventas Brilo (solo lectura)
+        Route::get('inventarios/{invId}/ventas',             [MermaBarrilController::class, 'ventasBrilo']);
+
+        // Audit log
+        Route::get('inventarios/{invId}/audit',              [MermaBarrilController::class, 'auditLog']);
+
+        // Dashboard gerencial
+        Route::get('dashboard',                              [MermaBarrilController::class, 'dashboard']);
+    });
 });
 
 // ─── Admin Portal (protegido con Sanctum + portal_admin) ────────────────
@@ -913,56 +964,5 @@ Route::prefix('cadejo-ventas')->group(function () {
     Route::patch('promociones-venta/{id}',         [\App\Http\Controllers\Api\Ventas\PromocionesVentaController::class, 'update']);
     Route::patch('promociones-venta/{id}/toggle',  [\App\Http\Controllers\Api\Ventas\PromocionesVentaController::class, 'toggle']);
     Route::delete('promociones-venta/{id}',        [\App\Http\Controllers\Api\Ventas\PromocionesVentaController::class, 'destroy']);
-
-    // ── Merma de Barril ────────────────────────────────────────────────────
-    Route::prefix('merma-barril')->group(function () {
-        // Catálogos
-        Route::get('config',                    [MermaBarrilController::class, 'config']);
-        Route::put('config',                    [MermaBarrilController::class, 'updateConfig']);
-        Route::get('presentaciones',            [MermaBarrilController::class, 'presentaciones']);
-        Route::get('cervezas',                  [MermaBarrilController::class, 'cervezas']);
-        Route::get('cervezas/todas',            [MermaBarrilController::class, 'cervezasAll']);
-        Route::post('cervezas',                 [MermaBarrilController::class, 'storeCerveza']);
-        Route::put('cervezas/{id}',             [MermaBarrilController::class, 'updateCerveza']);
-
-        // Inventario
-        Route::get('inventarios/hoy',           [MermaBarrilController::class, 'inventarioHoy']);
-        Route::post('inventarios',              [MermaBarrilController::class, 'store']);
-        Route::get('inventarios/{id}',          [MermaBarrilController::class, 'show']);
-        Route::post('inventarios/{id}/cerrar',  [MermaBarrilController::class, 'cerrar']);
-        Route::post('inventarios/{id}/aprobar', [MermaBarrilController::class, 'aprobar']);
-
-        // Items por cerveza
-        Route::put('inventarios/{invId}/items/{itemId}', [MermaBarrilController::class, 'updateItem']);
-
-        // Barriles conectados
-        Route::post('inventarios/{invId}/items/{itemId}/kegs',          [MermaBarrilController::class, 'storeKeg']);
-        Route::put('inventarios/{invId}/items/{itemId}/kegs/{kegId}',   [MermaBarrilController::class, 'updateKeg']);
-        Route::delete('inventarios/{invId}/items/{itemId}/kegs/{kegId}',[MermaBarrilController::class, 'destroyKeg']);
-
-        // Entradas
-        Route::post('inventarios/{invId}/entradas',          [MermaBarrilController::class, 'storeEntrada']);
-        Route::delete('inventarios/{invId}/entradas/{id}',   [MermaBarrilController::class, 'destroyEntrada']);
-
-        // Merma física
-        Route::put('inventarios/{invId}/merma-fisica',       [MermaBarrilController::class, 'updateFisica']);
-
-        // Cocina
-        Route::post('inventarios/{invId}/cocina',            [MermaBarrilController::class, 'storeCocina']);
-        Route::delete('inventarios/{invId}/cocina/{id}',     [MermaBarrilController::class, 'destroyCocina']);
-
-        // Otros usos
-        Route::post('inventarios/{invId}/otros-usos',        [MermaBarrilController::class, 'storeOtroUso']);
-        Route::delete('inventarios/{invId}/otros-usos/{id}', [MermaBarrilController::class, 'destroyOtroUso']);
-
-        // Ventas Brilo (solo lectura)
-        Route::get('inventarios/{invId}/ventas',             [MermaBarrilController::class, 'ventasBrilo']);
-
-        // Audit log
-        Route::get('inventarios/{invId}/audit',              [MermaBarrilController::class, 'auditLog']);
-
-        // Dashboard gerencial
-        Route::get('dashboard',                              [MermaBarrilController::class, 'dashboard']);
-    });
 });
 
