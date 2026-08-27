@@ -66,9 +66,14 @@ class AuditoriaConteoController extends Controller
             'fecha_conteo' => 'required|date',
         ]);
 
-        $authUser = Auth::user();
-        $esAdmin  = $authUser->hasRole('admin_compras') || $authUser->hasRole('gerencia_financiera') || $authUser->hasRole('dir_comercial');
-        $esAuditor = $authUser->hasPermission('puede_auditar_conteo');
+        $authUser     = Auth::user();
+        $esAuditorInv = $authUser->hasRole('auditor_inv');
+        $esAdmin      = !$esAuditorInv && (
+            $authUser->hasRole('admin_compras') ||
+            $authUser->hasRole('gerencia_financiera') ||
+            $authUser->hasRole('dir_comercial')
+        );
+        $esAuditor    = $authUser->hasPermission('puede_auditar_conteo');
 
         if (!$esAdmin && !$esAuditor) {
             return response()->json(['success' => false, 'message' => 'No tienes permiso para realizar auditorías.'], 403);
@@ -76,6 +81,19 @@ class AuditoriaConteoController extends Controller
 
         $sucursalId = (int) $request->sucursal_id;
         $fecha      = $request->fecha_conteo;
+
+        // Si tiene auditor_inv, solo puede auditar su sucursal asignada
+        if ($esAuditorInv) {
+            $tieneAcceso = DB::table('inventario_sucursal_roles')
+                ->where('user_id', $authUser->id)
+                ->where('sucursal_id', $sucursalId)
+                ->where('rol', 'auditor')
+                ->where('activo', true)
+                ->exists();
+            if (!$tieneAcceso) {
+                return response()->json(['success' => false, 'message' => 'No tienes acceso para auditar esta sucursal.'], 403);
+            }
+        }
 
         // Verificar que no exista ya una auditoría
         $existing = DB::connection('compras')
