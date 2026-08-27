@@ -16,7 +16,7 @@ class MermaInvItem extends Model
     ];
 
     protected $casts = [
-        'inicial_oz' => 'decimal:2',
+        'inicial_oz' => 'float',
     ];
 
     public function cerveza()
