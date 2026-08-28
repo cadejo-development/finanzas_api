@@ -397,7 +397,8 @@ class InventarioController extends Controller
                 ->where('m.sucursal_id', $sucursalId)
                 ->where('m.tipo', 'conteo_mensual')
                 ->where('m.fecha', $fecha)
-                ->where('m.aud_usuario', '!=', $usuario)   // otro usuario
+                ->where('m.aud_usuario', '!=', $usuario)      // otro contador real
+                ->where('m.aud_usuario', '!=', 'sin_contar') // ignorar placeholders automáticos
                 ->whereIn('m.producto_id', $productoIds)
                 ->select('m.producto_id', 'p.nombre', 'm.aud_usuario as contado_por')
                 ->get();
@@ -455,15 +456,21 @@ class InventarioController extends Controller
             }
         }
 
-        $inventarios = Inventario::where('sucursal_id', $sucursalId)
-            ->whereIn('producto_id', $productoIds)
+        // Cargar TODOS los inventarios activos de la sucursal (no solo los enviados)
+        // para poder generar registros 0 de productos no contados.
+        $todosInventarios = Inventario::where('sucursal_id', $sucursalId)
             ->get()
             ->keyBy('producto_id');
+
+        $inventarios = $todosInventarios->only($productoIds);
+
+        // Movimientos acumulados para cálculo de stock (solo productos enviados)
+        $todosProductoIds = $todosInventarios->keys()->all();
 
         $movimientos = DB::connection('compras')
             ->table('movimientos_inventario')
             ->where('sucursal_id', $sucursalId)
-            ->whereIn('producto_id', $productoIds)
+            ->whereIn('producto_id', $todosProductoIds)
             ->where('tipo', '!=', 'carga_inicial')
             ->selectRaw('producto_id, SUM(cantidad_base) as total_base')
             ->groupBy('producto_id')
@@ -471,23 +478,25 @@ class InventarioController extends Controller
 
         $productos = DB::connection('compras')
             ->table('productos')
-            ->whereIn('id', $productoIds)
-            ->select('id', 'factor_conversion')
+            ->whereIn('id', $todosProductoIds)
+            ->select('id', 'factor_conversion', 'unidad')
             ->get()
             ->keyBy('id');
 
+        $motivoLabel = $tipoConteo === 'conteo_mensual' ? 'Conteo mensual' : 'Conteo físico';
+
         DB::connection('compras')->beginTransaction();
         try {
-            $aplicados = 0;
+            $aplicados  = 0;
+            $enviados   = collect($validated['items'])->keyBy('producto_id');
+
             foreach ($validated['items'] as $item) {
                 $pid = (int) $item['producto_id'];
                 $inv = $inventarios[$pid] ?? null;
 
-                // Producto de receta sin entrada previa en inventarios → crear con stock 0
                 if (!$inv) {
                     $prod = $productos[$pid] ?? null;
                     if (!$prod) continue;
-
                     $inv = Inventario::create([
                         'sucursal_id'           => $sucursalId,
                         'producto_id'           => $pid,
@@ -499,6 +508,7 @@ class InventarioController extends Controller
                         'aud_usuario'           => $usuario,
                     ]);
                     $inventarios[$pid] = $inv;
+                    $todosInventarios[$pid] = $inv;
                 }
 
                 $factor          = max((float) ($productos[$pid]?->factor_conversion ?? 1), 0.0001);
@@ -507,7 +517,6 @@ class InventarioController extends Controller
                 $cantadaBase     = (float) $item['cantidad_contada'] * $factor;
                 $diferenciaBase  = $cantadaBase - $stockActualBase;
 
-                // Construir detalle con total_contado siempre, secciones si vienen
                 $seccionesConValor = [];
                 if (!empty($item['secciones'])) {
                     $seccionesConValor = array_filter(
@@ -515,16 +524,26 @@ class InventarioController extends Controller
                         fn($v) => is_numeric($v) && $v > 0
                     );
                 }
+
+                // detalle siempre completo: nunca null
                 $detalle = [
-                    'secciones'      => $seccionesConValor,
+                    'secciones'      => (object) $seccionesConValor,
                     'total_contado'  => round((float) $item['cantidad_contada'], 4),
                     'stock_anterior' => round($stockActualBase / $factor, 4),
                     'contado_por'    => $usuario,
                 ];
 
-                // Siempre crear movimiento para dejar registro de total_contado,
-                // aunque diferencia sea 0 (no afecta stock, permite mostrar en histórico)
-                $motivoLabel = $tipoConteo === 'conteo_mensual' ? 'Conteo mensual' : 'Conteo físico';
+                // Eliminar placeholder sin_contar si existe para que el real tome su lugar
+                DB::connection('compras')
+                    ->table('movimientos_inventario')
+                    ->where('sucursal_id', $sucursalId)
+                    ->where('producto_id', $pid)
+                    ->where('tipo', $tipoConteo)
+                    ->where('fecha', $fecha)
+                    ->where('aud_usuario', 'sin_contar')
+                    ->delete();
+
+                // Guardar el movimiento real (incluso si cantidad_contada = 0)
                 MovimientoInventario::create([
                     'sucursal_id'     => $sucursalId,
                     'producto_id'     => $pid,
@@ -539,9 +558,42 @@ class InventarioController extends Controller
                     'aud_usuario'     => $usuario,
                 ]);
 
-                if (abs($diferenciaBase) >= 0.00001) {
-                    $aplicados++;
-                }
+                $aplicados++;
+            }
+
+            // ── Guardar 0 para productos no contados (por nadie aún) ─────────
+            // Esto completa el snapshot del conteo aunque el producto no haya
+            // sido registrado por ningún contador. Sin efecto en stock.
+            $yaContadosIds = DB::connection('compras')
+                ->table('movimientos_inventario')
+                ->where('sucursal_id', $sucursalId)
+                ->where('tipo', $tipoConteo)
+                ->where('fecha', $fecha)
+                ->pluck('producto_id')
+                ->unique()
+                ->all();
+
+            foreach ($todosInventarios as $ncPid => $ncInv) {
+                if (in_array($ncPid, $yaContadosIds)) continue;
+
+                MovimientoInventario::create([
+                    'sucursal_id'     => $sucursalId,
+                    'producto_id'     => $ncPid,
+                    'tipo'            => $tipoConteo,
+                    'cantidad'        => 0,
+                    'unidad'          => $ncInv->unidad,
+                    'cantidad_base'   => 0,
+                    'motivo'          => "{$motivoLabel} — {$fecha} — sin registro",
+                    'fecha'           => $fecha,
+                    'referencia_tipo' => 'conteo',
+                    'detalle'         => [
+                        'secciones'      => (object) [],
+                        'total_contado'  => 0,
+                        'stock_anterior' => null,
+                        'contado_por'    => 'sin_contar',
+                    ],
+                    'aud_usuario'     => 'sin_contar',
+                ]);
             }
 
             DB::connection('compras')->commit();
@@ -550,11 +602,11 @@ class InventarioController extends Controller
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
 
-        // ── Notificación por email: prod_seg vs conteo aplicado ─────────────
-        try {
-            $this->enviarNotificacionConteoProdSeg($sucursalId, $fecha, $usuario, $validated['items'], $inventarios, $productos, $movimientos);
-        } catch (\Throwable) {
-            // Error de email no interrumpe la respuesta
+        // Notificación Brilo solo para conteo_fisico (conteo_mensual no compara con Brilo aquí)
+        if ($tipoConteo !== 'conteo_mensual') {
+            try {
+                $this->enviarNotificacionConteoProdSeg($sucursalId, $fecha, $usuario, $validated['items'], $inventarios, $productos, $movimientos);
+            } catch (\Throwable) {}
         }
 
         $msg = $tipoConteo === 'conteo_mensual'
