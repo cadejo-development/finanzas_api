@@ -321,6 +321,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('inventario/auditoria-conteo/{id}/borrador',              [AuditoriaConteoController::class, 'getBorrador']);
     Route::put('inventario/auditoria-conteo/{id}/borrador',              [AuditoriaConteoController::class, 'saveBorrador']);
     Route::get('inventario/auditoria-conteo/{id}/estadisticas',          [AuditoriaConteoController::class, 'getEstadisticas']);
+    Route::get('inventario/auditoria-conteo/estadisticas-directas',      [AuditoriaConteoController::class, 'getEstadisticasDirectas']);
     Route::put('inventario/auditoria-conteo/{id}/justificar/{pid}',      [AuditoriaConteoController::class, 'guardarJustificacion']);
     Route::post('inventario/auditoria-conteo/{id}/cerrar',               [AuditoriaConteoController::class, 'cerrar']);
     Route::post('inventario/auditoria-conteo/{id}/reabrir',              [AuditoriaConteoController::class, 'reabrir']);

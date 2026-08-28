@@ -545,6 +545,154 @@ class AuditoriaConteoController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // GET /api/compras/inventario/auditoria-conteo/estadisticas-directas
+    // Estadísticas de conteo mensual sin necesitar auditoría (para admin)
+    // ─────────────────────────────────────────────────────────────────────────
+    public function getEstadisticasDirectas(Request $request): JsonResponse
+    {
+        $sucursalId = (int) $request->query('sucursal_id');
+        $fecha      = $request->query('fecha');
+
+        if (!$sucursalId || !$fecha) {
+            return response()->json(['success' => false, 'message' => 'sucursal_id y fecha son requeridos.'], 422);
+        }
+
+        // Tomar un movimiento por producto (el real, no sin_contar)
+        $movs = DB::connection('compras')
+            ->table('movimientos_inventario as m')
+            ->join('productos as p', 'p.id', '=', 'm.producto_id')
+            ->leftJoin('categorias as cat', 'cat.id', '=', 'p.categoria_id')
+            ->leftJoin('inventarios as inv', fn($j) =>
+                $j->on('inv.producto_id', '=', 'p.id')->where('inv.sucursal_id', $sucursalId))
+            ->where('m.sucursal_id', $sucursalId)
+            ->where('m.tipo', 'conteo_mensual')
+            ->whereRaw("DATE(m.fecha) = ?", [$fecha])
+            ->where('m.aud_usuario', '!=', 'sin_contar')
+            ->select(
+                'm.producto_id', 'm.cantidad', 'm.aud_usuario',
+                'p.codigo', 'p.nombre', 'p.unidad', 'p.costo',
+                'cat.nombre as categoria',
+                'inv.brilo_stock'
+            )
+            ->orderBy('m.producto_id')
+            ->orderByDesc('m.created_at')
+            ->get()
+            ->unique('producto_id');
+
+        // ── Kardex BRILO para el período ─────────────────────────────────────
+        $kardexMeta = DB::connection('compras')
+            ->table('brilo_kardex')
+            ->where('sucursal_id', $sucursalId)
+            ->where('fecha_hasta', $fecha)
+            ->orderByDesc('synced_at')
+            ->first();
+
+        $kardex     = [];
+        $fechaDesde = $kardexMeta?->fecha_desde ?? null;
+
+        if ($kardexMeta) {
+            $kRows = DB::connection('compras')
+                ->table('brilo_kardex')
+                ->where('sucursal_id', $sucursalId)
+                ->where('fecha_desde', $kardexMeta->fecha_desde)
+                ->where('fecha_hasta', $fecha)
+                ->get();
+            foreach ($kRows as $r) {
+                $kardex[$r->producto_codigo] = [
+                    'saldo_ini' => (float) $r->saldo_ini,
+                    'entradas'  => (float) $r->entradas,
+                    'salidas'   => (float) $r->salidas,
+                    'saldo_fin' => (float) $r->saldo_fin,
+                ];
+            }
+        }
+
+        // ── Construir filas ───────────────────────────────────────────────────
+        $filas = [];
+        foreach ($movs as $m) {
+            $conteo  = round((float) $m->cantidad, 4);
+            $brilo   = $m->brilo_stock !== null ? round((float) $m->brilo_stock, 4) : null;
+            $diff    = $brilo !== null ? round($conteo - $brilo, 4) : null;
+            $diffPct = ($brilo !== null && $brilo != 0) ? round($diff / $brilo * 100, 2) : null;
+            $costo   = $m->costo !== null ? round((float) $m->costo, 4) : null;
+            $costoDiff = ($diff !== null && $costo !== null) ? round($diff * $costo, 2) : null;
+
+            if ($brilo === null)        $tipo = 'SIN_BRILO';
+            elseif (abs($diff) <= 0.01) $tipo = 'OK';
+            elseif ($diff < 0)          $tipo = 'FALTANTE';
+            else                        $tipo = 'SOBRANTE';
+
+            $kd = $kardex[$m->codigo] ?? null;
+
+            $filas[] = [
+                'producto_id'      => (int) $m->producto_id,
+                'codigo'           => $m->codigo,
+                'nombre'           => $m->nombre,
+                'categoria'        => $m->categoria ?? '—',
+                'unidad'           => $m->unidad,
+                'conteo'           => $conteo,
+                'brilo'            => $brilo,
+                'diff'             => $diff,
+                'diff_pct'         => $diffPct,
+                'tipo'             => $tipo,
+                'costo'            => $costo,
+                'costo_diff'       => $costoDiff,
+                'k_saldo_ini'      => $kd['saldo_ini'] ?? null,
+                'k_entradas'       => $kd['entradas']  ?? null,
+                'k_salidas'        => $kd['salidas']   ?? null,
+                'k_saldo_fin'      => $kd['saldo_fin'] ?? null,
+                'justificacion'    => null,
+                'justificacion_obs'=> null,
+            ];
+        }
+
+        usort($filas, fn($a, $b) => ($a['costo_diff'] ?? 0) <=> ($b['costo_diff'] ?? 0));
+
+        // ── Filtros ───────────────────────────────────────────────────────────
+        $tipoFilter = $request->query('tipo');
+        $search     = strtolower(trim($request->query('search', '')));
+
+        if ($tipoFilter && $tipoFilter !== 'todos') {
+            $filas = array_values(array_filter($filas, fn($f) => $f['tipo'] === strtoupper($tipoFilter)));
+        }
+        if ($search !== '') {
+            $filas = array_values(array_filter($filas, fn($f) =>
+                str_contains(strtolower($f['nombre']), $search) ||
+                str_contains(strtolower($f['codigo']), $search)
+            ));
+        }
+
+        // ── Paginación ────────────────────────────────────────────────────────
+        $perPage = max(1, min(200, (int) $request->query('per_page', 25)));
+        $page    = max(1, (int) $request->query('page', 1));
+        $total   = count($filas);
+        $items   = array_slice($filas, ($page - 1) * $perPage, $perPage);
+
+        $nFalt     = count(array_filter($filas, fn($f) => $f['tipo'] === 'FALTANTE'));
+        $nSobr     = count(array_filter($filas, fn($f) => $f['tipo'] === 'SOBRANTE'));
+        $nOk       = count(array_filter($filas, fn($f) => $f['tipo'] === 'OK'));
+        $nSinBrilo = count(array_filter($filas, fn($f) => $f['tipo'] === 'SIN_BRILO'));
+        $costoFalt = round(array_sum(array_map(
+            fn($f) => $f['tipo'] === 'FALTANTE' && $f['costo_diff'] !== null ? abs($f['costo_diff']) : 0, $filas
+        )), 2);
+        $costoSobr = round(array_sum(array_map(
+            fn($f) => $f['tipo'] === 'SOBRANTE' && $f['costo_diff'] !== null ? $f['costo_diff'] : 0, $filas
+        )), 2);
+
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'items'      => $items,
+                'pagination' => ['total' => $total, 'page' => $page, 'per_page' => $perPage, 'last_page' => max(1, (int) ceil($total / $perPage))],
+                'resumen'    => compact('nFalt', 'nSobr', 'nOk', 'nSinBrilo', 'costoFalt', 'costoSobr'),
+                'kardex_meta'=> $fechaDesde ? ['fecha_desde' => $fechaDesde, 'fecha_hasta' => $fecha] : null,
+                'auditoria'  => null,
+                'sin_auditoria' => true,
+            ],
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // PUT /api/compras/inventario/auditoria-conteo/{id}/justificar/{productoId}
     // Guarda la justificación de diferencia para un producto
     // ─────────────────────────────────────────────────────────────────────────
