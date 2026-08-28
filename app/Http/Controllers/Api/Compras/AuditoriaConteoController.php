@@ -167,6 +167,7 @@ class AuditoriaConteoController extends Controller
             ->where('producto_id', $productoId)
             ->update([
                 'comprobado'       => $request->comprobado,
+                'comprobado_por'   => $request->comprobado ? Auth::user()->email : null,
                 'cantidad_auditor' => $request->comprobado ? $request->cantidad_auditor : null,
                 'observacion'      => $request->observacion,
                 'updated_at'       => now(),
@@ -340,6 +341,55 @@ class AuditoriaConteoController extends Controller
             ]);
 
         return $this->_buildResponse($auditoriaId);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET /api/compras/inventario/auditoria-conteo/{id}/borrador
+    // Devuelve el borrador de trabajo del auditor actual para esta auditoría
+    // ─────────────────────────────────────────────────────────────────────────
+    public function getBorrador(int $auditoriaId): JsonResponse
+    {
+        $row = DB::connection('compras')
+            ->table('auditoria_borradores')
+            ->where('auditoria_id', $auditoriaId)
+            ->where('aud_usuario', Auth::user()->email)
+            ->first();
+
+        return response()->json([
+            'success' => true,
+            'data'    => $row ? [
+                'payload'    => is_string($row->payload) ? json_decode($row->payload, true) : (array) $row->payload,
+                'updated_at' => $row->updated_at,
+            ] : null,
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PUT /api/compras/inventario/auditoria-conteo/{id}/borrador
+    // Guarda/actualiza el borrador de trabajo del auditor actual
+    // ─────────────────────────────────────────────────────────────────────────
+    public function saveBorrador(Request $request, int $auditoriaId): JsonResponse
+    {
+        $request->validate(['payload' => 'required|array']);
+
+        $now   = now();
+        $email = Auth::user()->email;
+
+        DB::connection('compras')
+            ->table('auditoria_borradores')
+            ->upsert(
+                [[
+                    'auditoria_id' => $auditoriaId,
+                    'aud_usuario'  => $email,
+                    'payload'      => json_encode($request->payload),
+                    'created_at'   => $now,
+                    'updated_at'   => $now,
+                ]],
+                ['auditoria_id', 'aud_usuario'],
+                ['payload', 'updated_at']
+            );
+
+        return response()->json(['success' => true]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

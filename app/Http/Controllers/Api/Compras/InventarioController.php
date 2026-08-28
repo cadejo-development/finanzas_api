@@ -384,41 +384,76 @@ class InventarioController extends Controller
         $usuario     = Auth::user()->email;
         $tipoConteo  = $validated['tipo_conteo'] ?? 'conteo_fisico';
 
-        // Bloquear re-aplicación para gerentes: solo admins pueden re-aplicar el mismo día
-        // El bloqueo es independiente por tipo: diario (conteo_fisico) y mensual (conteo_mensual) no se interfieren
-        $tieneConteoPrevio = DB::connection('compras')
-            ->table('movimientos_inventario')
-            ->where('sucursal_id', $sucursalId)
-            ->where('tipo', $tipoConteo)
-            ->where('fecha', $fecha)
-            ->exists();
+        $productoIds = collect($validated['items'])->pluck('producto_id')->unique()->all();
 
-        if ($tieneConteoPrevio) {
-            $authUser  = Auth::user();
-            $esAdmin   = $authUser && (
-                $authUser->hasRole('admin_compras') ||
-                $authUser->hasRole('gerencia_financiera') ||
-                $authUser->hasRole('dir_comercial')
-            );
-            $esAuditor = $authUser && $authUser->hasPermission('puede_auditar_conteo');
+        // ── Para conteo_mensual: detectar productos ya contados por OTRO usuario ──
+        // Cada contador solo aplica sus propios productos; los conflictos se informan
+        // pero NO bloquean los productos únicos del contador.
+        $conflictos = [];
+        if ($tipoConteo === 'conteo_mensual') {
+            $yaContados = DB::connection('compras')
+                ->table('movimientos_inventario as m')
+                ->join('productos as p', 'p.id', '=', 'm.producto_id')
+                ->where('m.sucursal_id', $sucursalId)
+                ->where('m.tipo', 'conteo_mensual')
+                ->where('m.fecha', $fecha)
+                ->where('m.aud_usuario', '!=', $usuario)   // otro usuario
+                ->whereIn('m.producto_id', $productoIds)
+                ->select('m.producto_id', 'p.nombre', 'm.aud_usuario as contado_por')
+                ->get();
 
-            // Auditor puede re-aplicar si hay una reapertura registrada en las últimas 2 horas
-            $tieneReapertura = ($esAuditor || $esAdmin) && DB::connection('compras')
-                ->table('conteo_reaperturas')
+            if ($yaContados->isNotEmpty()) {
+                $conflictos      = $yaContados->toArray();
+                $idsConflicto    = $yaContados->pluck('producto_id')->all();
+                $productoIds     = array_values(array_diff($productoIds, $idsConflicto));
+                $validated['items'] = array_values(array_filter(
+                    $validated['items'],
+                    fn($i) => !in_array((int) $i['producto_id'], $idsConflicto)
+                ));
+            }
+
+            // Si no quedan ítems no-conflictivos, devolver solo los conflictos
+            if (empty($validated['items'])) {
+                return response()->json([
+                    'success'    => true,
+                    'aplicados'  => 0,
+                    'conflictos' => $conflictos,
+                    'message'    => 'Todos los productos enviados ya fueron contados por otro contador.',
+                ]);
+            }
+        } else {
+            // conteo_fisico: bloqueo clásico por re-aplicación
+            $tieneConteoPrevio = DB::connection('compras')
+                ->table('movimientos_inventario')
                 ->where('sucursal_id', $sucursalId)
-                ->where('fecha_conteo', $fecha)
-                ->where('created_at', '>=', now()->subHours(2))
+                ->where('tipo', $tipoConteo)
+                ->where('fecha', $fecha)
                 ->exists();
 
-            if (!$esAdmin && !$tieneReapertura) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'El conteo de este día ya fue aplicado. Solo un auditor puede reabrirlo.',
-                ], 422);
+            if ($tieneConteoPrevio) {
+                $authUser  = Auth::user();
+                $esAdmin   = $authUser && (
+                    $authUser->hasRole('admin_compras') ||
+                    $authUser->hasRole('gerencia_financiera') ||
+                    $authUser->hasRole('dir_comercial')
+                );
+                $esAuditor = $authUser && $authUser->hasPermission('puede_auditar_conteo');
+
+                $tieneReapertura = ($esAuditor || $esAdmin) && DB::connection('compras')
+                    ->table('conteo_reaperturas')
+                    ->where('sucursal_id', $sucursalId)
+                    ->where('fecha_conteo', $fecha)
+                    ->where('created_at', '>=', now()->subHours(2))
+                    ->exists();
+
+                if (!$esAdmin && !$tieneReapertura) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'El conteo de este día ya fue aplicado. Solo un auditor puede reabrirlo.',
+                    ], 422);
+                }
             }
         }
-
-        $productoIds = collect($validated['items'])->pluck('producto_id')->unique()->all();
 
         $inventarios = Inventario::where('sucursal_id', $sucursalId)
             ->whereIn('producto_id', $productoIds)
@@ -484,6 +519,7 @@ class InventarioController extends Controller
                     'secciones'      => $seccionesConValor,
                     'total_contado'  => round((float) $item['cantidad_contada'], 4),
                     'stock_anterior' => round($stockActualBase / $factor, 4),
+                    'contado_por'    => $usuario,
                 ];
 
                 // Siempre crear movimiento para dejar registro de total_contado,
@@ -521,10 +557,15 @@ class InventarioController extends Controller
             // Error de email no interrumpe la respuesta
         }
 
+        $msg = $tipoConteo === 'conteo_mensual'
+            ? "{$aplicados} productos aplicados al conteo mensual."
+            : "{$aplicados} productos ajustados por conteo físico.";
+
         return response()->json([
-            'success'   => true,
-            'message'   => "{$aplicados} productos ajustados por conteo físico.",
-            'aplicados' => $aplicados,
+            'success'    => true,
+            'message'    => $msg,
+            'aplicados'  => $aplicados,
+            'conflictos' => $conflictos ?? [],
         ]);
     }
 
