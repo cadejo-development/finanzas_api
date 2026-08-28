@@ -393,6 +393,186 @@ class AuditoriaConteoController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // GET /api/compras/inventario/auditoria-conteo/{id}/estadisticas
+    // Devuelve tabla comparativa (conteo vs Brilo) con Kardex y justificaciones
+    // ─────────────────────────────────────────────────────────────────────────
+    public function getEstadisticas(Request $request, int $auditoriaId): JsonResponse
+    {
+        $auditoria = DB::connection('compras')
+            ->table('conteo_auditorias')
+            ->where('id', $auditoriaId)
+            ->first();
+
+        if (!$auditoria) {
+            return response()->json(['success' => false, 'message' => 'Auditoría no encontrada.'], 404);
+        }
+
+        $sucursalId = $auditoria->sucursal_id;
+        $fecha      = $auditoria->fecha_conteo;
+
+        // ── Productos con datos de auditoría (inventario + brilo_stock + costo) ──
+        $itemsRaw = DB::connection('compras')
+            ->table('conteo_auditoria_items as ai')
+            ->join('productos as p', 'p.id', '=', 'ai.producto_id')
+            ->leftJoin('categorias as cat', 'cat.id', '=', 'p.categoria_id')
+            ->leftJoin('inventarios as inv', fn($j) =>
+                $j->on('inv.producto_id', '=', 'p.id')->where('inv.sucursal_id', $sucursalId))
+            ->where('ai.auditoria_id', $auditoriaId)
+            ->select(
+                'ai.producto_id', 'ai.cantidad_contador', 'ai.cantidad_auditor',
+                'ai.comprobado', 'ai.comprobado_por',
+                'ai.justificacion', 'ai.justificacion_obs',
+                'p.codigo', 'p.nombre', 'p.unidad', 'p.costo',
+                'cat.nombre as categoria',
+                'inv.brilo_stock'
+            )
+            ->get();
+
+        // ── Kardex BRILO para el período ─────────────────────────────────────
+        $kardexMeta = DB::connection('compras')
+            ->table('brilo_kardex')
+            ->where('sucursal_id', $sucursalId)
+            ->where('fecha_hasta', $fecha)
+            ->orderByDesc('synced_at')
+            ->first();
+
+        $kardex     = [];
+        $fechaDesde = $kardexMeta?->fecha_desde ?? null;
+
+        if ($kardexMeta) {
+            $kRows = DB::connection('compras')
+                ->table('brilo_kardex')
+                ->where('sucursal_id', $sucursalId)
+                ->where('fecha_desde', $kardexMeta->fecha_desde)
+                ->where('fecha_hasta', $fecha)
+                ->get();
+            foreach ($kRows as $r) {
+                $kardex[$r->producto_codigo] = [
+                    'saldo_ini' => (float) $r->saldo_ini,
+                    'entradas'  => (float) $r->entradas,
+                    'salidas'   => (float) $r->salidas,
+                    'saldo_fin' => (float) $r->saldo_fin,
+                ];
+            }
+        }
+
+        // ── Construir filas ───────────────────────────────────────────────────
+        $filas = [];
+        foreach ($itemsRaw as $ai) {
+            $conteo  = round((float) ($ai->cantidad_auditor ?? $ai->cantidad_contador), 4);
+            $brilo   = $ai->brilo_stock !== null ? round((float) $ai->brilo_stock, 4) : null;
+            $diff    = $brilo !== null ? round($conteo - $brilo, 4) : null;
+            $diffPct = ($brilo !== null && $brilo != 0) ? round($diff / $brilo * 100, 2) : null;
+            $costo   = $ai->costo !== null ? round((float) $ai->costo, 4) : null;
+            $costoDiff = ($diff !== null && $costo !== null) ? round($diff * $costo, 2) : null;
+
+            if ($brilo === null)        $tipo = 'SIN_BRILO';
+            elseif (abs($diff) <= 0.01) $tipo = 'OK';
+            elseif ($diff < 0)          $tipo = 'FALTANTE';
+            else                        $tipo = 'SOBRANTE';
+
+            $kd = $kardex[$ai->codigo] ?? null;
+
+            $filas[] = [
+                'producto_id'      => (int) $ai->producto_id,
+                'codigo'           => $ai->codigo,
+                'nombre'           => $ai->nombre,
+                'categoria'        => $ai->categoria ?? '—',
+                'unidad'           => $ai->unidad,
+                'conteo'           => $conteo,
+                'brilo'            => $brilo,
+                'diff'             => $diff,
+                'diff_pct'         => $diffPct,
+                'tipo'             => $tipo,
+                'costo'            => $costo,
+                'costo_diff'       => $costoDiff,
+                'k_saldo_ini'      => $kd['saldo_ini'] ?? null,
+                'k_entradas'       => $kd['entradas']  ?? null,
+                'k_salidas'        => $kd['salidas']   ?? null,
+                'k_saldo_fin'      => $kd['saldo_fin'] ?? null,
+                'comprobado'       => (bool) $ai->comprobado,
+                'comprobado_por'   => $ai->comprobado_por,
+                'justificacion'    => $ai->justificacion,
+                'justificacion_obs'=> $ai->justificacion_obs,
+            ];
+        }
+
+        // Ordenar: faltante de mayor costo primero, luego sobrantes, ok, sin brilo
+        usort($filas, fn($a, $b) => ($a['costo_diff'] ?? 0) <=> ($b['costo_diff'] ?? 0));
+
+        // ── Filtros opcionales ────────────────────────────────────────────────
+        $tipoFilter = $request->query('tipo');
+        $search     = strtolower(trim($request->query('search', '')));
+
+        if ($tipoFilter && $tipoFilter !== 'todos') {
+            $filas = array_values(array_filter($filas, fn($f) => $f['tipo'] === strtoupper($tipoFilter)));
+        }
+        if ($search !== '') {
+            $filas = array_values(array_filter($filas, fn($f) =>
+                str_contains(strtolower($f['nombre']), $search) ||
+                str_contains(strtolower($f['codigo']), $search)
+            ));
+        }
+
+        // ── Paginación ────────────────────────────────────────────────────────
+        $perPage = max(1, min(200, (int) $request->query('per_page', 25)));
+        $page    = max(1, (int) $request->query('page', 1));
+        $total   = count($filas);
+        $items   = array_slice($filas, ($page - 1) * $perPage, $perPage);
+
+        // ── Resumen ───────────────────────────────────────────────────────────
+        $nFalt     = count(array_filter($filas, fn($f) => $f['tipo'] === 'FALTANTE'));
+        $nSobr     = count(array_filter($filas, fn($f) => $f['tipo'] === 'SOBRANTE'));
+        $nOk       = count(array_filter($filas, fn($f) => $f['tipo'] === 'OK'));
+        $nSinBrilo = count(array_filter($filas, fn($f) => $f['tipo'] === 'SIN_BRILO'));
+        $costoFalt = round(array_sum(array_map(
+            fn($f) => $f['tipo'] === 'FALTANTE' && $f['costo_diff'] !== null ? abs($f['costo_diff']) : 0, $filas
+        )), 2);
+        $costoSobr = round(array_sum(array_map(
+            fn($f) => $f['tipo'] === 'SOBRANTE' && $f['costo_diff'] !== null ? $f['costo_diff'] : 0, $filas
+        )), 2);
+
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'items'      => $items,
+                'pagination' => ['total' => $total, 'page' => $page, 'per_page' => $perPage, 'last_page' => max(1, (int) ceil($total / $perPage))],
+                'resumen'    => compact('nFalt', 'nSobr', 'nOk', 'nSinBrilo', 'costoFalt', 'costoSobr'),
+                'kardex_meta'=> $fechaDesde ? ['fecha_desde' => $fechaDesde, 'fecha_hasta' => $fecha] : null,
+                'auditoria'  => ['id' => $auditoriaId, 'estado' => $auditoria->estado, 'fecha_conteo' => $fecha],
+            ],
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PUT /api/compras/inventario/auditoria-conteo/{id}/justificar/{productoId}
+    // Guarda la justificación de diferencia para un producto
+    // ─────────────────────────────────────────────────────────────────────────
+    public function guardarJustificacion(Request $request, int $auditoriaId, int $productoId): JsonResponse
+    {
+        $request->validate([
+            'justificacion'     => 'nullable|string|max:100',
+            'justificacion_obs' => 'nullable|string|max:500',
+        ]);
+
+        $rows = DB::connection('compras')
+            ->table('conteo_auditoria_items')
+            ->where('auditoria_id', $auditoriaId)
+            ->where('producto_id', $productoId)
+            ->update([
+                'justificacion'     => $request->justificacion,
+                'justificacion_obs' => $request->justificacion_obs,
+                'updated_at'        => now(),
+            ]);
+
+        if (!$rows) {
+            return response()->json(['success' => false, 'message' => 'Producto no encontrado en esta auditoría.'], 404);
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Helper: devuelve el payload completo de una auditoría por ID
     // ─────────────────────────────────────────────────────────────────────────
     private function _buildResponse(int $auditoriaId): JsonResponse

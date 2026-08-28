@@ -320,6 +320,8 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::put('inventario/auditoria-conteo/{id}/item/{productoId}',     [AuditoriaConteoController::class, 'actualizarItem']);
     Route::get('inventario/auditoria-conteo/{id}/borrador',              [AuditoriaConteoController::class, 'getBorrador']);
     Route::put('inventario/auditoria-conteo/{id}/borrador',              [AuditoriaConteoController::class, 'saveBorrador']);
+    Route::get('inventario/auditoria-conteo/{id}/estadisticas',          [AuditoriaConteoController::class, 'getEstadisticas']);
+    Route::put('inventario/auditoria-conteo/{id}/justificar/{pid}',      [AuditoriaConteoController::class, 'guardarJustificacion']);
     Route::post('inventario/auditoria-conteo/{id}/cerrar',               [AuditoriaConteoController::class, 'cerrar']);
     Route::post('inventario/auditoria-conteo/{id}/reabrir',              [AuditoriaConteoController::class, 'reabrir']);
     Route::post('inventario/auditoria-conteo/{id}/responder',            [AuditoriaConteoController::class, 'responder']);
