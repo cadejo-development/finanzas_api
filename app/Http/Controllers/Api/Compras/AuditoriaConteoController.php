@@ -56,6 +56,28 @@ class AuditoriaConteoController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // GET /api/compras/inventario/auditoria-conteo/fechas?sucursal_id=X
+    // Devuelve fechas (YYYY-MM-DD) que tienen auditoría registrada
+    // ─────────────────────────────────────────────────────────────────────────
+    public function fechas(Request $request): JsonResponse
+    {
+        $sucursalId = (int) $request->query('sucursal_id');
+        if (!$sucursalId) {
+            return response()->json(['data' => []]);
+        }
+
+        $fechas = DB::connection('compras')
+            ->table('conteo_auditorias')
+            ->where('sucursal_id', $sucursalId)
+            ->selectRaw('fecha_conteo::text AS fecha')
+            ->orderByDesc('fecha_conteo')
+            ->pluck('fecha')
+            ->all();
+
+        return response()->json(['success' => true, 'data' => $fechas]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // POST /api/compras/inventario/auditoria-conteo/iniciar
     // Inicia una nueva auditoría para el conteo mensual de una fecha
     // ─────────────────────────────────────────────────────────────────────────

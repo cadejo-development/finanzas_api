@@ -317,6 +317,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     // Auditoría de conteo mensual
     Route::get('inventario/auditoria-conteo',                            [AuditoriaConteoController::class, 'getAuditoria']);
     Route::post('inventario/auditoria-conteo/iniciar',                   [AuditoriaConteoController::class, 'iniciar']);
+    Route::get('inventario/auditoria-conteo/fechas',                     [AuditoriaConteoController::class, 'fechas']);
     Route::get('inventario/auditoria-conteo/estadisticas-directas',      [AuditoriaConteoController::class, 'getEstadisticasDirectas']);
     Route::put('inventario/auditoria-conteo/{id}/item/{productoId}',     [AuditoriaConteoController::class, 'actualizarItem']);
     Route::get('inventario/auditoria-conteo/{id}/borrador',              [AuditoriaConteoController::class, 'getBorrador']);
