@@ -2,7 +2,7 @@ name: Sync Nocturno — Stock Brilo
 
 on:
   schedule:
-    - cron: '0 9 * * *'   # 3:00 AM El Salvador (UTC-6)
+    - cron: '0 7 * * *'   # 1:00 AM El Salvador (UTC-6)
   workflow_dispatch:
     inputs:
       fecha:
