@@ -272,11 +272,17 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('ventas/{id}',                  [VentasController::class, 'show']);
     Route::post('ventas/import',      [VentasController::class, 'import']);
 
-    // Exportación BRILO (solo admin_compras / admin_recetas)
+    // Exportación BRILO — recetas/productos
     Route::get('export/brilo/materiales-x-producto',  [ExportBriloController::class, 'materialesXProducto']);
     Route::get('export/brilo/productos',               [ExportBriloController::class, 'productos']);
     Route::get('export/brilo/recetas-ven',             [ExportBriloController::class, 'recetasVen']);
     Route::post('export/brilo/resetear-modificados',   [ExportBriloController::class, 'resetearModificados']);
+
+    // Exportación BRILO — conteo físico mensual
+    Route::get('export/conteo/estado',              [\App\Http\Controllers\Api\Compras\ExportConteoController::class, 'estado']);
+    Route::get('export/conteo/config',              [\App\Http\Controllers\Api\Compras\ExportConteoController::class, 'config']);
+    Route::put('export/conteo/config/{sucursal_id}',[\App\Http\Controllers\Api\Compras\ExportConteoController::class, 'guardarConfig']);
+    Route::get('export/conteo/csv/{auditoria_id}',  [\App\Http\Controllers\Api\Compras\ExportConteoController::class, 'generarCsv']);
 
     // Solicitudes de carga a BRILO
     Route::get('solicitudes-carga',        [SolicitudCargaRecetasController::class, 'index']);
