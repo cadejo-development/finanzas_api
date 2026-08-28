@@ -458,10 +458,13 @@ class InventarioController extends Controller
 
         // Cargar TODOS los inventarios activos de la sucursal (no solo los enviados)
         // para poder generar registros 0 de productos no contados.
+        // keyBy con cast explícito a int para evitar mismatch string/int en el driver PG.
         $todosInventarios = Inventario::where('sucursal_id', $sucursalId)
             ->get()
-            ->keyBy('producto_id');
+            ->keyBy(fn($inv) => (int) $inv->producto_id);
 
+        // Garantizar que productoIds también son ints para que ->only() matchee
+        $productoIds = array_map('intval', $productoIds);
         $inventarios = $todosInventarios->only($productoIds);
 
         // Movimientos acumulados para cálculo de stock (solo productos enviados)
@@ -492,22 +495,23 @@ class InventarioController extends Controller
 
             foreach ($validated['items'] as $item) {
                 $pid = (int) $item['producto_id'];
-                $inv = $inventarios[$pid] ?? null;
+                // Buscar en el subset filtrado; si no está (por race condition o tipo), buscar en el total
+                $inv = $inventarios[$pid] ?? $todosInventarios[$pid] ?? null;
 
                 if (!$inv) {
-                    $prod = $productos[$pid] ?? null;
-                    if (!$prod) continue;
-                    $inv = Inventario::create([
-                        'sucursal_id'           => $sucursalId,
-                        'producto_id'           => $pid,
-                        'cantidad_inicial'      => 0,
-                        'unidad'                => $item['unidad'],
-                        'cantidad_inicial_base' => 0,
-                        'fecha_conteo'          => $fecha,
-                        'stock_minimo'          => null,
-                        'aud_usuario'           => $usuario,
-                    ]);
-                    $inventarios[$pid] = $inv;
+                    // firstOrCreate garantiza que nunca explota por unique constraint
+                    $inv = Inventario::firstOrCreate(
+                        ['sucursal_id' => $sucursalId, 'producto_id' => $pid],
+                        [
+                            'cantidad_inicial'      => 0,
+                            'unidad'                => $item['unidad'],
+                            'cantidad_inicial_base' => 0,
+                            'fecha_conteo'          => $fecha,
+                            'stock_minimo'          => null,
+                            'aud_usuario'           => $usuario,
+                        ]
+                    );
+                    $inventarios[$pid]      = $inv;
                     $todosInventarios[$pid] = $inv;
                 }
 
