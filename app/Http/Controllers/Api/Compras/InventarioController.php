@@ -131,6 +131,7 @@ class InventarioController extends Controller
                 'alerta'              => $alerta,
                 'activo'              => (bool) ($inv->activo ?? true),
                 'prod_seg'            => (bool) ($inv->prod_seg ?? false),
+                'excluir_estadisticas'=> (bool) ($inv->producto?->excluir_estadisticas ?? false),
             ]);
         }
 
@@ -166,6 +167,7 @@ class InventarioController extends Controller
                 'stock_actual'        => round($stockActual, 4),
                 'stock_actual_base'   => round($stockActualBase, 6),
                 'alerta'              => $stockActual <= 0 ? 'agotado' : null,
+                'excluir_estadisticas'=> (bool) ($prod->excluir_estadisticas ?? false),
             ]);
         }
 

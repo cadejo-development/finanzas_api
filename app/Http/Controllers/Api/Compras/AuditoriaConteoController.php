@@ -459,6 +459,7 @@ class AuditoriaConteoController extends Controller
             ->leftJoin('inventarios as inv', fn($j) =>
                 $j->on('inv.producto_id', '=', 'p.id')->where('inv.sucursal_id', $sucursalId))
             ->where('ai.auditoria_id', $auditoriaId)
+            ->where('p.excluir_estadisticas', false)
             ->select(
                 'ai.producto_id', 'ai.cantidad_contador', 'ai.cantidad_auditor',
                 'ai.comprobado', 'ai.comprobado_por',
@@ -609,6 +610,7 @@ class AuditoriaConteoController extends Controller
             ->where('m.tipo', 'conteo_mensual')
             ->whereRaw("DATE(m.fecha) = ?", [$fecha])
             ->where('m.aud_usuario', '!=', 'sin_contar')
+            ->where('p.excluir_estadisticas', false)
             ->select(
                 'm.producto_id', 'm.cantidad', 'm.aud_usuario',
                 'p.codigo', 'p.nombre', 'p.unidad', 'p.costo',
