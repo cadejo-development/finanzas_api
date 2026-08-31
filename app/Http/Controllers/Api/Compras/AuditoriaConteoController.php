@@ -241,17 +241,17 @@ class AuditoriaConteoController extends Controller
             ->where('comprobado', true)
             ->count();
 
-        // Jefes de departamento raíz de la sucursal → email de login (@cervezacadejo.com)
+        // Jefes de departamento de la sucursal → email de login (@cervezacadejo.com)
         $gerentes = DB::table('departamentos as d')
             ->join('empleados as e', 'e.id', '=', 'd.jefe_empleado_id')
             ->join('users as u', 'u.id', '=', 'e.user_id')
             ->where('d.sucursal_id', $auditoria->sucursal_id)
-            ->whereNull('d.parent_id')
             ->where('d.activo', true)
             ->where('e.activo', true)
             ->where('u.activo', true)
             ->whereNotNull('u.email')
             ->select('u.email', DB::raw("e.nombres || ' ' || e.apellidos as nombre"))
+            ->distinct()
             ->get();
 
         try {
