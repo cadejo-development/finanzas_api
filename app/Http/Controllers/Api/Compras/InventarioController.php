@@ -438,7 +438,7 @@ class InventarioController extends Controller
                     $authUser->hasRole('gerencia_financiera') ||
                     $authUser->hasRole('dir_comercial')
                 );
-                $esAuditor = $authUser && $authUser->hasPermission('puede_auditar_conteo');
+                $esAuditor = $authUser && $authUser->esAuditorInventario($sucursalId);
 
                 $tieneReapertura = ($esAuditor || $esAdmin) && DB::connection('compras')
                     ->table('conteo_reaperturas')
@@ -966,7 +966,7 @@ class InventarioController extends Controller
 
         $authUser = Auth::user();
         $esAdmin  = $authUser->hasRole('admin_compras') || $authUser->hasRole('gerencia_financiera') || $authUser->hasRole('dir_comercial');
-        $esAuditor = $authUser->hasPermission('puede_auditar_conteo');
+        $esAuditor = $authUser->esAuditorInventario((int) $validated['sucursal_id']);
 
         if (!$esAdmin && !$esAuditor) {
             return response()->json(['success' => false, 'message' => 'No tienes permiso para reabrir conteos.'], 403);
@@ -1055,7 +1055,7 @@ class InventarioController extends Controller
     {
         $authUser = Auth::user();
         $esAdmin  = $authUser->hasRole('admin_compras') || $authUser->hasRole('gerencia_financiera') || $authUser->hasRole('dir_comercial');
-        $esAuditor = $authUser->hasPermission('puede_auditar_conteo');
+        $esAuditor = $authUser->esAuditorInventario();
         if (!$esAdmin && !$esAuditor) {
             return response()->json(['success' => false, 'message' => 'No autorizado.'], 403);
         }
@@ -1136,7 +1136,7 @@ class InventarioController extends Controller
     {
         $authUser = Auth::user();
         $esAdmin  = $authUser->hasRole('admin_compras') || $authUser->hasRole('gerencia_financiera') || $authUser->hasRole('dir_comercial');
-        $esAuditor = $authUser->hasPermission('puede_auditar_conteo');
+        $esAuditor = $authUser->esAuditorInventario();
         if (!$esAdmin && !$esAuditor) {
             return response()->json(['success' => false, 'message' => 'No autorizado.'], 403);
         }

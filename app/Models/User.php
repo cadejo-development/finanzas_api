@@ -111,4 +111,28 @@ class User extends Authenticatable
         }
         return false;
     }
+
+    /**
+     * Verifica si el usuario es auditor de inventario mensual.
+     * Chequea tanto hasPermission (sistema estándar de roles) como
+     * inventario_sucursal_roles (asignación por sucursal específica).
+     * Si se pasa $sucursalId, valida que sea auditor de ESA sucursal.
+     */
+    public function esAuditorInventario(?int $sucursalId = null): bool
+    {
+        if ($this->hasPermission('puede_auditar_conteo')) {
+            return true;
+        }
+
+        $query = \Illuminate\Support\Facades\DB::table('inventario_sucursal_roles')
+            ->where('user_id', $this->id)
+            ->where('rol', 'auditor_inv')
+            ->where('activo', true);
+
+        if ($sucursalId) {
+            $query->where('sucursal_id', $sucursalId);
+        }
+
+        return $query->exists();
+    }
 }

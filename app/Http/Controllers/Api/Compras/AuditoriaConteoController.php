@@ -90,7 +90,7 @@ class AuditoriaConteoController extends Controller
 
         $authUser = Auth::user();
         $esAdmin  = $authUser->hasRole('admin_compras') || $authUser->hasRole('gerencia_financiera') || $authUser->hasRole('dir_comercial');
-        $esAuditor = $authUser->hasPermission('puede_auditar_conteo');
+        $esAuditor = $authUser->esAuditorInventario($request->input('sucursal_id'));
 
         if (!$esAdmin && !$esAuditor) {
             return response()->json(['success' => false, 'message' => 'No tienes permiso para realizar auditorías.'], 403);
