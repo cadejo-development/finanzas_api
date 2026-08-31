@@ -25,7 +25,10 @@ class AuditoriaConteoNotificacion extends Mailable
     {
         return new Envelope(
             subject: "Auditoría de conteo completada — {$this->sucursalNombre} ({$this->fecha})",
-            cc: [new Address('marcelaorellana@cervezacadejo.com', 'Ana Marcela Orellana')],
+            cc: [
+                new Address('javiermejia@cervezacadejo.com', 'Javier Mejia'),
+                new Address('marcelaorellana@cervezacadejo.com', 'Ana Marcela Orellana'),
+            ],
         );
     }
 
