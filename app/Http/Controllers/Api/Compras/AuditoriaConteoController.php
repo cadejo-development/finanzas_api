@@ -35,9 +35,14 @@ class AuditoriaConteoController extends Controller
         }
 
         $items = DB::connection('compras')
-            ->table('conteo_auditoria_items')
-            ->where('auditoria_id', $auditoria->id)
-            ->orderBy('producto_nombre')
+            ->table('conteo_auditoria_items as ai')
+            ->leftJoin('inventarios as inv', function ($j) use ($auditoria) {
+                $j->on('inv.producto_id', '=', 'ai.producto_id')
+                  ->where('inv.sucursal_id', $auditoria->sucursal_id);
+            })
+            ->where('ai.auditoria_id', $auditoria->id)
+            ->orderBy('ai.producto_nombre')
+            ->select('ai.*', 'inv.costo')
             ->get();
 
         $respuesta = DB::connection('compras')
@@ -770,9 +775,14 @@ class AuditoriaConteoController extends Controller
             ->first();
 
         $items = DB::connection('compras')
-            ->table('conteo_auditoria_items')
-            ->where('auditoria_id', $auditoriaId)
-            ->orderBy('producto_nombre')
+            ->table('conteo_auditoria_items as ai')
+            ->leftJoin('inventarios as inv', function ($j) use ($auditoria) {
+                $j->on('inv.producto_id', '=', 'ai.producto_id')
+                  ->where('inv.sucursal_id', $auditoria->sucursal_id);
+            })
+            ->where('ai.auditoria_id', $auditoriaId)
+            ->orderBy('ai.producto_nombre')
+            ->select('ai.*', 'inv.costo')
             ->get();
 
         $respuesta = DB::connection('compras')
