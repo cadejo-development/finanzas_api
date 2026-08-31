@@ -126,7 +126,7 @@ class User extends Authenticatable
 
         $query = \Illuminate\Support\Facades\DB::table('inventario_sucursal_roles')
             ->where('user_id', $this->id)
-            ->where('rol', 'auditor_inv')
+            ->where('rol', 'auditor')
             ->where('activo', true);
 
         if ($sucursalId) {
