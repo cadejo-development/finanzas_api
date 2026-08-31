@@ -504,7 +504,6 @@ class AuditoriaConteoController extends Controller
             $conteo  = round((float) ($ai->cantidad_auditor ?? $ai->cantidad_contador), 4);
             $brilo   = $ai->brilo_stock !== null ? round((float) $ai->brilo_stock, 4) : null;
             $diff    = $brilo !== null ? round($conteo - $brilo, 4) : null;
-            $diffPct = ($brilo !== null && $brilo != 0) ? round($diff / $brilo * 100, 2) : null;
             $costo   = $ai->costo !== null ? round((float) $ai->costo, 4) : null;
             $costoDiff = ($diff !== null && $costo !== null) ? round($diff * $costo, 2) : null;
 
@@ -513,7 +512,11 @@ class AuditoriaConteoController extends Controller
             elseif ($diff < 0)          $tipo = 'FALTANTE';
             else                        $tipo = 'SOBRANTE';
 
-            $kd = $kardex[$ai->codigo] ?? null;
+            $kd       = $kardex[$ai->codigo] ?? null;
+            $kSalidas = $kd !== null ? $kd['salidas'] : null;
+            $diffPct  = ($diff !== null && $kSalidas !== null && ($kSalidas + abs($diff)) > 0)
+                ? round(abs($diff) / (abs($diff) + $kSalidas) * 100, 2)
+                : null;
 
             $filas[] = [
                 'producto_id'      => (int) $ai->producto_id,
@@ -656,7 +659,6 @@ class AuditoriaConteoController extends Controller
             $conteo  = round((float) $m->cantidad, 4);
             $brilo   = $m->brilo_stock !== null ? round((float) $m->brilo_stock, 4) : null;
             $diff    = $brilo !== null ? round($conteo - $brilo, 4) : null;
-            $diffPct = ($brilo !== null && $brilo != 0) ? round($diff / $brilo * 100, 2) : null;
             $costo   = $m->costo !== null ? round((float) $m->costo, 4) : null;
             $costoDiff = ($diff !== null && $costo !== null) ? round($diff * $costo, 2) : null;
 
@@ -665,7 +667,11 @@ class AuditoriaConteoController extends Controller
             elseif ($diff < 0)          $tipo = 'FALTANTE';
             else                        $tipo = 'SOBRANTE';
 
-            $kd = $kardex[$m->codigo] ?? null;
+            $kd       = $kardex[$m->codigo] ?? null;
+            $kSalidas = $kd !== null ? $kd['salidas'] : null;
+            $diffPct  = ($diff !== null && $kSalidas !== null && ($kSalidas + abs($diff)) > 0)
+                ? round(abs($diff) / (abs($diff) + $kSalidas) * 100, 2)
+                : null;
 
             $filas[] = [
                 'producto_id'      => (int) $m->producto_id,
