@@ -764,6 +764,41 @@ class AuditoriaConteoController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // PUT /api/compras/inventario/auditoria-conteo/justificar-directa
+    // Guarda justificación para vista sin auditoría (admin directo)
+    // Body: { sucursal_id, fecha, producto_id, justificacion, justificacion_obs }
+    // ─────────────────────────────────────────────────────────────────────────
+    public function guardarJustificacionDirecta(Request $request): JsonResponse
+    {
+        $request->validate([
+            'sucursal_id'       => 'required|integer',
+            'fecha'             => 'required|date',
+            'producto_id'       => 'required|integer',
+            'justificacion'     => 'nullable|string|max:100',
+            'justificacion_obs' => 'nullable|string|max:500',
+        ]);
+
+        $now = now();
+        DB::connection('compras')
+            ->table('inventario_justificaciones')
+            ->upsert(
+                [[
+                    'sucursal_id'       => $request->sucursal_id,
+                    'fecha_conteo'      => $request->fecha,
+                    'producto_id'       => $request->producto_id,
+                    'justificacion'     => $request->justificacion,
+                    'justificacion_obs' => $request->justificacion_obs,
+                    'created_at'        => $now,
+                    'updated_at'        => $now,
+                ]],
+                ['sucursal_id', 'fecha_conteo', 'producto_id'],
+                ['justificacion', 'justificacion_obs', 'updated_at']
+            );
+
+        return response()->json(['success' => true]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Helper: devuelve el payload completo de una auditoría por ID
     // ─────────────────────────────────────────────────────────────────────────
     private function _buildResponse(int $auditoriaId): JsonResponse
