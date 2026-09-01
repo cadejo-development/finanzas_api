@@ -434,8 +434,13 @@ class ProductosController extends Controller
             ->orderBy('r.nombre')
             ->get();
 
+        // PG devuelve array_agg como string "{1,7,8}" — parsear a array de ints
+        $parsePgArray = fn($v) => is_string($v)
+            ? array_values(array_filter(array_map('intval', explode(',', trim($v, '{}')))))
+            : (array) $v;
+
         // Resolver nombres de sucursales desde la conexión principal
-        $allSucursalIds = $rows->flatMap(fn($r) => (array) $r->sucursal_ids)->unique()->filter()->values()->all();
+        $allSucursalIds = $rows->flatMap(fn($r) => $parsePgArray($r->sucursal_ids))->unique()->filter()->values()->all();
         $sucursalNombres = [];
         if (!empty($allSucursalIds)) {
             $sucursalNombres = DB::connection('pgsql')
@@ -445,8 +450,8 @@ class ProductosController extends Controller
                 ->all();
         }
 
-        $data = $rows->map(function ($row) use ($sucursalNombres) {
-            $ids = (array) $row->sucursal_ids;
+        $data = $rows->map(function ($row) use ($sucursalNombres, $parsePgArray) {
+            $ids = $parsePgArray($row->sucursal_ids);
             $nombres = array_values(array_filter(array_map(fn($id) => $sucursalNombres[$id] ?? null, $ids)));
             sort($nombres);
             return [
