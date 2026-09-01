@@ -416,11 +416,11 @@ class ProductosController extends Controller
      */
     public function usos(int $id): JsonResponse
     {
+        // Recetas que usan este producto (solo tablas en 'compras')
         $rows = DB::connection('compras')
             ->table('receta_ingredientes as ri')
             ->join('recetas as r', 'r.id', '=', 'ri.receta_id')
             ->leftJoin('receta_sucursal as rs', fn($j) => $j->on('rs.receta_id', '=', 'r.id')->where('rs.activa', true))
-            ->leftJoin('sucursales as s', 's.id', '=', 'rs.sucursal_id')
             ->where('ri.producto_id', $id)
             ->where('r.activa', true)
             ->groupBy('r.id', 'r.nombre', 'r.tipo_receta', 'r.tipo')
@@ -429,20 +429,34 @@ class ProductosController extends Controller
                 'r.nombre',
                 'r.tipo_receta',
                 'r.tipo',
-                DB::raw("array_remove(array_agg(DISTINCT s.nombre ORDER BY s.nombre), NULL) as sucursales"),
+                DB::raw("array_remove(array_agg(DISTINCT rs.sucursal_id), NULL) as sucursal_ids"),
             ])
             ->orderBy('r.nombre')
             ->get();
 
-        $data = $rows->map(fn($row) => [
-            'id'         => $row->id,
-            'nombre'     => $row->nombre,
-            'es_sub'     => $row->tipo_receta === 'sub_receta'
-                            || str_contains(strtolower($row->tipo ?? ''), 'sub'),
-            'sucursales' => is_string($row->sucursales)
-                            ? array_filter(explode(',', trim($row->sucursales, '{}')))
-                            : (array) $row->sucursales,
-        ]);
+        // Resolver nombres de sucursales desde la conexión principal
+        $allSucursalIds = $rows->flatMap(fn($r) => (array) $r->sucursal_ids)->unique()->filter()->values()->all();
+        $sucursalNombres = [];
+        if (!empty($allSucursalIds)) {
+            $sucursalNombres = DB::connection('pgsql')
+                ->table('sucursales')
+                ->whereIn('id', $allSucursalIds)
+                ->pluck('nombre', 'id')
+                ->all();
+        }
+
+        $data = $rows->map(function ($row) use ($sucursalNombres) {
+            $ids = (array) $row->sucursal_ids;
+            $nombres = array_values(array_filter(array_map(fn($id) => $sucursalNombres[$id] ?? null, $ids)));
+            sort($nombres);
+            return [
+                'id'         => $row->id,
+                'nombre'     => $row->nombre,
+                'es_sub'     => $row->tipo_receta === 'sub_receta'
+                                || str_contains(strtolower($row->tipo ?? ''), 'sub'),
+                'sucursales' => $nombres,
+            ];
+        });
 
         return response()->json(['success' => true, 'data' => $data]);
     }
