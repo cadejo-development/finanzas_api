@@ -607,18 +607,16 @@ class AuditoriaConteoController extends Controller
             ->table('movimientos_inventario as m')
             ->join('productos as p', 'p.id', '=', 'm.producto_id')
             ->leftJoin('categorias as cat', 'cat.id', '=', 'p.categoria_id')
-            ->leftJoin('inventarios as inv', fn($j) =>
-                $j->on('inv.producto_id', '=', 'p.id')->where('inv.sucursal_id', $sucursalId))
             ->where('m.sucursal_id', $sucursalId)
             ->where('m.tipo', 'conteo_mensual')
             ->whereRaw("DATE(m.fecha) = ?", [$fecha])
             ->where('m.aud_usuario', '!=', 'sin_contar')
             ->where('p.excluir_estadisticas', false)
             ->select(
-                'm.producto_id', 'm.cantidad', 'm.aud_usuario',
+                'm.producto_id', 'm.aud_usuario',
+                DB::raw("CAST(m.detalle->>'total_contado' AS numeric) AS total_contado"),
                 'p.codigo', 'p.nombre', 'p.unidad', 'p.costo',
-                'cat.nombre as categoria',
-                'inv.brilo_stock'
+                'cat.nombre as categoria'
             )
             ->orderBy('m.producto_id')
             ->orderByDesc('m.created_at')
@@ -656,18 +654,20 @@ class AuditoriaConteoController extends Controller
         // ── Construir filas ───────────────────────────────────────────────────
         $filas = [];
         foreach ($movs as $m) {
-            $conteo  = round((float) $m->cantidad, 4);
-            $brilo   = $m->brilo_stock !== null ? round((float) $m->brilo_stock, 4) : null;
-            $diff    = $brilo !== null ? round($conteo - $brilo, 4) : null;
+            $kd      = $kardex[$m->codigo] ?? null;
+            // Usar total_contado (cantidad real) y saldo_fin del kardex del período
+            $conteo  = $m->total_contado !== null ? round((float) $m->total_contado, 4) : null;
+            $brilo   = $kd !== null ? round($kd['saldo_fin'], 4) : null;
+            $diff    = ($conteo !== null && $brilo !== null) ? round($conteo - $brilo, 4) : null;
             $costo   = $m->costo !== null ? round((float) $m->costo, 4) : null;
             $costoDiff = ($diff !== null && $costo !== null) ? round($diff * $costo, 2) : null;
 
-            if ($brilo === null)        $tipo = 'SIN_BRILO';
-            elseif (abs($diff) <= 0.01) $tipo = 'OK';
-            elseif ($diff < 0)          $tipo = 'FALTANTE';
-            else                        $tipo = 'SOBRANTE';
+            if ($brilo === null)               $tipo = 'SIN_BRILO';
+            elseif ($diff === null)            $tipo = 'SIN_BRILO';
+            elseif (abs($diff) <= 0.01)        $tipo = 'OK';
+            elseif ($diff < 0)                 $tipo = 'FALTANTE';
+            else                               $tipo = 'SOBRANTE';
 
-            $kd       = $kardex[$m->codigo] ?? null;
             $kSalidas = $kd !== null ? $kd['salidas'] : null;
             $diffPct  = ($diff !== null && $kSalidas !== null && ($kSalidas + abs($diff)) > 0)
                 ? round(abs($diff) / (abs($diff) + $kSalidas) * 100, 2)
