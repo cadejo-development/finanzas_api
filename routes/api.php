@@ -207,6 +207,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('sucursales',                     [ProductosController::class, 'sucursales']);
     Route::get('productos/siguiente-codigo',     [ProductosController::class, 'siguienteCodigo']);
     Route::get('productos',                      [ProductosController::class, 'index']);
+    Route::get('productos/{id}/usos',            [ProductosController::class, 'usos']);
     Route::post('productos',          [ProductosController::class, 'store']);
     Route::put('productos/{id}',      [ProductosController::class, 'update']);
     Route::delete('productos/{id}',   [ProductosController::class, 'destroy']);

@@ -408,4 +408,42 @@ class ProductosController extends Controller
 
         return response()->json(['success' => true, 'data' => $sucursales]);
     }
+
+    /**
+     * GET /api/compras/productos/{id}/usos
+     * Devuelve recetas y sub-recetas que usan este producto como ingrediente directo,
+     * con las sucursales donde cada receta está activa.
+     */
+    public function usos(int $id): JsonResponse
+    {
+        $rows = DB::connection('pgsql')
+            ->table('receta_ingredientes as ri')
+            ->join('recetas as r', 'r.id', '=', 'ri.receta_id')
+            ->leftJoin('receta_sucursal as rs', fn($j) => $j->on('rs.receta_id', '=', 'r.id')->where('rs.activa', true))
+            ->leftJoin('sucursales as s', 's.id', '=', 'rs.sucursal_id')
+            ->where('ri.producto_id', $id)
+            ->where('r.activa', true)
+            ->groupBy('r.id', 'r.nombre', 'r.tipo_receta', 'r.tipo')
+            ->select([
+                'r.id',
+                'r.nombre',
+                'r.tipo_receta',
+                'r.tipo',
+                DB::raw("array_remove(array_agg(DISTINCT s.nombre ORDER BY s.nombre), NULL) as sucursales"),
+            ])
+            ->orderBy('r.nombre')
+            ->get();
+
+        $data = $rows->map(fn($row) => [
+            'id'         => $row->id,
+            'nombre'     => $row->nombre,
+            'es_sub'     => $row->tipo_receta === 'sub_receta'
+                            || str_contains(strtolower($row->tipo ?? ''), 'sub'),
+            'sucursales' => is_string($row->sucursales)
+                            ? array_filter(explode(',', trim($row->sucursales, '{}')))
+                            : (array) $row->sucursales,
+        ]);
+
+        return response()->json(['success' => true, 'data' => $data]);
+    }
 }
