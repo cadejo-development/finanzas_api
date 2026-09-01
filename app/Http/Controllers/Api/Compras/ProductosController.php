@@ -416,7 +416,7 @@ class ProductosController extends Controller
      */
     public function usos(int $id): JsonResponse
     {
-        $rows = DB::connection('pgsql')
+        $rows = DB::connection('compras')
             ->table('receta_ingredientes as ri')
             ->join('recetas as r', 'r.id', '=', 'ri.receta_id')
             ->leftJoin('receta_sucursal as rs', fn($j) => $j->on('rs.receta_id', '=', 'r.id')->where('rs.activa', true))
