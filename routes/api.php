@@ -315,6 +315,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::delete('inventario/borrador',        [InventarioController::class, 'deleteBorrador']);
     Route::patch('inventario/borrador/aplicado',[InventarioController::class, 'marcarBorradorAplicado']);
     Route::get('inventario/conteo-hoy',         [InventarioController::class, 'conteoHoy']);
+    Route::get('inventario/brilo-historico',    [InventarioController::class, 'briloHistorico']);
     Route::post('inventario/reabrir-conteo',    [InventarioController::class, 'reabrirConteo']);
     Route::get('inventario/solicitudes-correccion',                      [InventarioController::class, 'getSolicitudesCorreccion']);
     Route::post('inventario/solicitar-correccion',                       [InventarioController::class, 'solicitarCorreccion']);

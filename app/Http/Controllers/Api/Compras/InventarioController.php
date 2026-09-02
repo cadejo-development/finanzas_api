@@ -956,6 +956,36 @@ class InventarioController extends Controller
         ]);
     }
 
+    // GET /api/compras/inventario/brilo-historico?sucursal_id=X&fecha=Y
+    // Devuelve el último brilo_stock por producto registrado en aud_inventarios
+    // hasta el final del día de la fecha indicada (hora El Salvador).
+    public function briloHistorico(Request $request): JsonResponse
+    {
+        $request->validate(['sucursal_id' => 'required|integer', 'fecha' => 'required|date']);
+
+        $sucursalId = (int) $request->query('sucursal_id');
+        $fecha      = $request->query('fecha');
+
+        $rows = DB::connection('compras')->select("
+            SELECT DISTINCT ON (producto_id) producto_id, brilo_stock, brilo_sync_at
+            FROM aud_inventarios
+            WHERE sucursal_id = ?
+              AND brilo_stock IS NOT NULL
+              AND fecha_accion::date <= ?
+            ORDER BY producto_id, fecha_accion DESC
+        ", [$sucursalId, $fecha]);
+
+        $map = [];
+        foreach ($rows as $r) {
+            $map[$r->producto_id] = [
+                'brilo_stock'  => $r->brilo_stock !== null ? (float) $r->brilo_stock : null,
+                'brilo_sync_at' => $r->brilo_sync_at,
+            ];
+        }
+
+        return response()->json(['success' => true, 'data' => $map]);
+    }
+
     // POST /api/compras/inventario/reabrir-conteo
     // Auditor reabre un conteo cerrado (dentro de 2 horas). Registra motivo.
     public function reabrirConteo(Request $request): JsonResponse
