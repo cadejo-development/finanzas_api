@@ -28,11 +28,9 @@ if (!SUCURSAL_ID || !FECHA_CONTEO) {
   process.exit(1);
 }
 
-// El período de movimientos termina el día ANTERIOR al conteo (igual que Enrique)
+// Los movimientos incluyen el día completo del conteo (igual que el reporte manual de Brilo)
 const fechaConteo = new Date(FECHA_CONTEO + 'T12:00:00');
-const fechaMovsHasta = new Date(fechaConteo);
-fechaMovsHasta.setDate(fechaMovsHasta.getDate() - 1);
-const FECHA_MOVS_HASTA = fechaMovsHasta.toISOString().slice(0, 10);
+const FECHA_MOVS_HASTA = FECHA_CONTEO;
 
 console.log(`Conteo: ${FECHA_CONTEO}  |  Movimientos hasta: ${FECHA_MOVS_HASTA}`);
 
