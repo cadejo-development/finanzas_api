@@ -472,10 +472,15 @@ class AuditoriaConteoController extends Controller
             ->get();
 
         // ── Kardex BRILO para el período ─────────────────────────────────────
+        // Busca el kardex más reciente cuyo FIN PERÍODO caiga dentro de los 5 días
+        // anteriores al conteo (cubre casos donde el conteo se registró un día
+        // después de medianoche pero el FIN PERÍODO real es el día anterior).
         $kardexMeta = DB::connection('compras')
             ->table('brilo_kardex')
             ->where('sucursal_id', $sucursalId)
-            ->where('fecha_hasta', $fecha)
+            ->where('fecha_hasta', '<=', $fecha)
+            ->where('fecha_hasta', '>=', \Carbon\Carbon::parse($fecha)->subDays(5)->format('Y-m-d'))
+            ->orderByDesc('fecha_hasta')
             ->orderByDesc('synced_at')
             ->first();
 
@@ -487,7 +492,7 @@ class AuditoriaConteoController extends Controller
                 ->table('brilo_kardex')
                 ->where('sucursal_id', $sucursalId)
                 ->where('fecha_desde', $kardexMeta->fecha_desde)
-                ->where('fecha_hasta', $fecha)
+                ->where('fecha_hasta', $kardexMeta->fecha_hasta)
                 ->get();
             foreach ($kRows as $r) {
                 $kardex[$r->producto_codigo] = [
@@ -625,10 +630,15 @@ class AuditoriaConteoController extends Controller
             ->unique('producto_id');
 
         // ── Kardex BRILO para el período ─────────────────────────────────────
+        // Busca el kardex más reciente cuyo FIN PERÍODO caiga dentro de los 5 días
+        // anteriores al conteo (cubre casos donde el conteo se registró un día
+        // después de medianoche pero el FIN PERÍODO real es el día anterior).
         $kardexMeta = DB::connection('compras')
             ->table('brilo_kardex')
             ->where('sucursal_id', $sucursalId)
-            ->where('fecha_hasta', $fecha)
+            ->where('fecha_hasta', '<=', $fecha)
+            ->where('fecha_hasta', '>=', \Carbon\Carbon::parse($fecha)->subDays(5)->format('Y-m-d'))
+            ->orderByDesc('fecha_hasta')
             ->orderByDesc('synced_at')
             ->first();
 
@@ -640,7 +650,7 @@ class AuditoriaConteoController extends Controller
                 ->table('brilo_kardex')
                 ->where('sucursal_id', $sucursalId)
                 ->where('fecha_desde', $kardexMeta->fecha_desde)
-                ->where('fecha_hasta', $fecha)
+                ->where('fecha_hasta', $kardexMeta->fecha_hasta)
                 ->get();
             foreach ($kRows as $r) {
                 $kardex[$r->producto_codigo] = [
