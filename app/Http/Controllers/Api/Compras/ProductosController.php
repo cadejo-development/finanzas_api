@@ -423,12 +423,13 @@ class ProductosController extends Controller
             ->leftJoin('receta_sucursal as rs', fn($j) => $j->on('rs.receta_id', '=', 'r.id')->where('rs.activa', true))
             ->where('ri.producto_id', $id)
             ->where('r.activa', true)
-            ->groupBy('r.id', 'r.nombre', 'r.tipo_receta', 'r.tipo')
+            ->groupBy('r.id', 'r.nombre', 'r.tipo_receta', 'r.tipo', 'r.codigo_origen')
             ->select([
                 'r.id',
                 'r.nombre',
                 'r.tipo_receta',
                 'r.tipo',
+                'r.codigo_origen',
                 DB::raw("array_remove(array_agg(DISTINCT rs.sucursal_id), NULL) as sucursal_ids"),
             ])
             ->orderBy('r.nombre')
@@ -456,6 +457,7 @@ class ProductosController extends Controller
             sort($nombres);
             return [
                 'id'         => $row->id,
+                'codigo'     => $row->codigo_origen ?? null,
                 'nombre'     => $row->nombre,
                 'es_sub'     => $row->tipo_receta === 'sub_receta'
                                 || str_contains(strtolower($row->tipo ?? ''), 'sub'),
