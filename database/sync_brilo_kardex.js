@@ -23,10 +23,13 @@ const args = Object.fromEntries(
 
 const SUCURSAL_ID  = parseInt(args.sucursal);
 const FECHA_CONTEO = args.hasta;   // fecha del conteo (= fecha_hasta en BD)
+const DRY_RUN      = process.argv.includes('--dry-run');
+const FILTER_COD   = args.codigo ?? null;  // --codigo=MR0901009 para ver solo ese producto
 if (!SUCURSAL_ID || !FECHA_CONTEO) {
-  console.error('Uso: node _sync_brilo_kardex.js --sucursal=<id> --hasta=<YYYY-MM-DD> [--desde=<YYYY-MM-DD>]');
+  console.error('Uso: node sync_brilo_kardex.js --sucursal=<id> --hasta=<YYYY-MM-DD> [--desde=<YYYY-MM-DD>] [--dry-run] [--codigo=<codigo>]');
   process.exit(1);
 }
+if (DRY_RUN) console.log('\n⚠️  MODO DRY RUN — no se escribira nada en la base de datos\n');
 
 // Los movimientos incluyen el día completo del conteo (igual que el reporte manual de Brilo)
 const fechaConteo = new Date(FECHA_CONTEO + 'T12:00:00');
@@ -184,8 +187,29 @@ async function main() {
 
   await sql.close();
 
-  // 7. Guardar en brilo_kardex (fecha_hasta = fecha del conteo)
-  console.log(`Guardando ${Object.keys(kardex).length} registros (fecha_hasta=${FECHA_CONTEO})...`);
+  // 7. Mostrar resultado y/o guardar en brilo_kardex
+  const totalProds = Object.keys(kardex).length;
+  const toShow     = FILTER_COD
+    ? Object.entries(kardex).filter(([c]) => c === FILTER_COD)
+    : Object.entries(kardex).slice(0, 20);
+
+  console.log(`\nKardex calculado: ${totalProds} productos (fecha_hasta=${FECHA_CONTEO})`);
+  console.log(`${'─'.repeat(80)}`);
+  console.log(`${'Código'.padEnd(14)} ${'Saldo Ini'.padStart(12)} ${'Entradas'.padStart(12)} ${'Salidas'.padStart(12)} ${'Saldo Fin'.padStart(12)}`);
+  console.log(`${'─'.repeat(80)}`);
+  for (const [codigo, k] of toShow) {
+    console.log(`${codigo.padEnd(14)} ${String(k.saldo_ini).padStart(12)} ${String(k.entradas).padStart(12)} ${String(k.salidas).padStart(12)} ${String(k.saldo_fin).padStart(12)}`);
+  }
+  if (!FILTER_COD && totalProds > 20) console.log(`  … y ${totalProds - 20} productos más`);
+  console.log(`${'─'.repeat(80)}`);
+
+  if (DRY_RUN) {
+    await pg.end();
+    console.log(`\n✓ DRY RUN completado — nada escrito en BD. Verifica los valores arriba.`);
+    return;
+  }
+
+  console.log(`\nGuardando ${totalProds} registros...`);
   await pg.query(
     `DELETE FROM brilo_kardex WHERE sucursal_id=$1 AND fecha_desde=$2 AND fecha_hasta=$3`,
     [SUCURSAL_ID, fechaDesde, FECHA_CONTEO]
@@ -200,7 +224,7 @@ async function main() {
   }
 
   await pg.end();
-  console.log(`✓ Kardex sincronizado: período ${fechaDesde} → ${FECHA_MOVS_HASTA}, almacenado bajo fecha_hasta=${FECHA_CONTEO}`);
+  console.log(`\n✓ Kardex sincronizado: período ${fechaDesde} → ${FECHA_MOVS_HASTA}, almacenado bajo fecha_hasta=${FECHA_CONTEO}`);
 }
 
 main().catch(e => { console.error(e.message); process.exit(1); });
