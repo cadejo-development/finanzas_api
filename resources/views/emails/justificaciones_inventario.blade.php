@@ -104,6 +104,12 @@
                 <td style="padding:12px 18px;font-size:13px;color:#6b7280;">Categoría</td>
                 <td style="padding:12px 18px;font-size:13px;font-weight:600;text-align:right;color:#374151;">{{ $item['just_label'] ?? '—' }}</td>
               </tr>
+              @if(!empty($item['obs']))
+              <tr style="background:#fafafa;">
+                <td style="padding:12px 18px;font-size:13px;color:#6b7280;border-top:1px solid #f3f4f6;">Observación del gerente</td>
+                <td style="padding:12px 18px;font-size:13px;font-style:italic;text-align:right;color:#374151;border-top:1px solid #f3f4f6;">{{ $item['obs'] }}</td>
+              </tr>
+              @endif
             </table>
           </td>
         </tr>
