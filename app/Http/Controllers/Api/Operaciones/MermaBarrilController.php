@@ -336,6 +336,9 @@ class MermaBarrilController extends Controller
 
     public function storeEntrada(Request $request, $invId)
     {
+        if (!is_numeric($invId)) {
+            return response()->json(['message' => 'ID de inventario inválido'], 422);
+        }
         $data = $request->validate([
             'cerveza_id'  => 'required|exists:compras.merma_cervezas,id',
             'tamanio'     => 'required|in:p,g',
@@ -385,6 +388,9 @@ class MermaBarrilController extends Controller
 
     public function storeCocina(Request $request, $invId)
     {
+        if (!is_numeric($invId)) {
+            return response()->json(['message' => 'ID de inventario inválido'], 422);
+        }
         $data = $request->validate([
             'cerveza_id'      => 'required|exists:compras.merma_cervezas,id',
             'cantidad'        => 'required|numeric|min:0',
@@ -413,6 +419,9 @@ class MermaBarrilController extends Controller
 
     public function storeOtroUso(Request $request, $invId)
     {
+        if (!is_numeric($invId)) {
+            return response()->json(['message' => 'ID de inventario inválido'], 422);
+        }
         $data = $request->validate([
             'cerveza_id'      => 'required|exists:compras.merma_cervezas,id',
             'cantidad'        => 'required|numeric|min:0',
