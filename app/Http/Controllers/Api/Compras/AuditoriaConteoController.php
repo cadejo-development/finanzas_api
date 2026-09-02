@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Compras;
 use App\Http\Controllers\Controller;
 use App\Mail\Compras\AuditoriaConteoNotificacion;
 use App\Mail\Compras\RespuestaAuditoriaConteoNotificacion;
+use App\Mail\JustificacionesInventarioMail;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -802,6 +803,138 @@ class AuditoriaConteoController extends Controller
             );
 
         return response()->json(['success' => true]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /api/compras/inventario/auditoria-conteo/enviar-justificaciones
+    // Guarda justificaciones en batch y envía correos a los responsables.
+    // Body: { auditoria_id?, sucursal_id, sucursal_nombre, fecha, items: [...] }
+    // ─────────────────────────────────────────────────────────────────────────
+    public function enviarJustificaciones(Request $request): JsonResponse
+    {
+        $request->validate([
+            'sucursal_id'      => 'required|integer',
+            'sucursal_nombre'  => 'required|string',
+            'fecha'            => 'required|date',
+            'items'            => 'required|array|min:1',
+            'items.*.producto_id'       => 'required|integer',
+            'items.*.nombre'            => 'required|string',
+            'items.*.codigo'            => 'nullable|string',
+            'items.*.unidad'            => 'nullable|string',
+            'items.*.diferencia'        => 'nullable|numeric',
+            'items.*.dif_pct'           => 'nullable|numeric',
+            'items.*.costo_diff'        => 'nullable|numeric',
+            'items.*.justificacion'     => 'nullable|string|max:100',
+            'items.*.justificacion_obs' => 'nullable|string|max:500',
+        ]);
+
+        $auditoriaId    = $request->integer('auditoria_id', 0) ?: null;
+        $sucursalId     = $request->integer('sucursal_id');
+        $sucursalNombre = $request->string('sucursal_nombre');
+        $fecha          = $request->string('fecha');
+        $gerenteNombre  = Auth::user()?->name ?? 'Gerente';
+        $now            = now();
+
+        // 1. Guardar justificaciones en BD
+        foreach ($request->items as $item) {
+            if ($auditoriaId) {
+                DB::connection('compras')
+                    ->table('conteo_auditoria_items')
+                    ->where('auditoria_id', $auditoriaId)
+                    ->where('producto_id', $item['producto_id'])
+                    ->update([
+                        'justificacion'     => $item['justificacion'] ?: null,
+                        'justificacion_obs' => $item['justificacion_obs'] ?? null,
+                        'updated_at'        => $now,
+                    ]);
+            } else {
+                DB::connection('compras')
+                    ->table('inventario_justificaciones')
+                    ->upsert(
+                        [[
+                            'sucursal_id'       => $sucursalId,
+                            'fecha_conteo'      => $fecha,
+                            'producto_id'       => $item['producto_id'],
+                            'justificacion'     => $item['justificacion'] ?: null,
+                            'justificacion_obs' => $item['justificacion_obs'] ?? null,
+                            'created_at'        => $now,
+                            'updated_at'        => $now,
+                        ]],
+                        ['sucursal_id', 'fecha_conteo', 'producto_id'],
+                        ['justificacion', 'justificacion_obs', 'updated_at']
+                    );
+            }
+        }
+
+        // 2. Mapeo justificación → destinatario(s)
+        $destinatarios = [
+            'kristian@cervezacadejo.com' => [
+                'nombre' => 'Kristian Gutierres',
+                'tipos'  => ['error_receta', 'codigo_mp_equivocado'],
+            ],
+            'nelson@cervezacadejo.com' => [
+                'nombre' => 'Nelson Martínez',
+                'tipos'  => ['error_posteo', 'codigo_mp_equivocado'],
+            ],
+            'rosamarroquin@cervezacadejo.com' => [
+                'nombre' => 'Rosa Marroquín',
+                'tipos'  => ['error_traslado'],
+            ],
+        ];
+
+        $justificacionLabel = [
+            'error_receta'          => 'Error en receta',
+            'error_posteo'          => 'Error en posteo',
+            'error_traslado'        => 'Error en traslado entre sucursales',
+            'codigo_mp_equivocado'  => 'Código de materia prima equivocado',
+        ];
+
+        // 3. Agrupar items por destinatario
+        $porDestinatario = [];
+        foreach ($request->items as $item) {
+            $tipo = $item['justificacion'] ?? '';
+            if (!$tipo || !isset($justificacionLabel[$tipo])) continue;
+            foreach ($destinatarios as $email => $dest) {
+                if (in_array($tipo, $dest['tipos'])) {
+                    $porDestinatario[$email][] = [
+                        'codigo'      => $item['codigo'] ?? '',
+                        'nombre'      => $item['nombre'],
+                        'unidad'      => $item['unidad'] ?? '',
+                        'diferencia'  => $item['diferencia'] ?? null,
+                        'dif_pct'     => $item['dif_pct'] ?? null,
+                        'costo_diff'  => $item['costo_diff'] ?? null,
+                        'just_label'  => $justificacionLabel[$tipo],
+                        'obs'         => $item['justificacion_obs'] ?? '',
+                        'tipo'        => $tipo,
+                    ];
+                }
+            }
+        }
+
+        // 4. Enviar un correo por destinatario
+        $enviados = [];
+        foreach ($porDestinatario as $email => $items) {
+            $dest = $destinatarios[$email];
+            // Determinar tipo principal para el correo (si tiene varios, primer tipo del conjunto)
+            $tiposPrincipal = array_unique(array_column($items, 'tipo'));
+            $tipoPrincipal  = $tiposPrincipal[0];
+
+            Mail::to($email)->send(new JustificacionesInventarioMail(
+                destinatarioNombre:  $dest['nombre'],
+                sucursalNombre:      $sucursalNombre,
+                fechaConteo:         $fecha,
+                gerenteNombre:       $gerenteNombre,
+                items:               $items,
+                tipoResponsabilidad: $tipoPrincipal,
+            ));
+            $enviados[] = $email;
+        }
+
+        $msg = empty($enviados)
+            ? 'Justificaciones guardadas. No hay items con destinatarios de correo (merma/periodo anterior se guardan sin notificación).'
+            : 'Justificaciones guardadas y correos enviados a: ' . implode(', ', $enviados);
+
+        return response()->json(['success' => true, 'message' => $msg, 'enviados' => $enviados]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
