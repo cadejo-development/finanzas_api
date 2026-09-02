@@ -49,6 +49,13 @@ if (!FECHA_HASTA) {
 const SUCURSALES_TARGET = [4, 5, 16];
 const SUCURSALES        = SUCURSAL_ARG ? [SUCURSAL_ARG] : SUCURSALES_TARGET;
 
+// Fecha inicio de período por sucursal (cuando no se pasa --desde)
+const DESDE_DEFAULT = {
+  4:  '2026-07-28',  // AE1
+  5:  '2026-07-25',  // AE2
+  16: '2026-07-28',  // Malcriadas
+};
+
 // Validar que solo se procesen las 3 sucursales permitidas
 for (const s of SUCURSALES) {
   if (!SUCURSALES_TARGET.includes(s)) {
@@ -164,7 +171,7 @@ async function procesarSucursal(pg, pool, sucursalId, tmoIdsExcluir, globalFecha
   sep('═');
 
   // ── Auto-detectar fecha_desde ─────────────────────────────────────────────
-  let fechaDesde = globalFechaDesde;
+  let fechaDesde = globalFechaDesde ?? DESDE_DEFAULT[sucursalId] ?? null;
   if (!fechaDesde) {
     const { rows } = await pg.query(
       `SELECT MAX(DATE(fecha)) AS ultima FROM movimientos_inventario
@@ -236,11 +243,13 @@ async function procesarSucursal(pg, pool, sucursalId, tmoIdsExcluir, globalFecha
         SUM(CASE WHEN t.tmoSigno= 1 AND (
               CAST(m.mmoFecha AS DATE) > @fechaDesde
               OR (CAST(m.mmoFecha AS DATE) = @fechaDesde AND m.tmoId NOT IN (1,2,586,587))
-            ) THEN d.dmoCantidad ELSE 0 END) AS entradas,
+            ) AND NOT (m.tmoId IN (${excluirSQL}) AND CAST(m.mmoFecha AS DATE) = @fechaHasta)
+            THEN d.dmoCantidad ELSE 0 END) AS entradas,
         SUM(CASE WHEN t.tmoSigno=-1 AND (
               CAST(m.mmoFecha AS DATE) > @fechaDesde
               OR (CAST(m.mmoFecha AS DATE) = @fechaDesde AND m.tmoId NOT IN (1,2,586,587))
-            ) THEN d.dmoCantidad ELSE 0 END) AS salidas
+            ) AND NOT (m.tmoId IN (${excluirSQL}) AND CAST(m.mmoFecha AS DATE) = @fechaHasta)
+            THEN d.dmoCantidad ELSE 0 END) AS salidas
       FROM maeMovi m
       JOIN detMovi d ON d.mmoId = m.mmoId
       JOIN TiposMovi t ON t.tmoId = m.tmoId
@@ -249,7 +258,6 @@ async function procesarSucursal(pg, pool, sucursalId, tmoIdsExcluir, globalFecha
         AND d.ubiId = @ubiId
         AND CAST(m.mmoFecha AS DATE) > @snapFecha
         AND CAST(m.mmoFecha AS DATE) <= @fechaHasta
-        AND m.tmoId NOT IN (${excluirSQL})
       GROUP BY p.proCodigo
     `);
   log(`  Movimientos: ${movRes.recordset.length} productos con movs (AJUSTE/TRASLADO excluidos)`);
