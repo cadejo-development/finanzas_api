@@ -12,11 +12,12 @@ class MermaInvItem extends Model
 
     protected $fillable = [
         'inventario_id', 'cerveza_id',
-        'inicial_oz', 'final_cerrados_p', 'final_cerrados_g',
+        'inicial_oz', 'final_cerrados_p', 'final_cerrados_g', 'final_oz',
     ];
 
     protected $casts = [
         'inicial_oz' => 'float',
+        'final_oz'   => 'float',
     ];
 
     public function cerveza()

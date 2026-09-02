@@ -255,6 +255,7 @@ class MermaBarrilController extends Controller
             'inicial_oz'       => 'sometimes|numeric|min:0',
             'final_cerrados_p' => 'sometimes|integer|min:0',
             'final_cerrados_g' => 'sometimes|integer|min:0',
+            'final_oz'         => 'sometimes|nullable|numeric|min:0',
         ]);
 
         // Auditar corrección de inicial si cambia
