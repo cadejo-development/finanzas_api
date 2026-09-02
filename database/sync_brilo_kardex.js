@@ -2,13 +2,13 @@
  * Sincroniza datos de kardex de Brilo a la tabla brilo_kardex de nuestra BD.
  *
  * Uso:
- *   node database/_sync_brilo_kardex.js --sucursal=3 --hasta=2026-07-27 [--desde=2026-06-29]
+ *   node database/sync_brilo_kardex.js --sucursal=3 --hasta=2026-08-31 [--desde=2026-07-27] [--movs-hasta=2026-08-30]
  *
- * --hasta  = fecha del conteo físico (se almacena como fecha_hasta en BD)
- * --desde  = inicio del período (conteo anterior). Si se omite, se busca en movimientos_inventario.
- *
- * Los movimientos de Brilo se consultan hasta el día ANTERIOR a --hasta
- * (igual que el reporte de Enrique: "Saldo Final 26-Jul" para conteo del 27-Jul).
+ * --hasta       = fecha del conteo físico (se almacena como fecha_hasta en BD, para lookup)
+ * --desde       = inicio del período. Si se omite, se auto-detecta del último conteo_fisico.
+ * --movs-hasta  = hasta qué día se incluyen movimientos de Brilo (FIN PERÍODO).
+ *                 Si se omite, usa --hasta (mismo día que el conteo).
+ *                 Usar --movs-hasta=HASTA-1 para sucursales cuyo período cierra el día anterior al conteo.
  */
 require('dotenv').config();
 const sql = require('mssql');
@@ -26,14 +26,14 @@ const FECHA_CONTEO = args.hasta;   // fecha del conteo (= fecha_hasta en BD)
 const DRY_RUN      = process.argv.includes('--dry-run');
 const FILTER_COD   = args.codigo ?? null;  // --codigo=MR0901009 para ver solo ese producto
 if (!SUCURSAL_ID || !FECHA_CONTEO) {
-  console.error('Uso: node sync_brilo_kardex.js --sucursal=<id> --hasta=<YYYY-MM-DD> [--desde=<YYYY-MM-DD>] [--dry-run] [--codigo=<codigo>]');
+  console.error('Uso: node sync_brilo_kardex.js --sucursal=<id> --hasta=<YYYY-MM-DD> [--desde=<YYYY-MM-DD>] [--movs-hasta=<YYYY-MM-DD>] [--dry-run] [--codigo=<codigo>]');
   process.exit(1);
 }
 if (DRY_RUN) console.log('\n⚠️  MODO DRY RUN — no se escribira nada en la base de datos\n');
 
-// Los movimientos incluyen el día completo del conteo (igual que el reporte manual de Brilo)
-const fechaConteo = new Date(FECHA_CONTEO + 'T12:00:00');
-const FECHA_MOVS_HASTA = FECHA_CONTEO;
+// --movs-hasta controla hasta qué día se leen movimientos de Brilo (FIN PERÍODO real).
+// Por defecto = --hasta (mismo día del conteo). Para sucursales con FIN PERÍODO = día anterior, pasar --movs-hasta=FECHA-1.
+const FECHA_MOVS_HASTA = args['movs-hasta'] ?? FECHA_CONTEO;
 
 console.log(`Conteo: ${FECHA_CONTEO}  |  Movimientos hasta: ${FECHA_MOVS_HASTA}`);
 
