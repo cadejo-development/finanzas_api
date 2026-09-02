@@ -561,7 +561,7 @@ class AuditoriaConteoController extends Controller
         }
 
         // ── Paginación ────────────────────────────────────────────────────────
-        $perPage = max(1, min(200, (int) $request->query('per_page', 25)));
+        $perPage = max(1, min(9999, (int) $request->query('per_page', 25)));
         $page    = max(1, (int) $request->query('page', 1));
         $total   = count($filas);
         $items   = array_slice($filas, ($page - 1) * $perPage, $perPage);
@@ -713,7 +713,7 @@ class AuditoriaConteoController extends Controller
         }
 
         // ── Paginación ────────────────────────────────────────────────────────
-        $perPage = max(1, min(200, (int) $request->query('per_page', 25)));
+        $perPage = max(1, min(9999, (int) $request->query('per_page', 25)));
         $page    = max(1, (int) $request->query('page', 1));
         $total   = count($filas);
         $items   = array_slice($filas, ($page - 1) * $perPage, $perPage);
