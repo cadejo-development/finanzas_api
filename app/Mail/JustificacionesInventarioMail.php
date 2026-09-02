@@ -17,21 +17,21 @@ class JustificacionesInventarioMail extends Mailable
         public string $sucursalNombre,
         public string $fechaConteo,
         public string $gerenteNombre,       // quien envió la justificación
-        public array  $items,               // [{nombre, unidad, diferencia, dif_pct, costo_diff, justificacion_label, obs}]
+        public array  $item,                // {codigo, nombre, unidad, diferencia, dif_pct, costo_diff, just_label, obs}
         public string $tipoResponsabilidad, // "error_receta" | "error_posteo" | "error_traslado" | "codigo_mp_equivocado"
     ) {}
 
     public function envelope(): Envelope
     {
         $accion = match($this->tipoResponsabilidad) {
-            'error_receta'           => 'Revisión de recetas',
-            'error_posteo'           => 'Revisión de posteo/compras',
-            'error_traslado'         => 'Revisión de traslados',
-            'codigo_mp_equivocado'   => 'Revisión código MP equivocado',
+            'error_receta'           => 'Revisión de receta',
+            'error_posteo'           => 'Revisión de posteo',
+            'error_traslado'         => 'Revisión de traslado',
+            'codigo_mp_equivocado'   => 'Revisión de código MP',
             default                  => 'Revisión de inventario',
         };
         return new Envelope(
-            subject: "⚠️ {$accion} — {$this->sucursalNombre} ({$this->fechaConteo})",
+            subject: "⚠️ {$accion} — {$this->item['nombre']} ({$this->sucursalNombre})",
         );
     }
 

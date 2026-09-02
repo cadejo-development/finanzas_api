@@ -889,52 +889,39 @@ class AuditoriaConteoController extends Controller
             'codigo_mp_equivocado'  => 'Código de materia prima equivocado',
         ];
 
-        // 3. Agrupar items por destinatario
-        $porDestinatario = [];
+        // 3. Enviar un correo por producto (un email por item)
+        $emailCount = 0;
         foreach ($request->items as $item) {
             $tipo = $item['justificacion'] ?? '';
             if (!$tipo || !isset($justificacionLabel[$tipo])) continue;
             foreach ($destinatarios as $email => $dest) {
-                if (in_array($tipo, $dest['tipos'])) {
-                    $porDestinatario[$email][] = [
-                        'codigo'      => $item['codigo'] ?? '',
-                        'nombre'      => $item['nombre'],
-                        'unidad'      => $item['unidad'] ?? '',
-                        'diferencia'  => $item['diferencia'] ?? null,
-                        'dif_pct'     => $item['dif_pct'] ?? null,
-                        'costo_diff'  => $item['costo_diff'] ?? null,
-                        'just_label'  => $justificacionLabel[$tipo],
-                        'obs'         => $item['justificacion_obs'] ?? '',
-                        'tipo'        => $tipo,
-                    ];
-                }
+                if (!in_array($tipo, $dest['tipos'])) continue;
+                Mail::to($email)->send(new JustificacionesInventarioMail(
+                    destinatarioNombre:  $dest['nombre'],
+                    sucursalNombre:      $sucursalNombre,
+                    fechaConteo:         $fecha,
+                    gerenteNombre:       $gerenteNombre,
+                    item: [
+                        'codigo'     => $item['codigo'] ?? '',
+                        'nombre'     => $item['nombre'],
+                        'unidad'     => $item['unidad'] ?? '',
+                        'diferencia' => $item['diferencia'] ?? null,
+                        'dif_pct'    => $item['dif_pct'] ?? null,
+                        'costo_diff' => $item['costo_diff'] ?? null,
+                        'just_label' => $justificacionLabel[$tipo],
+                        'obs'        => $item['justificacion_obs'] ?? null,
+                    ],
+                    tipoResponsabilidad: $tipo,
+                ));
+                $emailCount++;
             }
         }
 
-        // 4. Enviar un correo por destinatario
-        $enviados = [];
-        foreach ($porDestinatario as $email => $items) {
-            $dest = $destinatarios[$email];
-            // Determinar tipo principal para el correo (si tiene varios, primer tipo del conjunto)
-            $tiposPrincipal = array_unique(array_column($items, 'tipo'));
-            $tipoPrincipal  = $tiposPrincipal[0];
-
-            Mail::to($email)->send(new JustificacionesInventarioMail(
-                destinatarioNombre:  $dest['nombre'],
-                sucursalNombre:      $sucursalNombre,
-                fechaConteo:         $fecha,
-                gerenteNombre:       $gerenteNombre,
-                items:               $items,
-                tipoResponsabilidad: $tipoPrincipal,
-            ));
-            $enviados[] = $email;
-        }
-
-        $msg = empty($enviados)
+        $msg = $emailCount === 0
             ? 'Justificaciones guardadas. No hay items con destinatarios de correo (merma/periodo anterior se guardan sin notificación).'
-            : 'Justificaciones guardadas y correos enviados a: ' . implode(', ', $enviados);
+            : "Justificaciones guardadas. Se enviaron {$emailCount} correo(s).";
 
-        return response()->json(['success' => true, 'message' => $msg, 'enviados' => $enviados]);
+        return response()->json(['success' => true, 'message' => $msg, 'correos_enviados' => $emailCount]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
