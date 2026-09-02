@@ -981,45 +981,4 @@ Route::prefix('cadejo-ventas')->group(function () {
     Route::delete('promociones-venta/{id}',        [\App\Http\Controllers\Api\Ventas\PromocionesVentaController::class, 'destroy']);
 });
 
-// ─── TEMPORAL: prueba email justificaciones (ELIMINAR después del test) ────────
-Route::get('_test/email-justificaciones', function () {
-    \Illuminate\Support\Facades\Mail::to('javiermejia@cervezacadejo.com')
-        ->send(new \App\Mail\JustificacionesInventarioMail(
-            destinatarioNombre:  'Kristian Gutierres',
-            sucursalNombre:      'Paseo Venecia',
-            fechaConteo:         '2026-08-31',
-            gerenteNombre:       'Javier Mejía (TEST)',
-            items: [
-                [
-                    'codigo'             => 'MP-0042',
-                    'nombre'             => 'Lúpulo Cascade',
-                    'unidad'             => 'kg',
-                    'diferencia'         => -3.50,
-                    'dif_pct'            => 4.2,
-                    'costo_diff'         => -87.50,
-                    'obs'                => 'Receta IPA no refleja ajuste del batch 38',
-                ],
-                [
-                    'codigo'             => 'MP-0071',
-                    'nombre'             => 'Malta Pale',
-                    'unidad'             => 'kg',
-                    'diferencia'         => -8.00,
-                    'dif_pct'            => 2.9,
-                    'costo_diff'         => -40.00,
-                    'obs'                => 'Posible error en receta Golden Ale batch 12',
-                ],
-                [
-                    'codigo'             => 'MP-0015',
-                    'nombre'             => 'Levadura Safale US-05',
-                    'unidad'             => 'sobre',
-                    'diferencia'         => 5.00,
-                    'dif_pct'            => 1.8,
-                    'costo_diff'         => 37.50,
-                    'obs'                => null,
-                ],
-            ],
-            tipoResponsabilidad: 'error_receta',
-        ));
-    return response()->json(['ok' => true, 'mensaje' => 'Email de prueba enviado a javiermejia@cervezacadejo.com']);
-});
 
