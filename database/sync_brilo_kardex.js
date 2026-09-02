@@ -42,7 +42,7 @@ const SUCURSAL_BRILO_UBI = {
   1: 37, 2: 38, 3: 48, 4: 51,
   5: 52, 6: 56, 7: 57, 8: 58,
   9: 65, 10: 69, 11: 77, 12: 78,
-  13: 79, 15: 76,
+  13: 79, 16: 76,
 };
 
 const UBI_ID = SUCURSAL_BRILO_UBI[SUCURSAL_ID];
