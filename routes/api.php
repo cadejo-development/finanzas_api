@@ -408,6 +408,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
         Route::post('inventarios',              [MermaBarrilController::class, 'store']);
         Route::get('inventarios/{id}',          [MermaBarrilController::class, 'show']);
         Route::post('inventarios/{id}/cerrar',  [MermaBarrilController::class, 'cerrar']);
+        Route::post('inventarios/{id}/sync-items', [MermaBarrilController::class, 'syncItems']);
         Route::post('inventarios/{id}/aprobar', [MermaBarrilController::class, 'aprobar']);
 
         // Items por cerveza

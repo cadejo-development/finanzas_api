@@ -205,6 +205,35 @@ class MermaBarrilController extends Controller
         );
     }
 
+    // Sincroniza items de cervezas activas a un inventario que quedó sin ellos
+    public function syncItems(Request $request, $id)
+    {
+        $inv      = MermaInventario::findOrFail($id);
+        $cervezas = MermaCerveza::activas()->orderBy('orden')->get();
+        $existing = MermaInvItem::where('inventario_id', $id)->pluck('cerveza_id')->toArray();
+        $added    = 0;
+        foreach ($cervezas as $c) {
+            if (!in_array($c->id, $existing)) {
+                MermaInvItem::create([
+                    'inventario_id'    => $id,
+                    'cerveza_id'       => $c->id,
+                    'inicial_oz'       => 0,
+                    'final_cerrados_p' => 0,
+                    'final_cerrados_g' => 0,
+                ]);
+                $added++;
+            }
+        }
+        return response()->json([
+            'success' => true,
+            'added'   => $added,
+            'inv'     => MermaInventario::with([
+                'items.cerveza', 'items.barrilesConectados',
+                'entradas', 'fisica', 'cocina', 'otrosUsos', 'ventasBrilo',
+            ])->find($id),
+        ]);
+    }
+
     public function cerrar(Request $request, $id)
     {
         $inv = MermaInventario::findOrFail($id);
