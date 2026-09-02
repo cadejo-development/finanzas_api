@@ -997,7 +997,7 @@ Route::get('_test/email-justificaciones', function () {
                 'dif_pct'    => 3.8,
                 'costo_diff' => -1.08,
                 'just_label' => 'Error en receta',
-                'obs'        => null,
+                'obs'        => 'Receta Burger Clásica registra 1oz pero en conteo descarga menos de lo que se le coloca',
             ],
             tipoResponsabilidad: 'error_receta',
         ));
