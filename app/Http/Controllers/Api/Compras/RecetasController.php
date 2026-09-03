@@ -56,9 +56,11 @@ class RecetasController extends Controller
             $query->with(['sucursalConfig' => fn ($q) => $q->whereIn('sucursal_id', $sucursalIds)]);
         }
 
-        // Filtro por categoria_id (nuevo) o tipo texto (legado)
+        // Filtro por categoria_id (subcategoría exacta), parent_categoria_id (todas de ese grupo) o tipo texto (legado)
         if ($categoriaId = $request->query('categoria_id')) {
             $query->where('categoria_id', (int) $categoriaId);
+        } elseif ($parentId = $request->query('parent_categoria_id')) {
+            $query->whereHas('categoria', fn ($q) => $q->where('parent_id', (int) $parentId));
         } elseif ($tipo = $request->query('tipo')) {
             $query->where('tipo', $tipo);
         }
