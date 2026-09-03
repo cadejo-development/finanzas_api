@@ -1357,4 +1357,72 @@ class RecetasController extends Controller
         return response()->json(['autorizadas' => $autorizadas, 'errores' => $errores]);
     }
 
+    // GET /api/compras/recetas/reporte-ingredientes?sucursal_id=N
+    // Devuelve datos para el Excel de 2 hojas: recetas activas + ingredientes aplanados.
+    public function reporteIngredientes(Request $request): JsonResponse
+    {
+        $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
+
+        $query = Receta::with([
+                'categoria',
+                'estado',
+                'ingredientes.producto.categoria',
+                'ingredientes.subReceta.ingredientes.producto.categoria',
+            ])
+            ->where('activa', true)
+            ->where('tipo_receta', 'plato')
+            ->orderBy('nombre');
+
+        if ($sucursalId) {
+            $query->whereHas('sucursalConfig', fn ($q) =>
+                $q->where('sucursal_id', $sucursalId)->where('activa', true)
+            );
+        }
+
+        $recetas = $query->get();
+
+        // ── Hoja 1: recetas activas ─────────────────────────────────────────────
+        $recetasData = $recetas->map(fn ($r) => [
+            'codigo'    => $r->codigo_origen ?? '',
+            'nombre'    => $r->nombre,
+            'categoria' => $r->categoria?->nombre ?? '',
+            'precio'    => $r->precio ? (float) $r->precio : null,
+            'estado'    => $r->estado?->nombre ?? '',
+        ]);
+
+        // ── Hoja 2: ingredientes aplanados ──────────────────────────────────────
+        $ingredientesData = [];
+        foreach ($recetas as $receta) {
+            foreach ($receta->ingredientes as $ing) {
+                if ($ing->sub_receta_id && $ing->subReceta) {
+                    // Los ingredientes de la sub-receta
+                    foreach ($ing->subReceta->ingredientes as $subIng) {
+                        if (!$subIng->producto) continue;
+                        $ingredientesData[] = [
+                            'codigo_mp'    => $subIng->producto->codigo_origen ?? $subIng->producto->codigo ?? '',
+                            'materia_prima' => $subIng->producto->nombre,
+                            'receta'        => $receta->nombre,
+                            'sub_receta'    => $ing->subReceta->nombre,
+                        ];
+                    }
+                } elseif ($ing->producto) {
+                    $ingredientesData[] = [
+                        'codigo_mp'     => $ing->producto->codigo_origen ?? $ing->producto->codigo ?? '',
+                        'materia_prima'  => $ing->producto->nombre,
+                        'receta'         => $receta->nombre,
+                        'sub_receta'     => '',
+                    ];
+                }
+            }
+        }
+
+        // Ordenar por materia prima para facilitar lectura
+        usort($ingredientesData, fn ($a, $b) => strcmp($a['materia_prima'], $b['materia_prima']));
+
+        return response()->json([
+            'recetas'      => $recetasData,
+            'ingredientes' => $ingredientesData,
+        ]);
+    }
+
 }
