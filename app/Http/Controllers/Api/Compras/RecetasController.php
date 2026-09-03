@@ -588,7 +588,7 @@ class RecetasController extends Controller
                 ->count();
 
             $totalCategorias = DB::connection('compras')
-                ->table('receta_categorias')->where('activa', true)->count();
+                ->table('receta_categorias')->where('activa', true)->whereNotNull('parent_id')->count();
 
             // Sincronización con BRILO: solo recetas con codigo_origen (tienen equivalente en SS)
             $sincBase = Receta::where('activa', true)

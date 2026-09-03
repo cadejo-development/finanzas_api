@@ -12,13 +12,14 @@ class RecetaCategoriasController extends Controller
     // GET /api/compras/receta-categorias
     // Parámetros opcionales: ?sucursal_id=N  o  ?sucursal_ids[]=1&sucursal_ids[]=2
     // Si se pasan, devuelve solo categorías con ≥1 receta activa para esa(s) sucursal(es).
+    // Devuelve solo subcategorías (parent_id IS NOT NULL) con parent_id y parent_nombre para agrupar en el frontend.
     public function index(Request $request): JsonResponse
     {
         $sucursalId  = $request->integer('sucursal_id', 0) ?: null;
         $sucursalIds = $request->input('sucursal_ids', []);
         if (is_array($sucursalIds)) $sucursalIds = array_map('intval', array_filter($sucursalIds));
 
-        $query = RecetaCategoria::where('activa', true);
+        $query = RecetaCategoria::where('activa', true)->whereNotNull('parent_id');
 
         if ($sucursalId || count($sucursalIds)) {
             $ids = $sucursalId ? [$sucursalId] : $sucursalIds;
@@ -33,7 +34,20 @@ class RecetaCategoriasController extends Controller
             });
         }
 
-        $categorias = $query->orderBy('orden')->orderBy('nombre')->get(['id', 'nombre']);
+        $categorias = $query
+            ->with('padre:id,nombre,orden')
+            ->orderBy('orden')
+            ->orderBy('nombre')
+            ->get(['id', 'nombre', 'parent_id'])
+            ->map(fn($c) => [
+                'id'           => $c->id,
+                'nombre'       => $c->nombre,
+                'parent_id'    => $c->parent_id,
+                'parent_nombre' => $c->padre?->nombre,
+                'parent_orden'  => $c->padre?->orden ?? 999,
+            ])
+            ->sortBy(['parent_orden', 'nombre'])
+            ->values();
 
         return response()->json(['data' => $categorias]);
     }
