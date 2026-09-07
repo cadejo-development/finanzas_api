@@ -1425,4 +1425,70 @@ class RecetasController extends Controller
         ]);
     }
 
+    // ----------------------------------------------------------------------
+    // GET /api/compras/recetas/reporte-extras
+    // Grupos de modificadores (extras) con sus opciones y recetas asociadas.
+    // Acepta ?sucursal_id= opcional.
+    // ----------------------------------------------------------------------
+    public function reporteExtras(Request $request): JsonResponse
+    {
+        $sucursalId = $request->query('sucursal_id') ? (int) $request->query('sucursal_id') : null;
+
+        $query = DB::connection('compras')
+            ->table('receta_modificadores as m')
+            ->join('recetas as r', 'r.id', '=', 'm.receta_id')
+            ->where('r.activa', true)
+            ->select('m.grupo_codigo', 'm.grupo_nombre', 'm.opcion_nombre', 'r.nombre as receta_nombre')
+            ->orderBy('m.grupo_nombre')
+            ->orderBy('m.opcion_nombre')
+            ->orderBy('r.nombre');
+
+        if ($sucursalId) {
+            $query->whereExists(fn ($sub) =>
+                $sub->from('receta_sucursal as rs')
+                    ->whereColumn('rs.receta_id', 'r.id')
+                    ->where('rs.sucursal_id', $sucursalId)
+                    ->where('rs.activa', true)
+            );
+        }
+
+        $rows = $query->get();
+
+        // ── Hoja 1: grupos con conteo de opciones y recetas ────────────────────
+        $gruposMap = [];
+        foreach ($rows as $row) {
+            $key = $row->grupo_codigo . '||' . $row->grupo_nombre;
+            if (!isset($gruposMap[$key])) {
+                $gruposMap[$key] = [
+                    'grupo_codigo'    => $row->grupo_codigo,
+                    'grupo_nombre'    => $row->grupo_nombre,
+                    'opciones'        => [],
+                    'recetas'         => [],
+                ];
+            }
+            $gruposMap[$key]['opciones'][] = $row->opcion_nombre;
+            $gruposMap[$key]['recetas'][]  = $row->receta_nombre;
+        }
+
+        $grupos = collect($gruposMap)->values()->map(fn ($g) => [
+            'grupo_codigo'    => $g['grupo_codigo'],
+            'grupo_nombre'    => $g['grupo_nombre'],
+            'total_opciones'  => count(array_unique($g['opciones'])),
+            'total_recetas'   => count(array_unique($g['recetas'])),
+        ])->sortBy('grupo_nombre')->values();
+
+        // ── Hoja 2: detalle completo (grupo, opción, receta) ───────────────────
+        $detalle = $rows->map(fn ($r) => [
+            'grupo_codigo'  => $r->grupo_codigo,
+            'grupo_nombre'  => $r->grupo_nombre,
+            'opcion_nombre' => $r->opcion_nombre,
+            'receta'        => $r->receta_nombre,
+        ])->values();
+
+        return response()->json([
+            'grupos'  => $grupos,
+            'detalle' => $detalle,
+        ]);
+    }
+
 }
