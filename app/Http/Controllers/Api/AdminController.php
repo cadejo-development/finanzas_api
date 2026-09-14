@@ -27,7 +27,9 @@ class AdminController extends Controller
      */
     public function usuarios(Request $request): JsonResponse
     {
-        $search = $request->query('search', '');
+        $search     = $request->query('search', '');
+        $rolId      = $request->query('rol_id');
+        $sucursalId = $request->query('sucursal_id');
 
         $query = $this->db()->table('empleados as e')
             ->leftJoin('users as u', 'u.id', '=', 'e.user_id')
@@ -62,10 +64,24 @@ class AdminController extends Controller
                             ->orWhereRaw('e.email ILIKE ?', [$w])
                             ->orWhereRaw('CAST(e.codigo AS TEXT) ILIKE ?', [$w])
                             ->orWhereRaw('c.nombre ILIKE ?', [$w])
-                            ->orWhereRaw('s.nombre ILIKE ?', [$w]);
+                            ->orWhereRaw('s.nombre ILIKE ?', [$w])
+                            ->orWhereRaw('EXISTS (SELECT 1 FROM role_user ru JOIN roles r ON r.id = ru.role_id WHERE ru.user_id = u.id AND r.nombre ILIKE ?)', [$w]);
                     });
                 }
             });
+        }
+
+        if ($rolId) {
+            $query->whereExists(function ($sub) use ($rolId) {
+                $sub->select(DB::raw(1))
+                    ->from('role_user as ru')
+                    ->whereColumn('ru.user_id', 'u.id')
+                    ->where('ru.role_id', $rolId);
+            });
+        }
+
+        if ($sucursalId) {
+            $query->where('e.sucursal_id', $sucursalId);
         }
 
         $empleados = $query->orderBy('e.apellidos')->paginate(25);
