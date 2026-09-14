@@ -388,43 +388,9 @@ class InventarioController extends Controller
 
         $productoIds = collect($validated['items'])->pluck('producto_id')->unique()->all();
 
-        // ── Para conteo_mensual: detectar productos ya contados por OTRO usuario ──
-        // Cada contador solo aplica sus propios productos; los conflictos se informan
-        // pero NO bloquean los productos únicos del contador.
         $conflictos = [];
-        if ($tipoConteo === 'conteo_mensual') {
-            $yaContados = DB::connection('compras')
-                ->table('movimientos_inventario as m')
-                ->join('productos as p', 'p.id', '=', 'm.producto_id')
-                ->where('m.sucursal_id', $sucursalId)
-                ->where('m.tipo', 'conteo_mensual')
-                ->where('m.fecha', $fecha)
-                ->where('m.aud_usuario', '!=', $usuario)      // otro contador real
-                ->where('m.aud_usuario', '!=', 'sin_contar') // ignorar placeholders automáticos
-                ->whereIn('m.producto_id', $productoIds)
-                ->select('m.producto_id', 'p.nombre', 'm.aud_usuario as contado_por')
-                ->get();
 
-            if ($yaContados->isNotEmpty()) {
-                $conflictos      = $yaContados->toArray();
-                $idsConflicto    = $yaContados->pluck('producto_id')->all();
-                $productoIds     = array_values(array_diff($productoIds, $idsConflicto));
-                $validated['items'] = array_values(array_filter(
-                    $validated['items'],
-                    fn($i) => !in_array((int) $i['producto_id'], $idsConflicto)
-                ));
-            }
-
-            // Si no quedan ítems no-conflictivos, devolver solo los conflictos
-            if (empty($validated['items'])) {
-                return response()->json([
-                    'success'    => true,
-                    'aplicados'  => 0,
-                    'conflictos' => $conflictos,
-                    'message'    => 'Todos los productos enviados ya fueron contados por otro contador.',
-                ]);
-            }
-        } else {
+        if ($tipoConteo !== 'conteo_mensual') {
             // conteo_fisico: bloqueo clásico por re-aplicación
             $tieneConteoPrevio = DB::connection('compras')
                 ->table('movimientos_inventario')
@@ -567,39 +533,41 @@ class InventarioController extends Controller
                 $aplicados++;
             }
 
-            // ── Guardar 0 para productos no contados (por nadie aún) ─────────
-            // Esto completa el snapshot del conteo aunque el producto no haya
-            // sido registrado por ningún contador. Sin efecto en stock.
-            $yaContadosIds = DB::connection('compras')
-                ->table('movimientos_inventario')
-                ->where('sucursal_id', $sucursalId)
-                ->where('tipo', $tipoConteo)
-                ->where('fecha', $fecha)
-                ->pluck('producto_id')
-                ->unique()
-                ->all();
+            // Para conteo_fisico: guardar 0 para productos no contados (snapshot completo)
+            // Para conteo_mensual NO se hace esto — cada contador aplica solo sus productos
+            // y la pantalla permanece abierta para que otros contadores sigan ingresando.
+            if ($tipoConteo !== 'conteo_mensual') {
+                $yaContadosIds = DB::connection('compras')
+                    ->table('movimientos_inventario')
+                    ->where('sucursal_id', $sucursalId)
+                    ->where('tipo', $tipoConteo)
+                    ->where('fecha', $fecha)
+                    ->pluck('producto_id')
+                    ->unique()
+                    ->all();
 
-            foreach ($todosInventarios as $ncPid => $ncInv) {
-                if (in_array($ncPid, $yaContadosIds)) continue;
+                foreach ($todosInventarios as $ncPid => $ncInv) {
+                    if (in_array($ncPid, $yaContadosIds)) continue;
 
-                MovimientoInventario::create([
-                    'sucursal_id'     => $sucursalId,
-                    'producto_id'     => $ncPid,
-                    'tipo'            => $tipoConteo,
-                    'cantidad'        => 0,
-                    'unidad'          => $ncInv->unidad,
-                    'cantidad_base'   => 0,
-                    'motivo'          => "{$motivoLabel} — {$fecha} — sin registro",
-                    'fecha'           => $fecha,
-                    'referencia_tipo' => 'conteo',
-                    'detalle'         => [
-                        'secciones'      => (object) [],
-                        'total_contado'  => 0,
-                        'stock_anterior' => null,
-                        'contado_por'    => 'sin_contar',
-                    ],
-                    'aud_usuario'     => 'sin_contar',
-                ]);
+                    MovimientoInventario::create([
+                        'sucursal_id'     => $sucursalId,
+                        'producto_id'     => $ncPid,
+                        'tipo'            => $tipoConteo,
+                        'cantidad'        => 0,
+                        'unidad'          => $ncInv->unidad,
+                        'cantidad_base'   => 0,
+                        'motivo'          => "{$motivoLabel} — {$fecha} — sin registro",
+                        'fecha'           => $fecha,
+                        'referencia_tipo' => 'conteo',
+                        'detalle'         => [
+                            'secciones'      => (object) [],
+                            'total_contado'  => 0,
+                            'stock_anterior' => null,
+                            'contado_por'    => 'sin_contar',
+                        ],
+                        'aud_usuario'     => 'sin_contar',
+                    ]);
+                }
             }
 
             DB::connection('compras')->commit();
@@ -923,27 +891,61 @@ class InventarioController extends Controller
                         ? $request->query('tipo_conteo')
                         : 'conteo_fisico';
 
-        // Trae el último movimiento del tipo indicado por producto para esa fecha
+        // Trae todos los movimientos del tipo indicado por producto para esa fecha
+        // Para conteo_mensual puede haber varios por producto (un contador por cada uno)
         $movs = DB::connection('compras')
             ->table('movimientos_inventario as m')
             ->join('productos as p', 'p.id', '=', 'm.producto_id')
             ->where('m.sucursal_id', $sucursalId)
             ->where('m.tipo', $tipo)
             ->where('m.fecha', $fecha)
-            ->select('m.producto_id', 'm.detalle', 'm.created_at', 'p.factor_conversion', 'p.unidad')
+            ->where('m.aud_usuario', '!=', 'sin_contar')
+            ->select('m.producto_id', 'm.detalle', 'm.created_at', 'm.aud_usuario', 'p.factor_conversion', 'p.unidad')
             ->orderBy('m.created_at')
             ->get();
 
-        // Por producto: último movimiento gana (puede haber varios en el día)
+        // Para conteo_mensual: acumulamos TODOS los contadores por producto en un array
+        // Para conteo_fisico: último movimiento gana
         $byProd    = [];
-        $appliedAt = null; // timestamp del conteo más reciente del día
+        $appliedAt = null;
         foreach ($movs as $mov) {
             $d = is_string($mov->detalle) ? json_decode($mov->detalle, true) : (array)($mov->detalle ?? []);
-            $byProd[$mov->producto_id] = [
-                'producto_id'   => $mov->producto_id,
-                'total_contado' => $d['total_contado'] ?? null,
-                'secciones'     => $d['secciones']     ?? null,
-            ];
+            if ($tipo === 'conteo_mensual') {
+                // Cada movimiento es de un contador distinto — acumular todos
+                if (!isset($byProd[$mov->producto_id])) {
+                    $byProd[$mov->producto_id] = [
+                        'producto_id'   => $mov->producto_id,
+                        'total_contado' => null,
+                        'secciones'     => null,
+                        'conteos'       => [],
+                    ];
+                }
+                $byProd[$mov->producto_id]['conteos'][] = [
+                    'total_contado' => $d['total_contado'] ?? null,
+                    'secciones'     => $d['secciones']     ?? null,
+                    'contado_por'   => $d['contado_por']   ?? $mov->aud_usuario,
+                    'created_at'    => $mov->created_at,
+                ];
+                // total_contado = suma de todos los contadores
+                $total = 0;
+                $secsMerge = [];
+                foreach ($byProd[$mov->producto_id]['conteos'] as $c) {
+                    $total += (float)($c['total_contado'] ?? 0);
+                    foreach ((array)($c['secciones'] ?? []) as $sec => $val) {
+                        $secsMerge[$sec] = ($secsMerge[$sec] ?? 0) + (float)$val;
+                    }
+                }
+                $byProd[$mov->producto_id]['total_contado'] = $total;
+                $byProd[$mov->producto_id]['secciones']     = empty($secsMerge) ? null : $secsMerge;
+            } else {
+                $byProd[$mov->producto_id] = [
+                    'producto_id'   => $mov->producto_id,
+                    'total_contado' => $d['total_contado'] ?? null,
+                    'secciones'     => $d['secciones']     ?? null,
+                    'contado_por'   => $d['contado_por']   ?? $mov->aud_usuario,
+                    'conteos'       => [],
+                ];
+            }
             if (!$appliedAt || $mov->created_at > $appliedAt) {
                 $appliedAt = $mov->created_at;
             }
