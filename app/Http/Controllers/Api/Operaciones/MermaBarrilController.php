@@ -166,13 +166,31 @@ class MermaBarrilController extends Controller
                 'estado'      => 'borrador',
             ]);
 
-            // Crear un item por cada cerveza activa
+            // Inventario de cierre más reciente de esta sucursal (para heredar inicial_oz)
+            $invAnterior = MermaInventario::where('sucursal_id', $sucursalId)
+                ->where('fecha', '<', $fecha)
+                ->whereIn('estado', ['enviado', 'aprobado'])
+                ->orderBy('fecha', 'desc')
+                ->with('items')
+                ->first();
+
+            $finalOzAnterior = [];
+            if ($invAnterior) {
+                foreach ($invAnterior->items as $itemAnt) {
+                    // final_oz guardado explícitamente tiene prioridad;
+                    // si no existe, calculamos desde barriles cerrados con capacidades default
+                    $finalOzAnterior[$itemAnt->cerveza_id] = $itemAnt->final_oz
+                        ?? ($itemAnt->final_cerrados_p * 661 + $itemAnt->final_cerrados_g * 1986.26);
+                }
+            }
+
+            // Crear un item por cada cerveza activa heredando el inventario de cierre de ayer
             $cervezas = MermaCerveza::activas()->orderBy('orden')->get();
             foreach ($cervezas as $c) {
                 MermaInvItem::create([
                     'inventario_id'    => $inv->id,
                     'cerveza_id'       => $c->id,
-                    'inicial_oz'       => 0,
+                    'inicial_oz'       => $finalOzAnterior[$c->id] ?? 0,
                     'final_cerrados_p' => 0,
                     'final_cerrados_g' => 0,
                 ]);
