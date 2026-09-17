@@ -508,7 +508,8 @@ class AuditoriaConteoController extends Controller
         $filas = [];
         foreach ($itemsRaw as $ai) {
             $conteo  = round((float) ($ai->cantidad_auditor ?? $ai->cantidad_contador), 4);
-            $brilo   = $ai->brilo_stock !== null ? round((float) $ai->brilo_stock, 4) : null;
+            $kd      = $kardex[$ai->codigo] ?? null;
+            $brilo   = $kd !== null ? round($kd['saldo_fin'], 4) : null;
             $diff    = $brilo !== null ? round($conteo - $brilo, 4) : null;
             $costo   = $ai->costo !== null ? round((float) $ai->costo, 4) : null;
             $costoDiff = ($diff !== null && $costo !== null) ? round($diff * $costo, 2) : null;
@@ -518,7 +519,6 @@ class AuditoriaConteoController extends Controller
             elseif ($diff < 0)          $tipo = 'FALTANTE';
             else                        $tipo = 'SOBRANTE';
 
-            $kd       = $kardex[$ai->codigo] ?? null;
             $kSalidas = $kd !== null ? $kd['salidas'] : null;
             $diffPct  = ($diff !== null && $kSalidas !== null && ($kSalidas + abs($diff)) > 0)
                 ? round(abs($diff) / (abs($diff) + $kSalidas) * 100, 2)
