@@ -1200,9 +1200,13 @@ class InventarioController extends Controller
     public function borradoresActivos(Request $request): JsonResponse
     {
         $request->validate(['sucursal_id' => 'required|integer']);
+        $tipoConteo = in_array($request->query('tipo_conteo'), ['conteo_fisico', 'conteo_mensual'])
+            ? $request->query('tipo_conteo')
+            : 'conteo_fisico';
         $rows = DB::connection('compras')
             ->table('conteo_borradores')
             ->where('sucursal_id', (int) $request->query('sucursal_id'))
+            ->where('tipo_conteo', $tipoConteo)
             ->where('estado', 'borrador')
             ->orderByDesc('updated_at')
             ->get();
@@ -1220,10 +1224,14 @@ class InventarioController extends Controller
     public function getBorrador(Request $request): JsonResponse
     {
         $request->validate(['sucursal_id' => 'required|integer']);
+        $tipoConteo = in_array($request->query('tipo_conteo'), ['conteo_fisico', 'conteo_mensual'])
+            ? $request->query('tipo_conteo')
+            : 'conteo_fisico';
         $row = DB::connection('compras')
             ->table('conteo_borradores')
             ->where('sucursal_id', (int) $request->query('sucursal_id'))
             ->where('aud_usuario', Auth::user()->email)
+            ->where('tipo_conteo', $tipoConteo)
             ->where('estado', 'borrador')
             ->first();
 
@@ -1245,7 +1253,10 @@ class InventarioController extends Controller
             'sucursal_id'  => 'required|integer',
             'fecha_conteo' => 'required|date',
             'payload'      => 'required|array',
+            'tipo_conteo'  => 'nullable|in:conteo_fisico,conteo_mensual',
         ]);
+
+        $tipoConteo = $validated['tipo_conteo'] ?? 'conteo_fisico';
 
         DB::connection('compras')
             ->table('conteo_borradores')
@@ -1253,12 +1264,13 @@ class InventarioController extends Controller
                 [[
                     'sucursal_id'  => (int) $validated['sucursal_id'],
                     'aud_usuario'  => Auth::user()->email,
+                    'tipo_conteo'  => $tipoConteo,
                     'fecha_conteo' => $validated['fecha_conteo'],
                     'payload'      => json_encode($validated['payload']),
                     'created_at'   => now(),
                     'updated_at'   => now(),
                 ]],
-                ['sucursal_id', 'aud_usuario'],
+                ['sucursal_id', 'aud_usuario', 'tipo_conteo'],
                 ['fecha_conteo', 'payload', 'updated_at']
             );
 
@@ -1268,11 +1280,15 @@ class InventarioController extends Controller
     public function deleteBorrador(Request $request): JsonResponse
     {
         $request->validate(['sucursal_id' => 'required|integer']);
+        $tipoConteo = in_array($request->query('tipo_conteo'), ['conteo_fisico', 'conteo_mensual'])
+            ? $request->query('tipo_conteo')
+            : 'conteo_fisico';
         // Soft-delete: marcar como descartado en lugar de borrar físicamente
         DB::connection('compras')
             ->table('conteo_borradores')
             ->where('sucursal_id', (int) $request->query('sucursal_id'))
             ->where('aud_usuario', Auth::user()->email)
+            ->where('tipo_conteo', $tipoConteo)
             ->where('estado', 'borrador')
             ->update(['estado' => 'descartado', 'updated_at' => now()]);
 
@@ -1284,10 +1300,14 @@ class InventarioController extends Controller
     public function marcarBorradorAplicado(Request $request): JsonResponse
     {
         $request->validate(['sucursal_id' => 'required|integer']);
+        $tipoConteo = in_array($request->query('tipo_conteo'), ['conteo_fisico', 'conteo_mensual'])
+            ? $request->query('tipo_conteo')
+            : 'conteo_fisico';
         DB::connection('compras')
             ->table('conteo_borradores')
             ->where('sucursal_id', (int) $request->query('sucursal_id'))
             ->where('aud_usuario', Auth::user()->email)
+            ->where('tipo_conteo', $tipoConteo)
             ->where('estado', 'borrador')
             ->update([
                 'estado'      => 'aplicado',
