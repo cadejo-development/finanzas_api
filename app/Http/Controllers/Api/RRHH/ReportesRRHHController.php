@@ -70,9 +70,10 @@ class ReportesRRHHController extends RRHHBaseController
         $ausAct   = $this->getAusencias($empIds, $desdeAct, $hastaAct);
         $ausPrev  = $this->getAusencias($empIds, $desdePrev, $hastaPrev);
 
-        // --- Horas nocturnas y extras ---
-        $horasNocturnasMap = $this->getHorasNocturnas($empIds, $desdeAct, $hastaAct);
+        // --- Horas nocturnas (quincena vencida), extras (quincena actual) y asuetos (quincena vencida) ---
+        $horasNocturnasMap = $this->getHorasNocturnas($empIds, $desdePrev, $hastaPrev);
         $horasExtraMap     = $this->getHorasExtra($empIds, $desdeAct, $hastaAct);
+        $horasAsuetoMap    = $this->getHorasAsueto($empIds, $desdePrev, $hastaPrev);
 
         // --- Mapa de tipo de sucursal por empleado (fallback si el join devolvió null) ---
         $sucursalTipoMap = $this->getSucursalTiposMap(
@@ -123,6 +124,7 @@ class ReportesRRHHController extends RRHHBaseController
                 'dias_propinas'      => $diasPropinas,
                 'horas_nocturnas'    => round($horasNocturnasMap[$eid] ?? 0, 2),
                 'horas_extra'        => round($horasExtraMap[$eid] ?? 0, 2),
+                'horas_asueto'       => round($horasAsuetoMap[$eid] ?? 0, 2),
             ];
         }
 
@@ -549,7 +551,6 @@ class ReportesRRHHController extends RRHHBaseController
 
         $noctMins = function (int $inicio, int $fin): int {
             $noct = 0;
-            if ($inicio < 6 * 60) $noct += min($fin, 6 * 60) - $inicio;
             $z2s = max($inicio, 19 * 60); $z2e = min($fin, 24 * 60);
             if ($z2e > $z2s) $noct += $z2e - $z2s;
             if ($fin > 24 * 60) $noct += min($fin, 30 * 60) - 24 * 60;
@@ -624,17 +625,12 @@ class ReportesRRHHController extends RRHHBaseController
 
             $noct = 0;
 
-            // Zona 1: 00:00–06:00 (inicio temprano)
-            if ($inicio < 6 * 60) {
-                $noct += min($fin, 6 * 60) - $inicio;
-            }
-
-            // Zona 2: 19:00–24:00
+            // 19:00–24:00 (parte nocturna antes de medianoche)
             $z2s = max($inicio, 19 * 60);
             $z2e = min($fin, 24 * 60);
             if ($z2e > $z2s) $noct += $z2e - $z2s;
 
-            // Zona 3: 00:00–06:00 del día siguiente (cruza medianoche)
+            // 00:00–06:00 del día siguiente (solo para turnos que cruzan medianoche desde la noche)
             if ($fin > 24 * 60) {
                 $noct += min($fin, 30 * 60) - 24 * 60;
             }
@@ -671,7 +667,6 @@ class ReportesRRHHController extends RRHHBaseController
 
         $horasNoctTurno = function (int $inicio, int $fin): float {
             $noct = 0;
-            if ($inicio < 6 * 60) $noct += min($fin, 6 * 60) - $inicio;
             $z2s = max($inicio, 19 * 60); $z2e = min($fin, 24 * 60);
             if ($z2e > $z2s) $noct += $z2e - $z2s;
             if ($fin > 24 * 60) $noct += min($fin, 30 * 60) - 24 * 60;
@@ -700,6 +695,46 @@ class ReportesRRHHController extends RRHHBaseController
                 $maxHoras = $totalNoctDia > 4 ? 7 : 8;
                 $result[$eid] += max(0.0, $totalHorasDia - $maxHoras);
             }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Calcula horas de asueto por empleado: 8h por cada día de asueto en el que
+     * el empleado tiene un registro tipo='normal' en horarios_empleado.
+     *
+     * @return array<int, float>  empleado_id => horas_asueto
+     */
+    private function getHorasAsueto(array $empIds, Carbon $desde, Carbon $hasta): array
+    {
+        if (empty($empIds)) return [];
+
+        $fechasAsueto = DB::connection('pgsql')
+            ->table('asuetos')
+            ->where('activo', true)
+            ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->pluck('fecha')
+            ->toArray();
+
+        if (empty($fechasAsueto)) return [];
+
+        $horarios = DB::connection('pgsql')
+            ->table('horarios_empleado')
+            ->whereIn('empleado_id', $empIds)
+            ->whereIn('fecha', $fechasAsueto)
+            ->where('tipo', 'normal')
+            ->distinct()
+            ->get(['empleado_id', 'fecha']);
+
+        $result = [];
+        $vistos = [];
+        foreach ($horarios as $h) {
+            $eid  = (int) $h->empleado_id;
+            $key  = $eid . '_' . $h->fecha;
+            if (isset($vistos[$key])) continue; // un solo turno por día cuenta
+            $vistos[$key] = true;
+            $result[$eid] = ($result[$eid] ?? 0.0) + 8.0;
         }
 
         return $result;
