@@ -68,22 +68,23 @@ class InactivarEmpleadosDesvinculados extends Command
             $this->line("  → {$label} ({$dv->tipo}) — fecha efectiva: {$dv->fecha_efectiva}");
 
             if (!$dryRun) {
-                // Obtener plaza actual antes de inactivar
+                $update = [
+                    'activo'      => false,
+                    'plaza_id'    => null,
+                    'aud_usuario' => 'sistema:inactivar-desvinculados',
+                    'updated_at'  => now(),
+                ];
+
+                // Obtener plaza actual antes de inactivar (desde core)
                 $empleado = DB::connection('pgsql')
                     ->table('empleados')
                     ->where('id', $dv->empleado_id)
                     ->select('plaza_id')
                     ->first();
 
-                DB::connection('pgsql')
-                    ->table('empleados')
-                    ->where('id', $dv->empleado_id)
-                    ->update([
-                        'activo'       => false,
-                        'plaza_id'     => null,
-                        'aud_usuario'  => 'sistema:inactivar-desvinculados',
-                        'updated_at'   => now(),
-                    ]);
+                // Inactivar en ambas bases
+                DB::connection('pgsql')->table('empleados')->where('id', $dv->empleado_id)->update($update);
+                DB::connection('rrhh')->table('empleados')->where('id', $dv->empleado_id)->update($update);
 
                 // Liberar la plaza si ningún otro activo la ocupa
                 if ($empleado?->plaza_id) {
