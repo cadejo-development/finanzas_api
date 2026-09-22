@@ -371,12 +371,21 @@ class ExportBriloController extends Controller
                         // ej: 10 tandas × 0.0625 LB/tanda = 0.625 LB
                         $cantBase = $cantBase * $rendim;
                     } elseif ($briloIng !== 'UNID0029' && $briloIng !== $briloRend && $briloRend) {
-                        // Unidades distintas: convertir a rendimiento_unidad
-                        // ej: 10 OZ → 0.625 LB
+                        // Unidades distintas: convertir a rendimiento_unidad y luego a fracción de tanda
+                        // ej: 10 OZ → 0.625 LB; luego 0.625 LB / rendim LB/tanda
                         $convertida = $this->convertirUnidad($cantBase, $briloIng, $briloRend);
                         $cantBase   = $convertida ?? $cantBase;
+                        if ($rendim > 0) {
+                            $cantBase = $cantBase / $rendim;
+                        }
+                    } else {
+                        // Misma unidad en receta y rendimiento (ej: porcion/porcion):
+                        // dividir por rendimiento para obtener la fracción de tanda que Brilo espera.
+                        // ej: 1 porcion / 27 porciones por tanda = 0.0370 tandas
+                        if ($rendim > 0) {
+                            $cantBase = $cantBase / $rendim;
+                        }
                     }
-                    // $cantBase ya en $briloRend — sin división por rendimiento
 
                     $nombreIng = $fila->sub_nombre ?? '';
                     fputcsv($handle, [
