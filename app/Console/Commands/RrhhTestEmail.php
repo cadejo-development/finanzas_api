@@ -67,6 +67,7 @@ class RrhhTestEmail extends Command
                 'estado'            => 'pendiente',
                 'aprobacion_token'  => $token,
                 'aud_usuario'       => 'artisan:test',
+                'test_notif_para'   => $to,
             ]);
             $this->info("✓ Creado registro de prueba ID={$cambio->id}");
         } else {

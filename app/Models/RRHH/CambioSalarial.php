@@ -15,6 +15,7 @@ class CambioSalarial extends Model
         'fecha_efectiva', 'justificacion', 'motivo_rechazo', 'estado',
         'aprobacion_token', 'aud_usuario', 'creado_por',
         'documento_ruta', 'documento_nombre', 'documento_mime',
+        'test_notif_para',
     ];
 
     protected $casts = [

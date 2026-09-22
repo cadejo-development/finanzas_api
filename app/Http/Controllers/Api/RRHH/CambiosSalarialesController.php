@@ -248,6 +248,12 @@ class CambiosSalarialesController extends RRHHBaseController
 
         $cambio->load('tipoAumento');
 
+        // Si el registro tiene test_notif_para, redirigir todos los correos
+        // de esta resolución a ese email (útil para pruebas sin tocar env de producción).
+        if ($cambio->test_notif_para) {
+            Mail::alwaysTo($cambio->test_notif_para);
+        }
+
         $this->enviarNotificacionesResolucion($cambio, $nuevoEstado);
 
         return response()->json([
