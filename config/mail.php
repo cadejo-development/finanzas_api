@@ -52,6 +52,8 @@ return [
         'ses' => [
             'transport' => 'ses',
             'region'    => env('SES_REGION', env('AWS_DEFAULT_REGION', 'us-east-1')),
+            // SES_SKIP_VERIFY=true solo en local (Windows). Nunca en producción.
+            'http'      => env('SES_SKIP_VERIFY') ? ['verify' => false] : [],
         ],
 
         'postmark' => [
