@@ -74,6 +74,7 @@ class ReportesRRHHController extends RRHHBaseController
         $horasNocturnasMap = $this->getHorasNocturnas($empIds, $desdePrev, $hastaPrev);
         $horasExtraMap     = $this->getHorasExtra($empIds, $desdeAct, $hastaAct);
         $horasAsuetoMap    = $this->getHorasAsueto($empIds, $desdePrev, $hastaPrev);
+        $descuentosMap     = $this->getOrdenesDescuento($empIds, $desdeAct, $hastaAct, $quincena);
 
         // --- Mapa de tipo de sucursal por empleado (fallback si el join devolvió null) ---
         $sucursalTipoMap = $this->getSucursalTiposMap(
@@ -125,6 +126,7 @@ class ReportesRRHHController extends RRHHBaseController
                 'horas_nocturnas'    => round($horasNocturnasMap[$eid] ?? 0, 2),
                 'horas_extra'        => round($horasExtraMap[$eid] ?? 0, 2),
                 'horas_asueto'       => round($horasAsuetoMap[$eid] ?? 0, 2),
+                'descuentos_quincenal' => round($descuentosMap[$eid] ?? 0, 2),
             ];
         }
 
@@ -296,6 +298,8 @@ class ReportesRRHHController extends RRHHBaseController
         $total    = 0;
 
         foreach ($permisos->where('empleado_id', $eid) as $p) {
+            // Días Cadejo son con goce de sueldo — no reducen días laborados ni propinas
+            if ($p->tipoPermiso && $p->tipoPermiso->categoria === 'cadejo') continue;
             $dias = (float) ($p->dias ?? ($p->horas_solicitadas ? $p->horas_solicitadas / 8 : 0));
             $total += $dias;
             $tipo = $p->tipoPermiso ? $p->tipoPermiso->nombre : 'Permiso';
@@ -586,6 +590,36 @@ class ReportesRRHHController extends RRHHBaseController
             }
         }
 
+        return $result;
+    }
+
+    /**
+     * Suma de descuentos quincenales de órdenes de descuento activas.
+     * Usa monto_q1 para la 1ra quincena, monto_q2 para la 2da.
+     *
+     * @return array<int, float>  empleado_id => monto_total_descuento
+     */
+    private function getOrdenesDescuento(array $empIds, Carbon $desde, Carbon $hasta, int $quincena): array
+    {
+        if (empty($empIds)) return [];
+
+        $rows = DB::connection('pgsql')
+            ->table('ordenes_descuento')
+            ->whereIn('empleado_id', $empIds)
+            ->where('estado_id', 1) // Activa
+            ->where('fecha_inicio', '<=', $hasta->toDateString())
+            ->where(function ($q) use ($desde) {
+                $q->whereNull('fecha_fin')
+                  ->orWhere('fecha_fin', '>=', $desde->toDateString());
+            })
+            ->get(['empleado_id', 'monto_q1', 'monto_q2']);
+
+        $result = [];
+        foreach ($rows as $r) {
+            $eid   = (int) $r->empleado_id;
+            $monto = $quincena === 1 ? (float) $r->monto_q1 : (float) $r->monto_q2;
+            $result[$eid] = ($result[$eid] ?? 0.0) + $monto;
+        }
         return $result;
     }
 
