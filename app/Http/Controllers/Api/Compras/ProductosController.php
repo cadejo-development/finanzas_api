@@ -416,24 +416,53 @@ class ProductosController extends Controller
      */
     public function usos(int $id): JsonResponse
     {
-        // Recetas que usan este producto (solo tablas en 'compras')
-        $rows = DB::connection('compras')
-            ->table('receta_ingredientes as ri')
+        $db = DB::connection('compras');
+
+        // Buscar el código de este producto para luego localizar su entrada en recetas (si es SUBR/CP)
+        $producto = $db->table('productos')->where('id', $id)->first(['codigo']);
+        $codigoProducto = $producto?->codigo ?? '';
+
+        $selectCols = [
+            'r.id',
+            'r.nombre',
+            'r.tipo_receta',
+            'r.tipo',
+            'r.codigo_origen',
+            DB::raw("array_remove(array_agg(DISTINCT rs.sucursal_id), NULL) as sucursal_ids"),
+        ];
+        $groupCols = ['r.id', 'r.nombre', 'r.tipo_receta', 'r.tipo', 'r.codigo_origen'];
+
+        // 1) Usos como producto_id (MR, CP guardados como producto)
+        $rowsProd = $db->table('receta_ingredientes as ri')
             ->join('recetas as r', 'r.id', '=', 'ri.receta_id')
             ->leftJoin('receta_sucursal as rs', fn($j) => $j->on('rs.receta_id', '=', 'r.id')->where('rs.activa', true))
             ->where('ri.producto_id', $id)
             ->where('r.activa', true)
-            ->groupBy('r.id', 'r.nombre', 'r.tipo_receta', 'r.tipo', 'r.codigo_origen')
-            ->select([
-                'r.id',
-                'r.nombre',
-                'r.tipo_receta',
-                'r.tipo',
-                'r.codigo_origen',
-                DB::raw("array_remove(array_agg(DISTINCT rs.sucursal_id), NULL) as sucursal_ids"),
-            ])
-            ->orderBy('r.nombre')
+            ->groupBy(...$groupCols)
+            ->select($selectCols)
             ->get();
+
+        // 2) Usos como sub_receta_id (SUBR/CP guardados como sub-receta en tabla recetas)
+        $rowsSub = collect();
+        if ($codigoProducto) {
+            $subRecetaId = $db->table('recetas')
+                ->where('codigo_origen', $codigoProducto)
+                ->value('id');
+
+            if ($subRecetaId) {
+                $rowsSub = $db->table('receta_ingredientes as ri')
+                    ->join('recetas as r', 'r.id', '=', 'ri.receta_id')
+                    ->leftJoin('receta_sucursal as rs', fn($j) => $j->on('rs.receta_id', '=', 'r.id')->where('rs.activa', true))
+                    ->where('ri.sub_receta_id', $subRecetaId)
+                    ->where('r.activa', true)
+                    ->groupBy(...$groupCols)
+                    ->select($selectCols)
+                    ->get();
+            }
+        }
+
+        // Unir resultados eliminando duplicados por id de receta
+        $rows = $rowsProd->concat($rowsSub)->unique('id')->values();
 
         // PG devuelve array_agg como string "{1,7,8}" — parsear a array de ints
         $parsePgArray = fn($v) => is_string($v)
@@ -451,7 +480,7 @@ class ProductosController extends Controller
                 ->all();
         }
 
-        $data = $rows->map(function ($row) use ($sucursalNombres, $parsePgArray) {
+        $data = $rows->sortBy('nombre')->values()->map(function ($row) use ($sucursalNombres, $parsePgArray) {
             $ids = $parsePgArray($row->sucursal_ids);
             $nombres = array_values(array_filter(array_map(fn($id) => $sucursalNombres[$id] ?? null, $ids)));
             sort($nombres);
