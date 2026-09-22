@@ -654,7 +654,7 @@ abstract class RRHHBaseController extends Controller
                 'destinatario'    => $supervisorEmail,
                 'asunto'          => $mailable->envelope()->subject,
                 'estado'          => 'enviado',
-                'enviado_por'     => Auth::user()->email,
+                'enviado_por'     => Auth::user()?->email ?? 'sistema',
                 'referencia_id'   => $empleadoId,
                 'referencia_tipo' => 'empleado',
             ]);
@@ -744,7 +744,7 @@ abstract class RRHHBaseController extends Controller
                 'destinatario'    => $destinatarioEmail,
                 'asunto'          => $mailable->envelope()->subject,
                 'estado'          => 'enviado',
-                'enviado_por'     => Auth::user()->email,
+                'enviado_por'     => Auth::user()?->email ?? 'sistema',
                 'referencia_id'   => $empleadoId,
                 'referencia_tipo' => 'empleado',
             ]);
@@ -818,7 +818,7 @@ abstract class RRHHBaseController extends Controller
                     'destinatario'    => $admin->email,
                     'asunto'          => $mailable->envelope()->subject,
                     'estado'          => 'enviado',
-                    'enviado_por'     => Auth::user()->email,
+                    'enviado_por'     => Auth::user()?->email ?? 'sistema',
                     'referencia_tipo' => 'empleado',
                 ]);
             }
@@ -891,7 +891,7 @@ abstract class RRHHBaseController extends Controller
                     'destinatario'    => $miembro->email,
                     'asunto'          => $mailable->envelope()->subject,
                     'estado'          => 'enviado',
-                    'enviado_por'     => Auth::user()->email,
+                    'enviado_por'     => Auth::user()?->email ?? 'sistema',
                     'referencia_tipo' => 'departamento',
                 ]);
             }
@@ -952,7 +952,7 @@ abstract class RRHHBaseController extends Controller
                     'destinatario'    => $dest->email,
                     'asunto'          => $mailable->envelope()->subject,
                     'estado'          => 'enviado',
-                    'enviado_por'     => Auth::user()->email,
+                    'enviado_por'     => Auth::user()?->email ?? 'sistema',
                     'referencia_id'   => $solicitudId,
                     'referencia_tipo' => $tipoModelo,
                 ]);
@@ -1001,7 +1001,7 @@ abstract class RRHHBaseController extends Controller
                 'destinatario'    => $jefaEmail,
                 'asunto'          => $mailable->envelope()->subject,
                 'estado'          => 'enviado',
-                'enviado_por'     => Auth::user()->email,
+                'enviado_por'     => Auth::user()?->email ?? 'sistema',
                 'referencia_id'   => $solicitudId,
                 'referencia_tipo' => $tipoModelo,
             ]);
@@ -1056,7 +1056,7 @@ abstract class RRHHBaseController extends Controller
                     'destinatario'    => $dest->email,
                     'asunto'          => $mailable->envelope()->subject,
                     'estado'          => 'enviado',
-                    'enviado_por'     => Auth::user()->email,
+                    'enviado_por'     => Auth::user()?->email ?? 'sistema',
                     'referencia_tipo' => 'empleado',
                 ]);
             }
