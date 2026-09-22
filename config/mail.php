@@ -116,4 +116,8 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    // Cuando está definido, TODOS los correos se redirigen a este destinatario.
+    // Solo para pruebas en producción. Eliminar del .env cuando termine la prueba.
+    'test_recipient' => env('MAIL_TEST_RECIPIENT'),
+
 ];
