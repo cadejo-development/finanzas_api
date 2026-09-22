@@ -79,6 +79,10 @@ Route::prefix('public')->group(function () {
     Route::get('ingreso/{token}',  [IngresoQRController::class, 'validar']);
     Route::post('ingreso/{token}', [IngresoQRController::class, 'registrar']);
 
+    // Revisión de nivelación salarial por email (sin auth, validado por token)
+    Route::get('nivelacion-revision/{token}',  [CambiosSalarialesController::class, 'mostrarRevision']);
+    Route::post('nivelacion-revision/{token}', [CambiosSalarialesController::class, 'procesarRevision']);
+
     // Portal de empleo — sucursales activas (sin auth)
     Route::get('sucursales-activas', function () {
         $sucursales = \App\Models\Sucursal::where(fn($q) => $q->where('activa', true)->orWhereNull('activa'))

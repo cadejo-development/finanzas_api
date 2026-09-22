@@ -113,6 +113,13 @@ class CatalogosRRHHController extends RRHHBaseController
             ->orderBy('nombre')
             ->get();
 
+        // El Gerente Financiero es el jefe del depto GERENCIA FINANCIERA
+        $esGerenteFinanciero = $jefeEmpleadoId && DB::connection('pgsql')
+            ->table('departamentos')
+            ->where('nombre', 'GERENCIA FINANCIERA')
+            ->where('jefe_empleado_id', $jefeEmpleadoId)
+            ->exists();
+
         return response()->json([
             'success' => true,
             'data'    => [
@@ -129,6 +136,7 @@ class CatalogosRRHHController extends RRHHBaseController
                 'es_gerencia_ops'        => $this->esGerenciaOps(),
                 'es_empleado'            => $this->esEmpleado(),
                 'empleado_id_propio'     => $jefeEmpleadoId,
+                'es_gerente_financiero'  => $esGerenteFinanciero,
             ],
         ]);
     }

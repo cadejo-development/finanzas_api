@@ -131,6 +131,38 @@
       {{-- CTA --}}
       <tr>
         <td class="card-bg" style="background:#ffffff;padding:0 40px 36px;text-align:center;">
+          @if(!empty($aprobarUrl) && !empty($rechazarUrl))
+          {{-- Flujo aprobación/rechazo (nivelaciones salariales) --}}
+          <table cellpadding="0" cellspacing="0" align="center" style="margin-bottom:16px;">
+            <tr>
+              <td style="padding-right:10px;">
+                <table cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="background:#15803d;border-radius:8px;padding:13px 28px;">
+                      <a href="{{ $aprobarUrl }}" style="color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;display:inline-block;letter-spacing:0.3px;">✓ Aprobar</a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+              <td>
+                <table cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="background:#dc2626;border-radius:8px;padding:13px 28px;">
+                      <a href="{{ $rechazarUrl }}" style="color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;display:inline-block;letter-spacing:0.3px;">✗ Rechazar</a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+          <table cellpadding="0" cellspacing="0" align="center">
+            <tr>
+              <td>
+                <a href="{{ $linkUrl }}" style="color:#6b7280;font-size:12px;text-decoration:underline;">Ver en el sistema</a>
+              </td>
+            </tr>
+          </table>
+          @else
           <table cellpadding="0" cellspacing="0" align="center">
             <tr>
               @if(!empty($confirmUrl))
@@ -156,6 +188,7 @@
               </td>
             </tr>
           </table>
+          @endif
         </td>
       </tr>
 
