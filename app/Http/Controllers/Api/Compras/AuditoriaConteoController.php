@@ -561,6 +561,14 @@ class AuditoriaConteoController extends Controller
             ];
         }
 
+        // Excluir productos sin ningún movimiento ni conteo
+        $filas = array_values(array_filter($filas, function ($f) {
+            $sinKardex = $f['k_saldo_ini'] === null && $f['k_entradas'] === null
+                      && $f['k_salidas']   === null && $f['k_saldo_fin'] === null;
+            $sinConteo = ($f['conteo'] ?? 0) == 0;
+            return !($sinKardex && $sinConteo);
+        }));
+
         // Ordenar: faltante de mayor costo primero, luego sobrantes, ok, sin brilo
         usort($filas, fn($a, $b) => ($a['costo_diff'] ?? 0) <=> ($b['costo_diff'] ?? 0));
 
