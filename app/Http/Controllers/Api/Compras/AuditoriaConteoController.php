@@ -186,6 +186,19 @@ class AuditoriaConteoController extends Controller
             'observacion'      => 'nullable|string|max:500',
         ]);
 
+        // Bloquear modificaciones en auditorías cerradas o aprobadas
+        $auditoria = DB::connection('compras')
+            ->table('conteo_auditorias')
+            ->where('id', $auditoriaId)
+            ->first();
+
+        if ($auditoria && in_array($auditoria->estado, ['cerrada', 'aprobada'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Esta auditoría ya fue cerrada y no puede modificarse.',
+            ], 403);
+        }
+
         $rows = DB::connection('compras')
             ->table('conteo_auditoria_items')
             ->where('auditoria_id', $auditoriaId)
@@ -707,6 +720,14 @@ class AuditoriaConteoController extends Controller
         }
 
         usort($filas, fn($a, $b) => ($a['costo_diff'] ?? 0) <=> ($b['costo_diff'] ?? 0));
+
+        // Ocultar productos sin ningún movimiento real: sin Kardex Y conteo = 0
+        $filas = array_values(array_filter($filas, function ($f) {
+            $sinKardex = $f['k_saldo_ini'] === null && $f['k_entradas'] === null
+                      && $f['k_salidas']   === null && $f['k_saldo_fin'] === null;
+            $sinConteo = ($f['conteo'] ?? 0) == 0;
+            return !($sinKardex && $sinConteo);
+        }));
 
         // ── Filtros ───────────────────────────────────────────────────────────
         $tipoFilter = $request->query('tipo');
