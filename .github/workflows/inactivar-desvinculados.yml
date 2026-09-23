@@ -1,0 +1,32 @@
+name: RRHH — Inactivar Empleados Desvinculados
+
+on:
+  schedule:
+    - cron: '0 12 * * *'  # 06:00 AM El Salvador (UTC-6)
+  workflow_dispatch:
+
+jobs:
+  inactivar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_pgsql, bcmath
+
+      - name: Instalar dependencias Composer
+        run: composer install --no-dev --no-scripts --optimize-autoloader --ignore-platform-reqs
+
+      - name: Crear .env
+        env:
+          ENV_FILE_CONTENT: ${{ secrets.ENV_FILE }}
+        run: printf '%s' "$ENV_FILE_CONTENT" > .env
+
+      - name: Ejecutar inactivar-desvinculados
+        run: php artisan rrhh:inactivar-desvinculados
