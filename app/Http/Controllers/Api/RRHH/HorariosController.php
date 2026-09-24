@@ -165,6 +165,17 @@ class HorariosController extends RRHHBaseController
             ];
         }
 
+        // Overlay de eventos automáticos (vacaciones, permisos, incapacidades)
+        $eventosAuto = $this->getEventosAuto([$empleado->id], $inicio, $fin);
+        foreach ($eventosAuto[$empleado->id] ?? [] as $fecha => $evento) {
+            if (!isset($dias[$fecha])) $dias[$fecha] = [];
+            // Solo agregar si no hay ya un turno manual del mismo tipo
+            $tiposExistentes = array_column($dias[$fecha], 'tipo');
+            if (!in_array($evento['tipo'], $tiposExistentes)) {
+                $dias[$fecha][] = $evento;
+            }
+        }
+
         return response()->json([
             'semana_inicio' => $inicio->toDateString(),
             'semana_fin'    => $fin->toDateString(),
@@ -459,14 +470,23 @@ class HorariosController extends RRHHBaseController
             ->whereIn('p.empleado_id', $empleadoIds)
             ->where('p.estado', 'aprobado')
             ->whereBetween('p.fecha', [$inicioStr, $finStr])
-            ->select('p.empleado_id', 'p.fecha', 'tp.categoria')
+            ->select('p.empleado_id', 'p.fecha', 'tp.categoria', 'p.hora_inicio', 'p.hora_fin', 'p.horas_solicitadas')
             ->get();
 
         foreach ($permisos as $p) {
             // Si ya tiene vacación ese día, no sobreescribir
             if (isset($eventos[$p->empleado_id][$p->fecha])) continue;
             $tipo = ($p->categoria === 'cadejo') ? 'dia_cadejo' : 'permiso';
-            $eventos[$p->empleado_id][$p->fecha] = ['tipo' => $tipo, 'auto' => true, 'parte' => 99];
+            $conGoce = in_array($p->categoria, ['personal', 'especial', 'cadejo']);
+            $eventos[$p->empleado_id][$p->fecha] = [
+                'tipo'             => $tipo,
+                'auto'             => true,
+                'parte'            => 99,
+                'con_goce'         => $conGoce,
+                'hora_inicio'      => $p->hora_inicio ? substr($p->hora_inicio, 0, 5) : null,
+                'hora_fin'         => $p->hora_fin    ? substr($p->hora_fin,    0, 5) : null,
+                'horas_solicitadas'=> $p->horas_solicitadas,
+            ];
         }
 
         // ── Incapacidades registradas ────────────────────────────────────────
@@ -491,5 +511,67 @@ class HorariosController extends RRHHBaseController
         }
 
         return $eventos;
+    }
+
+    /**
+     * GET /rrhh/horarios/empleado/{empleadoId}
+     * Devuelve el horario semanal de un empleado específico (para jefaturas/gerentes).
+     */
+    public function empleadoSemana(Request $request, int $empleadoId): JsonResponse
+    {
+        $semanaInicio = $request->query('semana_inicio');
+        $inicio = $semanaInicio
+            ? Carbon::parse($semanaInicio)->startOfWeek(Carbon::MONDAY)
+            : Carbon::now()->startOfWeek(Carbon::MONDAY);
+        $fin = $inicio->copy()->endOfWeek(Carbon::SUNDAY);
+
+        $empleado = DB::connection('pgsql')
+            ->table('empleados as e')
+            ->leftJoin('cargos as c', 'e.cargo_id', '=', 'c.id')
+            ->where('e.id', $empleadoId)
+            ->where('e.activo', true)
+            ->select('e.id', 'e.nombres', 'e.apellidos', 'c.nombre as cargo')
+            ->first();
+
+        if (!$empleado) {
+            return response()->json(['error' => 'Empleado no encontrado'], 404);
+        }
+
+        $horarios = HorarioEmpleado::where('empleado_id', $empleadoId)
+            ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
+            ->get();
+
+        $dias = [];
+        foreach ($horarios as $h) {
+            $fecha = $h->fecha instanceof \Carbon\Carbon ? $h->fecha->toDateString() : substr($h->fecha, 0, 10);
+            if (!isset($dias[$fecha])) $dias[$fecha] = [];
+            $dias[$fecha][] = [
+                'hora_inicio' => $h->hora_inicio ? substr($h->hora_inicio, 0, 5) : null,
+                'hora_fin'    => $h->hora_fin    ? substr($h->hora_fin,    0, 5) : null,
+                'tipo'        => $h->tipo,
+                'parte'       => $h->parte ?? 1,
+                'notas'       => $h->notas,
+            ];
+        }
+
+        $eventosAuto = $this->getEventosAuto([$empleadoId], $inicio, $fin);
+        foreach ($eventosAuto[$empleadoId] ?? [] as $fecha => $evento) {
+            if (!isset($dias[$fecha])) $dias[$fecha] = [];
+            $tiposExistentes = array_column($dias[$fecha], 'tipo');
+            if (!in_array($evento['tipo'], $tiposExistentes)) {
+                $dias[$fecha][] = $evento;
+            }
+        }
+
+        return response()->json([
+            'semana_inicio' => $inicio->toDateString(),
+            'semana_fin'    => $fin->toDateString(),
+            'empleado'      => [
+                'id'     => $empleado->id,
+                'nombre' => trim($empleado->nombres . ' ' . $empleado->apellidos),
+                'cargo'  => $empleado->cargo ?? '',
+            ],
+            'dias' => $dias,
+        ]);
     }
 }

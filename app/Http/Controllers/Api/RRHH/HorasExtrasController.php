@@ -93,6 +93,9 @@ class HorasExtrasController extends RRHHBaseController
                 'fecha_fin'    => 'required|date|after_or_equal:fecha_inicio',
                 'horas'        => 'required|numeric|min:0.5|max:999',
                 'descripcion'  => 'nullable|string|max:1000',
+                'hora_inicio'  => 'nullable|date_format:H:i',
+                'hora_fin'     => 'nullable|date_format:H:i',
+                'motivo'       => 'nullable|string|max:500',
             ]);
 
             $empleadoId     = (int) $v['empleado_id'];
@@ -139,6 +142,9 @@ class HorasExtrasController extends RRHHBaseController
                 'fecha_fin'                  => $v['fecha_fin'],
                 'horas'                      => $v['horas'],
                 'descripcion'                => $v['descripcion'] ?? null,
+                'hora_inicio'                => $v['hora_inicio'] ?? null,
+                'hora_fin'                   => $v['hora_fin'] ?? null,
+                'motivo'                     => $v['motivo'] ?? null,
                 'estado'                     => $estado,
                 'n1_empleado_id'             => $skipN1 ? null : $n1Id,
                 'n1_aprobado_por_id'         => $skipN1 ? $solicitadoPorId : null,
@@ -153,6 +159,20 @@ class HorasExtrasController extends RRHHBaseController
                 'quincena_pago_num'          => $pagoNum,
                 'aud_usuario'                => Auth::user()->email,
             ]);
+
+            // ── Notificaciones ───────────────────────────────────────────────
+            $detallesSolicitud = $this->detallesSolicitud($solicitud, $empleadoId);
+            if ($estado === 'pendiente_n1' && $n1Id) {
+                $this->notificarAprobador($n1Id, $empleadoId, $detallesSolicitud, $solicitud->id);
+            } elseif ($estado === 'pendiente_n2' && $n2Id) {
+                $this->notificarAprobador($n2Id, $empleadoId, $detallesSolicitud, $solicitud->id);
+            } elseif ($estado === 'aprobada') {
+                $this->notificarAlEmpleado(
+                    $empleadoId, 'Horas Extras Aprobadas',
+                    'Tu solicitud de horas extras fue aprobada automáticamente.',
+                    $detallesSolicitud, 'horas-extras',
+                );
+            }
 
             $data = $this->enrich([$solicitud->toArray()]);
             return response()->json(['success' => true, 'data' => $data[0]], 201);
@@ -187,6 +207,17 @@ class HorasExtrasController extends RRHHBaseController
                     'n1_observaciones'   => $v['observaciones'] ?? null,
                 ] + ($siguienteEstado === 'aprobada' ? $this->pagoPayload($solicitud) : []));
 
+                $detalles = $this->detallesSolicitud($solicitud, $solicitud->empleado_id);
+                if ($siguienteEstado === 'pendiente_n2' && $solicitud->n2_empleado_id) {
+                    $this->notificarAprobador((int) $solicitud->n2_empleado_id, (int) $solicitud->empleado_id, $detalles, $solicitud->id);
+                } else {
+                    $this->notificarAlEmpleado(
+                        (int) $solicitud->empleado_id, 'Horas Extras Aprobadas',
+                        'Tu solicitud de horas extras fue aprobada.',
+                        $detalles, 'horas-extras',
+                    );
+                }
+
             } elseif ($solicitud->estado === 'pendiente_n2') {
                 if ((int) $solicitud->n2_empleado_id !== $miEmpleadoId) {
                     return response()->json(['success' => false, 'message' => 'No eres el aprobador N2.'], 403);
@@ -198,6 +229,12 @@ class HorasExtrasController extends RRHHBaseController
                     'n2_fecha'           => now(),
                     'n2_observaciones'   => $v['observaciones'] ?? null,
                 ] + $this->pagoPayload($solicitud));
+
+                $this->notificarAlEmpleado(
+                    (int) $solicitud->empleado_id, 'Horas Extras Aprobadas',
+                    'Tu solicitud de horas extras fue aprobada.',
+                    $this->detallesSolicitud($solicitud, $solicitud->empleado_id), 'horas-extras',
+                );
 
             } else {
                 return response()->json(['success' => false, 'message' => "No se puede aprobar en estado '{$solicitud->estado}'."], 422);
@@ -228,6 +265,16 @@ class HorasExtrasController extends RRHHBaseController
                 'estado'               => 'rechazada',
                 'rechazo_observaciones'=> $v['observaciones'] ?? null,
             ]);
+
+            $detallesRechazo = $this->detallesSolicitud($solicitud, $solicitud->empleado_id);
+            if ($v['observaciones'] ?? null) {
+                $detallesRechazo['Motivo'] = $v['observaciones'];
+            }
+            $this->notificarAlEmpleado(
+                (int) $solicitud->empleado_id, 'Horas Extras Rechazadas',
+                'Tu solicitud de horas extras fue rechazada.',
+                $detallesRechazo, 'horas-extras',
+            );
 
             return response()->json(['success' => true, 'message' => 'Solicitud rechazada.']);
         });
@@ -285,6 +332,44 @@ class HorasExtrasController extends RRHHBaseController
     }
 
     // ── Privados ──────────────────────────────────────────────────────────────
+
+    /**
+     * Notifica a un aprobador (N1 o N2) que tiene una solicitud pendiente.
+     */
+    private function notificarAprobador(int $aprobadorId, int $empleadoId, array $detalles, int $solicitudId): void
+    {
+        $this->notificarAlEmpleado(
+            $aprobadorId,
+            'Solicitud de Horas Extras',
+            'Tienes una solicitud de horas extras pendiente de tu aprobación.',
+            $detalles,
+            'horas-extras',
+        );
+    }
+
+    /**
+     * Construye el array de detalles para los correos de horas extras.
+     */
+    private function detallesSolicitud(HorasExtrasSolicitud $s, int $empleadoId): array
+    {
+        $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+        $empRow = DB::connection('pgsql')
+            ->table('empleados')
+            ->where('id', $empleadoId)
+            ->selectRaw("nombres || ' ' || apellidos as nombre")
+            ->first();
+
+        $quincenaLabel = "Q{$s->quincena_trabajo_num} {$meses[$s->quincena_trabajo_mes]} {$s->quincena_trabajo_anio}";
+
+        return array_filter([
+            'Empleado'         => $empRow?->nombre,
+            'Período'          => $s->fecha_inicio . ($s->fecha_fin !== $s->fecha_inicio ? " al {$s->fecha_fin}" : ''),
+            'Horas'            => number_format((float)$s->horas, 1) . ' h',
+            'Quincena trabajo' => $quincenaLabel,
+            'Descripción'      => $s->descripcion,
+        ]);
+    }
 
     private function empleadoIdPropio(): ?int
     {

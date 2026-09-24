@@ -34,6 +34,9 @@ class HorasExtrasSolicitud extends Model
         'quincena_pago_mes',
         'quincena_pago_num',
         'rechazo_observaciones',
+        'hora_inicio',
+        'hora_fin',
+        'motivo',
         'aud_usuario',
     ];
 

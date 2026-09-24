@@ -629,6 +629,7 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
 
     // Horarios semanales
     Route::get('horarios/mi-horario',             [HorariosController::class, 'miHorario']);
+    Route::get('horarios/empleado/{empleadoId}',  [HorariosController::class, 'empleadoSemana']);
     Route::get('horarios',                        [HorariosController::class, 'index']);
     Route::post('horarios/bulk',                  [HorariosController::class, 'bulk']);
     Route::post('horarios/swap',                  [HorariosController::class, 'swap']);
