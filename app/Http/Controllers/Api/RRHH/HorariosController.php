@@ -140,7 +140,6 @@ class HorariosController extends RRHHBaseController
             ->table('empleados as e')
             ->leftJoin('cargos as c', 'e.cargo_id', '=', 'c.id')
             ->where('e.user_id', $user->id)
-            ->where('e.activo', true)
             ->select('e.id', 'e.nombres', 'e.apellidos', 'c.nombre as cargo')
             ->first();
 
