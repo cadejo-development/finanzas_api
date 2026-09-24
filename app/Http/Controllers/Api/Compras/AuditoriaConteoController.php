@@ -132,11 +132,13 @@ class AuditoriaConteoController extends Controller
         $byProd = [];
         foreach ($movs as $mov) {
             $d = is_string($mov->detalle) ? json_decode($mov->detalle, true) : (array)($mov->detalle ?? []);
+            $secsRaw = array_filter((array)($d['secciones'] ?? []), fn($v) => (float)$v > 0);
             $byProd[$mov->producto_id] = [
                 'producto_id'       => $mov->producto_id,
                 'producto_nombre'   => $mov->producto_nombre,
                 'cantidad_contador' => $d['total_contado'] ?? 0,
                 'unidad'            => $mov->unidad ?? $mov->p_unidad,
+                'secciones_conteo'  => json_encode(empty($secsRaw) ? (object)[] : $secsRaw),
             ];
         }
 
@@ -159,14 +161,16 @@ class AuditoriaConteoController extends Controller
         // Crear los items
         $now = now();
         $items = array_values(array_map(fn($p) => [
-            'auditoria_id'      => $auditoriaId,
-            'producto_id'       => $p['producto_id'],
-            'producto_nombre'   => $p['producto_nombre'],
-            'cantidad_contador' => $p['cantidad_contador'],
-            'unidad'            => $p['unidad'],
-            'comprobado'        => false,
-            'created_at'        => $now,
-            'updated_at'        => $now,
+            'auditoria_id'          => $auditoriaId,
+            'producto_id'           => $p['producto_id'],
+            'producto_nombre'       => $p['producto_nombre'],
+            'cantidad_contador'     => $p['cantidad_contador'],
+            'unidad'                => $p['unidad'],
+            'secciones_conteo'      => $p['secciones_conteo'],
+            'secciones_comprobadas' => '{}',
+            'comprobado'            => false,
+            'created_at'            => $now,
+            'updated_at'            => $now,
         ], $byProd));
 
         DB::connection('compras')->table('conteo_auditoria_items')->insert($items);
@@ -181,38 +185,85 @@ class AuditoriaConteoController extends Controller
     public function actualizarItem(Request $request, int $auditoriaId, int $productoId): JsonResponse
     {
         $request->validate([
-            'comprobado'      => 'required|boolean',
-            'cantidad_auditor' => 'nullable|numeric|min:0',
-            'observacion'      => 'nullable|string|max:500',
+            'secciones_comprobadas' => 'nullable|array',
+            'observacion'           => 'nullable|string|max:500',
+            // backwards compat
+            'comprobado'            => 'nullable|boolean',
+            'cantidad_auditor'      => 'nullable|numeric|min:0',
         ]);
 
-        // Bloquear modificaciones en auditorías cerradas o aprobadas
         $auditoria = DB::connection('compras')
             ->table('conteo_auditorias')
             ->where('id', $auditoriaId)
             ->first();
 
         if ($auditoria && in_array($auditoria->estado, ['cerrada', 'aprobada'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Esta auditoría ya fue cerrada y no puede modificarse.',
-            ], 403);
+            return response()->json(['success' => false, 'message' => 'Esta auditoría ya fue cerrada y no puede modificarse.'], 403);
         }
 
-        $rows = DB::connection('compras')
-            ->table('conteo_auditoria_items')
-            ->where('auditoria_id', $auditoriaId)
-            ->where('producto_id', $productoId)
-            ->update([
-                'comprobado'       => $request->comprobado,
-                'comprobado_por'   => $request->comprobado ? Auth::user()->email : null,
-                'cantidad_auditor' => $request->comprobado ? $request->cantidad_auditor : null,
-                'observacion'      => $request->observacion,
-                'updated_at'       => now(),
-            ]);
+        $email = Auth::user()->email;
 
-        if (!$rows) {
-            return response()->json(['success' => false, 'message' => 'Item no encontrado.'], 404);
+        if ($request->has('secciones_comprobadas')) {
+            $item = DB::connection('compras')
+                ->table('conteo_auditoria_items')
+                ->where('auditoria_id', $auditoriaId)
+                ->where('producto_id', $productoId)
+                ->first();
+
+            if (!$item) {
+                return response()->json(['success' => false, 'message' => 'Item no encontrado.'], 404);
+            }
+
+            $seccionesComprobadas = $request->secciones_comprobadas ?? [];
+
+            // cantidad_auditor = suma de todas las cantidades comprobadas
+            $cantidadAuditor = array_sum(array_map(
+                fn($v) => (float)($v['cantidad'] ?? 0),
+                array_values($seccionesComprobadas)
+            ));
+
+            // comprobado = todas las secciones del conteo están cubiertas
+            $seccionesConteo = [];
+            if ($item->secciones_conteo) {
+                $raw = is_string($item->secciones_conteo) ? json_decode($item->secciones_conteo, true) : (array)$item->secciones_conteo;
+                $seccionesConteo = array_keys(array_filter($raw, fn($v) => (float)$v > 0));
+            }
+            if (empty($seccionesConteo)) {
+                $comprobado = !empty($seccionesComprobadas);
+            } else {
+                $comprobado = empty(array_diff($seccionesConteo, array_keys($seccionesComprobadas)));
+            }
+
+            DB::connection('compras')
+                ->table('conteo_auditoria_items')
+                ->where('auditoria_id', $auditoriaId)
+                ->where('producto_id', $productoId)
+                ->update([
+                    'secciones_comprobadas' => json_encode(empty($seccionesComprobadas) ? (object)[] : $seccionesComprobadas),
+                    'cantidad_auditor'      => $cantidadAuditor > 0 ? $cantidadAuditor : null,
+                    'comprobado'            => $comprobado,
+                    'comprobado_por'        => $comprobado ? $email : null,
+                    'observacion'           => $request->observacion,
+                    'updated_at'            => now(),
+                ]);
+        } else {
+            // Flujo legacy (sin secciones / quitar completo)
+            $rows = DB::connection('compras')
+                ->table('conteo_auditoria_items')
+                ->where('auditoria_id', $auditoriaId)
+                ->where('producto_id', $productoId)
+                ->update([
+                    'comprobado'            => $request->comprobado,
+                    'comprobado_por'        => $request->comprobado ? $email : null,
+                    'cantidad_auditor'      => $request->comprobado ? $request->cantidad_auditor : null,
+                    'secciones_comprobadas' => $request->comprobado ? null : '{}',
+                    'observacion'           => $request->observacion,
+                    'updated_at'            => now(),
+                ]);
+
+            if (!$rows) {
+                return response()->json(['success' => false, 'message' => 'Item no encontrado.'], 404);
+            }
         }
 
         return response()->json(['success' => true, 'message' => 'Item actualizado.']);
