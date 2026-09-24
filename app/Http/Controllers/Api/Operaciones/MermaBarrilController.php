@@ -119,6 +119,10 @@ class MermaBarrilController extends Controller
         ->where('fecha', today())
         ->first();
 
+        if ($inv) {
+            $inv->primer_dia = $this->esPrimerDia($inv->sucursal_id, $inv->fecha);
+        }
+
         return response()->json($inv);
     }
 
@@ -134,6 +138,8 @@ class MermaBarrilController extends Controller
             'ventasBrilo',
             'auditLog',
         ])->findOrFail($id);
+
+        $inv->primer_dia = $this->esPrimerDia($inv->sucursal_id, $inv->fecha);
 
         return response()->json($inv);
     }
@@ -214,13 +220,13 @@ class MermaBarrilController extends Controller
             throw $e;
         }
 
-        return response()->json(
-            MermaInventario::with([
-                'items.cerveza', 'items.barrilesConectados',
-                'entradas', 'fisica', 'cocina', 'otrosUsos', 'ventasBrilo',
-            ])->find($inv->id),
-            201
-        );
+        $invFresh = MermaInventario::with([
+            'items.cerveza', 'items.barrilesConectados',
+            'entradas', 'fisica', 'cocina', 'otrosUsos', 'ventasBrilo',
+        ])->find($inv->id);
+        $invFresh->primer_dia = $this->esPrimerDia($sucursalId, $fecha);
+
+        return response()->json($invFresh, 201);
     }
 
     // Sincroniza items de cervezas activas a un inventario que quedó sin ellos,
@@ -607,5 +613,14 @@ class MermaBarrilController extends Controller
             'valor_nuevo'    => $nuevo,
             'comentario'     => $comentario,
         ]);
+    }
+
+    // Retorna true si no existe ningún inventario enviado/aprobado anterior para esta sucursal.
+    private function esPrimerDia(int $sucursalId, string $fecha): bool
+    {
+        return !MermaInventario::where('sucursal_id', $sucursalId)
+            ->where('fecha', '<', $fecha)
+            ->whereIn('estado', ['enviado', 'aprobado'])
+            ->exists();
     }
 }
