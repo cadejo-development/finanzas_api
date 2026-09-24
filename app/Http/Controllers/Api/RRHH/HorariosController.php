@@ -134,8 +134,8 @@ class HorariosController extends RRHHBaseController
             : Carbon::now()->startOfWeek(Carbon::MONDAY);
         $fin = $inicio->copy()->endOfWeek(Carbon::SUNDAY);
 
-        // Buscar el empleado_id del usuario autenticado
-        $user = Auth::user();
+        // Buscar el empleado_id del usuario efectivo (respeta ViewAs)
+        $user = $this->getEffectiveUser();
         $empleado = DB::connection('pgsql')
             ->table('empleados as e')
             ->leftJoin('cargos as c', 'e.cargo_id', '=', 'c.id')
