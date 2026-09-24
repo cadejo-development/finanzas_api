@@ -223,19 +223,38 @@ class MermaBarrilController extends Controller
         );
     }
 
-    // Sincroniza items de cervezas activas a un inventario que quedó sin ellos
+    // Sincroniza items de cervezas activas a un inventario que quedó sin ellos,
+    // heredando el final_oz del último inventario cerrado de la misma sucursal.
     public function syncItems(Request $request, $id)
     {
         $inv      = MermaInventario::findOrFail($id);
         $cervezas = MermaCerveza::activas()->orderBy('orden')->get();
         $existing = MermaInvItem::where('inventario_id', $id)->pluck('cerveza_id')->toArray();
-        $added    = 0;
+
+        // Heredar inventario de cierre anterior (igual que store())
+        $invAnterior = MermaInventario::where('sucursal_id', $inv->sucursal_id)
+            ->where('fecha', '<=', $inv->fecha)
+            ->where('id', '!=', $inv->id)
+            ->whereIn('estado', ['enviado', 'aprobado'])
+            ->orderBy('fecha', 'desc')
+            ->with('items')
+            ->first();
+
+        $finalOzAnterior = [];
+        if ($invAnterior) {
+            foreach ($invAnterior->items as $itemAnt) {
+                $finalOzAnterior[$itemAnt->cerveza_id] = $itemAnt->final_oz
+                    ?? ($itemAnt->final_cerrados_p * 661 + $itemAnt->final_cerrados_g * 1986.26);
+            }
+        }
+
+        $added = 0;
         foreach ($cervezas as $c) {
             if (!in_array($c->id, $existing)) {
                 MermaInvItem::create([
                     'inventario_id'    => $id,
                     'cerveza_id'       => $c->id,
-                    'inicial_oz'       => 0,
+                    'inicial_oz'       => $finalOzAnterior[$c->id] ?? 0,
                     'final_cerrados_p' => 0,
                     'final_cerrados_g' => 0,
                 ]);
