@@ -10,10 +10,12 @@ return new class extends Migration
 
     public function up(): void
     {
-        Schema::connection('compras')->table('conteo_auditoria_items', function (Blueprint $table) {
-            $table->jsonb('secciones_conteo')->default('{}')->after('unidad');
-            $table->jsonb('secciones_comprobadas')->default('{}')->after('secciones_conteo');
-        });
+        // Usar SQL directo con IF NOT EXISTS para que sea seguro si ya se corrió manualmente
+        DB::connection('compras')->statement("
+            ALTER TABLE conteo_auditoria_items
+              ADD COLUMN IF NOT EXISTS secciones_conteo      JSONB NOT NULL DEFAULT '{}',
+              ADD COLUMN IF NOT EXISTS secciones_comprobadas JSONB NOT NULL DEFAULT '{}'
+        ");
     }
 
     public function down(): void
