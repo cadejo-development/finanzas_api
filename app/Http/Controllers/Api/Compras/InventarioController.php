@@ -922,10 +922,11 @@ class InventarioController extends Controller
                     ];
                 }
                 $byProd[$mov->producto_id]['conteos'][] = [
-                    'total_contado' => $d['total_contado'] ?? null,
-                    'secciones'     => $d['secciones']     ?? null,
-                    'contado_por'   => $d['contado_por']   ?? $mov->aud_usuario,
-                    'created_at'    => $mov->created_at,
+                    'total_contado'       => $d['total_contado']       ?? null,
+                    'secciones'           => $d['secciones']           ?? null,
+                    'contado_por'         => $d['contado_por']         ?? $mov->aud_usuario,
+                    'created_at'          => $mov->created_at,
+                    'entradas_especiales' => $d['entradas_especiales'] ?? null,
                 ];
                 // total_contado = suma de todos los contadores
                 $total = 0;
