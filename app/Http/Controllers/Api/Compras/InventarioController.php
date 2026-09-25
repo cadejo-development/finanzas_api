@@ -499,10 +499,11 @@ class InventarioController extends Controller
 
                 // detalle siempre completo: nunca null
                 $detalle = [
-                    'secciones'      => (object) $seccionesConValor,
-                    'total_contado'  => round((float) $item['cantidad_contada'], 4),
-                    'stock_anterior' => round($stockActualBase / $factor, 4),
-                    'contado_por'    => $usuario,
+                    'secciones'           => (object) $seccionesConValor,
+                    'total_contado'       => round((float) $item['cantidad_contada'], 4),
+                    'stock_anterior'      => round($stockActualBase / $factor, 4),
+                    'contado_por'         => $usuario,
+                    'entradas_especiales' => $item['entradas_especiales'] ?? null,
                 ];
 
                 // Eliminar placeholder sin_contar si existe para que el real tome su lugar
