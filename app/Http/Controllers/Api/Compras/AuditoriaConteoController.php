@@ -205,15 +205,8 @@ class AuditoriaConteoController extends Controller
                 array_values($seccionesComprobadas)
             ));
 
-            // comprobado para ESTE auditor = sus secciones cubren todo el conteo
-            $raw = is_string($base->secciones_conteo)
-                ? json_decode($base->secciones_conteo, true)
-                : (array)($base->secciones_conteo ?? []);
-            $seccionesConteo = array_keys(array_filter($raw, fn($v) => (float)$v > 0));
-
-            $comprobado = empty($seccionesConteo)
-                ? !empty($seccionesComprobadas)
-                : empty(array_diff($seccionesConteo, array_keys($seccionesComprobadas)));
+            // comprobado para ESTE auditor = tiene al menos una sección auditada (puede corregir sección)
+            $comprobado = !empty($seccionesComprobadas);
 
             // Upsert: cada auditor tiene su propia fila (auditor_email distinto)
             DB::connection('compras')
@@ -1089,11 +1082,8 @@ class AuditoriaConteoController extends Controller
                 if ($audit->comprobado_por) $ultimoAuditor = $audit->comprobado_por;
             }
 
-            // comprobado = todas las secciones del conteo están cubiertas en el consolidado
-            $keysConteo = array_keys(array_filter($seccionesConteo, fn($v) => (float)$v > 0));
-            $comprobado = empty($keysConteo)
-                ? !empty($consolidado)
-                : empty(array_diff($keysConteo, array_keys($consolidado)));
+            // comprobado = al menos una sección auditada (el auditor puede corregir la sección real)
+            $comprobado = !empty($consolidado);
 
             // Verificaciones por auditor
             $verificaciones = array_values(array_map(fn($a) => [
