@@ -52,7 +52,7 @@ class InactivarEmpleadosDesvinculados extends Command
             ->whereIn('dv.empleado_id', $activosIds)
             ->where(function ($q) {
                 $q->whereNull('dv.estado')
-                  ->orWhere('dv.estado', '!=', 'pendiente_gerencia_ops');
+                  ->orWhereNotIn('dv.estado', ['pendiente_gerencia_ops', 'retractada']);
             })
             ->get();
 
