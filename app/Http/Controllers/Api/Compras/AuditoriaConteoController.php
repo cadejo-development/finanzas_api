@@ -165,11 +165,12 @@ class AuditoriaConteoController extends Controller
     public function actualizarItem(Request $request, int $auditoriaId, int $productoId): JsonResponse
     {
         $request->validate([
-            'secciones_comprobadas' => 'nullable|array',
-            'observacion'           => 'nullable|string|max:500',
+            'secciones_comprobadas'          => 'nullable|array',
+            'observacion'                    => 'nullable|string|max:500',
+            'entradas_especiales_auditadas'  => 'nullable|array',
             // backwards compat
-            'comprobado'            => 'nullable|boolean',
-            'cantidad_auditor'      => 'nullable|numeric|min:0',
+            'comprobado'                     => 'nullable|boolean',
+            'cantidad_auditor'               => 'nullable|numeric|min:0',
         ]);
 
         $auditoria = DB::connection('compras')
@@ -244,64 +245,78 @@ class AuditoriaConteoController extends Controller
                 ->first();
         }
 
+        $extrasAuditadas = $request->input('entradas_especiales_auditadas', []);
+        $extrasTotalAuditadas = array_sum(array_map(
+            fn($e) => (float)($e['cantidad'] ?? 0) * (float)($e['factor'] ?? 1),
+            $extrasAuditadas
+        ));
+
         if ($request->has('secciones_comprobadas')) {
             $seccionesComprobadas = $request->secciones_comprobadas ?? [];
 
-            // cantidad_auditor = suma de las secciones que este auditor comprobó
-            $cantidadAuditor = array_sum(array_map(
+            // cantidad_auditor = suma secciones + total entradas especiales de empaque
+            $cantidadSecciones = array_sum(array_map(
                 fn($v) => (float)($v['cantidad'] ?? 0),
                 array_values($seccionesComprobadas)
             ));
+            $cantidadAuditor = $cantidadSecciones + $extrasTotalAuditadas;
 
-            // comprobado para ESTE auditor = tiene al menos una sección auditada (puede corregir sección)
-            $comprobado = !empty($seccionesComprobadas);
+            // comprobado para ESTE auditor = tiene al menos una sección auditada o una entrada especial
+            $comprobado = !empty($seccionesComprobadas) || !empty($extrasAuditadas);
 
             // Upsert: cada auditor tiene su propia fila (auditor_email distinto)
             DB::connection('compras')
                 ->table('conteo_auditoria_items')
                 ->upsert(
                     [[
-                        'auditoria_id'          => $auditoriaId,
-                        'producto_id'           => $productoId,
-                        'auditor_email'         => $email,
-                        'producto_nombre'       => $base->producto_nombre,
-                        'cantidad_contador'     => $base->cantidad_contador,
-                        'unidad'                => $base->unidad,
-                        'secciones_conteo'      => $base->secciones_conteo ?? '{}',
-                        'secciones_comprobadas' => json_encode(empty($seccionesComprobadas) ? (object)[] : $seccionesComprobadas),
-                        'cantidad_auditor'      => $cantidadAuditor > 0 ? $cantidadAuditor : null,
-                        'comprobado'            => $comprobado,
-                        'comprobado_por'        => $comprobado ? $email : null,
-                        'observacion'           => $request->observacion,
-                        'created_at'            => $now,
-                        'updated_at'            => $now,
+                        'auditoria_id'                   => $auditoriaId,
+                        'producto_id'                    => $productoId,
+                        'auditor_email'                  => $email,
+                        'producto_nombre'                => $base->producto_nombre,
+                        'cantidad_contador'              => $base->cantidad_contador,
+                        'unidad'                         => $base->unidad,
+                        'secciones_conteo'               => $base->secciones_conteo ?? '{}',
+                        'secciones_comprobadas'          => json_encode(empty($seccionesComprobadas) ? (object)[] : $seccionesComprobadas),
+                        'entradas_especiales_auditadas'  => json_encode($extrasAuditadas),
+                        'cantidad_auditor'               => $cantidadAuditor > 0 ? $cantidadAuditor : null,
+                        'comprobado'                     => $comprobado,
+                        'comprobado_por'                 => $comprobado ? $email : null,
+                        'observacion'                    => $request->observacion,
+                        'created_at'                     => $now,
+                        'updated_at'                     => $now,
                     ]],
                     ['auditoria_id', 'producto_id', 'auditor_email'],
-                    ['secciones_comprobadas', 'cantidad_auditor', 'comprobado', 'comprobado_por', 'observacion', 'updated_at']
+                    ['secciones_comprobadas', 'entradas_especiales_auditadas', 'cantidad_auditor', 'comprobado', 'comprobado_por', 'observacion', 'updated_at']
                 );
         } else {
-            // Flujo legacy (sin secciones / quitar completo): upsert fila del auditor
+            // Flujo sin secciones (simple / quitar completo)
+            $cantidadAuditorSimple = $request->comprobado
+                ? (((float)$request->cantidad_auditor) + $extrasTotalAuditadas)
+                : null;
+            $comprobadoSimple = $request->comprobado ?? false;
+
             DB::connection('compras')
                 ->table('conteo_auditoria_items')
                 ->upsert(
                     [[
-                        'auditoria_id'          => $auditoriaId,
-                        'producto_id'           => $productoId,
-                        'auditor_email'         => $email,
-                        'producto_nombre'       => $base->producto_nombre,
-                        'cantidad_contador'     => $base->cantidad_contador,
-                        'unidad'                => $base->unidad,
-                        'secciones_conteo'      => $base->secciones_conteo ?? '{}',
-                        'secciones_comprobadas' => $request->comprobado ? '{}' : '{}',
-                        'comprobado'            => $request->comprobado ?? false,
-                        'comprobado_por'        => $request->comprobado ? $email : null,
-                        'cantidad_auditor'      => $request->comprobado ? $request->cantidad_auditor : null,
-                        'observacion'           => $request->observacion,
-                        'created_at'            => $now,
-                        'updated_at'            => $now,
+                        'auditoria_id'                   => $auditoriaId,
+                        'producto_id'                    => $productoId,
+                        'auditor_email'                  => $email,
+                        'producto_nombre'                => $base->producto_nombre,
+                        'cantidad_contador'              => $base->cantidad_contador,
+                        'unidad'                         => $base->unidad,
+                        'secciones_conteo'               => $base->secciones_conteo ?? '{}',
+                        'secciones_comprobadas'          => '{}',
+                        'entradas_especiales_auditadas'  => json_encode($extrasAuditadas),
+                        'comprobado'                     => $comprobadoSimple,
+                        'comprobado_por'                 => $comprobadoSimple ? $email : null,
+                        'cantidad_auditor'               => $cantidadAuditorSimple,
+                        'observacion'                    => $request->observacion,
+                        'created_at'                     => $now,
+                        'updated_at'                     => $now,
                     ]],
                     ['auditoria_id', 'producto_id', 'auditor_email'],
-                    ['secciones_comprobadas', 'cantidad_auditor', 'comprobado', 'comprobado_por', 'observacion', 'updated_at']
+                    ['secciones_comprobadas', 'entradas_especiales_auditadas', 'cantidad_auditor', 'comprobado', 'comprobado_por', 'observacion', 'updated_at']
                 );
         }
 
@@ -1165,17 +1180,23 @@ class AuditoriaConteoController extends Controller
             // comprobado = al menos una sección auditada (el auditor puede corregir la sección real)
             $comprobado = !empty($consolidado);
 
+            // comprobado = al menos una sección auditada o una entrada especial o comprobado=true directo
+            $comprobado = !empty($consolidado) || array_reduce($audits, fn($c, $a) => $c || (bool)$a->comprobado, false);
+
             // Verificaciones por auditor
             $verificaciones = array_values(array_map(fn($a) => [
-                'id'                    => $a->id,
-                'auditor_email'         => $a->auditor_email,
-                'secciones_comprobadas' => is_string($a->secciones_comprobadas)
+                'id'                           => $a->id,
+                'auditor_email'                => $a->auditor_email,
+                'secciones_comprobadas'        => is_string($a->secciones_comprobadas)
                     ? (json_decode($a->secciones_comprobadas, true) ?? (object)[])
                     : ($a->secciones_comprobadas ?? (object)[]),
-                'comprobado'            => (bool) $a->comprobado,
-                'cantidad_auditor'      => $a->cantidad_auditor,
-                'observacion'           => $a->observacion,
-                'updated_at'            => $a->updated_at,
+                'entradas_especiales_auditadas' => is_string($a->entradas_especiales_auditadas ?? null)
+                    ? (json_decode($a->entradas_especiales_auditadas, true) ?? [])
+                    : ($a->entradas_especiales_auditadas ?? []),
+                'comprobado'                   => (bool) $a->comprobado,
+                'cantidad_auditor'             => $a->cantidad_auditor,
+                'observacion'                  => $a->observacion,
+                'updated_at'                   => $a->updated_at,
             ], $audits));
 
             $items[] = [
