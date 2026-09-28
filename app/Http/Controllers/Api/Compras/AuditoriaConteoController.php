@@ -576,13 +576,28 @@ class AuditoriaConteoController extends Controller
             }
         }
 
+        // ── Ajustes post-conteo (ajuste/merma aplicados después del conteo) ───
+        $ajustesMap = DB::connection('compras')
+            ->table('movimientos_inventario')
+            ->where('sucursal_id', $sucursalId)
+            ->whereIn('tipo', ['ajuste', 'merma'])
+            ->whereRaw("DATE(fecha) >= ?", [$fecha])
+            ->selectRaw('producto_id, SUM(cantidad_base) as total_ajuste')
+            ->groupBy('producto_id')
+            ->get()
+            ->keyBy('producto_id');
+
         // ── Construir filas ───────────────────────────────────────────────────
         $filas = [];
         foreach ($itemsRaw as $ai) {
             $conteo  = round((float) ($ai->cantidad_auditor ?? $ai->cantidad_contador), 4);
             $kd      = $kardex[$ai->codigo] ?? null;
             $brilo   = $kd !== null ? round($kd['saldo_fin'], 4) : null;
-            $diff    = $brilo !== null ? round($conteo - $brilo, 4) : null;
+            $ajuste  = isset($ajustesMap[$ai->producto_id])
+                ? round((float) $ajustesMap[$ai->producto_id]->total_ajuste, 4)
+                : 0.0;
+            $conteoEfectivo = round($conteo + $ajuste, 4);
+            $diff    = $brilo !== null ? round($conteoEfectivo - $brilo, 4) : null;
             $costo   = $ai->costo !== null ? round((float) $ai->costo, 4) : null;
             $costoDiff = ($diff !== null && $costo !== null) ? round($diff * $costo, 2) : null;
 
@@ -597,26 +612,27 @@ class AuditoriaConteoController extends Controller
                 : null;
 
             $filas[] = [
-                'producto_id'      => (int) $ai->producto_id,
-                'codigo'           => $ai->codigo,
-                'nombre'           => $ai->nombre,
-                'categoria'        => $ai->categoria ?? '—',
-                'unidad'           => $ai->unidad,
-                'conteo'           => $conteo,
-                'brilo'            => $brilo,
-                'diff'             => $diff,
-                'diff_pct'         => $diffPct,
-                'tipo'             => $tipo,
-                'costo'            => $costo,
-                'costo_diff'       => $costoDiff,
-                'k_saldo_ini'      => $kd['saldo_ini'] ?? null,
-                'k_entradas'       => $kd['entradas']  ?? null,
-                'k_salidas'        => $kd['salidas']   ?? null,
-                'k_saldo_fin'      => $kd['saldo_fin'] ?? null,
-                'comprobado'       => (bool) $ai->comprobado,
-                'comprobado_por'   => $ai->comprobado_por,
-                'justificacion'    => $ai->justificacion,
-                'justificacion_obs'=> $ai->justificacion_obs,
+                'producto_id'        => (int) $ai->producto_id,
+                'codigo'             => $ai->codigo,
+                'nombre'             => $ai->nombre,
+                'categoria'          => $ai->categoria ?? '—',
+                'unidad'             => $ai->unidad,
+                'conteo'             => $conteo,
+                'ajuste_post_conteo' => $ajuste !== 0.0 ? $ajuste : null,
+                'brilo'              => $brilo,
+                'diff'               => $diff,
+                'diff_pct'           => $diffPct,
+                'tipo'               => $tipo,
+                'costo'              => $costo,
+                'costo_diff'         => $costoDiff,
+                'k_saldo_ini'        => $kd['saldo_ini'] ?? null,
+                'k_entradas'         => $kd['entradas']  ?? null,
+                'k_salidas'          => $kd['salidas']   ?? null,
+                'k_saldo_fin'        => $kd['saldo_fin'] ?? null,
+                'comprobado'         => (bool) $ai->comprobado,
+                'comprobado_por'     => $ai->comprobado_por,
+                'justificacion'      => $ai->justificacion,
+                'justificacion_obs'  => $ai->justificacion_obs,
             ];
         }
 
@@ -742,6 +758,17 @@ class AuditoriaConteoController extends Controller
             }
         }
 
+        // ── Ajustes post-conteo (ajuste/merma aplicados después del conteo) ───
+        $ajustesMap = DB::connection('compras')
+            ->table('movimientos_inventario')
+            ->where('sucursal_id', $sucursalId)
+            ->whereIn('tipo', ['ajuste', 'merma'])
+            ->whereRaw("DATE(fecha) >= ?", [$fecha])
+            ->selectRaw('producto_id, SUM(cantidad_base) as total_ajuste')
+            ->groupBy('producto_id')
+            ->get()
+            ->keyBy('producto_id');
+
         // ── Construir filas ───────────────────────────────────────────────────
         $filas = [];
         foreach ($movs as $m) {
@@ -749,7 +776,11 @@ class AuditoriaConteoController extends Controller
             // Usar total_contado (cantidad real) y saldo_fin del kardex del período
             $conteo  = $m->total_contado !== null ? round((float) $m->total_contado, 4) : null;
             $brilo   = $kd !== null ? round($kd['saldo_fin'], 4) : null;
-            $diff    = ($conteo !== null && $brilo !== null) ? round($conteo - $brilo, 4) : null;
+            $ajuste  = isset($ajustesMap[$m->producto_id])
+                ? round((float) $ajustesMap[$m->producto_id]->total_ajuste, 4)
+                : 0.0;
+            $conteoEfectivo = $conteo !== null ? round($conteo + $ajuste, 4) : null;
+            $diff    = ($conteoEfectivo !== null && $brilo !== null) ? round($conteoEfectivo - $brilo, 4) : null;
             $costo   = $m->costo !== null ? round((float) $m->costo, 4) : null;
             $costoDiff = ($diff !== null && $costo !== null) ? round($diff * $costo, 2) : null;
 
@@ -765,24 +796,25 @@ class AuditoriaConteoController extends Controller
                 : null;
 
             $filas[] = [
-                'producto_id'      => (int) $m->producto_id,
-                'codigo'           => $m->codigo,
-                'nombre'           => $m->nombre,
-                'categoria'        => $m->categoria ?? '—',
-                'unidad'           => $m->unidad,
-                'conteo'           => $conteo,
-                'brilo'            => $brilo,
-                'diff'             => $diff,
-                'diff_pct'         => $diffPct,
-                'tipo'             => $tipo,
-                'costo'            => $costo,
-                'costo_diff'       => $costoDiff,
-                'k_saldo_ini'      => $kd['saldo_ini'] ?? null,
-                'k_entradas'       => $kd['entradas']  ?? null,
-                'k_salidas'        => $kd['salidas']   ?? null,
-                'k_saldo_fin'      => $kd['saldo_fin'] ?? null,
-                'justificacion'    => null,
-                'justificacion_obs'=> null,
+                'producto_id'        => (int) $m->producto_id,
+                'codigo'             => $m->codigo,
+                'nombre'             => $m->nombre,
+                'categoria'          => $m->categoria ?? '—',
+                'unidad'             => $m->unidad,
+                'conteo'             => $conteo,
+                'ajuste_post_conteo' => $ajuste !== 0.0 ? $ajuste : null,
+                'brilo'              => $brilo,
+                'diff'               => $diff,
+                'diff_pct'           => $diffPct,
+                'tipo'               => $tipo,
+                'costo'              => $costo,
+                'costo_diff'         => $costoDiff,
+                'k_saldo_ini'        => $kd['saldo_ini'] ?? null,
+                'k_entradas'         => $kd['entradas']  ?? null,
+                'k_salidas'          => $kd['salidas']   ?? null,
+                'k_saldo_fin'        => $kd['saldo_fin'] ?? null,
+                'justificacion'      => null,
+                'justificacion_obs'  => null,
             ];
         }
 
