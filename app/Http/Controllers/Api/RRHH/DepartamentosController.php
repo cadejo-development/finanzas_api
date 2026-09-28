@@ -212,6 +212,50 @@ class DepartamentosController extends Controller
     }
 
     /**
+     * Empleados inactivos — búsqueda para expedientes.
+     * GET /api/rrhh/admin/empleados/inactivos?q=franklin
+     */
+    public function empleadosInactivos(Request $request): JsonResponse
+    {
+        $q = trim($request->query('q', ''));
+
+        $query = DB::connection('pgsql')
+            ->table('empleados as e')
+            ->leftJoin('cargos as c', 'e.cargo_id', '=', 'c.id')
+            ->leftJoin('sucursales as s', 'e.sucursal_id', '=', 's.id')
+            ->where('e.activo', false)
+            ->select(
+                'e.id', 'e.codigo', 'e.nombres', 'e.apellidos',
+                'c.nombre as cargo', 's.nombre as sucursal', 'e.sucursal_id',
+                'e.fecha_ingreso', 'e.updated_at'
+            )
+            ->orderBy('e.apellidos');
+
+        if ($q !== '') {
+            $like = '%' . $q . '%';
+            $query->where(function ($w) use ($like) {
+                $w->whereRaw("CONCAT(e.nombres, ' ', e.apellidos) ILIKE ?", [$like])
+                  ->orWhereRaw("CONCAT(e.apellidos, ' ', e.nombres) ILIKE ?", [$like])
+                  ->orWhere('e.codigo', 'ILIKE', $like);
+            });
+        }
+
+        $empleados = $query->limit(50)->get()->map(function ($e) {
+            return [
+                'id'          => $e->id,
+                'codigo'      => $e->codigo,
+                'nombre'      => trim("{$e->nombres} {$e->apellidos}"),
+                'puesto'      => $e->cargo ?? '',
+                'sucursal'    => $e->sucursal ?? '',
+                'sucursal_id' => $e->sucursal_id,
+                'activo'      => false,
+            ];
+        });
+
+        return response()->json(['success' => true, 'data' => $empleados]);
+    }
+
+    /**
      * Asignar empleado a departamento.
      * POST /api/rrhh/admin/departamentos/{id}/empleados/{empId}
      */
