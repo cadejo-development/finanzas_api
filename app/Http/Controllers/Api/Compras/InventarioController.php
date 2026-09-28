@@ -1230,13 +1230,16 @@ class InventarioController extends Controller
         $tipoConteo = in_array($request->query('tipo_conteo'), ['conteo_fisico', 'conteo_mensual'])
             ? $request->query('tipo_conteo')
             : 'conteo_fisico';
-        $row = DB::connection('compras')
+        $q = DB::connection('compras')
             ->table('conteo_borradores')
             ->where('sucursal_id', (int) $request->query('sucursal_id'))
             ->where('aud_usuario', Auth::user()->email)
             ->where('tipo_conteo', $tipoConteo)
-            ->where('estado', 'borrador')
-            ->first();
+            ->where('estado', 'borrador');
+        if ($request->query('fecha_conteo')) {
+            $q->where('fecha_conteo', $request->query('fecha_conteo'));
+        }
+        $row = $q->orderBy('fecha_conteo', 'desc')->first();
 
         if (!$row) return response()->json(['success' => true, 'data' => null]);
 
@@ -1274,8 +1277,8 @@ class InventarioController extends Controller
                     'created_at'   => now(),
                     'updated_at'   => now(),
                 ]],
-                ['sucursal_id', 'aud_usuario', 'tipo_conteo'],
-                ['fecha_conteo', 'payload', 'estado', 'updated_at']
+                ['sucursal_id', 'aud_usuario', 'tipo_conteo', 'fecha_conteo'],
+                ['payload', 'estado', 'updated_at']
             );
 
         return response()->json(['success' => true]);
@@ -1288,13 +1291,16 @@ class InventarioController extends Controller
             ? $request->query('tipo_conteo')
             : 'conteo_fisico';
         // Soft-delete: marcar como descartado en lugar de borrar físicamente
-        DB::connection('compras')
+        $q = DB::connection('compras')
             ->table('conteo_borradores')
             ->where('sucursal_id', (int) $request->query('sucursal_id'))
             ->where('aud_usuario', Auth::user()->email)
             ->where('tipo_conteo', $tipoConteo)
-            ->where('estado', 'borrador')
-            ->update(['estado' => 'descartado', 'updated_at' => now()]);
+            ->where('estado', 'borrador');
+        if ($request->query('fecha_conteo')) {
+            $q->where('fecha_conteo', $request->query('fecha_conteo'));
+        }
+        $q->update(['estado' => 'descartado', 'updated_at' => now()]);
 
         return response()->json(['success' => true]);
     }
@@ -1307,17 +1313,20 @@ class InventarioController extends Controller
         $tipoConteo = in_array($request->query('tipo_conteo'), ['conteo_fisico', 'conteo_mensual'])
             ? $request->query('tipo_conteo')
             : 'conteo_fisico';
-        DB::connection('compras')
+        $q = DB::connection('compras')
             ->table('conteo_borradores')
             ->where('sucursal_id', (int) $request->query('sucursal_id'))
             ->where('aud_usuario', Auth::user()->email)
             ->where('tipo_conteo', $tipoConteo)
-            ->where('estado', 'borrador')
-            ->update([
-                'estado'      => 'aplicado',
-                'aplicado_en' => now(),
-                'updated_at'  => now(),
-            ]);
+            ->where('estado', 'borrador');
+        if ($request->query('fecha_conteo')) {
+            $q->where('fecha_conteo', $request->query('fecha_conteo'));
+        }
+        $q->update([
+            'estado'      => 'aplicado',
+            'aplicado_en' => now(),
+            'updated_at'  => now(),
+        ]);
 
         return response()->json(['success' => true]);
     }
