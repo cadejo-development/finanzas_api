@@ -1270,11 +1270,12 @@ class InventarioController extends Controller
                     'tipo_conteo'  => $tipoConteo,
                     'fecha_conteo' => $validated['fecha_conteo'],
                     'payload'      => json_encode($validated['payload']),
+                    'estado'       => 'borrador',
                     'created_at'   => now(),
                     'updated_at'   => now(),
                 ]],
                 ['sucursal_id', 'aud_usuario', 'tipo_conteo'],
-                ['fecha_conteo', 'payload', 'updated_at']
+                ['fecha_conteo', 'payload', 'estado', 'updated_at']
             );
 
         return response()->json(['success' => true]);
