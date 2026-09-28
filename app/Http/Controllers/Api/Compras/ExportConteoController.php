@@ -51,10 +51,11 @@ class ExportConteoController extends Controller
             ->pluck('sucursal_id')
             ->flip(); // set para O(1) lookup
 
-        // Auditorías del mes
+        // Auditorías del mes (ordenado por id ASC → keyBy queda con el más reciente)
         $auditorias = DB::connection('compras')
             ->table('conteo_auditorias')
             ->whereBetween('fecha_conteo', [$desde, $hasta])
+            ->orderBy('id')
             ->get()
             ->keyBy('sucursal_id');
 
