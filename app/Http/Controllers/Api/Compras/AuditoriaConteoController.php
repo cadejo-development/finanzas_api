@@ -192,8 +192,56 @@ class AuditoriaConteoController extends Controller
             ->where('auditor_email', '')
             ->first();
 
+        // Si no hay fila base (producto agregado post-auditoría o no contado),
+        // crearla a partir del movimiento de conteo mensual o con cantidad 0.
         if (!$base) {
-            return response()->json(['success' => false, 'message' => 'Item no encontrado.'], 404);
+            $mov = DB::connection('compras')
+                ->table('movimientos_inventario as m')
+                ->join('productos as p', 'p.id', '=', 'm.producto_id')
+                ->where('m.sucursal_id', $auditoria->sucursal_id)
+                ->where('m.tipo', 'conteo_mensual')
+                ->whereRaw("DATE(m.fecha) = ?", [$auditoria->fecha_conteo])
+                ->where('m.producto_id', $productoId)
+                ->where('m.aud_usuario', '!=', 'sin_contar')
+                ->select('m.producto_id', 'p.nombre as producto_nombre', 'm.detalle', 'p.unidad', 'm.created_at')
+                ->orderByDesc('m.created_at')
+                ->first();
+
+            $productoNombre = $mov?->producto_nombre
+                ?? DB::connection('compras')->table('productos')->where('id', $productoId)->value('nombre')
+                ?? 'Producto';
+
+            $totalContado = 0;
+            $secciones    = '{}';
+            if ($mov) {
+                $d = is_string($mov->detalle) ? json_decode($mov->detalle, true) : (array)($mov->detalle ?? []);
+                $totalContado = $d['total_contado'] ?? 0;
+                $secsRaw = array_filter((array)($d['secciones'] ?? []), fn($v) => (float)$v > 0);
+                $secciones = json_encode(empty($secsRaw) ? (object)[] : $secsRaw);
+            }
+
+            $unidad = $mov
+                ? DB::connection('compras')->table('productos')->where('id', $productoId)->value('unidad') ?? ''
+                : '';
+
+            $newId = DB::connection('compras')->table('conteo_auditoria_items')->insertGetId([
+                'auditoria_id'          => $auditoriaId,
+                'producto_id'           => $productoId,
+                'auditor_email'         => '',
+                'producto_nombre'       => $productoNombre,
+                'cantidad_contador'     => $totalContado,
+                'unidad'                => $unidad,
+                'secciones_conteo'      => $secciones,
+                'secciones_comprobadas' => '{}',
+                'comprobado'            => false,
+                'created_at'            => now(),
+                'updated_at'            => now(),
+            ]);
+
+            $base = DB::connection('compras')
+                ->table('conteo_auditoria_items')
+                ->where('id', $newId)
+                ->first();
         }
 
         if ($request->has('secciones_comprobadas')) {
