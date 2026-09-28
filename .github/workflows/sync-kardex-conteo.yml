@@ -68,29 +68,32 @@ jobs:
 
       - name: Sync Kardex Brilo
         run: |
-          # Calcular fecha por defecto: último día del mes anterior
-          HASTA="${{ github.event.inputs.hasta }}"
-          if [ -z "$HASTA" ]; then
-            HASTA=$(date -d "$(date +%Y-%m-01) -1 day" +%Y-%m-%d)
-          fi
-          echo "Período hasta: $HASTA"
+          SUC_INPUT="${{ github.event.inputs.sucursal_id }}"
+          HASTA_INPUT="${{ github.event.inputs.hasta }}"
+          DESDE_INPUT="${{ github.event.inputs.desde }}"
 
-          SUCURSALES="${{ github.event.inputs.sucursal_id }}"
-          if [ -z "$SUCURSALES" ]; then
-            # Todas las sucursales activas mapeadas a Brilo
-            SUCURSALES="1 3 7 8 9 10 11"
+          if [ -n "$SUC_INPUT" ]; then
+            # ── Modo manual: sucursal específica ──────────────────────────────
+            if [ -z "$HASTA_INPUT" ]; then
+              HASTA_INPUT=$(date -d "$(date +%Y-%m-01) -1 day" +%Y-%m-%d)
+            fi
+            DESDE_ARG=""
+            if [ -n "$DESDE_INPUT" ]; then DESDE_ARG="--desde=$DESDE_INPUT"; fi
+            echo "─── Manual: sucursal $SUC_INPUT hasta=$HASTA_INPUT ───"
+            node database/sync_brilo_kardex.js --sucursal=$SUC_INPUT --hasta=$HASTA_INPUT $DESDE_ARG
+          else
+            # ── Modo automático: leer periodos de database/kardex-periodos.json ──
+            echo "Leyendo periodos desde database/kardex-periodos.json …"
+            node -e "
+              const fs = require('fs');
+              const p = JSON.parse(fs.readFileSync('database/kardex-periodos.json'));
+              p.forEach(r => console.log(r.sucursal_id + '|' + r.hasta + '|' + r.desde + '|' + r.bod + ' ' + r.nombre));
+            " | while IFS='|' read SUC HASTA DESDE LABEL; do
+              echo "─── $LABEL  suc=$SUC  hasta=$HASTA  desde=$DESDE ───"
+              node database/sync_brilo_kardex.js --sucursal=$SUC --hasta=$HASTA --desde=$DESDE || \
+                echo "⚠ Error en sucursal $SUC — continúa con las demás"
+            done
           fi
-
-          DESDE_ARG=""
-          if [ -n "${{ github.event.inputs.desde }}" ]; then
-            DESDE_ARG="--desde=${{ github.event.inputs.desde }}"
-          fi
-
-          for SUC in $SUCURSALES; do
-            echo "─── Sucursal $SUC ───"
-            node database/sync_brilo_kardex.js --sucursal=$SUC --hasta=$HASTA $DESDE_ARG || \
-              echo "⚠ Error en sucursal $SUC — continúa con las demás"
-          done
 
       - name: Desconectar VPN
         if: always()
