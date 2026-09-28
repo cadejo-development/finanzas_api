@@ -154,16 +154,26 @@ class ExportConteoController extends Controller
         }
 
         // Items de la auditoría con código de producto
+        // cantidad_auditor = suma consolidada de todos los auditores
         $items = DB::connection('compras')
             ->table('conteo_auditoria_items as ai')
             ->join('productos as p', 'p.id', '=', 'ai.producto_id')
+            ->leftJoinSub(
+                DB::connection('compras')->table('conteo_auditoria_items')
+                    ->where('auditoria_id', $auditoriaId)
+                    ->where('auditor_email', '!=', '')
+                    ->selectRaw('producto_id, SUM(cantidad_auditor) as cant_aud_consolidada')
+                    ->groupBy('producto_id'),
+                'aud', 'aud.producto_id', '=', 'ai.producto_id'
+            )
             ->select(
                 'p.codigo',
                 'ai.cantidad_contador',
-                'ai.cantidad_auditor',
+                DB::raw('aud.cant_aud_consolidada as cantidad_auditor'),
                 'ai.unidad',
             )
             ->where('ai.auditoria_id', $auditoriaId)
+            ->where('ai.auditor_email', '')
             ->orderBy('p.codigo')
             ->get();
 

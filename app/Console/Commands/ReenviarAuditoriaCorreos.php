@@ -25,7 +25,8 @@ class ReenviarAuditoriaCorreos extends Command
 
             $sucursalNombre = DB::table('sucursales')->where('id', $auditoria->sucursal_id)->value('nombre') ?? 'Sucursal';
             $comprobados    = DB::connection('compras')->table('conteo_auditoria_items')
-                ->where('auditoria_id', $audId)->where('comprobado', true)->count();
+                ->where('auditoria_id', $audId)->where('auditor_email', '!=', '')->where('comprobado', true)
+                ->distinct('producto_id')->count('producto_id');
 
             $gerentes = DB::table('departamentos as d')
                 ->join('empleados as e', 'e.id', '=', 'd.jefe_empleado_id')
