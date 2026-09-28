@@ -377,8 +377,12 @@ class InventarioController extends Controller
             'items.*.producto_id'       => 'required|integer',
             'items.*.cantidad_contada'  => 'required|numeric|min:0',
             'items.*.unidad'            => 'required|string|max:30',
-            'items.*.secciones'         => 'nullable|array',
+            'items.*.secciones'           => 'nullable|array',
             'items.*.entradas_especiales' => 'nullable|array',
+            'items.*.unidad_ingreso'      => 'nullable|string|max:20',
+            'items.*.unidad_ingreso_nombre' => 'nullable|string|max:50',
+            'items.*.factor_ingreso'      => 'nullable|numeric',
+            'items.*.secciones_crudas'    => 'nullable|array',
             'tipo_conteo'               => 'nullable|in:conteo_fisico,conteo_mensual',
         ]);
 
@@ -500,11 +504,17 @@ class InventarioController extends Controller
 
                 // detalle siempre completo: nunca null
                 $detalle = [
-                    'secciones'           => (object) $seccionesConValor,
-                    'total_contado'       => round((float) $item['cantidad_contada'], 4),
-                    'stock_anterior'      => round($stockActualBase / $factor, 4),
-                    'contado_por'         => $usuario,
-                    'entradas_especiales' => $item['entradas_especiales'] ?? null,
+                    'secciones'            => (object) $seccionesConValor,
+                    'total_contado'        => round((float) $item['cantidad_contada'], 4),
+                    'stock_anterior'       => round($stockActualBase / $factor, 4),
+                    'contado_por'          => $usuario,
+                    'entradas_especiales'  => $item['entradas_especiales'] ?? null,
+                    // Modo de ingreso: 'base' (default) o 'compra' (paquete/bolsa/etc.)
+                    'unidad_ingreso'       => $item['unidad_ingreso'] ?? 'base',
+                    'unidad_ingreso_nombre' => $item['unidad_ingreso_nombre'] ?? null,
+                    'factor_ingreso'       => isset($item['factor_ingreso']) ? (float)$item['factor_ingreso'] : null,
+                    // Valores crudos por sección antes de conversión (ej: 22 paquetes)
+                    'secciones_crudas'     => !empty($item['secciones_crudas']) ? (object)$item['secciones_crudas'] : null,
                 ];
 
                 // Eliminar placeholder sin_contar si existe para que el real tome su lugar
