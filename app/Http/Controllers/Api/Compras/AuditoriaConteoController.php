@@ -1084,32 +1084,37 @@ class AuditoriaConteoController extends Controller
             'codigo_mp_equivocado'  => 'Código de materia prima equivocado',
         ];
 
-        // 3. Enviar un correo por producto (un email por item)
-        $emailCount = 0;
+        // 3. Agrupar items por destinatario y enviar UN correo por destinatario
+        $porDestinatario = [];
         foreach ($request->items as $item) {
             $tipo = $item['justificacion'] ?? '';
             if (!$tipo || !isset($justificacionLabel[$tipo])) continue;
             foreach ($destinatarios as $email => $dest) {
                 if (!in_array($tipo, $dest['tipos'])) continue;
-                Mail::to($email)->send(new JustificacionesInventarioMail(
-                    destinatarioNombre:  $dest['nombre'],
-                    sucursalNombre:      $sucursalNombre,
-                    fechaConteo:         $fecha,
-                    gerenteNombre:       $gerenteNombre,
-                    item: [
-                        'codigo'     => $item['codigo'] ?? '',
-                        'nombre'     => $item['nombre'],
-                        'unidad'     => $item['unidad'] ?? '',
-                        'diferencia' => $item['diferencia'] ?? null,
-                        'dif_pct'    => $item['dif_pct'] ?? null,
-                        'costo_diff' => $item['costo_diff'] ?? null,
-                        'just_label' => $justificacionLabel[$tipo],
-                        'obs'        => $item['justificacion_obs'] ?? null,
-                    ],
-                    tipoResponsabilidad: $tipo,
-                ));
-                $emailCount++;
+                $porDestinatario[$email]['dest'] = $dest;
+                $porDestinatario[$email]['items'][] = [
+                    'codigo'     => $item['codigo'] ?? '',
+                    'nombre'     => $item['nombre'],
+                    'unidad'     => $item['unidad'] ?? '',
+                    'diferencia' => $item['diferencia'] ?? null,
+                    'dif_pct'    => $item['dif_pct'] ?? null,
+                    'costo_diff' => $item['costo_diff'] ?? null,
+                    'just_label' => $justificacionLabel[$tipo],
+                    'obs'        => $item['justificacion_obs'] ?? null,
+                ];
             }
+        }
+
+        $emailCount = 0;
+        foreach ($porDestinatario as $email => $data) {
+            Mail::to($email)->send(new JustificacionesInventarioMail(
+                destinatarioNombre: $data['dest']['nombre'],
+                sucursalNombre:     $sucursalNombre,
+                fechaConteo:        $fecha,
+                gerenteNombre:      $gerenteNombre,
+                items:              $data['items'],
+            ));
+            $emailCount++;
         }
 
         $msg = $emailCount === 0
