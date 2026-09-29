@@ -337,9 +337,11 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('inventario/auditoria-conteo/{id}/borrador',              [AuditoriaConteoController::class, 'getBorrador']);
     Route::put('inventario/auditoria-conteo/{id}/borrador',              [AuditoriaConteoController::class, 'saveBorrador']);
     Route::get('inventario/auditoria-conteo/{id}/estadisticas',          [AuditoriaConteoController::class, 'getEstadisticas']);
-    Route::put('inventario/auditoria-conteo/{id}/justificar/{pid}',      [AuditoriaConteoController::class, 'guardarJustificacion']);
-    Route::put('inventario/auditoria-conteo/justificar-directa',          [AuditoriaConteoController::class, 'guardarJustificacionDirecta']);
-    Route::post('inventario/auditoria-conteo/enviar-justificaciones',      [AuditoriaConteoController::class, 'enviarJustificaciones']);
+    Route::put('inventario/auditoria-conteo/{id}/justificar/{pid}',             [AuditoriaConteoController::class, 'guardarJustificacion']);
+    Route::post('inventario/auditoria-conteo/{id}/justificar/{pid}/imagen',     [AuditoriaConteoController::class, 'subirImagenJustificacion']);
+    Route::put('inventario/auditoria-conteo/justificar-directa',                [AuditoriaConteoController::class, 'guardarJustificacionDirecta']);
+    Route::post('inventario/auditoria-conteo/justificar-directa/imagen',        [AuditoriaConteoController::class, 'subirImagenJustificacionDirecta']);
+    Route::post('inventario/auditoria-conteo/enviar-justificaciones',           [AuditoriaConteoController::class, 'enviarJustificaciones']);
     Route::post('inventario/auditoria-conteo/{id}/cerrar',               [AuditoriaConteoController::class, 'cerrar']);
     Route::post('inventario/auditoria-conteo/{id}/reabrir',              [AuditoriaConteoController::class, 'reabrir']);
     Route::post('inventario/auditoria-conteo/{id}/responder',            [AuditoriaConteoController::class, 'responder']);

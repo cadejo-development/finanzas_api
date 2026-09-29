@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 
 class AuditoriaConteoController extends Controller
 {
@@ -600,6 +601,7 @@ class AuditoriaConteoController extends Controller
                 'aud.comprobado_por_cons as comprobado_por',
                 DB::raw('COALESCE(aud.just_cons, ai.justificacion) as justificacion'),
                 DB::raw('COALESCE(aud.just_obs_cons, ai.justificacion_obs) as justificacion_obs'),
+                'ai.justificacion_imagen',
                 'p.codigo', 'p.nombre', 'p.unidad', 'p.costo',
                 'cat.nombre as categoria',
                 'inv.brilo_stock'
@@ -694,8 +696,11 @@ class AuditoriaConteoController extends Controller
                 'k_saldo_fin'        => $kd['saldo_fin'] ?? null,
                 'comprobado'         => (bool) $ai->comprobado,
                 'comprobado_por'     => $ai->comprobado_por,
-                'justificacion'      => $ai->justificacion,
-                'justificacion_obs'  => $ai->justificacion_obs,
+                'justificacion'       => $ai->justificacion,
+                'justificacion_obs'   => $ai->justificacion_obs,
+                'justificacion_imagen_url' => $ai->justificacion_imagen
+                    ? Storage::disk('public')->url($ai->justificacion_imagen)
+                    : null,
             ];
         }
 
@@ -946,16 +951,20 @@ class AuditoriaConteoController extends Controller
             'justificacion_obs' => 'nullable|string|max:500',
         ]);
 
+        $update = [
+            'justificacion'     => $request->justificacion,
+            'justificacion_obs' => $request->justificacion_obs,
+            'updated_at'        => now(),
+        ];
+        // Si se limpia la justificación, también limpiar imagen
+        if (!$request->justificacion) $update['justificacion_imagen'] = null;
+
         $rows = DB::connection('compras')
             ->table('conteo_auditoria_items')
             ->where('auditoria_id', $auditoriaId)
             ->where('producto_id', $productoId)
             ->where('auditor_email', '')  // actualizar solo fila base
-            ->update([
-                'justificacion'     => $request->justificacion,
-                'justificacion_obs' => $request->justificacion_obs,
-                'updated_at'        => now(),
-            ]);
+            ->update($update);
 
         if (!$rows) {
             return response()->json(['success' => false, 'message' => 'Producto no encontrado en esta auditoría.'], 404);
@@ -1020,6 +1029,7 @@ class AuditoriaConteoController extends Controller
             'items.*.costo_diff'        => 'nullable|numeric',
             'items.*.justificacion'     => 'nullable|string|max:100',
             'items.*.justificacion_obs' => 'nullable|string|max:500',
+            'items.*.imagen_url'        => 'nullable|string|max:1000',
         ]);
 
         $auditoriaId    = $request->integer('auditoria_id', 0) ?: null;
@@ -1099,8 +1109,9 @@ class AuditoriaConteoController extends Controller
                     'diferencia' => $item['diferencia'] ?? null,
                     'dif_pct'    => $item['dif_pct'] ?? null,
                     'costo_diff' => $item['costo_diff'] ?? null,
-                    'just_label' => $justificacionLabel[$tipo],
-                    'obs'        => $item['justificacion_obs'] ?? null,
+                    'just_label'  => $justificacionLabel[$tipo],
+                    'obs'         => $item['justificacion_obs'] ?? null,
+                    'imagen_url'  => $item['imagen_url'] ?? null,
                 ];
             }
         }
@@ -1122,6 +1133,64 @@ class AuditoriaConteoController extends Controller
             : "Justificaciones guardadas. Se enviaron {$emailCount} correo(s).";
 
         return response()->json(['success' => true, 'message' => $msg, 'correos_enviados' => $emailCount]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /api/compras/inventario/auditoria-conteo/{id}/justificar/{pid}/imagen
+    // Sube imagen de apoyo a la justificación (vía auditoría)
+    // ─────────────────────────────────────────────────────────────────────────
+    public function subirImagenJustificacion(Request $request, int $auditoriaId, int $productoId): JsonResponse
+    {
+        $request->validate(['imagen' => 'required|image|max:8192']); // 8 MB max
+
+        $file     = $request->file('imagen');
+        $ext      = strtolower($file->getClientOriginalExtension()) ?: 'jpg';
+        $path     = "justificaciones/{$auditoriaId}/{$productoId}.{$ext}";
+
+        Storage::disk('public')->put($path, file_get_contents($file->getRealPath()));
+
+        DB::connection('compras')
+            ->table('conteo_auditoria_items')
+            ->where('auditoria_id', $auditoriaId)
+            ->where('producto_id', $productoId)
+            ->where('auditor_email', '')
+            ->update(['justificacion_imagen' => $path, 'updated_at' => now()]);
+
+        return response()->json([
+            'imagen_url' => Storage::disk('public')->url($path),
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /api/compras/inventario/auditoria-conteo/justificar-directa/imagen
+    // Sube imagen de apoyo a la justificación (vista directa sin auditoría)
+    // ─────────────────────────────────────────────────────────────────────────
+    public function subirImagenJustificacionDirecta(Request $request): JsonResponse
+    {
+        $request->validate([
+            'imagen'      => 'required|image|max:8192',
+            'sucursal_id' => 'required|integer',
+            'fecha'       => 'required|date',
+            'producto_id' => 'required|integer',
+        ]);
+
+        $file  = $request->file('imagen');
+        $ext   = strtolower($file->getClientOriginalExtension()) ?: 'jpg';
+        $key   = "suc{$request->sucursal_id}_{$request->fecha}";
+        $path  = "justificaciones/{$key}/{$request->producto_id}.{$ext}";
+
+        Storage::disk('public')->put($path, file_get_contents($file->getRealPath()));
+
+        DB::connection('compras')
+            ->table('inventario_justificaciones')
+            ->where('sucursal_id', $request->sucursal_id)
+            ->where('fecha_conteo', $request->fecha)
+            ->where('producto_id', $request->producto_id)
+            ->update(['justificacion_imagen' => $path, 'updated_at' => now()]);
+
+        return response()->json([
+            'imagen_url' => Storage::disk('public')->url($path),
+        ]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

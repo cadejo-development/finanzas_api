@@ -69,6 +69,12 @@
                   @if(!empty($item['obs']))
                     <br><span style="color:#6b7280;font-style:italic;font-size:12px;">{{ $item['obs'] }}</span>
                   @endif
+                  @if(!empty($item['imagen_url']))
+                    <br>
+                    <a href="{{ $item['imagen_url'] }}" target="_blank" style="display:inline-block;margin-top:6px;">
+                      <img src="{{ $item['imagen_url'] }}" alt="Evidencia" style="max-width:180px;max-height:120px;border-radius:4px;border:1px solid #e5e7eb;display:block;" />
+                    </a>
+                  @endif
                 </td>
                 <td style="padding:10px 14px;text-align:right;font-weight:700;color:{{ $color }};border-bottom:1px solid #f3f4f6;white-space:nowrap;">
                   {{ $signo }}{{ number_format($diff, 2) }} {{ $item['unidad'] ?? '' }}
