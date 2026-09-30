@@ -851,14 +851,22 @@ class VentasController extends Controller
         $codigos = array_keys($qtyMap);
 
         $unitConv = [
-            'oz fl|lt'  => 0.0295735,  'oz fl|ml'  => 29.5735,
-            'fl oz|lt'  => 0.0295735,  'fl oz|ml'  => 29.5735,
-            'oz|g'      => 28.3495,    'oz|kg'     => 0.0283495,
-            'ml|lt'     => 0.001,      'lt|ml'     => 1000.0,
-            'g|kg'      => 0.001,      'kg|g'      => 1000.0,
-            'lb|kg'     => 0.453592,   'lb|g'      => 453.592,
-            'cup|lt'    => 0.236588,   'cups|lt'   => 0.236588,
-            'tsp|lt'    => 0.00492892, 'tbsp|lt'   => 0.0147868,
+            // Volumen: oz fl / fl oz
+            'oz fl|lt'    => 0.0295735,   'oz fl|ml'    => 29.5735,    'oz fl|galon' => 0.0078125,
+            'fl oz|lt'    => 0.0295735,   'fl oz|ml'    => 29.5735,    'fl oz|galon' => 0.0078125,
+            // Volumen: ml / lt / galon
+            'ml|lt'       => 0.001,       'lt|ml'       => 1000.0,
+            'ml|galon'    => 0.000264172, 'lt|galon'    => 0.264172,
+            'galon|lt'    => 3.78541,     'galon|ml'    => 3785.41,
+            // Volumen: cc (= ml)
+            'cc|lt'       => 0.001,       'cc|ml'       => 1.0,        'cc|galon'    => 0.000264172,
+            // Masa
+            'oz|g'        => 28.3495,     'oz|kg'       => 0.0283495,
+            'g|kg'        => 0.001,       'kg|g'        => 1000.0,
+            'lb|kg'       => 0.453592,    'lb|g'        => 453.592,
+            // Volumen: cup / tsp / tbsp
+            'cup|lt'      => 0.236588,    'cups|lt'     => 0.236588,
+            'tsp|lt'      => 0.00492892,  'tbsp|lt'     => 0.0147868,
         ];
 
         // Ingredientes directos (producto_id enlazado directamente)
