@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Receta;
 use App\Models\VentaSemanal;
 use App\Models\VentaSemanalDetalle;
+use App\Services\Compras\PurchasePlanningService;
 use App\Traits\RecetaCostoTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -492,18 +493,10 @@ class VentasController extends Controller
 
     /**
      * GET /api/compras/ventas/proyeccion
-     * Proyección de ventas por plato para un período futuro usando fórmula de 6 niveles.
+     * Proyección de ventas por plato usando la API CDJ_PurchasePlanning (ML externo).
+     * La API realiza todos los cálculos; nosotros solo consumimos y formateamos el resultado.
      *
      * Params: sucursal_id (req), desde (Y-m-d, default mañana), hasta (Y-m-d, default desde+9), categoria_key (opt)
-     *
-     * Fórmula: P = blend ponderado de 5 componentes × Fe (eventos)
-     *   L1 35% — Histórico mismo período año anterior
-     *   L2 25% — Histórico × factor crecimiento sucursal (90d)
-     *   L3 15% — Histórico × factor crecimiento plato (120d)
-     *   L4 15% — Tendencia reciente (avg 10d×50% + 30d×30% + 60d×20%)
-     *   L5 10% — Mejor estimado × factor eventos
-     *
-     * Buffer: pedido_sugerido = P × 1.10 (siempre), × 1.05 adicional en vacaciones
      */
     public function proyeccion(Request $request): JsonResponse
     {
@@ -517,100 +510,93 @@ class VentasController extends Controller
         $sucursalId   = (int) $request->sucursal_id;
         $categoriaKey = $request->categoria_key;
 
-        // Período de proyección (default: próximos 10 días)
         $desde = $request->desde ?? date('Y-m-d', strtotime('tomorrow'));
         $hasta = $request->hasta ?? date('Y-m-d', strtotime($desde . ' +9 days'));
 
         $diasPeriodo = max(1, (int) round((strtotime($hasta) - strtotime($desde)) / 86400) + 1);
+        $ref         = date('Y-m-d', strtotime($desde) - 86400);
 
-        // Día de referencia: último día con datos reales (día anterior a la proyección)
-        $ref = date('Y-m-d', strtotime($desde) - 86400);
+        /** @var PurchasePlanningService $service */
+        $service = app(PurchasePlanningService::class);
 
-        // ── L1: Histórico — mismo período año anterior ────────────────────
-        $desdeAnt = date('Y-m-d', strtotime($desde . ' -1 year'));
-        $hastaAnt = date('Y-m-d', strtotime($hasta . ' -1 year'));
-        $historico = $this->vpGetPorPlato($sucursalId, $desdeAnt, $hastaAnt, $categoriaKey);
+        // Sin sucursal mapeada en Brilo → respuesta vacía (ej. sucursal_id=12, 13)
+        if (!$service->getBriloSucId($sucursalId)) {
+            return response()->json([
+                'success'         => true,
+                'sucursal_id'     => $sucursalId,
+                'desde'           => $desde,
+                'hasta'           => $hasta,
+                'dias'            => $diasPeriodo,
+                'referencia'      => $ref,
+                'factor_sucursal' => 1.0,
+                'factor_eventos'  => 1.0,
+                'eventos'         => [],
+                'advertencia'     => 'Sucursal sin mapeo en sistema externo de proyección.',
+                'proyecciones'    => [],
+            ]);
+        }
 
-        // ── L2: Factor sucursal — crecimiento últimos 90d ─────────────────
-        $suc90Desde    = date('Y-m-d', strtotime($ref . ' -90 days'));
-        $suc90AntDesde = date('Y-m-d', strtotime($suc90Desde . ' -1 year'));
-        $suc90AntHasta = date('Y-m-d', strtotime($ref . ' -1 year'));
+        // ── Catálogo activo: productos vendidos en los últimos 180 días ──
+        $catDesde = date('Y-m-d', strtotime($ref . ' -180 days'));
+        $catalogo = $this->vpGetPorPlato($sucursalId, $catDesde, $ref, $categoriaKey);
 
-        $sucTotal    = $this->vpTotalQty($sucursalId, $suc90Desde, $ref);
-        $sucTotalAnt = $this->vpTotalQty($sucursalId, $suc90AntDesde, $suc90AntHasta);
-        $Fs          = $sucTotalAnt > 0 ? max(0.3, min(3.0, $sucTotal / $sucTotalAnt)) : 1.0;
+        if (empty($catalogo)) {
+            return response()->json([
+                'success'      => true,
+                'sucursal_id'  => $sucursalId,
+                'desde'        => $desde,
+                'hasta'        => $hasta,
+                'dias'         => $diasPeriodo,
+                'referencia'   => $ref,
+                'factor_sucursal' => 1.0,
+                'factor_eventos'  => 1.0,
+                'eventos'      => [],
+                'proyecciones' => [],
+            ]);
+        }
 
-        // ── L3: Factor plato — crecimiento últimos 120d ───────────────────
-        $p120Desde    = date('Y-m-d', strtotime($ref . ' -120 days'));
-        $p120AntDesde = date('Y-m-d', strtotime($p120Desde . ' -1 year'));
-        $p120AntHasta = date('Y-m-d', strtotime($ref . ' -1 year'));
+        // ── Lookup brilo_pro_id para cada código ──────────────────────────
+        $briloProIds = DB::connection('compras')
+            ->table('productos')
+            ->whereIn('codigo', array_keys($catalogo))
+            ->whereNotNull('brilo_pro_id')
+            ->select('codigo', 'brilo_pro_id')
+            ->get()
+            ->keyBy('codigo')
+            ->map(fn($r) => (int) $r->brilo_pro_id)
+            ->toArray();
 
-        $platos120Act = $this->vpGetPorPlato($sucursalId, $p120Desde, $ref, $categoriaKey);
-        $platos120Ant = $this->vpGetPorPlato($sucursalId, $p120AntDesde, $p120AntHasta, $categoriaKey);
+        // Armar array de productos para el servicio
+        $productosParaAPI = [];
+        foreach (array_keys($catalogo) as $cod) {
+            if (empty($briloProIds[$cod])) continue;
+            $productosParaAPI[] = [
+                'codigo'        => $cod,
+                'proId'         => $briloProIds[$cod],
+                'nombre'        => $catalogo[$cod]['nombre'],
+                'categoria_key' => $catalogo[$cod]['categoria'],
+            ];
+        }
 
-        // ── L4: Tendencia reciente ────────────────────────────────────────
-        $avg10d = $this->vpAvgDiario($sucursalId, date('Y-m-d', strtotime($ref . ' -9 days')),   $ref, $categoriaKey);
-        $avg30d = $this->vpAvgDiario($sucursalId, date('Y-m-d', strtotime($ref . ' -29 days')),  $ref, $categoriaKey);
-        $avg60d = $this->vpAvgDiario($sucursalId, date('Y-m-d', strtotime($ref . ' -59 days')),  $ref, $categoriaKey);
+        // ── Llamar a la API ───────────────────────────────────────────────
+        $resultadosAPI = $service->proyectar($sucursalId, $desde, $hasta, $productosParaAPI);
 
-        // ── L6: Factor eventos ────────────────────────────────────────────
-        [$Fe, $detalleEventos] = $this->vpFactorEventos($desde, $hasta);
-
-        // ── Proyección por plato ──────────────────────────────────────────
-        $codigos = array_unique(array_merge(
-            array_keys($historico),
-            array_keys($platos120Act),
-            array_keys($avg10d),
-        ));
-
+        // ── Construir respuesta ───────────────────────────────────────────
         $proyecciones = [];
+        foreach ($resultadosAPI as $cod => $res) {
+            if ($res['qty_proyectada'] < 0.5) continue;
 
-        foreach ($codigos as $cod) {
-            // L1
-            $H = $historico[$cod]['qty'] ?? 0;
-
-            // L3: factor plato clamped
-            $qAct = $platos120Act[$cod]['qty'] ?? 0;
-            $qAnt = $platos120Ant[$cod]['qty'] ?? 0;
-            $Fp   = $qAnt > 0 ? max(0.3, min(3.0, $qAct / $qAnt)) : 1.0;
-
-            // L4: tendencia proyectada al período
-            $d10 = ($avg10d[$cod]['avg'] ?? 0) * $diasPeriodo;
-            $d30 = ($avg30d[$cod]['avg'] ?? 0) * $diasPeriodo;
-            $d60 = ($avg60d[$cod]['avg'] ?? 0) * $diasPeriodo;
-            $Ft  = $d10 * 0.50 + $d30 * 0.30 + $d60 * 0.20;
-
-            // Blend 5 componentes
-            $P1 = $H;              // histórico puro
-            $P2 = $H * $Fs;       // histórico × crecimiento sucursal
-            $P3 = $H * $Fp;       // histórico × crecimiento plato
-            $P4 = $Ft;            // tendencia reciente
-            $P5 = max($P1, $P2, $P3, $P4) * $Fe; // mejor estimado × eventos
-
-            $P = 0.35 * $P1 + 0.25 * $P2 + 0.15 * $P3 + 0.15 * $P4 + 0.10 * $P5;
-            $P = max(0.0, $P);
-
-            if ($P < 0.5) continue; // descartar productos insignificantes
-
-            // Buffer +10% base; +5% adicional si hay vacaciones en el período
-            $bufferVac = in_array('vacaciones_escolares', $detalleEventos) ? 1.05 : 1.0;
-            $pedido    = $P * 1.10 * $bufferVac;
-
-            $nombre    = $historico[$cod]['nombre']    ?? ($platos120Act[$cod]['nombre'] ?? $cod);
-            $categoria = $historico[$cod]['categoria'] ?? ($platos120Act[$cod]['categoria'] ?? null);
+            $qty = round($res['qty_proyectada'], 1);
 
             $proyecciones[] = [
                 'codigo'         => (string) $cod,
-                'nombre'         => $nombre,
-                'categoria_key'  => $categoria,
-                'qty_proyectada' => round($P, 1),
-                'qty_pedido'     => round($pedido, 1),
+                'nombre'         => $catalogo[$cod]['nombre'] ?? $cod,
+                'categoria_key'  => $catalogo[$cod]['categoria'] ?? null,
+                'qty_proyectada' => $qty,
+                'qty_pedido'     => $qty,
                 'factores'       => [
-                    'H'  => round($H, 1),
-                    'Fs' => round($Fs, 3),
-                    'Fp' => round($Fp, 3),
-                    'Ft' => round($Ft, 1),
-                    'Fe' => round($Fe, 3),
+                    'origen'     => $res['origen'],
+                    'tipoModelo' => $res['tipoModelo'],
                 ],
             ];
         }
@@ -624,9 +610,9 @@ class VentasController extends Controller
             'hasta'           => $hasta,
             'dias'            => $diasPeriodo,
             'referencia'      => $ref,
-            'factor_sucursal' => round($Fs, 3),
-            'factor_eventos'  => round($Fe, 3),
-            'eventos'         => $detalleEventos,
+            'factor_sucursal' => 1.0,
+            'factor_eventos'  => 1.0,
+            'eventos'         => [],
             'proyecciones'    => $proyecciones,
         ]);
     }
