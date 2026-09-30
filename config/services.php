@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'purchase_planning' => [
+        'url' => env('PURCHASE_PLANNING_URL', ''),
+        'key' => env('PURCHASE_PLANNING_KEY', ''),
+    ],
+
 ];

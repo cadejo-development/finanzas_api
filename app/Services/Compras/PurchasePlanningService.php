@@ -12,8 +12,8 @@ class PurchasePlanningService
 
     public function __construct()
     {
-        $this->apiUrl = env('PURCHASE_PLANNING_URL', '');
-        $this->apiKey = env('PURCHASE_PLANNING_KEY', '');
+        $this->apiUrl = config('services.purchase_planning.url', '');
+        $this->apiKey = config('services.purchase_planning.key', '');
     }
 
     // Nuestro sucursal_id → Brilo sucId (olComun.dbo.Sucursales)
