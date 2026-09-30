@@ -2,7 +2,6 @@
 
 namespace App\Services\Compras;
 
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -97,30 +96,24 @@ class PurchasePlanningService
     {
         if (empty($items)) return ['fechas' => [], 'proyecciones' => []];
 
-        // Ordenar para que la clave de cache sea determinística sin importar el orden de entrada
-        usort($items, fn($a, $b) => $a['proId'] <=> $b['proId']);
-        $cacheKey = 'pp_api_' . md5($fechaInicio . $fechaFin . serialize($items));
+        $url = $this->apiUrl . '?code=' . $this->apiKey;
 
-        return Cache::remember($cacheKey, now()->addHours(3), function () use ($fechaInicio, $fechaFin, $items) {
-            $url = $this->apiUrl . '?code=' . $this->apiKey;
+        $response = Http::withHeaders(['Content-Type' => 'application/json'])
+            ->timeout(90)
+            ->post($url, [
+                'fechaInicio' => $fechaInicio,
+                'fechaFin'    => $fechaFin,
+                'items'       => $items,
+            ]);
 
-            $response = Http::withHeaders(['Content-Type' => 'application/json'])
-                ->timeout(90)
-                ->post($url, [
-                    'fechaInicio' => $fechaInicio,
-                    'fechaFin'    => $fechaFin,
-                    'items'       => $items,
-                ]);
+        if (!$response->successful()) {
+            Log::error('PurchasePlanningService error', [
+                'status' => $response->status(),
+                'body'   => substr($response->body(), 0, 500),
+            ]);
+            throw new \RuntimeException('CDJ_PurchasePlanning API error: HTTP ' . $response->status());
+        }
 
-            if (!$response->successful()) {
-                Log::error('PurchasePlanningService error', [
-                    'status' => $response->status(),
-                    'body'   => substr($response->body(), 0, 500),
-                ]);
-                throw new \RuntimeException('CDJ_PurchasePlanning API error: HTTP ' . $response->status());
-            }
-
-            return $response->json() ?? ['fechas' => [], 'proyecciones' => []];
-        });
+        return $response->json() ?? ['fechas' => [], 'proyecciones' => []];
     }
 }
