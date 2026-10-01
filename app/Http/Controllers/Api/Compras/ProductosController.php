@@ -70,16 +70,8 @@ class ProductosController extends Controller
             $query->whereHas('categoria', fn ($q) => $q->where('key', 'ilike', $prefijo . '%'));
         }
 
-        // Filtro por sucursal: solo productos que son ingredientes de recetas activas de esa sucursal
-        if ($sucursalId = $request->query('sucursal_id')) {
-            $query->whereIn('id', function ($sub) use ($sucursalId) {
-                $sub->select('ri.producto_id')
-                    ->from('receta_ingredientes as ri')
-                    ->join('receta_sucursal as rs', 'rs.receta_id', '=', 'ri.receta_id')
-                    ->where('rs.sucursal_id', (int) $sucursalId)
-                    ->where('rs.activa', true);
-            });
-        }
+        // sucursal_id solo se usa para datos de inventario (ver más abajo),
+        // NO filtra qué productos aparecen — así el catálogo muestra todos los productos activos
 
         // Filtro por origen: 'restaurante' | 'centro_produccion'
         if ($origen = $request->query('origen')) {
