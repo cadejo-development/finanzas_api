@@ -1,14 +1,14 @@
 [
-  { "sucursal_id": 1,  "bod": "BOD-03", "nombre": "REST. ZONA ROSA",        "hasta": "2026-09-28", "desde": "2026-08-31" },
-  { "sucursal_id": 3,  "bod": "BOD-06", "nombre": "REST. LA LIBERTAD",      "hasta": "2026-09-28", "desde": "2026-08-31" },
-  { "sucursal_id": 4,  "bod": "BOD-07", "nombre": "REST. AEROPUERTO #1",    "hasta": "2026-09-28", "desde": "2026-09-01" },
-  { "sucursal_id": 5,  "bod": "BOD-08", "nombre": "REST. AEROPUERTO #2",    "hasta": "2026-09-28", "desde": "2026-09-01" },
-  { "sucursal_id": 7,  "bod": "BOD-11", "nombre": "REST. PASEO VENECIA",    "hasta": "2026-09-28", "desde": "2026-08-31" },
-  { "sucursal_id": 8,  "bod": "BOD-12", "nombre": "REST. SANTA ELENA",      "hasta": "2026-09-28", "desde": "2026-08-31" },
-  { "sucursal_id": 9,  "bod": "BOD-18", "nombre": "REST. HUIZUCAR",         "hasta": "2026-09-28", "desde": "2026-08-31" },
-  { "sucursal_id": 10, "bod": "BOD-20", "nombre": "REST. OPICO",            "hasta": "2026-09-28", "desde": "2026-08-31" },
-  { "sucursal_id": 11, "bod": "BOD-23", "nombre": "REST. CASA GUIROLA",     "hasta": "2026-09-28", "desde": "2026-08-31" },
-  { "sucursal_id": 13, "bod": "BOD-13", "nombre": "BGA. PROD TERM CADEJO",  "hasta": "2026-09-30", "desde": "2026-07-27" },
-  { "sucursal_id": 16, "bod": "BOD-22", "nombre": "REST. MALCRIADAS AE2",   "hasta": "2026-09-28", "desde": "2026-09-01" },
-  { "sucursal_id": 21, "bod": "BOD-19", "nombre": "BGA. CENTRO PRODUCCION", "hasta": "2026-09-28", "desde": "2026-08-29" }
+  { "sucursal_id": 1,  "bod": "BOD-03", "nombre": "REST. ZONA ROSA",        "hasta": "2026-09-28", "movs_hasta": "2026-09-27", "desde": "2026-08-31" },
+  { "sucursal_id": 3,  "bod": "BOD-06", "nombre": "REST. LA LIBERTAD",      "hasta": "2026-09-28", "movs_hasta": "2026-09-27", "desde": "2026-08-31" },
+  { "sucursal_id": 4,  "bod": "BOD-07", "nombre": "REST. AEROPUERTO #1",    "hasta": "2026-09-28", "movs_hasta": "2026-09-28", "desde": "2026-09-01" },
+  { "sucursal_id": 5,  "bod": "BOD-08", "nombre": "REST. AEROPUERTO #2",    "hasta": "2026-09-28", "movs_hasta": "2026-09-28", "desde": "2026-09-01" },
+  { "sucursal_id": 7,  "bod": "BOD-11", "nombre": "REST. PASEO VENECIA",    "hasta": "2026-09-28", "movs_hasta": "2026-09-27", "desde": "2026-08-31" },
+  { "sucursal_id": 8,  "bod": "BOD-12", "nombre": "REST. SANTA ELENA",      "hasta": "2026-09-28", "movs_hasta": "2026-09-27", "desde": "2026-08-31" },
+  { "sucursal_id": 9,  "bod": "BOD-18", "nombre": "REST. HUIZUCAR",         "hasta": "2026-09-28", "movs_hasta": "2026-09-27", "desde": "2026-08-31" },
+  { "sucursal_id": 10, "bod": "BOD-20", "nombre": "REST. OPICO",            "hasta": "2026-09-28", "movs_hasta": "2026-09-27", "desde": "2026-08-31" },
+  { "sucursal_id": 11, "bod": "BOD-23", "nombre": "REST. CASA GUIROLA",     "hasta": "2026-09-28", "movs_hasta": "2026-09-27", "desde": "2026-08-31" },
+  { "sucursal_id": 13, "bod": "BOD-13", "nombre": "BGA. PROD TERM CADEJO",  "hasta": "2026-09-30", "movs_hasta": "2026-09-29", "desde": "2026-07-27" },
+  { "sucursal_id": 16, "bod": "BOD-22", "nombre": "REST. MALCRIADAS AE2",   "hasta": "2026-09-28", "movs_hasta": "2026-09-28", "desde": "2026-09-01" },
+  { "sucursal_id": 21, "bod": "BOD-19", "nombre": "BGA. CENTRO PRODUCCION", "hasta": "2026-09-28", "movs_hasta": "2026-09-25", "desde": "2026-08-29" }
 ]

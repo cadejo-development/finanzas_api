@@ -1,9 +1,7 @@
 name: Sync Kardex — Brilo Conteo Mensual
 
 on:
-  schedule:
-    # Corre el día 1 de cada mes a las 3:00 AM El Salvador (UTC-6) = 9:00 AM UTC
-    - cron: '0 9 1 * *'
+  # Schedule automático DESACTIVADO — re-sync de períodos de auditoría solo manual
   workflow_dispatch:
     inputs:
       sucursal_id:
@@ -87,10 +85,12 @@ jobs:
             node -e "
               const fs = require('fs');
               const p = JSON.parse(fs.readFileSync('database/kardex-periodos.json'));
-              p.forEach(r => console.log(r.sucursal_id + '|' + r.hasta + '|' + r.desde + '|' + r.bod + ' ' + r.nombre));
-            " | while IFS='|' read SUC HASTA DESDE LABEL; do
-              echo "─── $LABEL  suc=$SUC  hasta=$HASTA  desde=$DESDE ───"
-              node database/sync_brilo_kardex.js --sucursal=$SUC --hasta=$HASTA --desde=$DESDE || \
+              p.forEach(r => console.log(r.sucursal_id + '|' + r.hasta + '|' + (r.movs_hasta ?? '') + '|' + r.desde + '|' + r.bod + ' ' + r.nombre));
+            " | while IFS='|' read SUC HASTA MOVS_HASTA DESDE LABEL; do
+              echo "─── $LABEL  suc=$SUC  hasta=$HASTA  movs_hasta=$MOVS_HASTA  desde=$DESDE ───"
+              MOVS_ARG=""
+              if [ -n "$MOVS_HASTA" ]; then MOVS_ARG="--movs-hasta=$MOVS_HASTA"; fi
+              node database/sync_brilo_kardex.js --sucursal=$SUC --hasta=$HASTA --desde=$DESDE $MOVS_ARG || \
                 echo "⚠ Error en sucursal $SUC — continúa con las demás"
             done
           fi
