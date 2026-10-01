@@ -70,8 +70,22 @@ class ProductosController extends Controller
             $query->whereHas('categoria', fn ($q) => $q->where('key', 'ilike', $prefijo . '%'));
         }
 
+        // Para PLATOS: filtrar solo los asignados a la sucursal (via receta_sucursal)
+        $activeSucursalIdPrefijo = (int) $request->query('sucursal_id', 0);
+        if ($prefijo === 'PL' && $activeSucursalIdPrefijo) {
+            $query->whereIn('codigo', function ($sub) use ($activeSucursalIdPrefijo) {
+                $sub->select('r.codigo_origen')
+                    ->from('recetas as r')
+                    ->join('receta_sucursal as rs', 'rs.receta_id', '=', 'r.id')
+                    ->where('rs.sucursal_id', $activeSucursalIdPrefijo)
+                    ->where('rs.activa', true)
+                    ->where('r.activa', true)
+                    ->whereNotNull('r.codigo_origen');
+            });
+        }
+
         // sucursal_id solo se usa para datos de inventario (ver más abajo),
-        // NO filtra qué productos aparecen — así el catálogo muestra todos los productos activos
+        // NO filtra qué productos aparecen para MAT. PRIMAS — así el catálogo muestra todos los activos
 
         // Filtro por origen: 'restaurante' | 'centro_produccion'
         if ($origen = $request->query('origen')) {

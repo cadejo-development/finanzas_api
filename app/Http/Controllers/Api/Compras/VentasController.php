@@ -850,36 +850,27 @@ class VentasController extends Controller
 
         $codigos = array_keys($qtyMap);
 
+        // Solo conversiones físicamente válidas (misma dimensión: masa↔masa, volumen↔volumen).
+        // Unidades incompatibles (botella, porcion, rebanada, u, barril, tanda) usan factor 1.0.
         $unitConv = [
-            // Volumen: oz fl / fl oz → lt / ml / galon
-            'oz fl|lt'    => 0.0295735,   'oz fl|ml'    => 29.5735,    'oz fl|galon' => 0.0078125,
-            'fl oz|lt'    => 0.0295735,   'fl oz|ml'    => 29.5735,    'fl oz|galon' => 0.0078125,
-            // oz usado como volumen (equivalente a oz fl en recetas de cocina)
-            'oz|lt'       => 0.0295735,   'oz|ml'       => 29.5735,
-            // oz fl aplicado a productos en lb (ej: salsas densas como ketchup)
-            'oz fl|lb'    => 0.0625,
-            // Volumen: ml / lt / galon
-            'ml|lt'       => 0.001,       'lt|ml'       => 1000.0,
-            'ml|galon'    => 0.000264172, 'lt|galon'    => 0.264172,
-            'galon|lt'    => 3.78541,     'galon|ml'    => 3785.41,
-            // Volumen: cc (= ml)
-            'cc|lt'       => 0.001,       'cc|ml'       => 1.0,        'cc|galon'    => 0.000264172,
-            // Masa: oz ↔ lb (MÁS COMÚN EN RECETAS — 2928 ocurrencias)
-            'oz|lb'       => 0.0625,      'lb|oz'       => 16.0,
-            // Masa: oz / lb ↔ g / kg
+            // ── Masa ────────────────────────────────────────────────────────
+            'oz|lb'       => 0.0625,      'lb|oz'       => 16.0,       // la más común (2928 casos)
             'oz|g'        => 28.3495,     'oz|kg'       => 0.0283495,
             'g|oz'        => 0.035274,    'kg|oz'       => 35.274,
             'g|kg'        => 0.001,       'kg|g'        => 1000.0,
             'lb|kg'       => 0.453592,    'lb|g'        => 453.592,
             'g|lb'        => 0.00220462,  'kg|lb'       => 2.20462,
-            // Volumen: cup / tsp / tbsp → lt / ml
+            // ── Volumen ──────────────────────────────────────────────────────
+            'oz fl|lt'    => 0.0295735,   'oz fl|ml'    => 29.5735,    'oz fl|galon' => 0.0078125,
+            'fl oz|lt'    => 0.0295735,   'fl oz|ml'    => 29.5735,    'fl oz|galon' => 0.0078125,
+            'ml|lt'       => 0.001,       'lt|ml'       => 1000.0,
+            'ml|galon'    => 0.000264172, 'lt|galon'    => 0.264172,
+            'galon|lt'    => 3.78541,     'galon|ml'    => 3785.41,
+            'cc|lt'       => 0.001,       'cc|ml'       => 1.0,        'cc|galon'    => 0.000264172,
             'cup|lt'      => 0.236588,    'cups|lt'     => 0.236588,
             'tsp|lt'      => 0.00492892,  'tbsp|lt'     => 0.0147868,
             'cup|ml'      => 236.588,     'cups|ml'     => 236.588,
             'tsp|ml'      => 4.92892,     'tbsp|ml'     => 14.7868,
-            // Nota: botella→lt depende del producto (750ml vino vs 1lt licor);
-            // u→lb, u→oz, lb→u, porcion→u etc. requieren factor_conversion por producto.
-            // Para esos casos el factor queda en 1.0 (default) — corrección por producto.
         ];
 
         // Ingredientes directos (producto_id enlazado directamente)
