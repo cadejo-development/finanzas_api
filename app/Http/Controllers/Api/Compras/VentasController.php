@@ -860,13 +860,20 @@ class VentasController extends Controller
             'galon|lt'    => 3.78541,     'galon|ml'    => 3785.41,
             // Volumen: cc (= ml)
             'cc|lt'       => 0.001,       'cc|ml'       => 1.0,        'cc|galon'    => 0.000264172,
-            // Masa
+            // Masa: oz ↔ lb (LA MÁS COMÚN EN RECETAS)
+            'oz|lb'       => 0.0625,      'lb|oz'       => 16.0,
+            // Masa: oz / lb ↔ g / kg
             'oz|g'        => 28.3495,     'oz|kg'       => 0.0283495,
+            'g|oz'        => 0.035274,    'kg|oz'       => 35.274,
             'g|kg'        => 0.001,       'kg|g'        => 1000.0,
             'lb|kg'       => 0.453592,    'lb|g'        => 453.592,
-            // Volumen: cup / tsp / tbsp
+            'g|lb'        => 0.00220462,  'kg|lb'       => 2.20462,
+            // Volumen: cup / tsp / tbsp → lt
             'cup|lt'      => 0.236588,    'cups|lt'     => 0.236588,
             'tsp|lt'      => 0.00492892,  'tbsp|lt'     => 0.0147868,
+            // Volumen: cup / tsp / tbsp → ml
+            'cup|ml'      => 236.588,     'cups|ml'     => 236.588,
+            'tsp|ml'      => 4.92892,     'tbsp|ml'     => 14.7868,
         ];
 
         // Ingredientes directos (producto_id enlazado directamente)
