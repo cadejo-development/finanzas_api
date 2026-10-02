@@ -54,9 +54,11 @@ class RecetasController extends Controller
                 $q->whereIn('sucursal_id', $sucursalIds)->where('activa', true)
             );
             $query->with(['sucursalConfig' => fn ($q) => $q->whereIn('sucursal_id', $sucursalIds)]);
-        } elseif ($request->boolean('solo_en_menu')) {
-            // Mostrar solo recetas que están en el menú de ALGUNA sucursal (tienen entrada en receta_sucursal)
-            $query->whereHas('sucursalConfig', fn ($q) => $q->where('activa', true));
+        }
+
+        // solo_en_menu=1: solo recetas que tienen grupos de modificadores (opciones de menú en Brilo)
+        if ($request->boolean('solo_en_menu')) {
+            $query->has('modificadores');
         }
 
         // Filtro por categoria_id (subcategoría exacta), parent_categoria_id (todas de ese grupo) o tipo texto (legado)
