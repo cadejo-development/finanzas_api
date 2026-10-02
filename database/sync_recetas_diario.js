@@ -28,8 +28,10 @@ const SQL_CFG = {
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 20000 },
 };
 const PG_CFG = {
-  host: process.env.DB_HOST, port: 5432,
-  database: 'compras_db', user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD,
+  host: process.env.DB_HOST_COMPRAS || process.env.DB_HOST, port: 5432,
+  database: process.env.DB_DATABASE_COMPRAS || 'gestion_operaciones_db',
+  user: process.env.DB_USERNAME_COMPRAS || process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD_COMPRAS || process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false },
   connectionTimeoutMillis: 30000, idleTimeoutMillis: 90000,
 };
