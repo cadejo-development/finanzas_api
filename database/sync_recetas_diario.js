@@ -282,9 +282,36 @@ async function main() {
 
       log('\n══ SOLO FLAGS (mod_local=true) ══════════════════');
       log(`  Total: ${paraActivo.length}`);
+
+      // Calcular cuántas se activarían / desactivarían
+      const seActivarian   = paraActivo.filter(({ b, r }) => b.activo && !r.activa);
+      const seDesactivarian = paraActivo.filter(({ b, r }) => !b.activo && r.activa);
+      const sePromoverian  = paraActivo.filter(({ b, r }) => b.activo && parseInt(r.estado_id) === 3);
+      log(`  Se activarían (inactivas en RDS, activas en Brilo):   ${seActivarian.length}`);
+      log(`  Se desactivarían (activas en RDS, inactivas en Brilo): ${seDesactivarian.length}`);
+      log(`  Se promoverían Autorizada→Activa:                     ${sePromoverian.length}`);
+      if (seActivarian.length) {
+        seActivarian.slice(0, 10).forEach(({ b, r }) =>
+          log(`    ▶ ${b.codigo.padEnd(18)} ${b.nombre.slice(0, 40)}`));
+        if (seActivarian.length > 10) log(`    ... y ${seActivarian.length - 10} más`);
+      }
+
       paraActivo.slice(0, 10).forEach(({ b }) =>
         log(`    ${b.codigo.padEnd(18)} ${b.nombre.slice(0, 40)}`));
       if (paraActivo.length > 10) log(`    ... y ${paraActivo.length - 10} más`);
+
+      log('\n══ MENÚ (receta_sucursal) ════════════════════════');
+      // Contar entradas de menú que faltarían en RDS
+      let menuFaltantes = 0;
+      for (const [cod, sucIds] of Object.entries(menuMap)) {
+        if (!esCodReceta(cod)) continue;
+        const recId = rdsMap[cod]?.id;
+        if (!recId) continue;
+        for (const sucId of sucIds) {
+          if (!rsSet.has(`${recId}:${sucId}`)) menuFaltantes++;
+        }
+      }
+      log(`  Entradas de menú que se agregarían a RDS: ${menuFaltantes}`);
 
       log('\n════ DRY-RUN COMPLETO — ejecuta sin --dry-run para aplicar ════');
       return;
