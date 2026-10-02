@@ -585,27 +585,41 @@ async function main() {
     const prodRefresh = (await pg.query(`SELECT id, codigo FROM productos WHERE activo = true`)).rows;
     prodRefresh.forEach(r => { prodMap[r.codigo] = r.id; });
 
-    // Unir nuevaMap con rdsMap para tener IDs completos
-    const allNewIds = { ...nuevaMap };
+    // Ampliar subRecetaIdMap con las recetas recién insertadas en 4a.
+    // Esto garantiza que si una sub-receta es nueva en esta ejecución, sus referencias
+    // se vinculan correctamente como sub_receta_id en lugar de saltarse o ir a producto_id.
+    Object.entries(nuevaMap).forEach(([cod, id]) => { subRecetaIdMap[cod] = id; });
 
     let ingOk = 0, ingSkip = 0;
 
     for (const b of paraInsertar) {
-      const recId = allNewIds[b.codigo];
+      const recId = nuevaMap[b.codigo];
       if (!recId) { ingSkip++; continue; }
 
       const bIngs = briloIngMap[b.proId] || [];
       if (!bIngs.length) continue;
 
       const iParams = [], iParts = [];
+      const srParams4d = [], srParts4d = [];
+
       for (const ing of bIngs) {
-        const pId = prodMap[ing.ing_codigo];
-        if (!pId) { ingSkip++; continue; }
-        const { cantidad, unidad } = cantUniAlmacenar(ing);
-        const vals = [recId, pId, cantidad, unidad, AUD, NOW, NOW];
-        const ph   = vals.map(v => { iParams.push(v); return `$${iParams.length}`; });
-        iParts.push(`(${ph.join(',')})`);
-        ingOk++;
+        const srId = subRecetaIdMap[ing.ing_codigo];
+        if (srId) {
+          // Es una sub-receta: vincular con sub_receta_id
+          const { cantidad } = cantUniAlmacenar(ing);
+          const vals = [recId, srId, cantidad, 'tanda', AUD, NOW, NOW];
+          const ph   = vals.map(v => { srParams4d.push(v); return `$${srParams4d.length}`; });
+          srParts4d.push(`(${ph.join(',')})`);
+          ingOk++;
+        } else {
+          const pId = prodMap[ing.ing_codigo];
+          if (!pId) { ingSkip++; continue; }
+          const { cantidad, unidad } = cantUniAlmacenar(ing);
+          const vals = [recId, pId, cantidad, unidad, AUD, NOW, NOW];
+          const ph   = vals.map(v => { iParams.push(v); return `$${iParams.length}`; });
+          iParts.push(`(${ph.join(',')})`);
+          ingOk++;
+        }
       }
       if (iParts.length) {
         await pg.query(
@@ -615,6 +629,27 @@ async function main() {
            ON CONFLICT (receta_id, producto_id) DO NOTHING`,
           iParams
         );
+      }
+      // Sub-recetas nuevas: UPDATE si ya existe, INSERT si no
+      for (let k = 0; k < srParts4d.length; k++) {
+        const base = k * 7;
+        const recId4d = srParams4d[base];
+        const srId4d  = srParams4d[base + 1];
+        const qty4d   = srParams4d[base + 2];
+        const upd = await pg.query(
+          `UPDATE receta_ingredientes
+             SET cantidad_por_plato = $1, aud_usuario = $2, updated_at = $3
+           WHERE receta_id = $4 AND sub_receta_id = $5`,
+          [qty4d, AUD, NOW, recId4d, srId4d]
+        );
+        if (upd.rowCount === 0) {
+          await pg.query(
+            `INSERT INTO receta_ingredientes
+               (receta_id, sub_receta_id, cantidad_por_plato, unidad, aud_usuario, created_at, updated_at)
+             VALUES ($1, $2, $3, 'tanda', $4, $5, $5)`,
+            [recId4d, srId4d, qty4d, AUD, NOW]
+          );
+        }
       }
     }
     log(`  Ingredientes nuevos: ${ingOk} insertados, ${ingSkip} saltados (producto no en RDS)`);
