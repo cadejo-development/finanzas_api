@@ -344,6 +344,25 @@ async function main() {
     log('\n  [4b] Actualizando recetas existentes (mod_local=false)...');
     let updOk = 0;
 
+    // Cargar códigos de ingredientes que ya son sub_receta en RDS para estas recetas.
+    // Estos NO deben ser pisados por el sync — Brilo los ve como materia prima pero
+    // en RDS están modelados como sub-receta (con sub_receta_id) y tienen su propio
+    // desglose de ingredientes. Sobreescribirlos con producto_id rompería esa cadena.
+    const updateIds = paraUpdate.map(({ r }) => r.id);
+    const subRecetaProtegidos = new Set(); // "receta_id:codigo_origen" a ignorar
+    if (updateIds.length) {
+      const { rows: srLinks } = await pg.query(`
+        SELECT ri.receta_id, sr.codigo_origen AS codigo
+        FROM receta_ingredientes ri
+        JOIN recetas sr ON sr.id = ri.sub_receta_id
+        WHERE ri.receta_id = ANY($1)
+      `, [updateIds]);
+      srLinks.forEach(({ receta_id, codigo }) => {
+        subRecetaProtegidos.add(`${receta_id}:${codigo}`);
+      });
+    }
+    log(`  Ingredientes sub_receta protegidos: ${subRecetaProtegidos.size}`);
+
     for (let i = 0; i < paraUpdate.length; i += BATCH) {
       const chunk = paraUpdate.slice(i, i + BATCH);
       for (const { b, r } of chunk) {
@@ -370,13 +389,15 @@ async function main() {
           [nuevaActiva, nuevoEstado, NOW, r.id]
         );
 
-        // Eliminar ingredientes viejos y reinsertar desde Brilo
-        // Opción B: actualizar/insertar sin borrar — ingredientes removidos de Brilo se dejan intactos
+        // Actualizar ingredientes desde Brilo.
+        // Se saltan los ingredientes que en RDS ya están vinculados como sub_receta_id:
+        // cambiar su vínculo a producto_id rompería el desglose de ingredientes de esa sub-receta.
         const bIngs = briloIngMap[b.proId] || [];
         for (let j = 0; j < bIngs.length; j += 100) {
           const ingChunk = bIngs.slice(j, j + 100);
           const iParams  = [], iParts = [];
           for (const ing of ingChunk) {
+            if (subRecetaProtegidos.has(`${r.id}:${ing.ing_codigo}`)) continue;
             const pId = prodMap[ing.ing_codigo];
             if (!pId) continue;
             const { cantidad, unidad } = cantUniAlmacenar(ing);

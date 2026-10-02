@@ -25,8 +25,10 @@ const SQL_CFG = {
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 20000 },
 };
 const PG_CFG = {
-  host: process.env.DB_HOST, port: 5432,
-  database: 'compras_db', user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD,
+  host: process.env.DB_HOST_COMPRAS || process.env.DB_HOST, port: 5432,
+  database: process.env.DB_DATABASE_COMPRAS || 'gestion_operaciones_db',
+  user: process.env.DB_USERNAME_COMPRAS || process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD_COMPRAS || process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false },
 };
 
@@ -135,7 +137,8 @@ async function main() {
              COALESCE(p.codigo, sr.codigo_origen) AS ing_codigo,
              COALESCE(p.nombre, sr.nombre)        AS ing_nombre,
              ri.cantidad_por_plato                AS cantidad,
-             ri.unidad
+             ri.unidad,
+             CASE WHEN ri.sub_receta_id IS NOT NULL THEN true ELSE false END AS es_sub_receta
       FROM receta_ingredientes ri
       LEFT JOIN productos p  ON p.id  = ri.producto_id
       LEFT JOIN recetas   sr ON sr.id = ri.sub_receta_id
@@ -143,9 +146,12 @@ async function main() {
     `, [recetasEnBrilo]);
 
     const rdsIngMap = {};
+    // Set de "receta_id:codigo" que son sub_receta → el sync los protege
+    const subRecetaProtegidos = new Set();
     rdsIngs.forEach(r => {
       if (!rdsIngMap[r.receta_id]) rdsIngMap[r.receta_id] = [];
       rdsIngMap[r.receta_id].push(r);
+      if (r.es_sub_receta) subRecetaProtegidos.add(`${r.receta_id}:${r.ing_codigo}`);
     });
 
     // Mapa producto_id por codigo (para saber si existe en RDS)
@@ -198,15 +204,19 @@ async function main() {
       let hayCambios = false;
       for (const bw of briloWrites) {
         const ri = rdsSet[bw.codigo];
+        // ¿Es un ingrediente protegido porque en RDS es sub_receta?
+        bw.es_sub_receta = subRecetaProtegidos.has(`${r.id}:${bw.codigo}`);
         if (ri) {
           bw.en_rds    = true;
           bw.rds_valor = `${fmtNum(ri.cantidad)} ${ri.unidad}`;
-          bw.cambia    = bw.rds_valor !== bw.sync_escribe;
+          // Si es sub_receta, el sync lo salta → no cuenta como cambio
+          bw.cambia    = !bw.es_sub_receta && (bw.rds_valor !== bw.sync_escribe);
           if (bw.cambia) hayCambios = true;
         } else {
           bw.en_rds  = false;
-          bw.cambia  = true; // ingrediente nuevo que no está en RDS
-          hayCambios = true;
+          // Si es sub_receta no existente como producto, tampoco el sync lo toca
+          bw.cambia  = !bw.es_sub_receta;
+          if (bw.cambia) hayCambios = true;
         }
       }
 
@@ -268,7 +278,10 @@ async function main() {
           const syncVal   = bw.sync_escribe.padEnd(18);
           const base      = bw.brilo_base.padEnd(18);
           const pres      = (bw.brilo_pres ?? '—').padEnd(15);
-          const cambia    = !bw.en_rds ? '➕ NUEVO' : (bw.cambia ? (protegida ? '≠ (no aplica)' : '⚠️  CAMBIA') : '✓ igual');
+          const cambia    = bw.es_sub_receta
+                            ? '🔗 sub_receta (protegida)'
+                            : !bw.en_rds ? '➕ NUEVO'
+                            : (bw.cambia ? (protegida ? '≠ (no aplica)' : '⚠️  CAMBIA') : '✓ igual');
           const noProd    = !bw.existe_prod ? ' [sin prod en RDS]' : '';
           console.log(`  ${nombre} ${rdsVal} ${syncVal} ${base} ${pres} ${cambia}${noProd}`);
         }
