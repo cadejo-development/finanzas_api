@@ -42,11 +42,14 @@ class RecetasController extends Controller
             ->when(!$request->boolean('incluir_inactivas'), fn ($q) => $q->where('activa', true))
             ->orderBy('nombre');
 
-        // Filtrar por sucursal — aplica tanto a platos como a sub-recetas.
+        // sucursal_id: carga contexto por sucursal (badge Menú + platos_semana).
+        // Solo restringe el listado si además viene solo_en_menu=1 (Pedido Semanal).
         if ($sucursalId !== null) {
-            $query->whereHas('sucursalConfig', fn ($q) =>
-                $q->where('sucursal_id', $sucursalId)->where('activa', true)
-            );
+            if ($request->boolean('solo_en_menu')) {
+                $query->whereHas('sucursalConfig', fn ($q) =>
+                    $q->where('sucursal_id', $sucursalId)->where('activa', true)
+                );
+            }
             $query->with(['sucursalConfig' => fn ($q) => $q->where('sucursal_id', $sucursalId)]);
         } elseif (!empty($sucursalIds)) {
             // Gerente multi-sucursal: mostrar recetas activas en CUALQUIERA de sus sucursales
@@ -54,10 +57,8 @@ class RecetasController extends Controller
                 $q->whereIn('sucursal_id', $sucursalIds)->where('activa', true)
             );
             $query->with(['sucursalConfig' => fn ($q) => $q->whereIn('sucursal_id', $sucursalIds)]);
-        }
-
-        // solo_en_menu=1: solo recetas que están en el menú de alguna sucursal (tienen entrada en receta_sucursal)
-        if ($request->boolean('solo_en_menu')) {
+        } elseif ($request->boolean('solo_en_menu')) {
+            // Sin sucursal específica: solo recetas en algún menú
             $query->whereHas('sucursalConfig', fn ($q) => $q->where('activa', true));
         }
 
