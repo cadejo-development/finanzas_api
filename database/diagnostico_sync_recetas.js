@@ -130,6 +130,29 @@ async function main() {
     const rdsMap = {};
     rdsRec.forEach(r => { rdsMap[r.codigo_origen] = r; });
 
+    // Cargar menú de RDS: receta_sucursal activa → saber en qué sucursales está publicada
+    const { rows: rsRows } = await pg.query(`
+      SELECT receta_id, sucursal_id FROM receta_sucursal WHERE activa = true
+    `);
+    const rdsSucMap = {}; // receta_id → [ sucursal_id ]
+    rsRows.forEach(r => {
+      if (!rdsSucMap[r.receta_id]) rdsSucMap[r.receta_id] = [];
+      rdsSucMap[r.receta_id].push(r.sucursal_id);
+    });
+
+    // Cargar menú de Brilo: ProductoXCocinaXSucRst → en qué sucursales está configurado
+    const bMenuRows = (await sqlPool.request().query(`
+      SELECT DISTINCT TRIM(p.proCodigo) AS codigo, px.sucId
+      FROM olRestaurante.dbo.ProductoXCocinaXSucRst px WITH(NOLOCK)
+      JOIN olComun.dbo.Productos p WITH(NOLOCK) ON p.proId = px.proId
+      WHERE p.proCodigo IS NOT NULL
+    `)).recordset;
+    const briloMenuMap = {}; // codigo → Set<sucId>
+    bMenuRows.forEach(r => {
+      if (!briloMenuMap[r.codigo]) briloMenuMap[r.codigo] = new Set();
+      briloMenuMap[r.codigo].add(r.sucId);
+    });
+
     // Ingredientes RDS de todas las recetas que existen en Brilo también
     const recetasEnBrilo = rdsRec.filter(r => briloMap[r.codigo_origen]).map(r => r.id);
     const { rows: rdsIngs } = await pg.query(`
@@ -163,6 +186,7 @@ async function main() {
       total_en_brilo:     bRec.length,
       solo_en_brilo:      0,
       en_ambos:           0,
+      en_menu_rds:        0,
       mod_local_false:    { sin_diffs: 0, con_diffs: 0 },
       mod_local_true:     { sin_diffs: 0, con_diffs: 0 },
     };
@@ -228,18 +252,27 @@ async function main() {
       const activaCambia = nuevaActiva !== r.activa;
       if (activaCambia) hayCambios = true;
 
+      // Menú: sucursales en RDS (receta_sucursal) y en Brilo (ProductoXCocinaXSucRst)
+      const menuRds   = [...(rdsSucMap[r.id]   || [])].sort((a,b) => a-b);
+      const menuBrilo = [...(briloMenuMap[cod]  || new Set())].sort((a,b) => a-b);
+
       const entry = {
-        codigo:       cod,
-        nombre:       r.nombre,
-        mod_local:    r.modificado_localmente,
-        activa_rds:   r.activa,
-        activa_brilo: b.activo,
+        codigo:        cod,
+        nombre:        r.nombre,
+        mod_local:     r.modificado_localmente,
+        activa_rds:    r.activa,
+        activa_brilo:  b.activo,
         activa_cambia: activaCambia,
         nueva_activa:  nuevaActiva,
-        ing_writes:   briloWrites,
-        solo_en_rds:  soloEnRds,
-        hay_cambios:  hayCambios,
+        ing_writes:    briloWrites,
+        solo_en_rds:   soloEnRds,
+        hay_cambios:   hayCambios,
+        menu_rds:      menuRds,
+        menu_brilo:    menuBrilo,
+        en_menu:       menuRds.length > 0 || menuBrilo.length > 0,
       };
+
+      if (entry.menu_rds.length > 0) resumen.en_menu_rds++;
 
       if (hayCambios) {
         recConDiffs.push(entry);
@@ -259,9 +292,15 @@ async function main() {
       const protegida = rec.mod_local;
       const accion    = protegida ? '🔒 PROTEGIDA (mod_local=true) — ingredientes NO se tocan' : '⚠️  ACTUALIZABLE (mod_local=false) — ingredientes SE SOBREESCRIBEN';
 
+      const menuRdsStr   = rec.menu_rds.length   ? `suc(${rec.menu_rds.join(',')})` : '—';
+      const menuBriloStr = rec.menu_brilo.length ? `suc(${rec.menu_brilo.join(',')})` : '—';
+      const menuTag      = rec.menu_rds.length || rec.menu_brilo.length
+        ? `📋 MENÚ RDS: ${menuRdsStr}  |  Brilo botones: ${menuBriloStr}` : '';
+
       console.log(`\n────────────────────────────────────────────────────────────`);
       console.log(`${rec.codigo.padEnd(18)} ${rec.nombre}`);
       console.log(accion);
+      if (menuTag) console.log(`  ${menuTag}`);
       if (rec.activa_cambia) {
         console.log(`  ⚡ ACTIVA: ${rec.activa_rds} → ${rec.nueva_activa}  (Brilo=${rec.activa_brilo})`);
       }
@@ -301,6 +340,8 @@ async function main() {
     console.log(`  Total recetas en Brilo:                     ${resumen.total_en_brilo}`);
     console.log(`  Solo en Brilo (se crearían si se corre):    ${resumen.solo_en_brilo}`);
     console.log(`  En ambos (Brilo + RDS):                     ${resumen.en_ambos}`);
+    console.log('');
+    console.log(`  En menú (receta_sucursal activa en RDS):    ${resumen.en_menu_rds}`);
     console.log('');
     console.log(`  mod_local=false (actualizables con sync):`);
     console.log(`    Sin diferencias vs Brilo:                 ${resumen.mod_local_false.sin_diffs}`);
