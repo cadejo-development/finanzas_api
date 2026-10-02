@@ -344,24 +344,11 @@ async function main() {
     log('\n  [4b] Actualizando recetas existentes (mod_local=false)...');
     let updOk = 0;
 
-    // Cargar códigos de ingredientes que ya son sub_receta en RDS para estas recetas.
-    // Estos NO deben ser pisados por el sync — Brilo los ve como materia prima pero
-    // en RDS están modelados como sub-receta (con sub_receta_id) y tienen su propio
-    // desglose de ingredientes. Sobreescribirlos con producto_id rompería esa cadena.
-    const updateIds = paraUpdate.map(({ r }) => r.id);
-    const subRecetaProtegidos = new Set(); // "receta_id:codigo_origen" a ignorar
-    if (updateIds.length) {
-      const { rows: srLinks } = await pg.query(`
-        SELECT ri.receta_id, sr.codigo_origen AS codigo
-        FROM receta_ingredientes ri
-        JOIN recetas sr ON sr.id = ri.sub_receta_id
-        WHERE ri.receta_id = ANY($1)
-      `, [updateIds]);
-      srLinks.forEach(({ receta_id, codigo }) => {
-        subRecetaProtegidos.add(`${receta_id}:${codigo}`);
-      });
-    }
-    log(`  Ingredientes sub_receta protegidos: ${subRecetaProtegidos.size}`);
+    // Mapa codigo_origen → sub_receta_id para todos los productos que en RDS son sub-recetas.
+    // Cuando Brilo lista un ingrediente cuyo código existe como sub-receta en RDS, hay que
+    // vincularlo con sub_receta_id (no con producto_id) y usar cantidad de Brilo con unidad 'tanda'.
+    const subRecetaIdMap = {}; // codigo_origen → receta.id
+    rdsRec.forEach(r => { subRecetaIdMap[r.codigo_origen] = r.id; });
 
     for (let i = 0; i < paraUpdate.length; i += BATCH) {
       const chunk = paraUpdate.slice(i, i + BATCH);
@@ -389,34 +376,70 @@ async function main() {
           [nuevaActiva, nuevoEstado, NOW, r.id]
         );
 
-        // Actualizar ingredientes desde Brilo.
-        // Se saltan los ingredientes que en RDS ya están vinculados como sub_receta_id:
-        // cambiar su vínculo a producto_id rompería el desglose de ingredientes de esa sub-receta.
+        // Procesar ingredientes desde Brilo separando productos de sub-recetas.
+        // Si el código del ingrediente corresponde a una receta en RDS → sub_receta_id + tanda.
+        // Si corresponde a un producto → producto_id + unidad de presentación/base.
         const bIngs = briloIngMap[b.proId] || [];
         for (let j = 0; j < bIngs.length; j += 100) {
           const ingChunk = bIngs.slice(j, j + 100);
-          const iParams  = [], iParts = [];
+
+          const prodParams = [], prodParts = [];
+          const srParams   = [], srParts   = [];
+
           for (const ing of ingChunk) {
-            if (subRecetaProtegidos.has(`${r.id}:${ing.ing_codigo}`)) continue;
-            const pId = prodMap[ing.ing_codigo];
-            if (!pId) continue;
-            const { cantidad, unidad } = cantUniAlmacenar(ing);
-            const vals = [r.id, pId, cantidad, unidad, AUD, NOW, NOW];
-            const ph   = vals.map(v => { iParams.push(v); return `$${iParams.length}`; });
-            iParts.push(`(${ph.join(',')})`);
+            const srId = subRecetaIdMap[ing.ing_codigo];
+            if (srId) {
+              // Es una sub-receta en RDS: vincular con sub_receta_id, cantidad de Brilo, unidad tanda
+              const { cantidad } = cantUniAlmacenar(ing);
+              const vals = [r.id, srId, cantidad, 'tanda', AUD, NOW, NOW];
+              const ph   = vals.map(v => { srParams.push(v); return `$${srParams.length}`; });
+              srParts.push(`(${ph.join(',')})`);
+            } else {
+              // Es materia prima: vincular con producto_id
+              const pId = prodMap[ing.ing_codigo];
+              if (!pId) continue;
+              const { cantidad, unidad } = cantUniAlmacenar(ing);
+              const vals = [r.id, pId, cantidad, unidad, AUD, NOW, NOW];
+              const ph   = vals.map(v => { prodParams.push(v); return `$${prodParams.length}`; });
+              prodParts.push(`(${ph.join(',')})`);
+            }
           }
-          if (iParts.length) {
+
+          if (prodParts.length) {
             await pg.query(
               `INSERT INTO receta_ingredientes
                  (receta_id, producto_id, cantidad_por_plato, unidad, aud_usuario, created_at, updated_at)
-               VALUES ${iParts.join(',')}
+               VALUES ${prodParts.join(',')}
                ON CONFLICT (receta_id, producto_id) DO UPDATE SET
                  cantidad_por_plato = EXCLUDED.cantidad_por_plato,
                  unidad             = EXCLUDED.unidad,
                  aud_usuario        = EXCLUDED.aud_usuario,
                  updated_at         = EXCLUDED.updated_at`,
-              iParams
+              prodParams
             );
+          }
+
+          // Sub-recetas: UPDATE si existe, INSERT si no.
+          // No hay UNIQUE (receta_id, sub_receta_id) todavía, así que se maneja manual.
+          for (let k = 0; k < srParts.length; k++) {
+            const base = k * 7;
+            const recId = srParams[base];     // receta_id
+            const srId  = srParams[base + 1]; // sub_receta_id
+            const qty   = srParams[base + 2]; // cantidad_por_plato
+            const upd = await pg.query(
+              `UPDATE receta_ingredientes
+                 SET cantidad_por_plato = $1, aud_usuario = $2, updated_at = $3
+               WHERE receta_id = $4 AND sub_receta_id = $5`,
+              [qty, AUD, NOW, recId, srId]
+            );
+            if (upd.rowCount === 0) {
+              await pg.query(
+                `INSERT INTO receta_ingredientes
+                   (receta_id, sub_receta_id, cantidad_por_plato, unidad, aud_usuario, created_at, updated_at)
+                 VALUES ($1, $2, $3, 'tanda', $4, $5, $5)`,
+                [recId, srId, qty, AUD, NOW]
+              );
+            }
           }
         }
         updOk++;
