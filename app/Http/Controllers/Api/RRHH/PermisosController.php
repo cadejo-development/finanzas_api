@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\RRHH;
 use App\Models\RRHH\Permiso;
 use App\Models\RRHH\SaldoCadejo;
 use App\Models\RRHH\TipoPermiso;
+use App\Services\RRHH\SaldoCadejoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -91,6 +92,13 @@ class PermisosController extends RRHHBaseController
 
             $permiso->load('tipoPermiso');
 
+            // Días Cadejo auto-aprobados: descontar saldo inmediatamente
+            if ($estadoInicial === 'aprobado' && $permiso->tipoPermiso?->categoria === 'cadejo') {
+                $dias = (float) ($validated['dias'] ?? 1);
+                $anio = (int) \Carbon\Carbon::parse($validated['fecha'])->year;
+                SaldoCadejoService::descontar($validated['empleado_id'], $dias, $anio);
+            }
+
             $tipoLabel = $permiso->tipoPermiso?->nombre ?? 'Permiso';
             $detallesPermiso = array_filter([
                 'Tipo'   => $tipoLabel,
@@ -148,7 +156,8 @@ class PermisosController extends RRHHBaseController
     public function update(Request $request, int $id): JsonResponse
     {
         return $this->captureAndRespond($request, function () use ($request, $id) {
-            $permiso = Permiso::findOrFail($id);
+            $permiso = Permiso::with('tipoPermiso')->findOrFail($id);
+            $estadoAnterior = $permiso->estado;
 
             $validated = $request->validate([
                 'tipo_permiso_id'    => 'sometimes|exists:rrhh.tipos_permiso,id',
@@ -184,6 +193,18 @@ class PermisosController extends RRHHBaseController
             }
             $permiso->update(array_merge($validated, $extra));
             $permiso->load('tipoPermiso');
+
+            // Días Cadejo: sincronizar saldo al cambiar estado
+            if ($permiso->tipoPermiso?->categoria === 'cadejo' && isset($validated['estado'])) {
+                $nuevoEstado = $validated['estado'];
+                $dias = (float) ($permiso->dias ?? 1);
+                $anio = (int) \Carbon\Carbon::parse($permiso->fecha)->year;
+                if ($nuevoEstado === 'aprobado' && $estadoAnterior !== 'aprobado') {
+                    SaldoCadejoService::descontar($permiso->empleado_id, $dias, $anio);
+                } elseif ($nuevoEstado === 'rechazado' && $estadoAnterior === 'aprobado') {
+                    SaldoCadejoService::devolver($permiso->empleado_id, $dias, $anio);
+                }
+            }
 
             $arr = $this->enrichWithEmpleadoData([$permiso->toArray()]);
             return response()->json(['success' => true, 'data' => $arr[0]]);

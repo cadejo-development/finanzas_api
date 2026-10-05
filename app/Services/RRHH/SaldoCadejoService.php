@@ -65,9 +65,14 @@ class SaldoCadejoService
 
     /**
      * Descuenta días del saldo al aprobar un permiso Cadejo.
+     * Crea el registro si no existe para garantizar que el increment tenga efecto.
      */
     public static function descontar(int $empleadoId, float $dias, int $anio): void
     {
+        SaldoCadejo::firstOrCreate(
+            ['empleado_id' => $empleadoId, 'anio' => $anio],
+            ['dias_disponibles' => self::DIAS_POR_ANIO, 'dias_usados' => 0, 'aud_usuario' => 'sistema']
+        );
         SaldoCadejo::where('empleado_id', $empleadoId)
             ->where('anio', $anio)
             ->increment('dias_usados', $dias);
@@ -80,6 +85,7 @@ class SaldoCadejoService
     {
         SaldoCadejo::where('empleado_id', $empleadoId)
             ->where('anio', $anio)
+            ->where('dias_usados', '>', 0)
             ->decrement('dias_usados', $dias);
     }
 
