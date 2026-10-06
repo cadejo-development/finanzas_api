@@ -150,14 +150,16 @@ class ComparadorBriloController extends Controller
                 ->get()
                 ->groupBy('receta_codigo');
 
-            // Rendimiento de sub-recetas: Brilo guarda en TANDA (fracción del batch),
-            // nuestro sistema guarda en porcion. Conversión: brilo_tanda × rendimiento = porciones
+            // Rendimiento de sub-recetas: Brilo guarda en TANDA (fracción del batch).
+            // brilo_tanda × rendimiento = cantidad en rendimiento_unidad (oz, g, ml, porcion, etc.)
             $subRecetaRend = DB::connection('compras')
                 ->table('recetas')
                 ->where('tipo_receta', 'sub_receta')
                 ->where('rendimiento', '>', 0)
                 ->whereNotNull('rendimiento')
-                ->pluck('rendimiento', 'codigo_origen')
+                ->select('codigo_origen', 'rendimiento', 'rendimiento_unidad')
+                ->get()
+                ->keyBy('codigo_origen')
                 ->all();
 
             $candidatosSet = array_flip($codigosCandidatos);
@@ -179,14 +181,14 @@ class ComparadorBriloController extends Controller
                     $sCant = (float) $s->cantidad;
                     $sUnit = (string) $s->unidad;
 
-                    // Sub-receta: TANDA (Brilo) ↔ porcion (Sistema)
-                    // brilo_tanda × rendimiento = sistema_porciones
-                    if (strtolower(trim((string) $bUnit)) === 'tanda'
-                        && str_starts_with(strtolower(trim($sUnit)), 'porci')
-                        && isset($subRecetaRend[$cod])) {
-                        $convertido = $bCant * (float) $subRecetaRend[$cod];
-                        $tol = 0.02 * max($convertido, $sCant, 0.001);
-                        if (abs($convertido - $sCant) <= $tol) continue; // igual tras conversión
+                    // Sub-receta: TANDA (Brilo) → cualquier unidad del sistema
+                    // brilo_tanda × rendimiento = cantidad en rendimiento_unidad (oz, g, ml, porcion…)
+                    if (strtolower(trim((string) $bUnit)) === 'tanda' && isset($subRecetaRend[$cod])) {
+                        $rend      = $subRecetaRend[$cod];
+                        $rendVal   = (float) $rend->rendimiento;
+                        $rendUnit  = (string) ($rend->rendimiento_unidad ?? 'porcion');
+                        $convertido = $bCant * $rendVal;
+                        if (!$this->cantidadesDifieren($convertido, $rendUnit, $sCant, $sUnit)) continue;
                         $r['hay_diferencia'] = true; $r['diferencias'][] = 'ingredientes'; return $r;
                     }
 
