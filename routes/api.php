@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\Compras\AuditoriaConteoController;
 use App\Http\Controllers\Api\Compras\InventarioController;
 use App\Http\Controllers\Api\Compras\InventarioReporteController;
 use App\Http\Controllers\Api\Compras\ExportBriloController;
+use App\Http\Controllers\Api\Compras\ComparadorBriloController;
 use App\Http\Controllers\Api\Compras\SolicitudCargaRecetasController;
 use App\Http\Controllers\Api\Compras\BrewRecetasController;
 use App\Http\Controllers\Api\Compras\BrewLotesController;
@@ -278,6 +279,11 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('ventas/proyeccion-ingrediente-detalle',   [VentasController::class, 'proyeccionIngredienteDetalle']);
     Route::get('ventas/{id}',                  [VentasController::class, 'show']);
     Route::post('ventas/import',      [VentasController::class, 'import']);
+
+    // Comparador Brilo ↔ Sistema
+    Route::get('comparador-brilo',                          [ComparadorBriloController::class, 'index']);
+    Route::get('comparador-brilo/{codigo}/detalle',         [ComparadorBriloController::class, 'detalle']);
+    Route::get('comparador-brilo/{codigo}/historial',       [ComparadorBriloController::class, 'historial']);
 
     // Exportación BRILO — recetas/productos
     Route::get('export/brilo/materiales-x-producto',  [ExportBriloController::class, 'materialesXProducto']);
