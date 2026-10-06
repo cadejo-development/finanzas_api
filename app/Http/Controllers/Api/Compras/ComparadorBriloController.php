@@ -110,16 +110,18 @@ class ComparadorBriloController extends Controller
             ];
         });
 
-        // Solo mostrar recetas que pertenecen al catálogo (tienen categoria en nuestro sistema)
-        // o que están solo en Brilo con categoría de tipo Plato/Bebida/Sub (para detectar faltantes)
-        $rows = $rows->filter(function ($r) {
-            if ($r['sistema_categoria'] !== null) return true; // está en nuestro catálogo
-            if ($r['solo_en_brilo']) {
-                $cat = strtolower($r['brilo_categoria'] ?? '');
-                return str_starts_with($cat, 'platos') ||
-                       str_starts_with($cat, 'bebidas') ||
-                       str_starts_with($cat, 'sub');
-            }
+        // Solo mostrar recetas del catálogo (mismas categorías que CatalogoRecetas: Platos/Bebidas/Sub)
+        $esCatalogoValida = fn($cat) => $cat !== null && (
+            str_starts_with(strtolower($cat), 'platos')  ||
+            str_starts_with(strtolower($cat), 'bebidas') ||
+            str_starts_with(strtolower($cat), 'sub')
+        );
+
+        $rows = $rows->filter(function ($r) use ($esCatalogoValida) {
+            // En nuestro sistema: solo si tiene categoría válida del catálogo
+            if (!$r['solo_en_brilo'] && $esCatalogoValida($r['sistema_categoria'])) return true;
+            // Solo en Brilo: solo si la categoría de Brilo es tipo Platos/Bebidas/Sub
+            if ($r['solo_en_brilo'] && $esCatalogoValida($r['brilo_categoria'])) return true;
             return false;
         });
 
