@@ -9,120 +9,149 @@ use Illuminate\Support\Facades\DB;
 /**
  * Comparativa Brilo ↔ Sistema propio.
  *
- * GET /api/compras/comparador-brilo                  → lista de recetas con estado comparativo
- * GET /api/compras/comparador-brilo/{codigo}/detalle → ingredientes comparados lado a lado
- * GET /api/compras/comparador-brilo/{codigo}/historial → historial de cambios (aud_receta_ingredientes)
+ * GET /api/compras/comparador-brilo                  → lista comparativa
+ * GET /api/compras/comparador-brilo/{codigo}/detalle → ingredientes lado a lado
+ * GET /api/compras/comparador-brilo/{codigo}/historial → auditoría de cambios
  */
 class ComparadorBriloController extends Controller
 {
-    // ─────────────────────────────────────────────────────────────────────────
-    // GET /api/compras/comparador-brilo
-    // ─────────────────────────────────────────────────────────────────────────
     public function index(Request $request)
     {
         $this->requireAdminRecetas();
 
-        $filtro   = $request->query('filtro', 'todos');   // todos | diferencias | solo_brilo | solo_sistema
-        $buscar   = trim($request->query('buscar', ''));
-        $tipo     = $request->query('tipo');              // plato | sub_receta
-        $perPage  = min((int) $request->query('per_page', 50), 200);
+        $filtro    = $request->query('filtro', 'todos');
+        $buscar    = trim($request->query('buscar', ''));
+        $tipo      = $request->query('tipo');
+        $categoria = $request->query('categoria');
+        $perPage   = min((int) $request->query('per_page', 50), 200);
+        $page      = max(1, (int) $request->query('page', 1));
 
-        // Snapshot Brilo
-        $brilo = DB::connection('compras')
-            ->table('brilo_snapshot_recetas as b')
-            ->select([
-                'b.codigo', 'b.nombre as brilo_nombre', 'b.tipo_receta as brilo_tipo',
-                'b.categoria_nombre as brilo_categoria',
-                'b.precio as brilo_precio', 'b.activo as brilo_activo',
-                'b.no_enviar_cocina', 'b.en_boton_cocina',
-                'b.sucursales as brilo_sucursales',
-                'b.synced_at',
-                // Contar ingredientes en Brilo
-                DB::raw('(SELECT COUNT(*) FROM brilo_snapshot_ingredientes bi WHERE bi.receta_codigo = b.codigo AND bi.activo = true) AS brilo_num_ing'),
-            ]);
+        // FULL OUTER JOIN en SQL para no perder registros con colecciones PHP
+        $sql = "
+            SELECT
+                COALESCE(b.codigo, r.codigo_origen)       AS codigo,
+                b.nombre                                   AS brilo_nombre,
+                r.nombre                                   AS sistema_nombre,
+                COALESCE(b.tipo_receta, r.tipo_receta)    AS tipo_receta,
+                b.categoria_nombre                         AS brilo_categoria,
+                rc.nombre                                  AS sistema_categoria,
+                b.precio                                   AS brilo_precio,
+                b.activo                                   AS brilo_activo,
+                r.activa                                   AS sistema_activa,
+                b.no_enviar_cocina,
+                b.en_boton_cocina,
+                b.sucursales                               AS brilo_sucursales,
+                b.synced_at,
+                r.modificado_localmente,
+                r.sincronizado_brilo,
+                COALESCE(bi_c.cnt, 0)                     AS brilo_num_ing,
+                COALESCE(ri_c.cnt, 0)                     AS sistema_num_ing
+            FROM brilo_snapshot_recetas b
+            FULL OUTER JOIN recetas r
+                ON r.codigo_origen = b.codigo
+            LEFT JOIN receta_categorias rc
+                ON rc.id = r.categoria_id
+            LEFT JOIN (
+                SELECT receta_codigo, COUNT(*) AS cnt
+                FROM   brilo_snapshot_ingredientes
+                WHERE  activo = true
+                GROUP  BY receta_codigo
+            ) bi_c ON bi_c.receta_codigo = b.codigo
+            LEFT JOIN (
+                SELECT receta_id, COUNT(*) AS cnt
+                FROM   receta_ingredientes
+                GROUP  BY receta_id
+            ) ri_c ON ri_c.receta_id = r.id
+            WHERE (b.codigo IS NOT NULL)
+               OR (r.codigo_origen IS NOT NULL AND r.codigo_origen <> '')
+            ORDER BY COALESCE(b.codigo, r.codigo_origen)
+        ";
 
-        // Nuestro sistema
-        $sistema = DB::connection('compras')
-            ->table('recetas as r')
-            ->leftJoin('receta_categorias as rc', 'r.categoria_id', '=', 'rc.id')
-            ->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '')
-            ->select([
-                'r.codigo_origen as codigo',
-                'r.nombre as sistema_nombre',
-                'r.tipo_receta as sistema_tipo',
-                'rc.nombre as sistema_categoria',
-                'r.activa as sistema_activa',
-                'r.modificado_localmente',
-                'r.sincronizado_brilo',
-                DB::raw('(SELECT COUNT(*) FROM receta_ingredientes ri WHERE ri.receta_id = r.id) AS sistema_num_ing'),
-            ]);
+        $raw = DB::connection('compras')->select($sql);
 
-        // Hacer el FULL OUTER JOIN en PHP (simple y portable)
-        $briloRows   = $brilo->get()->keyBy('codigo');
-        $sistemaRows = $sistema->get()->keyBy('codigo');
+        $rows = collect($raw)->map(function ($r) {
+            $soloEnBrilo   = $r->brilo_nombre !== null && $r->sistema_nombre === null;
+            $soloEnSistema = $r->brilo_nombre === null && $r->sistema_nombre !== null;
+            $enAmbos       = $r->brilo_nombre !== null && $r->sistema_nombre !== null;
 
-        $allCodigos = $briloRows->keys()->merge($sistemaRows->keys())->unique();
+            $nombreDif = $enAmbos && strtolower(trim($r->brilo_nombre)) !== strtolower(trim($r->sistema_nombre));
+            $activoDif = $enAmbos && $this->boolVal($r->brilo_activo) !== $this->boolVal($r->sistema_activa);
+            $ingDif    = $enAmbos && (int) $r->brilo_num_ing !== (int) $r->sistema_num_ing;
+            $hayDif    = $soloEnBrilo || $soloEnSistema || $nombreDif || $activoDif || $ingDif;
 
-        $rows = $allCodigos->map(function ($cod) use ($briloRows, $sistemaRows) {
-            $b = $briloRows->get($cod);
-            $s = $sistemaRows->get($cod);
-
-            $soloEnBrilo   = $b && !$s;
-            $soloEnSistema = !$b && $s;
-            $enAmbos       = $b && $s;
-
-            $nombreDiferente   = $enAmbos && strtolower(trim($b->brilo_nombre ?? '')) !== strtolower(trim($s->sistema_nombre ?? ''));
-            $activoDiferente   = $enAmbos && (bool) $b->brilo_activo !== (bool) $s->sistema_activa;
-            $numIngDiferente   = $enAmbos && (int) $b->brilo_num_ing !== (int) $s->sistema_num_ing;
-            $hayDiferencia     = $soloEnBrilo || $soloEnSistema || $nombreDiferente || $activoDiferente || $numIngDiferente;
-
-            return (object) [
-                'codigo'              => $cod,
-                'brilo_nombre'        => $b?->brilo_nombre,
-                'sistema_nombre'      => $s?->sistema_nombre,
-                'tipo_receta'         => $b?->brilo_tipo ?? $s?->sistema_tipo,
-                'brilo_categoria'     => $b?->brilo_categoria,
-                'sistema_categoria'   => $s?->sistema_categoria,
-                'brilo_precio'        => $b?->brilo_precio,
-                'brilo_activo'        => $b ? (bool) $b->brilo_activo : null,
-                'sistema_activa'      => $s ? (bool) $s->sistema_activa : null,
-                'no_enviar_cocina'    => $b ? (bool) $b->no_enviar_cocina : null,
-                'en_boton_cocina'     => $b ? (bool) $b->en_boton_cocina : null,
-                'brilo_sucursales'    => $b?->brilo_sucursales ? json_decode($b->brilo_sucursales) : [],
-                'brilo_num_ing'       => $b ? (int) $b->brilo_num_ing : null,
-                'sistema_num_ing'     => $s ? (int) $s->sistema_num_ing : null,
-                'modificado_local'    => $s ? (bool) $s->modificado_localmente : null,
-                'sincronizado_brilo'  => $s ? (bool) $s->sincronizado_brilo : null,
-                'solo_en_brilo'       => $soloEnBrilo,
-                'solo_en_sistema'     => $soloEnSistema,
-                'hay_diferencia'      => $hayDiferencia,
-                'diferencias'         => array_filter([
-                    $soloEnBrilo    ? 'solo_en_brilo'    : null,
-                    $soloEnSistema  ? 'solo_en_sistema'  : null,
-                    $nombreDiferente   ? 'nombre'         : null,
-                    $activoDiferente   ? 'estado'         : null,
-                    $numIngDiferente   ? 'ingredientes'   : null,
-                ]),
-                'synced_at' => $b?->synced_at,
+            return [
+                'codigo'             => $r->codigo,
+                'brilo_nombre'       => $r->brilo_nombre,
+                'sistema_nombre'     => $r->sistema_nombre,
+                'tipo_receta'        => $r->tipo_receta,
+                'brilo_categoria'    => $r->brilo_categoria,
+                'sistema_categoria'  => $r->sistema_categoria,
+                'brilo_precio'       => $r->brilo_precio,
+                'brilo_activo'       => $r->brilo_activo !== null ? $this->boolVal($r->brilo_activo) : null,
+                'sistema_activa'     => $r->sistema_activa !== null ? $this->boolVal($r->sistema_activa) : null,
+                'no_enviar_cocina'   => $r->no_enviar_cocina !== null ? $this->boolVal($r->no_enviar_cocina) : null,
+                'en_boton_cocina'    => $r->en_boton_cocina !== null ? $this->boolVal($r->en_boton_cocina) : null,
+                'brilo_sucursales'   => $r->brilo_sucursales ? json_decode($r->brilo_sucursales) : [],
+                'brilo_num_ing'      => (int) $r->brilo_num_ing,
+                'sistema_num_ing'    => (int) $r->sistema_num_ing,
+                'modificado_local'   => $r->modificado_localmente !== null ? $this->boolVal($r->modificado_localmente) : null,
+                'sincronizado_brilo' => $r->sincronizado_brilo !== null ? $this->boolVal($r->sincronizado_brilo) : null,
+                'solo_en_brilo'      => $soloEnBrilo,
+                'solo_en_sistema'    => $soloEnSistema,
+                'hay_diferencia'     => $hayDif,
+                'diferencias'        => array_values(array_filter([
+                    $soloEnBrilo ? 'solo_en_brilo'  : null,
+                    $soloEnSistema ? 'solo_en_sistema' : null,
+                    $nombreDif   ? 'nombre'         : null,
+                    $activoDif   ? 'estado'         : null,
+                    $ingDif      ? 'ingredientes'   : null,
+                ])),
+                'synced_at' => $r->synced_at,
             ];
-        })->values();
+        });
 
-        // Filtros
-        if ($filtro === 'diferencias')  $rows = $rows->filter(fn ($r) => $r->hay_diferencia);
-        if ($filtro === 'solo_brilo')   $rows = $rows->filter(fn ($r) => $r->solo_en_brilo);
-        if ($filtro === 'solo_sistema') $rows = $rows->filter(fn ($r) => $r->solo_en_sistema);
-        if ($tipo)                      $rows = $rows->filter(fn ($r) => $r->tipo_receta === $tipo);
-        if ($buscar !== '') {
+        // Lista de categorías únicas (para el dropdown del frontend)
+        $categorias = $rows
+            ->map(fn ($r) => $r['sistema_categoria'] ?? $r['brilo_categoria'])
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+
+        // Filtro de categoría (antes del resumen para que los stats reflejen la categoría seleccionada)
+        if ($categoria) {
             $rows = $rows->filter(fn ($r) =>
-                str_contains(strtolower($r->codigo), strtolower($buscar)) ||
-                str_contains(strtolower($r->brilo_nombre ?? ''), strtolower($buscar)) ||
-                str_contains(strtolower($r->sistema_nombre ?? ''), strtolower($buscar))
+                ($r['sistema_categoria'] ?? '') === $categoria ||
+                ($r['brilo_categoria'] ?? '') === $categoria
             );
         }
 
-        $rows = $rows->sortBy('codigo')->values();
+        // Resumen GLOBAL de la categoría seleccionada (o todo si no hay filtro)
+        $resumen = [
+            'total'           => $rows->count(),
+            'solo_en_brilo'   => $rows->filter(fn ($r) => $r['solo_en_brilo'])->count(),
+            'solo_en_sistema' => $rows->filter(fn ($r) => $r['solo_en_sistema'])->count(),
+            'con_diferencias' => $rows->filter(fn ($r) => $r['hay_diferencia'] && !$r['solo_en_brilo'] && !$r['solo_en_sistema'])->count(),
+            'sincronizados'   => $rows->filter(fn ($r) => !$r['hay_diferencia'])->count(),
+            'categorias'      => $categorias,
+        ];
+
+        // Filtros de estado (después del resumen)
+        if ($filtro === 'diferencias')  $rows = $rows->filter(fn ($r) => $r['hay_diferencia']);
+        if ($filtro === 'solo_brilo')   $rows = $rows->filter(fn ($r) => $r['solo_en_brilo']);
+        if ($filtro === 'solo_sistema') $rows = $rows->filter(fn ($r) => $r['solo_en_sistema']);
+        if ($tipo)                      $rows = $rows->filter(fn ($r) => $r['tipo_receta'] === $tipo);
+        if ($buscar !== '') {
+            $buscarLow = strtolower($buscar);
+            $rows = $rows->filter(fn ($r) =>
+                str_contains(strtolower($r['codigo'] ?? ''), $buscarLow) ||
+                str_contains(strtolower($r['brilo_nombre'] ?? ''), $buscarLow) ||
+                str_contains(strtolower($r['sistema_nombre'] ?? ''), $buscarLow)
+            );
+        }
+
+        $rows  = $rows->values();
         $total = $rows->count();
-        $page  = max(1, (int) $request->query('page', 1));
         $items = $rows->slice(($page - 1) * $perPage, $perPage)->values();
 
         return response()->json([
@@ -130,19 +159,11 @@ class ComparadorBriloController extends Controller
             'total'        => $total,
             'per_page'     => $perPage,
             'current_page' => $page,
-            'last_page'    => (int) ceil($total / $perPage),
-            'resumen'      => [
-                'total'            => $rows->count(),
-                'solo_en_brilo'    => $rows->filter(fn ($r) => $r->solo_en_brilo)->count(),
-                'solo_en_sistema'  => $rows->filter(fn ($r) => $r->solo_en_sistema)->count(),
-                'con_diferencias'  => $rows->filter(fn ($r) => $r->hay_diferencia && !$r->solo_en_brilo && !$r->solo_en_sistema)->count(),
-                'sincronizados'    => $rows->filter(fn ($r) => !$r->hay_diferencia)->count(),
-            ],
+            'last_page'    => max(1, (int) ceil($total / $perPage)),
+            'resumen'      => $resumen,
         ]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // GET /api/compras/comparador-brilo/{codigo}/detalle
     // ─────────────────────────────────────────────────────────────────────────
     public function detalle(string $codigo)
     {
@@ -150,7 +171,6 @@ class ComparadorBriloController extends Controller
 
         $codigo = strtoupper(trim($codigo));
 
-        // Ingredientes Brilo
         $briloIngs = DB::connection('compras')
             ->table('brilo_snapshot_ingredientes')
             ->where('receta_codigo', $codigo)
@@ -159,10 +179,9 @@ class ComparadorBriloController extends Controller
             ->get()
             ->keyBy('ingrediente_codigo');
 
-        // Receta en nuestro sistema
         $receta = DB::connection('compras')
-            ->table('recetas as r')
-            ->where('r.codigo_origen', $codigo)
+            ->table('recetas')
+            ->where('codigo_origen', $codigo)
             ->first();
 
         $sistemaIngs = collect();
@@ -190,32 +209,31 @@ class ComparadorBriloController extends Controller
             $b = $briloIngs->get($cod);
             $s = $sistemaIngs->get($cod);
 
-            // Cantidad efectiva de Brilo: presentación si existe, si no base
-            $bCant  = $b ? ($b->cantidad_pres > 0 ? (float) $b->cantidad_pres : (float) $b->cantidad_base) : null;
-            $bUnit  = $b ? ($b->cantidad_pres > 0 && $b->unidad_pres ? $b->unidad_pres : $b->unidad_base) : null;
-            $sCant  = $s ? (float) $s->cantidad : null;
-            $sUnit  = $s ? $s->unidad : null;
+            $bCant = $b ? ($b->cantidad_pres > 0 ? (float) $b->cantidad_pres : (float) $b->cantidad_base) : null;
+            $bUnit = $b ? ($b->cantidad_pres > 0 && $b->unidad_pres ? $b->unidad_pres : $b->unidad_base) : null;
+            $sCant = $s ? (float) $s->cantidad : null;
+            $sUnit = $s ? $s->unidad : null;
 
             $cantDif = $bCant !== null && $sCant !== null && abs($bCant - $sCant) > 0.0001;
             $unitDif = $bUnit && $sUnit && strtolower(trim($bUnit)) !== strtolower(trim($sUnit));
 
             return [
-                'codigo'            => $cod,
-                'nombre'            => $b?->ingrediente_nombre ?? $s?->nombre,
-                'es_sub_receta'     => $b ? (bool) $b->es_sub_receta : (bool) ($s?->es_sub_receta ?? false),
-                'brilo_cant_base'   => $b ? (float) $b->cantidad_base : null,
-                'brilo_unit_base'   => $b?->unidad_base,
-                'brilo_cant_pres'   => $b && $b->cantidad_pres > 0 ? (float) $b->cantidad_pres : null,
-                'brilo_unit_pres'   => $b?->unidad_pres,
-                'sistema_cant'      => $sCant,
-                'sistema_unit'      => $sUnit,
-                'solo_en_brilo'     => $b && !$s,
-                'solo_en_sistema'   => !$b && $s,
-                'cant_diferente'    => $cantDif,
-                'unidad_diferente'  => $unitDif,
-                'hay_diferencia'    => $b && !$s || !$b && $s || $cantDif || $unitDif,
+                'codigo'           => $cod,
+                'nombre'           => $b?->ingrediente_nombre ?? $s?->nombre,
+                'es_sub_receta'    => $b ? $this->boolVal($b->es_sub_receta) : (bool) ($s?->es_sub_receta ?? false),
+                'brilo_cant_base'  => $b ? (float) $b->cantidad_base : null,
+                'brilo_unit_base'  => $b?->unidad_base,
+                'brilo_cant_pres'  => $b && $b->cantidad_pres > 0 ? (float) $b->cantidad_pres : null,
+                'brilo_unit_pres'  => $b?->unidad_pres,
+                'sistema_cant'     => $sCant,
+                'sistema_unit'     => $sUnit,
+                'solo_en_brilo'    => $b && !$s,
+                'solo_en_sistema'  => !$b && $s,
+                'cant_diferente'   => $cantDif,
+                'unidad_diferente' => $unitDif,
+                'hay_diferencia'   => ($b && !$s) || (!$b && $s) || $cantDif || $unitDif,
             ];
-        })->values()->sortBy('codigo')->values();
+        })->sortBy('codigo')->values();
 
         return response()->json([
             'codigo'      => $codigo,
@@ -231,8 +249,6 @@ class ComparadorBriloController extends Controller
         ]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // GET /api/compras/comparador-brilo/{codigo}/historial
     // ─────────────────────────────────────────────────────────────────────────
     public function historial(string $codigo)
     {
@@ -267,6 +283,16 @@ class ComparadorBriloController extends Controller
             ->get();
 
         return response()->json(['data' => $rows]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private function boolVal($v): bool
+    {
+        if (is_bool($v)) return $v;
+        if ($v === 't' || $v === '1' || $v === 1) return true;
+        if ($v === 'f' || $v === '0' || $v === 0) return false;
+        return (bool) $v;
     }
 
     private function requireAdminRecetas(): void
