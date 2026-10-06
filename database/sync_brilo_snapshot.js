@@ -32,7 +32,7 @@ const PG_CFG = {
   ssl: { rejectUnauthorized: false },
 };
 
-const PREFIJOS = ['PL', 'SUBR', 'PR', 'PRD', 'LLPL', 'HZPL', 'HZPR', 'EVPL', 'VOPL', 'PMPL'];
+const PREFIJOS = ['PL', 'SUBR', 'PR', 'PRD', 'LLPL', 'HZPL', 'HZPR', 'EVPL', 'VOPL', 'PMPL', 'AE1'];
 const esReceta = cod => cod && PREFIJOS.some(p => String(cod).startsWith(p));
 const esSubRec = (cod, catNombre) => {
   const t = (catNombre || '').toLowerCase();
@@ -77,6 +77,7 @@ async function main() {
           OR p.proCodigo LIKE 'LLPL%' OR p.proCodigo LIKE 'HZPL%'
           OR p.proCodigo LIKE 'HZPR%' OR p.proCodigo LIKE 'EVPL%'
           OR p.proCodigo LIKE 'VOPL%' OR p.proCodigo LIKE 'PMPL%'
+          OR p.proCodigo LIKE 'AE1%'
         )
       ORDER BY p.proCodigo
     `);
