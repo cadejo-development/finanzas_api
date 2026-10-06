@@ -23,6 +23,7 @@ class ComparadorBriloController extends Controller
         $buscar    = trim($request->query('buscar', ''));
         $tipo      = $request->query('tipo');
         $categoria = $request->query('categoria');
+        $estado    = $request->query('estado');
         $perPage   = min((int) $request->query('per_page', 50), 200);
         $page      = max(1, (int) $request->query('page', 1));
 
@@ -38,6 +39,7 @@ class ComparadorBriloController extends Controller
                 b.precio                                   AS brilo_precio,
                 b.activo                                   AS brilo_activo,
                 r.activa                                   AS sistema_activa,
+                r.estado                                   AS sistema_estado,
                 b.no_enviar_cocina,
                 b.en_boton_cocina,
                 b.sucursales                               AS brilo_sucursales,
@@ -89,6 +91,7 @@ class ComparadorBriloController extends Controller
                 'brilo_precio'       => $r->brilo_precio,
                 'brilo_activo'       => $r->brilo_activo !== null ? $this->boolVal($r->brilo_activo) : null,
                 'sistema_activa'     => $r->sistema_activa !== null ? $this->boolVal($r->sistema_activa) : null,
+                'sistema_estado'     => $r->sistema_estado ?? null,
                 'no_enviar_cocina'   => $r->no_enviar_cocina !== null ? $this->boolVal($r->no_enviar_cocina) : null,
                 'en_boton_cocina'    => $r->en_boton_cocina !== null ? $this->boolVal($r->en_boton_cocina) : null,
                 'brilo_sucursales'   => $r->brilo_sucursales ? json_decode($r->brilo_sucursales) : [],
@@ -171,6 +174,7 @@ class ComparadorBriloController extends Controller
         if ($filtro === 'solo_brilo')   $rows = $rows->filter(fn ($r) => $r['solo_en_brilo']);
         if ($filtro === 'solo_sistema') $rows = $rows->filter(fn ($r) => $r['solo_en_sistema']);
         if ($tipo)                      $rows = $rows->filter(fn ($r) => $r['tipo_receta'] === $tipo);
+        if ($estado)                    $rows = $rows->filter(fn ($r) => ($r['sistema_estado'] ?? '') === $estado);
         if ($buscar !== '') {
             $buscarLow = strtolower($buscar);
             $rows = $rows->filter(fn ($r) =>
