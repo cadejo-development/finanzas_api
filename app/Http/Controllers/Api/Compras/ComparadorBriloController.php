@@ -449,13 +449,18 @@ class ComparadorBriloController extends Controller
         static $volumen = [
             'galon' => 3785.41, 'galón' => 3785.41, 'gal' => 3785.41,
             'litro' => 1000, 'l' => 1000,
-            'ml' => 1, 'mililitro' => 1,
+            'ml' => 1, 'mililitro' => 1, 'mililitros' => 1,
             'oz fl' => 29.5735, 'oz. fl.' => 29.5735, 'oz.fl' => 29.5735, 'fl oz' => 29.5735,
             'onza fluida' => 29.5735, 'onzas fluidas' => 29.5735, 'onza fluida.' => 29.5735,
+        ];
+        static $conteo = [
+            'u' => 1, 'unidad' => 1, 'unidades' => 1, 'und' => 1,
+            'pieza' => 1, 'piezas' => 1, 'pza' => 1, 'pz' => 1,
         ];
 
         if (isset($peso[$u]))    return ['family' => 'peso',    'value' => $cantidad * $peso[$u]];
         if (isset($volumen[$u])) return ['family' => 'volumen', 'value' => $cantidad * $volumen[$u]];
+        if (isset($conteo[$u]))  return ['family' => 'conteo',  'value' => $cantidad * $conteo[$u]];
         return ['family' => $u,  'value' => $cantidad]; // sin conversión conocida
     }
 
