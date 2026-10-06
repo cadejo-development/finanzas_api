@@ -39,7 +39,7 @@ class ComparadorBriloController extends Controller
                 b.precio                                   AS brilo_precio,
                 b.activo                                   AS brilo_activo,
                 r.activa                                   AS sistema_activa,
-                r.estado                                   AS sistema_estado,
+                er.codigo                                  AS sistema_estado,
                 b.no_enviar_cocina,
                 b.en_boton_cocina,
                 b.sucursales                               AS brilo_sucursales,
@@ -53,6 +53,8 @@ class ComparadorBriloController extends Controller
                 ON r.codigo_origen = b.codigo
             LEFT JOIN receta_categorias rc
                 ON rc.id = r.categoria_id
+            LEFT JOIN estados_receta er
+                ON er.id = r.estado_id
             LEFT JOIN (
                 SELECT receta_codigo, COUNT(*) AS cnt
                 FROM   brilo_snapshot_ingredientes
