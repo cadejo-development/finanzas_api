@@ -154,9 +154,9 @@ class ComparadorBriloController extends Controller
             // brilo_tanda × rendimiento = cantidad en rendimiento_unidad (oz, g, ml, porcion, etc.)
             $subRecetaRend = DB::connection('compras')
                 ->table('recetas')
-                ->where('tipo_receta', 'sub_receta')
                 ->where('rendimiento', '>', 0)
                 ->whereNotNull('rendimiento')
+                ->whereNotNull('codigo_origen')
                 ->select('codigo_origen', 'rendimiento', 'rendimiento_unidad')
                 ->get()
                 ->keyBy('codigo_origen')
@@ -463,7 +463,7 @@ class ComparadorBriloController extends Controller
         static $conteo = [
             'u' => 1, 'unidad' => 1, 'unidades' => 1, 'und' => 1,
             'pieza' => 1, 'piezas' => 1, 'pza' => 1, 'pz' => 1,
-            'porcion' => 1, 'porciones' => 1, 'porción' => 1, 'porciones' => 1,
+            'porcion' => 1, 'porciones' => 1, 'porción' => 1,
         ];
 
         if (isset($peso[$u]))    return ['family' => 'peso',    'value' => $cantidad * $peso[$u]];
