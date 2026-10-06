@@ -110,9 +110,22 @@ class ComparadorBriloController extends Controller
             ];
         });
 
-        // Lista de categorías únicas (para el dropdown del frontend)
+        // Solo mostrar recetas que pertenecen al catálogo (tienen categoria en nuestro sistema)
+        // o que están solo en Brilo con categoría de tipo Plato/Bebida/Sub (para detectar faltantes)
+        $rows = $rows->filter(function ($r) {
+            if ($r['sistema_categoria'] !== null) return true; // está en nuestro catálogo
+            if ($r['solo_en_brilo']) {
+                $cat = strtolower($r['brilo_categoria'] ?? '');
+                return str_starts_with($cat, 'platos') ||
+                       str_starts_with($cat, 'bebidas') ||
+                       str_starts_with($cat, 'sub');
+            }
+            return false;
+        });
+
+        // Categorías solo del sistema (igual que el Catálogo de Recetas)
         $categorias = $rows
-            ->map(fn ($r) => $r['sistema_categoria'] ?? $r['brilo_categoria'])
+            ->map(fn ($r) => $r['sistema_categoria'])
             ->filter()
             ->unique()
             ->sort()
@@ -121,8 +134,7 @@ class ComparadorBriloController extends Controller
         // Filtro de categoría (antes del resumen para que los stats reflejen la categoría seleccionada)
         if ($categoria) {
             $rows = $rows->filter(fn ($r) =>
-                ($r['sistema_categoria'] ?? '') === $categoria ||
-                ($r['brilo_categoria'] ?? '') === $categoria
+                ($r['sistema_categoria'] ?? '') === $categoria
             );
         }
 
