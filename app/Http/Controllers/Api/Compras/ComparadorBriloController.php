@@ -125,8 +125,8 @@ class ComparadorBriloController extends Controller
             $bcat = strtolower(trim($r['brilo_categoria']  ?? ''));
             // En nuestro sistema: solo si tiene una categoría válida del catálogo
             if (!$r['solo_en_brilo'] && isset($categoriasValidas[$scat])) return true;
-            // Solo en Brilo: solo si su categoría de Brilo coincide con una de las nuestras
-            if ($r['solo_en_brilo'] && isset($categoriasValidas[$bcat])) return true;
+            // Solo en Brilo: categoría válida Y activo en Brilo (excluye versiones viejas inactivas)
+            if ($r['solo_en_brilo'] && isset($categoriasValidas[$bcat]) && $r['brilo_activo'] === true) return true;
             return false;
         });
 
