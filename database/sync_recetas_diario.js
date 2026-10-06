@@ -379,6 +379,21 @@ async function main() {
     const subRecetaIdMap = {}; // codigo_origen → receta.id
     rdsRec.forEach(r => { subRecetaIdMap[r.codigo_origen] = r.id; });
 
+    // Cargar unidades actuales de ingredientes producto para preservarlas durante el sync.
+    // Brilo almacena en unidad base (lb, lt) pero nuestro sistema puede tener unidades de
+    // presentación (oz, oz fl). Si Brilo envía un valor equivalente en distinta unidad,
+    // convertimos la cantidad a la unidad existente en vez de sobreescribirla.
+    const updRecIds = paraUpdate.map(({ r }) => r.id);
+    const { rows: existIngRows } = await pg.query(
+      `SELECT receta_id, producto_id, unidad FROM receta_ingredientes
+       WHERE receta_id = ANY($1) AND producto_id IS NOT NULL`,
+      [updRecIds]
+    );
+    const existIngUnitMap = {}; // `${receta_id}:${producto_id}` → unidad
+    existIngRows.forEach(row => {
+      existIngUnitMap[`${row.receta_id}:${row.producto_id}`] = row.unidad;
+    });
+
     for (let i = 0; i < paraUpdate.length; i += BATCH) {
       const chunk = paraUpdate.slice(i, i + BATCH);
       for (const { b, r } of chunk) {
@@ -427,7 +442,20 @@ async function main() {
               // Es materia prima: vincular con producto_id
               const pId = prodMap[ing.ing_codigo];
               if (!pId) continue;
-              const { cantidad, unidad } = cantUniAlmacenar(ing);
+              let { cantidad, unidad } = cantUniAlmacenar(ing);
+
+              // Preservar la unidad de presentación ya almacenada en nuestro sistema.
+              // Brilo usa unidades base (lb, lt); nuestro sistema puede tener oz, oz fl, etc.
+              // Si hay conversión conocida entre la unidad de Brilo y la nuestra, convertimos
+              // la cantidad a nuestra unidad en vez de sobreescribir con la de Brilo.
+              const existUnit = existIngUnitMap[`${r.id}:${pId}`];
+              if (existUnit && existUnit !== unidad) {
+                const de = BRILO_CODE[unidad]    || unidad.toUpperCase();
+                const a  = BRILO_CODE[existUnit] || existUnit.toUpperCase();
+                const fn = CONV[`${de}→${a}`];
+                if (fn) { cantidad = fn(cantidad); unidad = existUnit; }
+              }
+
               const vals = [r.id, pId, cantidad, unidad, AUD, NOW, NOW];
               const ph   = vals.map(v => { prodParams.push(v); return `$${prodParams.length}`; });
               prodParts.push(`(${ph.join(',')})`);
