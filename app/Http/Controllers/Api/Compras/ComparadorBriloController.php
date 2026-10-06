@@ -264,8 +264,7 @@ class ComparadorBriloController extends Controller
         if ($estado)                    $rows = $rows->filter(fn ($r) => ($r['sistema_estado'] ?? '') === $estado);
         if ($situacion)                 $rows = $rows->filter(fn ($r) => in_array($situacion, $r['diferencias']));
         if ($comanda === 'en_comanda')  $rows = $rows->filter(fn ($r) => $r['en_boton_cocina'] === true);
-        if ($comanda === 'sin_comanda') $rows = $rows->filter(fn ($r) => $r['en_boton_cocina'] === false && $r['no_enviar_cocina'] !== true);
-        if ($comanda === 'no_enviar')   $rows = $rows->filter(fn ($r) => $r['no_enviar_cocina'] === true);
+        if ($comanda === 'sin_comanda') $rows = $rows->filter(fn ($r) => $r['en_boton_cocina'] === false);
         if ($buscar !== '') {
             $buscarLow = strtolower($buscar);
             $rows = $rows->filter(fn ($r) =>
