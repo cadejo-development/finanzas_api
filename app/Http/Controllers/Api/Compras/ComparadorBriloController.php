@@ -441,16 +441,17 @@ class ComparadorBriloController extends Controller
         $u = strtolower(trim($unidad));
 
         static $peso = [
-            'libra' => 453.592, 'lb' => 453.592,
+            'libra' => 453.592, 'lb' => 453.592, 'libras' => 453.592,
             'oz' => 28.3495, 'onza' => 28.3495, 'onzas' => 28.3495,
-            'gramo' => 1, 'g' => 1, 'gr' => 1,
-            'kg' => 1000, 'kilogramo' => 1000, 'kilo' => 1000,
+            'gramo' => 1, 'g' => 1, 'gr' => 1, 'gramos' => 1,
+            'kg' => 1000, 'kilogramo' => 1000, 'kilo' => 1000, 'kilogramos' => 1000,
         ];
         static $volumen = [
             'galon' => 3785.41, 'galón' => 3785.41, 'gal' => 3785.41,
             'litro' => 1000, 'l' => 1000,
             'ml' => 1, 'mililitro' => 1,
             'oz fl' => 29.5735, 'oz. fl.' => 29.5735, 'oz.fl' => 29.5735, 'fl oz' => 29.5735,
+            'onza fluida' => 29.5735, 'onzas fluidas' => 29.5735, 'onza fluida.' => 29.5735,
         ];
 
         if (isset($peso[$u]))    return ['family' => 'peso',    'value' => $cantidad * $peso[$u]];
