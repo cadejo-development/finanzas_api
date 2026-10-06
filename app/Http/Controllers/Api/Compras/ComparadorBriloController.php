@@ -463,6 +463,7 @@ class ComparadorBriloController extends Controller
         static $conteo = [
             'u' => 1, 'unidad' => 1, 'unidades' => 1, 'und' => 1,
             'pieza' => 1, 'piezas' => 1, 'pza' => 1, 'pz' => 1,
+            'porcion' => 1, 'porciones' => 1, 'porción' => 1, 'porciones' => 1,
         ];
 
         if (isset($peso[$u]))    return ['family' => 'peso',    'value' => $cantidad * $peso[$u]];
