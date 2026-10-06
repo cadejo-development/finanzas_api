@@ -120,11 +120,22 @@ class ComparadorBriloController extends Controller
             ->flip()
             ->all(); // lookup O(1): ['platos fuertes' => 0, 'bebidas con alcohol' => 1, ...]
 
-        $rows = $rows->filter(function ($r) use ($categoriasValidas) {
+        // Códigos que existen en productos (materias primas): si Brilo los tiene como receta
+        // pero en nuestro sistema están registrados como productos, no los marcamos como "Solo en BRILO"
+        $codigosEnProductos = DB::connection('compras')
+            ->table('productos')
+            ->whereNotNull('codigo')
+            ->pluck('codigo')
+            ->flip()
+            ->all();
+
+        $rows = $rows->filter(function ($r) use ($categoriasValidas, $codigosEnProductos) {
             $scat = strtolower(trim($r['sistema_categoria'] ?? ''));
             $bcat = strtolower(trim($r['brilo_categoria']  ?? ''));
             // En nuestro sistema: solo si tiene una categoría válida del catálogo
             if (!$r['solo_en_brilo'] && isset($categoriasValidas[$scat])) return true;
+            // Solo en Brilo: si el código existe en productos, ya está en el sistema → omitir
+            if ($r['solo_en_brilo'] && isset($codigosEnProductos[$r['codigo']])) return false;
             // Solo en Brilo: categoría válida Y activo en Brilo (excluye versiones viejas inactivas)
             if ($r['solo_en_brilo'] && isset($categoriasValidas[$bcat]) && $r['brilo_activo'] === true) return true;
             return false;
