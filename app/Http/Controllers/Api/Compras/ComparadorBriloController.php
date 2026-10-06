@@ -110,22 +110,27 @@ class ComparadorBriloController extends Controller
             ];
         });
 
-        // Solo mostrar recetas del catálogo (mismas categorías que CatalogoRecetas: Platos/Bebidas/Sub)
-        $esCatalogoValida = fn($cat) => $cat !== null && (
-            str_starts_with(strtolower($cat), 'platos')  ||
-            str_starts_with(strtolower($cat), 'bebidas') ||
-            str_starts_with(strtolower($cat), 'sub')
-        );
+        // Categorías válidas: las que existen en nuestro catálogo (receta_categorias)
+        // Solo Platos/Bebidas/Sub para coincidir con el CatalogoRecetas
+        $categoriasValidas = DB::connection('compras')
+            ->table('receta_categorias')
+            ->whereRaw("LOWER(nombre) LIKE 'platos%' OR LOWER(nombre) LIKE 'bebidas%' OR LOWER(nombre) LIKE 'sub%'")
+            ->pluck('nombre')
+            ->map(fn($n) => strtolower(trim($n)))
+            ->flip()
+            ->all(); // lookup O(1): ['platos fuertes' => 0, 'bebidas con alcohol' => 1, ...]
 
-        $rows = $rows->filter(function ($r) use ($esCatalogoValida) {
-            // En nuestro sistema: solo si tiene categoría válida del catálogo
-            if (!$r['solo_en_brilo'] && $esCatalogoValida($r['sistema_categoria'])) return true;
-            // Solo en Brilo: solo si la categoría de Brilo es tipo Platos/Bebidas/Sub
-            if ($r['solo_en_brilo'] && $esCatalogoValida($r['brilo_categoria'])) return true;
+        $rows = $rows->filter(function ($r) use ($categoriasValidas) {
+            $scat = strtolower(trim($r['sistema_categoria'] ?? ''));
+            $bcat = strtolower(trim($r['brilo_categoria']  ?? ''));
+            // En nuestro sistema: solo si tiene una categoría válida del catálogo
+            if (!$r['solo_en_brilo'] && isset($categoriasValidas[$scat])) return true;
+            // Solo en Brilo: solo si su categoría de Brilo coincide con una de las nuestras
+            if ($r['solo_en_brilo'] && isset($categoriasValidas[$bcat])) return true;
             return false;
         });
 
-        // Categorías solo del sistema (igual que el Catálogo de Recetas)
+        // Categorías del dropdown: las que tienen recetas en los resultados actuales
         $categorias = $rows
             ->map(fn ($r) => $r['sistema_categoria'])
             ->filter()
