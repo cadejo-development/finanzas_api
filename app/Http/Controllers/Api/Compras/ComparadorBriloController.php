@@ -148,9 +148,19 @@ class ComparadorBriloController extends Controller
                 ->get()
                 ->groupBy('receta_codigo');
 
+            // Rendimiento de sub-recetas: Brilo guarda en TANDA (fracción del batch),
+            // nuestro sistema guarda en porcion. Conversión: brilo_tanda × rendimiento = porciones
+            $subRecetaRend = DB::connection('compras')
+                ->table('recetas')
+                ->where('tipo_receta', 'sub_receta')
+                ->where('rendimiento', '>', 0)
+                ->whereNotNull('rendimiento')
+                ->pluck('rendimiento', 'codigo_origen')
+                ->all();
+
             $candidatosSet = array_flip($codigosCandidatos);
 
-            $rows = $rows->map(function ($r) use ($briloIngMapDeep, $sistemaIngMapDeep, $candidatosSet) {
+            $rows = $rows->map(function ($r) use ($briloIngMapDeep, $sistemaIngMapDeep, $candidatosSet, $subRecetaRend) {
                 if (!isset($candidatosSet[$r['codigo']])) return $r;
 
                 $bIngs = ($briloIngMapDeep->get($r['codigo']) ?? collect())->keyBy('ingrediente_codigo');
@@ -164,8 +174,21 @@ class ComparadorBriloController extends Controller
 
                     $bCant = (float) ($b->cantidad_pres > 0 ? $b->cantidad_pres : $b->cantidad_base);
                     $bUnit = ($b->cantidad_pres > 0 && $b->unidad_pres) ? $b->unidad_pres : $b->unidad_base;
+                    $sCant = (float) $s->cantidad;
+                    $sUnit = (string) $s->unidad;
 
-                    if ($this->cantidadesDifieren($bCant, (string) $bUnit, (float) $s->cantidad, (string) $s->unidad)) {
+                    // Sub-receta: TANDA (Brilo) ↔ porcion (Sistema)
+                    // brilo_tanda × rendimiento = sistema_porciones
+                    if (strtolower(trim((string) $bUnit)) === 'tanda'
+                        && str_starts_with(strtolower(trim($sUnit)), 'porci')
+                        && isset($subRecetaRend[$cod])) {
+                        $convertido = $bCant * (float) $subRecetaRend[$cod];
+                        $tol = 0.02 * max($convertido, $sCant, 0.001);
+                        if (abs($convertido - $sCant) <= $tol) continue; // igual tras conversión
+                        $r['hay_diferencia'] = true; $r['diferencias'][] = 'ingredientes'; return $r;
+                    }
+
+                    if ($this->cantidadesDifieren($bCant, (string) $bUnit, $sCant, $sUnit)) {
                         $r['hay_diferencia'] = true;
                         $r['diferencias'][] = 'ingredientes';
                         return $r;
@@ -301,7 +324,22 @@ class ComparadorBriloController extends Controller
 
         $allCods = $briloIngs->keys()->merge($sistemaIngs->keys())->unique();
 
-        $comparativa = $allCods->map(function ($cod) use ($briloIngs, $sistemaIngs) {
+        // Rendimiento de sub-recetas que aparecen como ingredientes:
+        // Brilo guarda TANDA (fracción del batch), sistema guarda porcion.
+        // brilo_tanda × rendimiento = sistema_porciones
+        $subCodigos = $briloIngs->filter(fn ($b) => $this->boolVal($b->es_sub_receta))->keys()->all();
+        $rendSubMap = [];
+        if (!empty($subCodigos)) {
+            $rendSubMap = DB::connection('compras')
+                ->table('recetas')
+                ->whereIn('codigo_origen', $subCodigos)
+                ->where('rendimiento', '>', 0)
+                ->whereNotNull('rendimiento')
+                ->pluck('rendimiento', 'codigo_origen')
+                ->all();
+        }
+
+        $comparativa = $allCods->map(function ($cod) use ($briloIngs, $sistemaIngs, $rendSubMap) {
             $b = $briloIngs->get($cod);
             $s = $sistemaIngs->get($cod);
 
@@ -310,11 +348,23 @@ class ComparadorBriloController extends Controller
             $sCant = $s ? (float) $s->cantidad : null;
             $sUnit = $s ? $s->unidad : null;
 
-            $cantDif = $bCant !== null && $sCant !== null && $this->cantidadesDifieren($bCant, $bUnit ?? 'u', $sCant, $sUnit ?? 'u');
-            // Marcar unidad diferente solo si las cantidades son realmente distintas tras conversión
-            // (si 0.0156 GALON = 2 oz fl, no hay diferencia de unidad que importa)
-            $unitDif = $cantDif && $bUnit && $sUnit && strtolower(trim($bUnit)) !== strtolower(trim($sUnit))
-                && $this->normalizarCantidad(1, $bUnit)['family'] !== $this->normalizarCantidad(1, $sUnit)['family'];
+            // Sub-receta TANDA↔porcion: convertir antes de comparar
+            $cantDif = false;
+            $unitDif = false;
+            if ($bCant !== null && $sCant !== null) {
+                $bUL = strtolower(trim($bUnit ?? ''));
+                $sUL = strtolower(trim($sUnit ?? ''));
+                if ($bUL === 'tanda' && str_starts_with($sUL, 'porci') && isset($rendSubMap[$cod])) {
+                    $convertido = $bCant * (float) $rendSubMap[$cod];
+                    $tol = 0.02 * max($convertido, $sCant, 0.001);
+                    $cantDif = abs($convertido - $sCant) > $tol;
+                } else {
+                    $cantDif = $this->cantidadesDifieren($bCant, $bUnit ?? 'u', $sCant, $sUnit ?? 'u');
+                    $unitDif = $cantDif && $bUnit && $sUnit
+                        && strtolower(trim($bUnit)) !== strtolower(trim($sUnit))
+                        && $this->normalizarCantidad(1, $bUnit)['family'] !== $this->normalizarCantidad(1, $sUnit)['family'];
+                }
+            }
 
             return [
                 'codigo'           => $cod,
