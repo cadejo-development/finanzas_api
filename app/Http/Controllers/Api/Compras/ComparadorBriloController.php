@@ -115,6 +115,66 @@ class ComparadorBriloController extends Controller
             ];
         });
 
+        // ── Comparación profunda de ingredientes para detectar diferencias reales ──
+        // La comparación inicial solo verifica conteo (brilo_num_ing vs sistema_num_ing).
+        // Aquí cargamos los ingredientes reales de las recetas que aparecen como "igual"
+        // y verificamos si las cantidades coinciden (con conversión de unidades).
+        $codigosCandidatos = $rows
+            ->filter(fn ($r) => !$r['hay_diferencia'] && $r['brilo_nombre'] !== null && $r['sistema_nombre'] !== null)
+            ->pluck('codigo')
+            ->values()
+            ->all();
+
+        if (!empty($codigosCandidatos)) {
+            $briloIngMapDeep = DB::connection('compras')
+                ->table('brilo_snapshot_ingredientes')
+                ->whereIn('receta_codigo', $codigosCandidatos)
+                ->where('activo', true)
+                ->get(['receta_codigo', 'ingrediente_codigo', 'cantidad_base', 'unidad_base', 'cantidad_pres', 'unidad_pres'])
+                ->groupBy('receta_codigo');
+
+            $sistemaIngMapDeep = DB::connection('compras')
+                ->table('receta_ingredientes as ri')
+                ->join('recetas as rec', 'ri.receta_id', '=', 'rec.id')
+                ->leftJoin('productos as p',  'ri.producto_id',   '=', 'p.id')
+                ->leftJoin('recetas as sr',   'ri.sub_receta_id', '=', 'sr.id')
+                ->whereIn('rec.codigo_origen', $codigosCandidatos)
+                ->select([
+                    'rec.codigo_origen as receta_codigo',
+                    DB::raw("COALESCE(p.codigo, sr.codigo_origen) AS ing_codigo"),
+                    'ri.cantidad_por_plato as cantidad',
+                    'ri.unidad',
+                ])
+                ->get()
+                ->groupBy('receta_codigo');
+
+            $candidatosSet = array_flip($codigosCandidatos);
+
+            $rows = $rows->map(function ($r) use ($briloIngMapDeep, $sistemaIngMapDeep, $candidatosSet) {
+                if (!isset($candidatosSet[$r['codigo']])) return $r;
+
+                $bIngs = ($briloIngMapDeep->get($r['codigo']) ?? collect())->keyBy('ingrediente_codigo');
+                $sIngs = ($sistemaIngMapDeep->get($r['codigo']) ?? collect())->keyBy('ing_codigo');
+                $allCods = $bIngs->keys()->merge($sIngs->keys())->unique();
+
+                foreach ($allCods as $cod) {
+                    $b = $bIngs->get($cod);
+                    $s = $sIngs->get($cod);
+                    if (!$b || !$s) { $r['hay_diferencia'] = true; $r['diferencias'][] = 'ingredientes'; return $r; }
+
+                    $bCant = (float) ($b->cantidad_pres > 0 ? $b->cantidad_pres : $b->cantidad_base);
+                    $bUnit = ($b->cantidad_pres > 0 && $b->unidad_pres) ? $b->unidad_pres : $b->unidad_base;
+
+                    if ($this->cantidadesDifieren($bCant, (string) $bUnit, (float) $s->cantidad, (string) $s->unidad)) {
+                        $r['hay_diferencia'] = true;
+                        $r['diferencias'][] = 'ingredientes';
+                        return $r;
+                    }
+                }
+                return $r;
+            });
+        }
+
         // Categorías válidas: las que existen en nuestro catálogo (receta_categorias)
         // Solo Platos/Bebidas/Sub para coincidir con el CatalogoRecetas
         $categoriasValidas = DB::connection('compras')
@@ -250,8 +310,11 @@ class ComparadorBriloController extends Controller
             $sCant = $s ? (float) $s->cantidad : null;
             $sUnit = $s ? $s->unidad : null;
 
-            $cantDif = $bCant !== null && $sCant !== null && abs($bCant - $sCant) > 0.0001;
-            $unitDif = $bUnit && $sUnit && strtolower(trim($bUnit)) !== strtolower(trim($sUnit));
+            $cantDif = $bCant !== null && $sCant !== null && $this->cantidadesDifieren($bCant, $bUnit ?? 'u', $sCant, $sUnit ?? 'u');
+            // Marcar unidad diferente solo si las cantidades son realmente distintas tras conversión
+            // (si 0.0156 GALON = 2 oz fl, no hay diferencia de unidad que importa)
+            $unitDif = $cantDif && $bUnit && $sUnit && strtolower(trim($bUnit)) !== strtolower(trim($sUnit))
+                && $this->normalizarCantidad(1, $bUnit)['family'] !== $this->normalizarCantidad(1, $sUnit)['family'];
 
             return [
                 'codigo'           => $cod,
@@ -322,6 +385,39 @@ class ComparadorBriloController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+
+    private function normalizarCantidad(float $cantidad, string $unidad): array
+    {
+        $u = strtolower(trim($unidad));
+
+        static $peso = [
+            'libra' => 453.592, 'lb' => 453.592,
+            'oz' => 28.3495, 'onza' => 28.3495, 'onzas' => 28.3495,
+            'gramo' => 1, 'g' => 1, 'gr' => 1,
+            'kg' => 1000, 'kilogramo' => 1000, 'kilo' => 1000,
+        ];
+        static $volumen = [
+            'galon' => 3785.41, 'galón' => 3785.41, 'gal' => 3785.41,
+            'litro' => 1000, 'l' => 1000,
+            'ml' => 1, 'mililitro' => 1,
+            'oz fl' => 29.5735, 'oz. fl.' => 29.5735, 'oz.fl' => 29.5735, 'fl oz' => 29.5735,
+        ];
+
+        if (isset($peso[$u]))    return ['family' => 'peso',    'value' => $cantidad * $peso[$u]];
+        if (isset($volumen[$u])) return ['family' => 'volumen', 'value' => $cantidad * $volumen[$u]];
+        return ['family' => $u,  'value' => $cantidad]; // sin conversión conocida
+    }
+
+    private function cantidadesDifieren(float $bCant, string $bUnit, float $sCant, string $sUnit): bool
+    {
+        $bN = $this->normalizarCantidad($bCant, $bUnit);
+        $sN = $this->normalizarCantidad($sCant, $sUnit);
+
+        if ($bN['family'] !== $sN['family']) return true; // familias incompatibles
+
+        $tolerancia = 0.02 * max($bN['value'], $sN['value'], 0.001); // 2% de tolerancia por redondeos
+        return abs($bN['value'] - $sN['value']) > $tolerancia;
+    }
 
     private function boolVal($v): bool
     {
