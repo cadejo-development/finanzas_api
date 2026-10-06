@@ -32,7 +32,8 @@ const PG_CFG = {
   ssl: { rejectUnauthorized: false },
 };
 
-const PREFIJOS = ['PL', 'SUBR', 'PR', 'PRD', 'LLPL', 'HZPL', 'HZPR', 'EVPL', 'VOPL', 'PMPL', 'AE'];
+// Prefijos mantenidos para uso de esReceta/esSubRec en procesamiento local
+const PREFIJOS = ['PL', 'SUBR', 'PR', 'PRD', 'LLPL', 'HZPL', 'HZPR', 'EVPL', 'VOPL', 'PMPL', 'AE', 'BR'];
 const esReceta = cod => cod && PREFIJOS.some(p => String(cod).startsWith(p));
 const esSubRec = (cod, catNombre) => {
   const t = (catNombre || '').toLowerCase();
@@ -72,12 +73,9 @@ async function main() {
       WHERE p.proCodigo IS NOT NULL AND LTRIM(RTRIM(p.proCodigo)) != ''
         AND p.proEliminado = 0
         AND (
-             p.proCodigo LIKE 'PL%'   OR p.proCodigo LIKE 'SUBR%'
-          OR p.proCodigo LIKE 'PR%'   OR p.proCodigo LIKE 'PRD%'
-          OR p.proCodigo LIKE 'LLPL%' OR p.proCodigo LIKE 'HZPL%'
-          OR p.proCodigo LIKE 'HZPR%' OR p.proCodigo LIKE 'EVPL%'
-          OR p.proCodigo LIKE 'VOPL%' OR p.proCodigo LIKE 'PMPL%'
-          OR p.proCodigo LIKE 'AE%'
+          cpr.cprNombre LIKE 'Plato%'  OR
+          cpr.cprNombre LIKE 'Bebida%' OR
+          cpr.cprNombre LIKE 'Sub%'
         )
       ORDER BY p.proCodigo
     `);
