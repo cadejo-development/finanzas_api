@@ -24,6 +24,7 @@ class ComparadorBriloController extends Controller
         $tipo      = $request->query('tipo');
         $categoria = $request->query('categoria');
         $estado    = $request->query('estado');
+        $situacion = $request->query('situacion');
         $perPage   = min((int) $request->query('per_page', 50), 200);
         $page      = max(1, (int) $request->query('page', 1));
 
@@ -260,6 +261,7 @@ class ComparadorBriloController extends Controller
         if ($filtro === 'solo_sistema') $rows = $rows->filter(fn ($r) => $r['solo_en_sistema']);
         if ($tipo)                      $rows = $rows->filter(fn ($r) => $r['tipo_receta'] === $tipo);
         if ($estado)                    $rows = $rows->filter(fn ($r) => ($r['sistema_estado'] ?? '') === $estado);
+        if ($situacion)                 $rows = $rows->filter(fn ($r) => in_array($situacion, $r['diferencias']));
         if ($buscar !== '') {
             $buscarLow = strtolower($buscar);
             $rows = $rows->filter(fn ($r) =>
