@@ -334,6 +334,8 @@ class ComparadorBriloController extends Controller
         // Rendimiento de sub-recetas que aparecen como ingredientes:
         // Brilo guarda TANDA (fracción del batch), sistema guarda porcion.
         // brilo_tanda × rendimiento = sistema_porciones
+        // Rendimiento de todos los ingredientes que Brilo marca como sub-receta (es_sub_receta=true)
+        // Incluye PL20xxx y otros que no tienen tipo_receta='sub_receta' pero sí son sub-recetas
         $subCodigos = $briloIngs->filter(fn ($b) => $this->boolVal($b->es_sub_receta))->keys()->all();
         $rendSubMap = [];
         if (!empty($subCodigos)) {
@@ -342,7 +344,9 @@ class ComparadorBriloController extends Controller
                 ->whereIn('codigo_origen', $subCodigos)
                 ->where('rendimiento', '>', 0)
                 ->whereNotNull('rendimiento')
-                ->pluck('rendimiento', 'codigo_origen')
+                ->select('codigo_origen', 'rendimiento', 'rendimiento_unidad')
+                ->get()
+                ->keyBy('codigo_origen')
                 ->all();
         }
 
@@ -355,16 +359,18 @@ class ComparadorBriloController extends Controller
             $sCant = $s ? (float) $s->cantidad : null;
             $sUnit = $s ? $s->unidad : null;
 
-            // Sub-receta TANDA↔porcion: convertir antes de comparar
+            // TANDA (Brilo) → cualquier unidad del sistema via rendimiento
+            // brilo_tanda × rendimiento = cantidad en rendimiento_unidad
             $cantDif = false;
             $unitDif = false;
             if ($bCant !== null && $sCant !== null) {
                 $bUL = strtolower(trim($bUnit ?? ''));
-                $sUL = strtolower(trim($sUnit ?? ''));
-                if ($bUL === 'tanda' && str_starts_with($sUL, 'porci') && isset($rendSubMap[$cod])) {
-                    $convertido = $bCant * (float) $rendSubMap[$cod];
-                    $tol = 0.02 * max($convertido, $sCant, 0.001);
-                    $cantDif = abs($convertido - $sCant) > $tol;
+                if ($bUL === 'tanda' && isset($rendSubMap[$cod])) {
+                    $rend       = $rendSubMap[$cod];
+                    $rendVal    = (float) $rend->rendimiento;
+                    $rendUnit   = (string) ($rend->rendimiento_unidad ?? 'porcion');
+                    $convertido = $bCant * $rendVal;
+                    $cantDif    = $this->cantidadesDifieren($convertido, $rendUnit, $sCant, $sUnit ?? 'u');
                 } else {
                     $cantDif = $this->cantidadesDifieren($bCant, $bUnit ?? 'u', $sCant, $sUnit ?? 'u');
                     $unitDif = $cantDif && $bUnit && $sUnit
