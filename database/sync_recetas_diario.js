@@ -37,7 +37,10 @@ const PG_CFG = {
 };
 
 // ── Prefijos de receta ────────────────────────────────────────────────────────
-const PREFIJOS_RECETA = ['PL', 'SUBR', 'PR', 'PRD', 'LLPL', 'HZPL', 'HZPR', 'EVPL', 'VOPL', 'PMPL'];
+const PREFIJOS_RECETA = [
+  'PL', 'SUBR', 'PR', 'PRD', 'LLPL', 'HZPL', 'HZPR', 'EVPL', 'VOPL', 'PMPL',
+  'PT', 'AE', 'PM', 'BR', 'CP', 'MR', 'DV',
+];
 const esCodReceta = cod => cod && PREFIJOS_RECETA.some(p => String(cod).startsWith(p));
 const esSubReceta = (cod, tipo) => {
   const t = (tipo || '').toLowerCase();
@@ -144,7 +147,11 @@ async function main() {
           OR p.proCodigo LIKE 'PR%'   OR p.proCodigo LIKE 'PRD%'
           OR p.proCodigo LIKE 'LLPL%' OR p.proCodigo LIKE 'HZPL%'
           OR p.proCodigo LIKE 'HZPR%' OR p.proCodigo LIKE 'EVPL%'
-          OR p.proCodigo LIKE 'VOPL%' OR p.proCodigo LIKE 'PMPL%')
+          OR p.proCodigo LIKE 'VOPL%' OR p.proCodigo LIKE 'PMPL%'
+          OR p.proCodigo LIKE 'PT%'   OR p.proCodigo LIKE 'AE%'
+          OR p.proCodigo LIKE 'PM%'   OR p.proCodigo LIKE 'BR%'
+          OR p.proCodigo LIKE 'CP%'   OR p.proCodigo LIKE 'MR%'
+          OR p.proCodigo LIKE 'DV%')
       ORDER BY p.proCodigo
     `)).recordset.filter(r => catValidasSet.has(r.cat_nombre));
 
