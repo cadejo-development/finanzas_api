@@ -270,6 +270,11 @@ class RecetasController extends Controller
     // ----------------------------------------------------------------------
     public function store(Request $request): JsonResponse
     {
+        $roles = auth()->user()->roles()->pluck('codigo')->toArray();
+        if (!array_intersect(['admin_compras', 'editor_recetas'], $roles)) {
+            return response()->json(['error' => 'No autorizado para crear recetas'], 403);
+        }
+
         $validated = $request->validate([
             'nombre'              => 'required|string|max:150',
             'descripcion'         => 'nullable|string',
@@ -408,6 +413,11 @@ class RecetasController extends Controller
     // ----------------------------------------------------------------------
     public function update(Request $request, int $id): JsonResponse
     {
+        $roles = auth()->user()->roles()->pluck('codigo')->toArray();
+        if (!array_intersect(['admin_compras', 'editor_recetas'], $roles)) {
+            return response()->json(['error' => 'No autorizado para editar recetas'], 403);
+        }
+
         $receta = Receta::findOrFail($id);
 
         $validated = $request->validate([
@@ -544,6 +554,11 @@ class RecetasController extends Controller
     // ----------------------------------------------------------------------
     public function destroy(Request $request, int $id): JsonResponse
     {
+        $roles = auth()->user()->roles()->pluck('codigo')->toArray();
+        if (!array_intersect(['admin_compras', 'editor_recetas'], $roles)) {
+            return response()->json(['error' => 'No autorizado para eliminar recetas'], 403);
+        }
+
         $receta     = Receta::findOrFail($id);
         $sucursalIds = $request->input('sucursal_ids');
 
