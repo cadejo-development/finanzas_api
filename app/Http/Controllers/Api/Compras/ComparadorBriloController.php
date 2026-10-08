@@ -224,6 +224,11 @@ class ComparadorBriloController extends Controller
         $rows = $rows->filter(function ($r) use ($categoriasValidas, $codigosEnProductos) {
             $scat = strtolower(trim($r['sistema_categoria'] ?? ''));
             $bcat = strtolower(trim($r['brilo_categoria']  ?? ''));
+            // Sub-recetas: incluir siempre por tipo (la mayoría no tiene categoria_id asignada)
+            if ($r['tipo_receta'] === 'sub_receta') {
+                if ($r['solo_en_brilo']) return $r['brilo_activo'] === true && !isset($codigosEnProductos[$r['codigo']]);
+                return true;
+            }
             // En nuestro sistema: solo si tiene una categoría válida del catálogo
             if (!$r['solo_en_brilo'] && isset($categoriasValidas[$scat])) return true;
             // Solo en Brilo: si el código existe en productos, ya está en el sistema → omitir
@@ -234,8 +239,11 @@ class ComparadorBriloController extends Controller
         });
 
         // Categorías del dropdown: las que tienen recetas en los resultados actuales
+        // Sub-recetas sin categoria_id asignada se agrupan bajo "Sub-Recetas"
         $categorias = $rows
-            ->map(fn ($r) => $r['sistema_categoria'])
+            ->map(fn ($r) => $r['tipo_receta'] === 'sub_receta' && !$r['sistema_categoria']
+                ? 'Sub-Recetas'
+                : $r['sistema_categoria'])
             ->filter()
             ->unique()
             ->sort()
@@ -243,9 +251,10 @@ class ComparadorBriloController extends Controller
 
         // Filtro de categoría (antes del resumen para que los stats reflejen la categoría seleccionada)
         if ($categoria) {
-            $rows = $rows->filter(fn ($r) =>
-                ($r['sistema_categoria'] ?? '') === $categoria
-            );
+            $rows = $rows->filter(function ($r) use ($categoria) {
+                if ($categoria === 'Sub-Recetas') return $r['tipo_receta'] === 'sub_receta';
+                return ($r['sistema_categoria'] ?? '') === $categoria;
+            });
         }
 
         // Resumen GLOBAL de la categoría seleccionada (o todo si no hay filtro)
