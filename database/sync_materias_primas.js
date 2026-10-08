@@ -103,8 +103,7 @@ LEFT JOIN olComun.dbo.CategoriasProductos CPR WITH(NOLOCK)
   ON PROM.cprId = CPR.cprId
 LEFT JOIN olComun.dbo.Unidades UNI WITH(NOLOCK)
   ON UNI.uniId = PROM.uniId
-WHERE PROM.proActivo = 1
-  AND PROM.proEliminado = 0
+WHERE PROM.proEliminado = 0
   AND CPR.cprCodigo IN (
     SELECT DISTINCT CPR2.cprCodigo
     FROM olComun.dbo.MaterialesXProducto MXP2 WITH(NOLOCK)
