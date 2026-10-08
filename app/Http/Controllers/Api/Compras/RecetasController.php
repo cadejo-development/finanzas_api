@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Compras;
 
 use App\Http\Controllers\Controller;
+use App\Mail\Compras\RecetaAutorizadaNotificacion;
 use App\Mail\Compras\RecetaModificadaNotificacion;
 use App\Models\Receta;
 use App\Models\RecetaIngrediente;
@@ -462,9 +463,9 @@ class RecetasController extends Controller
             'modificadores.*.opciones.*.unidad'        => 'nullable|string|max:20',
         ]);
 
-        $tipoReceta = $validated['tipo_receta'] ?? $receta->tipo_receta;
-        $usuario    = $request->user()?->email ?? 'sistema';
-
+        $tipoReceta    = $validated['tipo_receta'] ?? $receta->tipo_receta;
+        $usuario       = $request->user()?->email ?? 'sistema';
+        $estadoAntes   = $receta->estado_id;
 
         DB::connection('compras')->transaction(function () use ($receta, $validated, $usuario) {
             $campos = array_intersect_key($validated, array_flip([
@@ -555,6 +556,27 @@ class RecetasController extends Controller
         $this->sincronizarCostoProducto($receta);
 
         $recetaFormateada = $this->formatReceta($receta, null, true);
+
+        // Notificar a IT cuando la receta cambia a estado "autorizada" (id=3)
+        if (($validated['estado_id'] ?? null) === 3 && $estadoAntes !== 3) {
+            try {
+                $mailable = new RecetaAutorizadaNotificacion(
+                    recetaData:      $recetaFormateada,
+                    recetaNombre:    $receta->nombre,
+                    recetaCodigo:    $receta->codigo_origen ?? '',
+                    recetaCategoria: $receta->categoria?->nombre ?? '',
+                    autorizadoPor:   $usuario,
+                    autorizadoEn:    now()->format('d/m/Y H:i'),
+                );
+                Mail::to(['javiermejia@cervezacadejo.com', 'marcelaorellana@cervezacadejo.com'])
+                    ->queue($mailable);
+            } catch (\Throwable $e) {
+                \Log::warning('RecetaAutorizada: no se pudo enviar email', [
+                    'receta_id' => $receta->id,
+                    'error'     => $e->getMessage(),
+                ]);
+            }
+        }
 
         // Notificar por email cuando modifica el chef (chef_recetas)
         if (in_array('chef_recetas', $roles)) {
