@@ -1,4 +1,4 @@
-name: Sync Diario — Materias Primas, Empleados y Ventas
+name: Sync Diario — Materias Primas, Empleados, Ventas, Snapshot y Recetas
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       scripts:
-        description: 'Scripts a ejecutar (all | materias | empleados | ventas)'
+        description: 'Scripts a ejecutar (all | materias | empleados | ventas | snapshot | recetas)'
         required: false
         default: 'all'
 
@@ -79,6 +79,14 @@ jobs:
       - name: Sync ventas Santa Elena
         if: ${{ github.event.inputs.scripts == 'all' || github.event.inputs.scripts == 'ventas' || github.event_name == 'schedule' }}
         run: node database/sync_ventas_santa_elena.js
+
+      - name: Sync snapshot Brilo
+        if: ${{ github.event.inputs.scripts == 'all' || github.event.inputs.scripts == 'snapshot' || github.event_name == 'schedule' }}
+        run: node database/sync_brilo_snapshot.js
+
+      - name: Sync recetas diario
+        if: ${{ github.event.inputs.scripts == 'all' || github.event.inputs.scripts == 'recetas' || github.event_name == 'schedule' }}
+        run: node database/sync_recetas_diario.js
 
       - name: Desconectar VPN
         if: always()
