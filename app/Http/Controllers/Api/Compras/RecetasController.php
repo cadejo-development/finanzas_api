@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Compras;
 
 use App\Http\Controllers\Controller;
+use App\Mail\Compras\RecetaModificadaNotificacion;
 use App\Models\Receta;
 use App\Models\RecetaIngrediente;
 use App\Models\RecetaModificador;
@@ -11,6 +12,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Facades\Storage;
 
@@ -548,10 +550,37 @@ class RecetasController extends Controller
             }
         });
 
-        $receta->load(['ingredientes.producto', 'ingredientes.subReceta.productoAsociado', 'ingredientes.subReceta.ingredientes.producto', 'modificadores.producto', 'sucursalConfig']);
+        $receta->load(['ingredientes.producto', 'ingredientes.subReceta.productoAsociado', 'ingredientes.subReceta.ingredientes.producto', 'modificadores.producto', 'sucursalConfig', 'categoria', 'estado']);
         $this->upsertProductoSubReceta($receta);
         $this->sincronizarCostoProducto($receta);
-        return response()->json(['data' => $this->formatReceta($receta, null, true)]);
+
+        $recetaFormateada = $this->formatReceta($receta, null, true);
+
+        // Notificar por email cuando modifica el chef (chef_recetas)
+        if (in_array('chef_recetas', $roles)) {
+            try {
+                $mailable = new RecetaModificadaNotificacion(
+                    recetaData:       $recetaFormateada,
+                    recetaNombre:     $receta->nombre,
+                    recetaCodigo:     $receta->codigo_origen ?? '',
+                    recetaCategoria:  $receta->categoria?->nombre ?? '',
+                    recetaEstado:     $receta->estado?->nombre ?? '',
+                    modificadoPor:    $usuario,
+                    modificadoEn:     now()->format('d/m/Y H:i'),
+                );
+
+                Mail::to(['javiermejia@cervezacadejo.com', 'marcelaorellana@cervezacadejo.com'])
+                    ->cc($usuario)
+                    ->queue($mailable);
+            } catch (\Throwable $e) {
+                \Log::warning('RecetaModificada: no se pudo enviar email', [
+                    'receta_id' => $receta->id,
+                    'error'     => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return response()->json(['data' => $recetaFormateada]);
     }
 
     // ----------------------------------------------------------------------
