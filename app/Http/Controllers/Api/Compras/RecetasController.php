@@ -271,7 +271,7 @@ class RecetasController extends Controller
     public function store(Request $request): JsonResponse
     {
         $roles = auth()->user()->roles()->pluck('codigo')->toArray();
-        if (!array_intersect(['admin_compras', 'editor_recetas'], $roles)) {
+        if (!array_intersect(['chef_recetas', 'asistente_recetas'], $roles)) {
             return response()->json(['error' => 'No autorizado para crear recetas'], 403);
         }
 
@@ -414,11 +414,18 @@ class RecetasController extends Controller
     public function update(Request $request, int $id): JsonResponse
     {
         $roles = auth()->user()->roles()->pluck('codigo')->toArray();
-        if (!array_intersect(['admin_compras', 'editor_recetas'], $roles)) {
+        if (!array_intersect(['chef_recetas', 'asistente_recetas'], $roles)) {
             return response()->json(['error' => 'No autorizado para editar recetas'], 403);
         }
 
         $receta = Receta::findOrFail($id);
+
+        // asistente_recetas solo puede editar recetas en borrador (1) o finalizada (2)
+        if (!in_array('chef_recetas', $roles)) {
+            if (!in_array($receta->estado_id, [1, 2])) {
+                return response()->json(['error' => 'No autorizado: solo puedes editar recetas en estado borrador o finalizada'], 403);
+            }
+        }
 
         $validated = $request->validate([
             'nombre'              => 'sometimes|string|max:150',
@@ -555,11 +562,16 @@ class RecetasController extends Controller
     public function destroy(Request $request, int $id): JsonResponse
     {
         $roles = auth()->user()->roles()->pluck('codigo')->toArray();
-        if (!array_intersect(['admin_compras', 'editor_recetas'], $roles)) {
-            return response()->json(['error' => 'No autorizado para eliminar recetas'], 403);
+        if (!array_intersect(['chef_recetas', 'asistente_recetas'], $roles)) {
+            return response()->json(['error' => 'No autorizado para inactivar recetas'], 403);
         }
 
         $receta     = Receta::findOrFail($id);
+
+        // asistente_recetas solo puede inactivar recetas en borrador (1) o finalizada (2)
+        if (!in_array('chef_recetas', $roles) && !in_array($receta->estado_id, [1, 2])) {
+            return response()->json(['error' => 'No autorizado: solo puedes inactivar recetas en estado borrador o finalizada'], 403);
+        }
         $sucursalIds = $request->input('sucursal_ids');
 
         if (!empty($sucursalIds)) {
