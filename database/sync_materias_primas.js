@@ -26,6 +26,7 @@ const sqlCfg = {
   user: process.env.DB_USERNAME_ORIGEN, password: process.env.DB_PASSWORD_ORIGEN,
   server: process.env.DB_HOST_ORIGEN, port: 2033, database: 'olcomun',
   options: { trustServerCertificate: true, encrypt: false, connectTimeout: 20000 },
+  requestTimeout: 120000,
 };
 
 const pgCfg = {
@@ -83,10 +84,6 @@ function buildBatch(table, columns, rows, conflictSql, returningSql = '') {
 }
 
 // ── Query: todas las materias primas activas de categorías usadas en MXP ─────
-// Incluye TODO producto activo de una categoría que sea materia prima,
-// independientemente de si ya está asignado a alguna receta (MXP).
-// Esto permite que productos nuevos (ej: "Mermelada de Uva") aparezcan
-// en el catálogo aunque todavía no estén en ninguna receta.
 const Q_MATERIAS_PRIMAS = `
 SELECT DISTINCT
   PROM.proId       AS id_origen,
@@ -117,6 +114,29 @@ WHERE PROM.proActivo = 1
       AND CPR2.cprCodigo IS NOT NULL
   )
 ORDER BY CPR.cprCodigo, PROM.proCodigo
+`;
+
+// ── Query adicional: MR* activos sin categoría en Brilo (creados sin categorizar) ─
+// Estos quedan huérfanos del filtro principal porque NULL IN (...) = false.
+const Q_MR_SIN_CATEGORIA = `
+SELECT
+  PROM.proId       AS id_origen,
+  PROM.proCodigo   AS codigo,
+  PROM.proNombre   AS nombre,
+  NULL             AS cat_codigo,
+  NULL             AS cat_nombre,
+  UNI.uniNombre    AS unidad_nombre,
+  ISNULL(PROM.proCosto, 0)  AS costo,
+  ISNULL(PROM.proPrecio, 0) AS precio,
+  PROM.proActivo   AS activo
+FROM olComun.dbo.Productos PROM WITH(NOLOCK)
+LEFT JOIN olComun.dbo.Unidades UNI WITH(NOLOCK)
+  ON UNI.uniId = PROM.uniId
+WHERE PROM.proActivo = 1
+  AND PROM.proEliminado = 0
+  AND PROM.cprId IS NULL
+  AND PROM.proCodigo LIKE 'MR%'
+ORDER BY PROM.proCodigo
 `;
 
 // ── Query: categorías de esas materias primas ────────────────────────────────
@@ -157,13 +177,20 @@ async function main() {
   log('[1/3] Cargando materias primas desde SQL Server...');
   const mpRows = (await sqlPool.request().query(Q_MATERIAS_PRIMAS)).recordset;
 
+  // Productos MR* sin categoría en Brilo (quedarían huérfanos del filtro principal)
+  const mrSinCatRows = (await sqlPool.request().query(Q_MR_SIN_CATEGORIA)).recordset;
+  if (mrSinCatRows.length > 0) {
+    log(`      ⚠ ${mrSinCatRows.length} producto(s) MR* sin categoría en Brilo: ${mrSinCatRows.map(r => r.codigo).join(', ')}`);
+    log(`        Se incluirán con categoria SIN-CAT. Pedir a Brilo que les asignen categoría.`);
+  }
+
   // Deduplicar por id_origen (por si hay duplicados en MXP)
   const mpMap = new Map();
-  for (const r of mpRows) {
+  for (const r of [...mpRows, ...mrSinCatRows]) {
     if (!mpMap.has(r.id_origen)) mpMap.set(r.id_origen, r);
   }
   const mps = [...mpMap.values()];
-  log(`      ${mps.length} materias primas únicas encontradas.`);
+  log(`      ${mps.length} materias primas únicas encontradas (${mpRows.length} con categoría + ${mrSinCatRows.length} sin categoría).`);
 
   // ── 2. Cargar categorías desde SS ────────────────────────────────────────
   log('\n[2/3] Sincronizando categorías de materias primas...');
