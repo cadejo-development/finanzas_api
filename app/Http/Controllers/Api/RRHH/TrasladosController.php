@@ -248,9 +248,19 @@ class TrasladosController extends RRHHBaseController
                     ->value('nombre');
             }
 
+            $estadoAntes = $traslado->estado;
             $traslado->update(array_merge($validated, ['aud_usuario' => Auth::user()->email]));
 
-            return response()->json(['success' => true, 'data' => $traslado]);
+            // Aplicar el traslado si acaba de pasar a 'aprobado' y la fecha efectiva ya llegó
+            if (
+                ($validated['estado'] ?? null) === 'aprobado'
+                && $estadoAntes !== 'aprobado'
+                && $traslado->fresh()->fecha_efectiva->lte(now())
+            ) {
+                $this->aplicarTraslado($traslado->fresh());
+            }
+
+            return response()->json(['success' => true, 'data' => $traslado->fresh()]);
         });
     }
 
