@@ -19,13 +19,73 @@ class TrasladosController extends RRHHBaseController
     {
         $subordinadosIds = $this->getSubordinadosIds();
 
-        $traslados = Traslado::whereIn('empleado_id', $subordinadosIds)
-            ->orderByDesc('id')
-            ->get();
+        $query = Traslado::orderByDesc('id');
 
+        if ($this->esAdminRrhh() || $this->esAnalistaRrhh() || $this->esGerenciaOps()) {
+            // Vista total: filtrar solo por subordinados (ya incluyen todos los empleados activos)
+            $query->whereIn('empleado_id', $subordinadosIds);
+        } else {
+            // Jefatura: ve traslados de su equipo actual + traslados pendientes/rechazados
+            // donde SU sucursal es el destino (para poder aprobar ingresos a su sucursal)
+            $misSucursales = $this->getSucursalesGestionadas();
+            $query->where(function ($q) use ($subordinadosIds, $misSucursales) {
+                $q->whereIn('empleado_id', $subordinadosIds);
+                if (!empty($misSucursales)) {
+                    $q->orWhereIn('sucursal_destino_id', $misSucursales);
+                }
+            });
+        }
+
+        $traslados = $query->get();
         $data = $this->enrichWithEmpleadoData($traslados->toArray());
 
         return response()->json(['success' => true, 'data' => $data]);
+    }
+
+    /**
+     * Devuelve los IDs de sucursales que gestiona el usuario efectivo.
+     * Usado para mostrar traslados entrantes (sucursal_destino) al gerente destino.
+     */
+    private function getSucursalesGestionadas(): array
+    {
+        $user = $this->getEffectiveUser();
+
+        $jefeEmpleadoId = DB::connection('pgsql')
+            ->table('empleados')
+            ->where('user_id', $user->id)
+            ->value('id');
+
+        if (!$jefeEmpleadoId) {
+            return $user->sucursal_id ? [(int) $user->sucursal_id] : [];
+        }
+
+        // 1. Departamentos donde es jefe → sucursal del departamento
+        $deptSucursales = DB::connection('pgsql')
+            ->table('departamentos')
+            ->where('jefe_empleado_id', $jefeEmpleadoId)
+            ->where('activo', true)
+            ->whereNotNull('sucursal_id')
+            ->pluck('sucursal_id')
+            ->map(fn($id) => (int) $id)
+            ->unique()
+            ->all();
+
+        if (!empty($deptSucursales)) return $deptSucursales;
+
+        // 2. Jefaturas explícitas (tabla empleado_jefaturas)
+        $jefaturas = DB::connection('pgsql')
+            ->table('empleado_jefaturas')
+            ->where('empleado_id', $jefeEmpleadoId)
+            ->where('activo', true)
+            ->whereNotNull('sucursal_id')
+            ->pluck('sucursal_id')
+            ->map(fn($id) => (int) $id)
+            ->all();
+
+        if (!empty($jefaturas)) return $jefaturas;
+
+        // 3. Fallback: sucursal propia del usuario
+        return $user->sucursal_id ? [(int) $user->sucursal_id] : [];
     }
 
     /**
