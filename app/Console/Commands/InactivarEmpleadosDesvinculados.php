@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Services\RRHH\PlazaHistorialService;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -100,7 +102,15 @@ class InactivarEmpleadosDesvinculados extends Command
                             ->where('id', $empleado->plaza_id)
                             ->update(['estado' => 'vacante', 'updated_at' => now()]);
 
-                        $this->line("    Plaza liberada (id={$empleado->plaza_id}) → vacante");
+                        // Cerrar el registro activo del historial de la plaza
+                        $motivo = $dv->tipo === 'despido' ? 'despido' : 'renuncia';
+                        app(PlazaHistorialService::class)->liberar(
+                            $empleado->plaza_id,
+                            Carbon::parse($dv->fecha_efectiva),
+                            $motivo,
+                        );
+
+                        $this->line("    Plaza liberada (id={$empleado->plaza_id}) → vacante + historial cerrado");
                     }
                 }
 
