@@ -352,6 +352,7 @@ class PlazasController extends Controller
 
         $historial = $plaza->historial()
             ->with('empleado:id,nombres,apellidos,codigo')
+            ->orderBy('fecha_inicio', 'desc')
             ->get()
             ->map(fn($h) => [
                 'id'             => $h->id,
@@ -365,7 +366,10 @@ class PlazasController extends Controller
                 'fecha_fin'      => $h->fecha_fin?->format('Y-m-d'),
                 'motivo_salida'  => $h->motivo_salida,
                 'notas'          => $h->notas,
-                'actual'         => is_null($h->fecha_fin),
+                // actual = sin fecha_fin Y la plaza efectivamente sigue con ese empleado
+                'actual'         => is_null($h->fecha_fin) && $plaza->empleado_id == $h->empleado_id,
+                // huerfano = sin fecha_fin pero ya no está en la plaza (dato incompleto)
+                'sin_fecha_fin'  => is_null($h->fecha_fin) && $plaza->empleado_id != $h->empleado_id,
             ]);
 
         return response()->json([
