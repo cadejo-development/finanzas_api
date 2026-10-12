@@ -11,6 +11,7 @@ use App\Models\RRHH\PlantillaContrato;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class IngresoPersonalController extends RRHHBaseController
@@ -29,7 +30,34 @@ class IngresoPersonalController extends RRHHBaseController
             $query->whereIn('empleado_id', $ids);
         }
 
-        return response()->json(['success' => true, 'data' => $query->get()]);
+        $ingresos = $query->get();
+
+        // Adjuntar estado del perfil del cargo (cross-DB: pgsql)
+        $empleadoIds = $ingresos->pluck('empleado_id')->unique()->filter()->values()->all();
+        if (!empty($empleadoIds)) {
+            $cargoPorEmpleado = DB::connection('pgsql')
+                ->table('empleados')
+                ->whereIn('id', $empleadoIds)
+                ->pluck('cargo_id', 'id');
+
+            $cargoIds = $cargoPorEmpleado->unique()->filter()->values()->all();
+            $perfilPorCargo = DB::connection('pgsql')
+                ->table('cargos')
+                ->whereIn('id', $cargoIds)
+                ->get(['id', 'funciones', 'horario'])
+                ->keyBy('id');
+
+            $ingresos = $ingresos->map(function ($ing) use ($cargoPorEmpleado, $perfilPorCargo) {
+                $cargoId = $cargoPorEmpleado->get($ing->empleado_id);
+                $cargo   = $cargoId ? $perfilPorCargo->get($cargoId) : null;
+                $ing->cargo_id            = $cargoId;
+                $ing->cargo_tiene_funciones = !empty($cargo?->funciones);
+                $ing->cargo_tiene_horario   = !empty($cargo?->horario);
+                return $ing;
+            });
+        }
+
+        return response()->json(['success' => true, 'data' => $ingresos]);
     }
 
     /**
