@@ -10,7 +10,7 @@ class Cargo extends Model
     protected $table = 'cargos';
 
     protected $fillable = [
-        'codigo', 'nombre', 'activo', 'aud_usuario',
+        'codigo', 'nombre', 'descripcion', 'funciones', 'horario', 'requisitos', 'activo', 'aud_usuario',
     ];
 
     protected $casts = [

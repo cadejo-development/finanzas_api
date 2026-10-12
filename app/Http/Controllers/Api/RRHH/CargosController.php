@@ -71,9 +71,13 @@ class CargosController extends Controller
     {
         return $this->captureAndRespond($request, function () use ($request) {
             $data = $request->validate([
-                'codigo' => 'required|string|max:30|unique:pgsql.cargos,codigo',
-                'nombre' => 'required|string|max:120',
-                'activo' => 'boolean',
+                'codigo'      => 'required|string|max:30|unique:pgsql.cargos,codigo',
+                'nombre'      => 'required|string|max:120',
+                'descripcion' => 'nullable|string|max:5000',
+                'funciones'   => 'nullable|string|max:10000',
+                'horario'     => 'nullable|string|max:200',
+                'requisitos'  => 'nullable|string|max:5000',
+                'activo'      => 'boolean',
             ]);
 
             $data['nombre']      = $this->normalizarNombre($data['nombre']);
@@ -90,8 +94,12 @@ class CargosController extends Controller
             $cargo = Cargo::findOrFail($id);
 
             $data = $request->validate([
-                'codigo' => 'required|string|max:30|unique:pgsql.cargos,codigo,' . $id,
-                'nombre' => 'required|string|max:120',
+                'codigo'      => 'required|string|max:30|unique:pgsql.cargos,codigo,' . $id,
+                'nombre'      => 'required|string|max:120',
+                'descripcion' => 'nullable|string|max:5000',
+                'funciones'   => 'nullable|string|max:10000',
+                'horario'     => 'nullable|string|max:200',
+                'requisitos'  => 'nullable|string|max:5000',
             ]);
 
             $data['nombre']      = $this->normalizarNombre($data['nombre']);

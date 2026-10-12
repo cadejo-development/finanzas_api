@@ -110,9 +110,10 @@ class ContratoEmpleadoController extends RRHHBaseController
     {
         return $this->captureAndRespond($request, function () use ($request, $empleadoId) {
             $emp = DB::connection('pgsql')
-                ->table('empleados')
-                ->where('id', $empleadoId)
-                ->select('nombres', 'apellidos')
+                ->table('empleados as e')
+                ->leftJoin('cargos as c', 'c.id', '=', 'e.cargo_id')
+                ->where('e.id', $empleadoId)
+                ->select('e.nombres', 'e.apellidos', 'c.funciones as cargo_funciones', 'c.horario as cargo_horario')
                 ->first();
 
             abort_unless($emp, 404, 'Empleado no encontrado.');
@@ -126,6 +127,10 @@ class ContratoEmpleadoController extends RRHHBaseController
                 'horario'          => 'nullable|string|max:200',
                 'notas'            => 'nullable|string|max:2000',
             ]);
+
+            // Auto-poblar funciones/horario desde el perfil del cargo si no se enviaron
+            $v['funciones'] = $v['funciones'] ?: $emp->cargo_funciones;
+            $v['horario']   = $v['horario']   ?: $emp->cargo_horario;
 
             $contrato = ContratoEmpleado::create([
                 ...$v,
@@ -170,6 +175,19 @@ class ContratoEmpleadoController extends RRHHBaseController
                 'horario'          => 'nullable|string|max:200',
                 'notas'            => 'nullable|string|max:2000',
             ]);
+
+            // Auto-poblar funciones/horario desde el perfil del cargo del empleado si no se enviaron
+            if (empty($v['funciones']) || empty($v['horario'])) {
+                $cargo = DB::connection('pgsql')
+                    ->table('empleados as e')
+                    ->leftJoin('cargos as c', 'c.id', '=', 'e.cargo_id')
+                    ->where('e.id', $ingreso->empleado_id)
+                    ->select('c.funciones', 'c.horario')
+                    ->first();
+
+                $v['funciones'] = $v['funciones'] ?: $cargo?->funciones;
+                $v['horario']   = $v['horario']   ?: $cargo?->horario;
+            }
 
             $contrato = ContratoEmpleado::create([
                 ...$v,
