@@ -1,7 +1,8 @@
 /**
  * Sync ventas draft desde Brilo SQL Server hacia merma_ventas_brilo
- * Uso: node database/sync_merma_ventas_brilo.js [fecha] [suc_brilo_id]
- * Ejemplo: node database/sync_merma_ventas_brilo.js 2026-10-14 11
+ * Uso: node database/sync_merma_ventas_brilo.js [fecha_inv] [suc_brilo_id] [fecha_brilo]
+ * Ejemplo: node database/sync_merma_ventas_brilo.js 2026-10-15 11
+ *          node database/sync_merma_ventas_brilo.js 2026-10-15 11 2026-10-14  (inv hoy, ventas de ayer en Brilo)
  */
 
 require('dotenv').config();
@@ -10,6 +11,7 @@ const { Client } = require('pg');
 
 const FECHA         = process.argv[2] ?? new Date().toISOString().slice(0, 10);
 const SUC_BRILO_ID  = parseInt(process.argv[3] ?? '11');  // 11 = Santa Elena
+const FECHA_BRILO   = process.argv[4] ?? FECHA;  // fecha a consultar en Brilo (por defecto igual a FECHA)
 
 // Brilo sucIdOrigenSync → pg sucursal_id
 const SUCURSAL_MAP = {
@@ -47,7 +49,8 @@ const cfgPg = {
 
 async function main() {
   console.log(`\n=== Sync Merma Ventas Brilo ===`);
-  console.log(`Fecha: ${FECHA}  |  Sucursal: ${suc.nombre} (brilo=${SUC_BRILO_ID}, pg=${suc.pg_id})\n`);
+  const fechaLabel = FECHA_BRILO !== FECHA ? `${FECHA} (ventas Brilo del ${FECHA_BRILO})` : FECHA;
+  console.log(`Fecha inv: ${FECHA}  |  Fecha Brilo: ${FECHA_BRILO}  |  Sucursal: ${suc.nombre} (brilo=${SUC_BRILO_ID}, pg=${suc.pg_id})\n`);
 
   // ── 1. Conectar Brilo SQL Server ────────────────────────────────────────────
   console.log('Conectando a Brilo SQL Server...');
@@ -71,7 +74,7 @@ async function main() {
       AND MCT.sucIdOrigenSync = ${SUC_BRILO_ID}
       AND CPR.cprNombre = 'Cerveza Draft'
       AND CAST(MCT.mctrstFecHoraCerrada AT TIME ZONE 'UTC'
-               AT TIME ZONE 'Central America Standard Time' AS DATE) = '${FECHA}'
+               AT TIME ZONE 'Central America Standard Time' AS DATE) = '${FECHA_BRILO}'
     GROUP BY PRO.proNombre, CPR.cprNombre
     ORDER BY SUM(DET.dctrstCantidad * DET.dctrstPrecio) DESC
   `);
