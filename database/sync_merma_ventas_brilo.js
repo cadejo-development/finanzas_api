@@ -42,6 +42,7 @@ const cfgPg = {
   database: 'gestion_operaciones_db',
   user:     process.env.DB_USERNAME_COMPRAS ?? process.env.DB_USERNAME ?? 'cadejo_admin',
   password: process.env.DB_PASSWORD_COMPRAS ?? process.env.DB_PASSWORD ?? process.env.PGPASSWORD,
+  ssl:      { rejectUnauthorized: false },
 };
 
 async function main() {
@@ -121,8 +122,10 @@ async function main() {
 
   for (const row of result.recordset) {
     const nombre = row.producto_nombre;
+    // Normalizar: ONZ → OZ, separar número pegado antes de unidad (ej: "16ONZ" → "16 OZ")
+    const nombreNorm = nombre.replace(/(\d)(onz|oz)/gi, '$1 $2').replace(/onz/gi, 'oz');
 
-    const cerveza = cervezas.find(c => nombre.toLowerCase().includes(c.nombre.toLowerCase()));
+    const cerveza = cervezas.find(c => nombreNorm.toLowerCase().includes(c.nombre.toLowerCase()));
     if (!cerveza) {
       console.log(`  [SIN CERVEZA] "${nombre}" — no coincide con ningún nombre en merma_cervezas`);
       sinMapeo++;
@@ -131,8 +134,8 @@ async function main() {
 
     // Extraer presentacion: último token numérico + unidad
     // Ej: "WAPA 16oz" → "16 Oz", "Nacional 1 Lt" → "1 Lt"
-    const matchOz = nombre.match(/(\d+(?:\.\d+)?)\s*oz/i);
-    const matchLt = nombre.match(/(\d+(?:\.\d+)?)\s*l(?:t|ts?)?/i);
+    const matchOz = nombreNorm.match(/(\d+(?:\.\d+)?)\s*oz/i);
+    const matchLt = nombreNorm.match(/(\d+(?:\.\d+)?)\s*l(?:t|ts?)?/i);
     let presLabel = null;
     if (matchOz) presLabel = `${matchOz[1]} Oz`;
     else if (matchLt) presLabel = parseFloat(matchLt[1]) === 1 ? '1 Lt' : `${parseFloat(matchLt[1])} Lts`;
