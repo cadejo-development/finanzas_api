@@ -11,14 +11,17 @@ class BrewRecetaDiaObjetivo extends Model
 
     protected $fillable = [
         'brew_receta_id', 'dia', 'etapa',
-        'plato_obj', 'temp_obj', 'ph_obj', 'notas_objetivo',
+        'plato_min', 'plato_obj', 'plato_max',
+        'temp_min',  'temp_obj',  'temp_max',
+        'ph_min',    'ph_obj',    'ph_max',
+        'notas_objetivo',
     ];
 
     protected $casts = [
         'dia'       => 'integer',
-        'plato_obj' => 'float',
-        'temp_obj'  => 'float',
-        'ph_obj'    => 'float',
+        'plato_min' => 'float', 'plato_obj' => 'float', 'plato_max' => 'float',
+        'temp_min'  => 'float', 'temp_obj'  => 'float', 'temp_max'  => 'float',
+        'ph_min'    => 'float', 'ph_obj'    => 'float', 'ph_max'    => 'float',
     ];
 
     public function receta()

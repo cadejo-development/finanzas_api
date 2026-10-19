@@ -14,7 +14,7 @@ class BrewReceta extends Model
         'vol_preboil', 'vol_postboil', 'vol_bbt',
         'og', 'fg', 'abv', 'ibu', 'srm', 'eficiencia_macerado', 'dias_ferm',
         'cajas_objetivo', 'barriles_objetivo',
-        'temp_maduracion', 'dias_maduracion', 'dias_seguimiento',
+        'temp_maduracion_min', 'temp_maduracion_max', 'dias_maduracion', 'dias_seguimiento',
         'notas', 'activa',
     ];
 
