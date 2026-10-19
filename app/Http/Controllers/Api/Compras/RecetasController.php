@@ -1271,6 +1271,24 @@ class RecetasController extends Controller
         ];
 
         if ($withModificadores && $r->relationLoaded('modificadores')) {
+            // Para productos modificadores con costo=0 (típicamente platos), calcular
+            // el costo desde los ingredientes de su receta asociada en una sola query.
+            $codigosCero = $r->modificadores
+                ->filter(fn ($m) => $m->producto && (float) $m->producto->costo === 0.0 && $m->producto->codigo_origen)
+                ->map(fn ($m) => $m->producto->codigo_origen)
+                ->unique()->values()->all();
+
+            $recetasModif = [];
+            if (!empty($codigosCero)) {
+                $recetasModif = Receta::whereIn('codigo_origen', $codigosCero)
+                    ->with([
+                        'ingredientes.producto',
+                        'ingredientes.subReceta.productoAsociado',
+                        'ingredientes.subReceta.ingredientes.producto',
+                    ])
+                    ->get()->keyBy('codigo_origen')->all();
+            }
+
             $grupos = [];
             foreach ($r->modificadores as $mod) {
                 $key = $mod->grupo_id_origen;
@@ -1283,9 +1301,13 @@ class RecetasController extends Controller
                         'costo_grupo'  => 0.0,
                     ];
                 }
-                $costoUnit = $mod->producto
-                    ? $this->costoPorUnidadReceta($mod->producto, strtolower(trim($mod->unidad ?? '')))
-                    : 0.0;
+                $costoUnit = 0.0;
+                if ($mod->producto) {
+                    $costoUnit = $this->costoPorUnidadReceta($mod->producto, strtolower(trim($mod->unidad ?? '')));
+                    if ($costoUnit === 0.0 && $mod->producto->codigo_origen && isset($recetasModif[$mod->producto->codigo_origen])) {
+                        $costoUnit = $this->calcularBatchCostoDirecto($recetasModif[$mod->producto->codigo_origen]);
+                    }
+                }
                 $costoOp = $costoUnit * (float) ($mod->cantidad ?? 0);
                 $grupos[$key]['opciones'][] = [
                     'nombre'          => $mod->opcion_nombre,
