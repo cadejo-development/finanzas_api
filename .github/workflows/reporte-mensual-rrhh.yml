@@ -1,0 +1,58 @@
+name: Reporte Mensual RRHH — Amonestaciones
+
+on:
+  schedule:
+    - cron: '0 22 28-31 * *'  # 4:00 PM El Salvador (UTC-6), días 28-31
+  workflow_dispatch:
+    inputs:
+      mes:
+        description: 'Mes a reportar (YYYY-MM). Vacío = mes anterior.'
+        required: false
+        default: ''
+
+jobs:
+  reporte:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout rama produccion
+        uses: actions/checkout@v4
+        with:
+          ref: produccion
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo, pdo_pgsql
+
+      - name: Crear .env
+        env:
+          ENV_FILE_CONTENT: ${{ secrets.ENV_FILE }}
+        run: printf '%s' "$ENV_FILE_CONTENT" > .env
+
+      - name: Instalar dependencias Composer
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+
+      - name: Solo ejecutar el último día del mes
+        id: check_day
+        run: |
+          HOY=$(date +%-d)
+          ULTIMO=$(cal $(date +%m) $(date +%Y) | awk 'NF{f=$NF} END{print f}')
+          echo "Hoy: $HOY, Último día: $ULTIMO"
+          if [ "$HOY" -eq "$ULTIMO" ]; then
+            echo "es_ultimo_dia=true" >> $GITHUB_OUTPUT
+          else
+            echo "es_ultimo_dia=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Enviar reporte mensual
+        if: ${{ steps.check_day.outputs.es_ultimo_dia == 'true' || github.event_name == 'workflow_dispatch' }}
+        run: |
+          MES="${{ github.event.inputs.mes }}"
+          if [ -n "$MES" ]; then
+            php artisan rrhh:reporte-mensual-amonestaciones --mes="$MES"
+          else
+            php artisan rrhh:reporte-mensual-amonestaciones
+          fi
