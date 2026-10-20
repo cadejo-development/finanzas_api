@@ -1,0 +1,45 @@
+name: Reporte Semanal RRHH — Altas y Bajas
+
+on:
+  schedule:
+    - cron: '0 16 * * 1'  # Lunes 10:00 AM El Salvador (UTC-6)
+  workflow_dispatch:
+    inputs:
+      semana:
+        description: 'Fecha inicio de semana (YYYY-MM-DD). Vacío = semana anterior.'
+        required: false
+        default: ''
+
+jobs:
+  reporte:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout rama produccion
+        uses: actions/checkout@v4
+        with:
+          ref: produccion
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo, pdo_pgsql
+
+      - name: Crear .env
+        env:
+          ENV_FILE_CONTENT: ${{ secrets.ENV_FILE }}
+        run: printf '%s' "$ENV_FILE_CONTENT" > .env
+
+      - name: Instalar dependencias Composer
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+
+      - name: Enviar reporte semanal
+        run: |
+          SEMANA="${{ github.event.inputs.semana }}"
+          if [ -n "$SEMANA" ]; then
+            php artisan rrhh:reporte-semanal-altas-bajas --semana="$SEMANA"
+          else
+            php artisan rrhh:reporte-semanal-altas-bajas
+          fi
