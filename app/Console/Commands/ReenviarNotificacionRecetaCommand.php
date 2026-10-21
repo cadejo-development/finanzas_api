@@ -20,6 +20,7 @@ class ReenviarNotificacionRecetaCommand extends Command
     {
         $codigos      = $this->argument('codigos');
         $destinatarios = $this->option('email') ?: ['javiermejia@cervezacadejo.com', 'marcelaorellana@cervezacadejo.com'];
+        $cc = $this->option('email') ? [] : ['kristian@cervezacadejo.com'];
 
         $controller = app(RecetasController::class);
 
@@ -48,7 +49,9 @@ class ReenviarNotificacionRecetaCommand extends Command
                     autorizadoEn:    now()->format('d/m/Y H:i'),
                 );
 
-                Mail::to($destinatarios)->send($mailable);
+                $mailer = Mail::to($destinatarios);
+                if (!empty($cc)) $mailer = $mailer->cc($cc);
+                $mailer->send($mailable);
                 $this->info("Enviado: {$receta->nombre} → " . implode(', ', $destinatarios));
             } catch (\Throwable $e) {
                 $this->error("Error en {$codigo}: " . $e->getMessage());
