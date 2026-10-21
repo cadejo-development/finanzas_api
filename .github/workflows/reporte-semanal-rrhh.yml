@@ -9,6 +9,10 @@ on:
         description: 'Fecha inicio de semana (YYYY-MM-DD). Vacío = semana anterior.'
         required: false
         default: ''
+      email:
+        description: 'Destinatario alternativo (ej. prueba@cadejo.com). Vacío = juanlopez.'
+        required: false
+        default: ''
 
 jobs:
   reporte:
@@ -38,8 +42,8 @@ jobs:
       - name: Enviar reporte semanal
         run: |
           SEMANA="${{ github.event.inputs.semana }}"
-          if [ -n "$SEMANA" ]; then
-            php artisan rrhh:reporte-semanal-altas-bajas --semana="$SEMANA"
-          else
-            php artisan rrhh:reporte-semanal-altas-bajas
-          fi
+          EMAIL="${{ github.event.inputs.email }}"
+          CMD="php artisan rrhh:reporte-semanal-altas-bajas"
+          [ -n "$SEMANA" ] && CMD="$CMD --semana=$SEMANA"
+          [ -n "$EMAIL"  ] && CMD="$CMD --email=$EMAIL"
+          eval $CMD
