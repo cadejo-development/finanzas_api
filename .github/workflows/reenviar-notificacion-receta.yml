@@ -1,0 +1,45 @@
+name: Reenviar Notificación Receta Autorizada
+
+on:
+  workflow_dispatch:
+    inputs:
+      codigos:
+        description: 'Códigos de receta separados por coma (ej. PL14260501,PL14260502)'
+        required: true
+      email:
+        description: 'Destinatario alternativo. Vacío = javiermejia y marcelaorellana.'
+        required: false
+        default: ''
+
+jobs:
+  reenviar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout rama produccion
+        uses: actions/checkout@v4
+        with:
+          ref: produccion
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo, pdo_pgsql
+
+      - name: Crear .env
+        env:
+          ENV_FILE_CONTENT: ${{ secrets.ENV_FILE }}
+        run: printf '%s' "$ENV_FILE_CONTENT" > .env
+
+      - name: Instalar dependencias Composer
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+
+      - name: Reenviar notificaciones
+        run: |
+          EMAIL="${{ github.event.inputs.email }}"
+          IFS=',' read -ra CODES <<< "${{ github.event.inputs.codigos }}"
+          CMD="php artisan recetas:reenviar-notificacion ${CODES[*]}"
+          [ -n "$EMAIL" ] && CMD="$CMD --email=$EMAIL"
+          eval $CMD
