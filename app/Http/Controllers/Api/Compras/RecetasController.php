@@ -1410,11 +1410,28 @@ class RecetasController extends Controller
             return response()->json(['error' => "El plato \"{$receta->nombre}\" no tiene precio de venta. Defínalo antes de autorizar."], 422);
         }
 
+        $usuario = $request->user()?->email ?? 'sistema';
+
         $receta->update([
             'estado_id'             => 3,
             'modificado_localmente' => true,
-            'aud_usuario'           => $request->user()?->email ?? 'sistema',
+            'aud_usuario'           => $usuario,
         ]);
+
+        try {
+            $receta->load(['ingredientes.producto', 'categoria', 'estado']);
+            $mailable = new RecetaAutorizadaNotificacion(
+                recetaData:      $this->formatReceta($receta, null, true),
+                recetaNombre:    $receta->nombre,
+                recetaCodigo:    $receta->codigo_origen ?? '',
+                recetaCategoria: $receta->categoria?->nombre ?? '',
+                autorizadoPor:   $usuario,
+                autorizadoEn:    now()->format('d/m/Y H:i'),
+            );
+            Mail::to(['javiermejia@cervezacadejo.com', 'marcelaorellana@cervezacadejo.com'])->queue($mailable);
+        } catch (\Throwable $e) {
+            \Log::warning('RecetaAutorizada: no se pudo enviar email', ['receta_id' => $receta->id, 'error' => $e->getMessage()]);
+        }
 
         return response()->json(['data' => ['id' => $receta->id, 'estado_id' => 3, 'estado' => 'Autorizada']]);
     }
@@ -1458,6 +1475,21 @@ class RecetasController extends Controller
                 'aud_usuario'           => $usuario,
             ]);
             $autorizadas[] = $receta->id;
+
+            try {
+                $receta->load(['ingredientes.producto', 'categoria', 'estado']);
+                $mailable = new RecetaAutorizadaNotificacion(
+                    recetaData:      $this->formatReceta($receta, null, true),
+                    recetaNombre:    $receta->nombre,
+                    recetaCodigo:    $receta->codigo_origen ?? '',
+                    recetaCategoria: $receta->categoria?->nombre ?? '',
+                    autorizadoPor:   $usuario,
+                    autorizadoEn:    now()->format('d/m/Y H:i'),
+                );
+                Mail::to(['javiermejia@cervezacadejo.com', 'marcelaorellana@cervezacadejo.com'])->queue($mailable);
+            } catch (\Throwable $e) {
+                \Log::warning('RecetaAutorizadaMasivo: no se pudo enviar email', ['receta_id' => $receta->id, 'error' => $e->getMessage()]);
+            }
         }
 
         return response()->json(['autorizadas' => $autorizadas, 'errores' => $errores]);
