@@ -9,6 +9,10 @@ on:
         description: 'Mes a reportar (YYYY-MM). Vacío = mes anterior.'
         required: false
         default: ''
+      email:
+        description: 'Destinatario alternativo (ej. prueba@cadejo.com). Vacío = juanlopez.'
+        required: false
+        default: ''
 
 jobs:
   reporte:
@@ -51,8 +55,8 @@ jobs:
         if: ${{ steps.check_day.outputs.es_ultimo_dia == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
           MES="${{ github.event.inputs.mes }}"
-          if [ -n "$MES" ]; then
-            php artisan rrhh:reporte-mensual-amonestaciones --mes="$MES"
-          else
-            php artisan rrhh:reporte-mensual-amonestaciones
-          fi
+          EMAIL="${{ github.event.inputs.email }}"
+          CMD="php artisan rrhh:reporte-mensual-amonestaciones"
+          [ -n "$MES"   ] && CMD="$CMD --mes=$MES"
+          [ -n "$EMAIL" ] && CMD="$CMD --email=$EMAIL"
+          eval $CMD
