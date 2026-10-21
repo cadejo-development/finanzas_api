@@ -1212,7 +1212,7 @@ class RecetasController extends Controller
         return $prefijo . str_pad($maxNum + 1, 2, '0', STR_PAD_LEFT);
     }
 
-    private function formatReceta(Receta $r, ?int $sucursalId = null, bool $withModificadores = false): array
+    public function formatReceta(Receta $r, ?int $sucursalId = null, bool $withModificadores = false): array
     {
         $data = [
             'id'            => $r->id,
