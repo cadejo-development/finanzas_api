@@ -12,6 +12,7 @@ class ReporteMensualAmonestacionesCommand extends Command
 {
     protected $signature = 'rrhh:reporte-mensual-amonestaciones
                             {--mes= : Mes en formato YYYY-MM (default: mes anterior)}
+                            {--email= : Destinatario alternativo (para pruebas)}
                             {--dry-run : Solo muestra el resumen sin enviar correo}';
 
     protected $description = 'Envía a juanlopez@cervezacadejo.com el reporte mensual de amonestaciones';
@@ -108,8 +109,9 @@ class ReporteMensualAmonestacionesCommand extends Command
             detalle:     $detalle,
         );
 
-        Mail::to(self::DESTINATARIO)->send($mailable);
-        $this->info("Reporte enviado a " . self::DESTINATARIO);
+        $destino = $this->option('email') ?: self::DESTINATARIO;
+        Mail::to($destino)->send($mailable);
+        $this->info("Reporte enviado a {$destino}");
 
         return 0;
     }
