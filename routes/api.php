@@ -40,6 +40,7 @@ use App\Http\Controllers\Api\RRHH\AmonestacionesController;
 use App\Http\Controllers\Api\RRHH\DesvinculacionesController;
 use App\Http\Controllers\Api\RRHH\RetractacionesController;
 use App\Http\Controllers\Api\RRHH\TrasladosController;
+use App\Http\Controllers\Api\RRHH\PeriodosPruebaTrasladoController;
 use App\Http\Controllers\Api\RRHH\CambiosSalarialesController;
 use App\Http\Controllers\Api\RRHH\DepartamentosController;
 use App\Http\Controllers\Api\RRHH\ExpedienteController;
@@ -609,6 +610,12 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::get('traslados/{id}',    [TrasladosController::class, 'show']);
     Route::put('traslados/{id}',    [TrasladosController::class, 'update']);
     Route::delete('traslados/{id}', [TrasladosController::class, 'destroy']);
+
+    // Períodos de Prueba (traslados)
+    Route::get('periodos-prueba',                          [PeriodosPruebaTrasladoController::class, 'index']);
+    Route::post('periodos-prueba',                         [PeriodosPruebaTrasladoController::class, 'store']);
+    Route::patch('periodos-prueba/{id}/decision',          [PeriodosPruebaTrasladoController::class, 'decision']);
+    Route::patch('periodos-prueba/{id}/cancelar',          [PeriodosPruebaTrasladoController::class, 'cancelar']);
 
     // Plazas vacantes (necesario para jefatura al registrar cambio de plaza)
     Route::get('plazas/disponibles-sucursal', [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'disponiblesSucursal']);
