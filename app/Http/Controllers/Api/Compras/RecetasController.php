@@ -570,7 +570,7 @@ class RecetasController extends Controller
                 );
                 Mail::to(['javiermejia@cervezacadejo.com', 'marcelaorellana@cervezacadejo.com'])
                     ->cc('kristian@cervezacadejo.com')
-                    ->queue($mailable);
+                    ->send($mailable);
             } catch (\Throwable $e) {
                 \Log::warning('RecetaAutorizada: no se pudo enviar email', [
                     'receta_id' => $receta->id,
@@ -594,7 +594,7 @@ class RecetasController extends Controller
 
                 Mail::to(['javiermejia@cervezacadejo.com', 'marcelaorellana@cervezacadejo.com'])
                     ->cc($usuario)
-                    ->queue($mailable);
+                    ->send($mailable);
             } catch (\Throwable $e) {
                 \Log::warning('RecetaModificada: no se pudo enviar email', [
                     'receta_id' => $receta->id,
@@ -1431,7 +1431,7 @@ class RecetasController extends Controller
             );
             Mail::to(['javiermejia@cervezacadejo.com', 'marcelaorellana@cervezacadejo.com'])
                 ->cc('kristian@cervezacadejo.com')
-                ->queue($mailable);
+                ->send($mailable);
         } catch (\Throwable $e) {
             \Log::warning('RecetaAutorizada: no se pudo enviar email', ['receta_id' => $receta->id, 'error' => $e->getMessage()]);
         }
@@ -1491,7 +1491,7 @@ class RecetasController extends Controller
                 );
                 Mail::to(['javiermejia@cervezacadejo.com', 'marcelaorellana@cervezacadejo.com'])
                     ->cc('kristian@cervezacadejo.com')
-                    ->queue($mailable);
+                    ->send($mailable);
             } catch (\Throwable $e) {
                 \Log::warning('RecetaAutorizadaMasivo: no se pudo enviar email', ['receta_id' => $receta->id, 'error' => $e->getMessage()]);
             }
