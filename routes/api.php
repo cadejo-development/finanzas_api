@@ -612,6 +612,7 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::delete('traslados/{id}', [TrasladosController::class, 'destroy']);
 
     // Períodos de Prueba (traslados)
+    Route::get('periodos-prueba/cargos-sucursal',          [PeriodosPruebaTrasladoController::class, 'cargosPorSucursal']);
     Route::get('periodos-prueba',                          [PeriodosPruebaTrasladoController::class, 'index']);
     Route::post('periodos-prueba',                         [PeriodosPruebaTrasladoController::class, 'store']);
     Route::patch('periodos-prueba/{id}/decision',          [PeriodosPruebaTrasladoController::class, 'decision']);

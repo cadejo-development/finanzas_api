@@ -239,6 +239,32 @@ class PeriodosPruebaTrasladoController extends RRHHBaseController
     }
 
     /**
+     * GET /api/rrhh/periodos-prueba/cargos-sucursal?sucursal_id=X
+     * Retorna los cargos que tienen plazas activas en la sucursal indicada.
+     */
+    public function cargosPorSucursal(Request $request): JsonResponse
+    {
+        $sucursalId = (int) $request->query('sucursal_id');
+
+        if (!$sucursalId) {
+            return response()->json(['success' => false, 'message' => 'sucursal_id requerido'], 422);
+        }
+
+        $cargos = DB::connection('pgsql')
+            ->table('plazas as p')
+            ->join('departamentos as d', 'd.id', '=', 'p.departamento_id')
+            ->join('cargos as c', 'c.id', '=', 'p.cargo_id')
+            ->where('d.sucursal_id', $sucursalId)
+            ->where('p.activo', true)
+            ->select('c.id', 'c.nombre')
+            ->distinct()
+            ->orderBy('c.nombre')
+            ->get();
+
+        return response()->json(['success' => true, 'data' => $cargos]);
+    }
+
+    /**
      * Sucursales que gestiona el usuario (copiado de TrasladosController).
      */
     private function getSucursalesGestionadas(): array
