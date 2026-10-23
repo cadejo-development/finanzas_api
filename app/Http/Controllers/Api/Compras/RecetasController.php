@@ -1245,15 +1245,20 @@ class RecetasController extends Controller
             'sucursales'    => (function () use ($r) {
                 if (!$r->relationLoaded('sucursalConfig')) return [];
                 $ids = $r->sucursalConfig->pluck('sucursal_id')->filter()->unique()->values();
+                // Solo sucursales operativas activas (excluye ubicaciones cerradas)
                 $nombres = $ids->isNotEmpty()
-                    ? \App\Models\Sucursal::whereIn('id', $ids)->pluck('nombre', 'id')
+                    ? \App\Models\Sucursal::whereIn('id', $ids)
+                        ->where(fn($q) => $q->where('activa', true)->orWhereNull('activa'))
+                        ->pluck('nombre', 'id')
                     : collect();
-                return $r->sucursalConfig->map(fn ($s) => [
-                    'sucursal_id'   => $s->sucursal_id,
-                    'sucursal_nombre' => $nombres->get($s->sucursal_id, "Sucursal #{$s->sucursal_id}"),
-                    'platos_semana' => $s->platos_semana,
-                    'activa'        => $s->activa,
-                ])->values();
+                return $r->sucursalConfig
+                    ->filter(fn ($s) => $nombres->has($s->sucursal_id))
+                    ->map(fn ($s) => [
+                        'sucursal_id'     => $s->sucursal_id,
+                        'sucursal_nombre' => $nombres->get($s->sucursal_id),
+                        'platos_semana'   => $s->platos_semana,
+                        'activa'          => $s->activa,
+                    ])->values();
             })(),
             'ingredientes'  => $r->ingredientes->map(fn ($ing) => [
                 'id'                 => $ing->id,
