@@ -1242,13 +1242,19 @@ class RecetasController extends Controller
             'modificado_localmente'=> (bool) $r->modificado_localmente,
             'actualizada'          => (bool) $r->actualizada,
             'grupos_modificadores' => (int) ($r->grupos_modificadores ?? 0),
-            'sucursales'    => $r->relationLoaded('sucursalConfig')
-                ? $r->sucursalConfig->map(fn ($s) => [
+            'sucursales'    => (function () use ($r) {
+                if (!$r->relationLoaded('sucursalConfig')) return [];
+                $ids = $r->sucursalConfig->pluck('sucursal_id')->filter()->unique()->values();
+                $nombres = $ids->isNotEmpty()
+                    ? \App\Models\Sucursal::whereIn('id', $ids)->pluck('nombre', 'id')
+                    : collect();
+                return $r->sucursalConfig->map(fn ($s) => [
                     'sucursal_id'   => $s->sucursal_id,
+                    'sucursal_nombre' => $nombres->get($s->sucursal_id, "Sucursal #{$s->sucursal_id}"),
                     'platos_semana' => $s->platos_semana,
                     'activa'        => $s->activa,
-                ])->values()
-                : [],
+                ])->values();
+            })(),
             'ingredientes'  => $r->ingredientes->map(fn ($ing) => [
                 'id'                 => $ing->id,
                 'producto_id'        => $ing->producto_id,
