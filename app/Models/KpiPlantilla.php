@@ -22,14 +22,20 @@ class KpiPlantilla extends Model
         'monto_bono_base',
         'tipo_meta',
         'activo',
+        'tiene_bono',
+        'vigencia_desde',
+        'vigencia_hasta',
         'aud_usuario',
     ];
 
     protected $casts = [
         'activo'          => 'boolean',
+        'tiene_bono'      => 'boolean',
         'sucursal_id'     => 'integer',
         'departamento_id' => 'integer',
         'monto_bono_base' => 'float',
+        'vigencia_desde'  => 'date',
+        'vigencia_hasta'  => 'date',
     ];
 
     public function sucursal(): BelongsTo

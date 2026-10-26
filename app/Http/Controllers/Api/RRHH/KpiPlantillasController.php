@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Api\RRHH;
 
 use App\Http\Controllers\Controller;
+use App\Mail\RRHH\KpiPlantillaCreada;
 use App\Models\KpiPlantilla;
 use App\Models\KpiEscalaBonificacion;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 
 class KpiPlantillasController extends Controller
 {
@@ -41,6 +44,8 @@ class KpiPlantillasController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $esFinanciero = $request->user()?->hasRole('gerencia_financiera') ?? false;
+
         $data = $request->validate([
             'nombre'          => 'required|string|max:150',
             'descripcion'     => 'nullable|string|max:1000',
@@ -48,16 +53,20 @@ class KpiPlantillasController extends Controller
             'departamento_id' => 'nullable|integer|exists:pgsql.departamentos,id',
             'unidad_medida'   => 'required|string|max:80',
             'monto_objetivo'  => 'nullable|string|max:50',
-            'monto_bono_base' => 'nullable|numeric|min:0',
             'tipo_meta'       => 'nullable|in:fijo,variable',
             'activo'          => 'boolean',
+            'tiene_bono'      => 'boolean',
+            'vigencia_desde'  => 'nullable|date',
+            'vigencia_hasta'  => 'nullable|date|after_or_equal:vigencia_desde',
             'cargo_ids'       => 'array',
             'cargo_ids.*'     => 'integer|exists:pgsql.cargos,id',
-            'escala'          => 'array',
-            'escala.*.porcentaje_desde' => 'required|numeric|min:0|max:100',
+            // Campos monetarios solo aceptados si el usuario es gerencia_financiera
+            'monto_bono_base' => $esFinanciero ? 'nullable|numeric|min:0' : 'prohibited',
+            'escala'          => $esFinanciero ? 'array' : 'prohibited',
+            'escala.*.porcentaje_desde' => 'required_with:escala|numeric|min:0|max:100',
             'escala.*.operador'         => 'nullable|in:>=,>,<=,<',
-            'escala.*.tipo'             => 'required|in:porcentaje_bono,monto_fijo',
-            'escala.*.valor'            => 'required|numeric|min:0',
+            'escala.*.tipo'             => 'required_with:escala|in:porcentaje_bono,monto_fijo',
+            'escala.*.valor'            => 'required_with:escala|numeric|min:0',
         ]);
 
         DB::connection('pgsql')->beginTransaction();
@@ -69,9 +78,12 @@ class KpiPlantillasController extends Controller
                 'departamento_id' => $data['departamento_id'] ?? null,
                 'unidad_medida'   => $data['unidad_medida'],
                 'monto_objetivo'  => $data['monto_objetivo'] ?? null,
-                'monto_bono_base' => isset($data['monto_bono_base']) ? (float) $data['monto_bono_base'] : null,
+                'monto_bono_base' => $esFinanciero && isset($data['monto_bono_base']) ? (float) $data['monto_bono_base'] : null,
                 'tipo_meta'       => $data['tipo_meta'] ?? 'fijo',
                 'activo'          => $data['activo'] ?? true,
+                'tiene_bono'      => $data['tiene_bono'] ?? false,
+                'vigencia_desde'  => $data['vigencia_desde'] ?? null,
+                'vigencia_hasta'  => $data['vigencia_hasta'] ?? null,
                 'aud_usuario'     => $request->user()?->email ?? 'sistema',
             ]);
 
@@ -79,15 +91,17 @@ class KpiPlantillasController extends Controller
                 $plantilla->cargos()->sync($data['cargo_ids']);
             }
 
-            foreach (($data['escala'] ?? []) as $i => $fila) {
-                KpiEscalaBonificacion::create([
-                    'kpi_plantilla_id' => $plantilla->id,
-                    'porcentaje_desde' => $fila['porcentaje_desde'],
-                    'operador'         => $fila['operador'] ?? '>=',
-                    'tipo'             => $fila['tipo'],
-                    'valor'            => $fila['valor'],
-                    'orden'            => $i,
-                ]);
+            if ($esFinanciero) {
+                foreach (($data['escala'] ?? []) as $i => $fila) {
+                    KpiEscalaBonificacion::create([
+                        'kpi_plantilla_id' => $plantilla->id,
+                        'porcentaje_desde' => $fila['porcentaje_desde'],
+                        'operador'         => $fila['operador'] ?? '>=',
+                        'tipo'             => $fila['tipo'],
+                        'valor'            => $fila['valor'],
+                        'orden'            => $i,
+                    ]);
+                }
             }
 
             DB::connection('pgsql')->commit();
@@ -99,12 +113,16 @@ class KpiPlantillasController extends Controller
         $plantilla->load(['sucursal:id,nombre', 'cargos:id,nombre,codigo', 'escala']);
         $plantilla->loadCount('cargos');
 
+        // Notificar a todos los usuarios con rol rrhh_admin
+        $this->notificarRrhhAdmins($plantilla, $request->user()?->name ?? 'Sistema');
+
         return response()->json($this->format($plantilla), 201);
     }
 
     public function update(Request $request, int $id): JsonResponse
     {
-        $plantilla = KpiPlantilla::findOrFail($id);
+        $plantilla    = KpiPlantilla::findOrFail($id);
+        $esFinanciero = $request->user()?->hasRole('gerencia_financiera') ?? false;
 
         $data = $request->validate([
             'nombre'          => 'required|string|max:150',
@@ -113,45 +131,57 @@ class KpiPlantillasController extends Controller
             'departamento_id' => 'nullable|integer|exists:pgsql.departamentos,id',
             'unidad_medida'   => 'required|string|max:80',
             'monto_objetivo'  => 'nullable|string|max:50',
-            'monto_bono_base' => 'nullable|numeric|min:0',
             'tipo_meta'       => 'nullable|in:fijo,variable',
             'activo'          => 'boolean',
+            'tiene_bono'      => 'boolean',
+            'vigencia_desde'  => 'nullable|date',
+            'vigencia_hasta'  => 'nullable|date|after_or_equal:vigencia_desde',
             'cargo_ids'       => 'array',
             'cargo_ids.*'     => 'integer|exists:pgsql.cargos,id',
-            'escala'          => 'array',
-            'escala.*.porcentaje_desde' => 'required|numeric|min:0|max:100',
+            'monto_bono_base' => $esFinanciero ? 'nullable|numeric|min:0' : 'prohibited',
+            'escala'          => $esFinanciero ? 'array' : 'prohibited',
+            'escala.*.porcentaje_desde' => 'required_with:escala|numeric|min:0|max:100',
             'escala.*.operador'         => 'nullable|in:>=,>,<=,<',
-            'escala.*.tipo'             => 'required|in:porcentaje_bono,monto_fijo',
-            'escala.*.valor'            => 'required|numeric|min:0',
+            'escala.*.tipo'             => 'required_with:escala|in:porcentaje_bono,monto_fijo',
+            'escala.*.valor'            => 'required_with:escala|numeric|min:0',
         ]);
 
         DB::connection('pgsql')->beginTransaction();
         try {
-            $plantilla->update([
+            $updateData = [
                 'nombre'          => $data['nombre'],
                 'descripcion'     => $data['descripcion'] ?? null,
                 'sucursal_id'     => $data['sucursal_id'] ?? null,
                 'departamento_id' => $data['departamento_id'] ?? null,
                 'unidad_medida'   => $data['unidad_medida'],
                 'monto_objetivo'  => $data['monto_objetivo'] ?? null,
-                'monto_bono_base' => isset($data['monto_bono_base']) ? (float) $data['monto_bono_base'] : null,
                 'tipo_meta'       => $data['tipo_meta'] ?? $plantilla->tipo_meta,
                 'activo'          => $data['activo'] ?? $plantilla->activo,
+                'tiene_bono'      => $data['tiene_bono'] ?? $plantilla->tiene_bono,
+                'vigencia_desde'  => $data['vigencia_desde'] ?? null,
+                'vigencia_hasta'  => $data['vigencia_hasta'] ?? null,
                 'aud_usuario'     => $request->user()?->email ?? 'sistema',
-            ]);
+            ];
 
+            if ($esFinanciero) {
+                $updateData['monto_bono_base'] = isset($data['monto_bono_base']) ? (float) $data['monto_bono_base'] : null;
+            }
+
+            $plantilla->update($updateData);
             $plantilla->cargos()->sync($data['cargo_ids'] ?? []);
 
-            $plantilla->escala()->delete();
-            foreach (($data['escala'] ?? []) as $i => $fila) {
-                KpiEscalaBonificacion::create([
-                    'kpi_plantilla_id' => $plantilla->id,
-                    'porcentaje_desde' => $fila['porcentaje_desde'],
-                    'operador'         => $fila['operador'] ?? '>=',
-                    'tipo'             => $fila['tipo'],
-                    'valor'            => $fila['valor'],
-                    'orden'            => $i,
-                ]);
+            if ($esFinanciero) {
+                $plantilla->escala()->delete();
+                foreach (($data['escala'] ?? []) as $i => $fila) {
+                    KpiEscalaBonificacion::create([
+                        'kpi_plantilla_id' => $plantilla->id,
+                        'porcentaje_desde' => $fila['porcentaje_desde'],
+                        'operador'         => $fila['operador'] ?? '>=',
+                        'tipo'             => $fila['tipo'],
+                        'valor'            => $fila['valor'],
+                        'orden'            => $i,
+                    ]);
+                }
             }
 
             DB::connection('pgsql')->commit();
@@ -288,7 +318,10 @@ class KpiPlantillasController extends Controller
             'monto_objetivo'      => $p->monto_objetivo,
             'monto_bono_base'     => $p->monto_bono_base,
             'tipo_meta'           => $p->tipo_meta ?? 'fijo',
-            'activo'         => $p->activo,
+            'activo'              => $p->activo,
+            'tiene_bono'          => $p->tiene_bono,
+            'vigencia_desde'      => $p->vigencia_desde?->format('Y-m-d'),
+            'vigencia_hasta'      => $p->vigencia_hasta?->format('Y-m-d'),
             'cargos_count'   => $p->cargos_count ?? $p->cargos->count(),
             'cargos'         => $p->cargos->map(fn($c) => [
                                     'id'     => $c->id,
@@ -304,5 +337,29 @@ class KpiPlantillasController extends Controller
                                     'orden'             => $e->orden,
                                 ]),
         ];
+    }
+
+    private function notificarRrhhAdmins(KpiPlantilla $plantilla, string $creadoPor): void
+    {
+        $admins = User::whereHas('roles', fn($q) => $q->where('roles.codigo', 'rrhh_admin'))
+            ->where('activo', true)
+            ->get(['id', 'name', 'email']);
+
+        $link = config('app.rrhh_url', 'https://talentohumano.cervezacadejo.com') . '/admin/kpi-plantillas';
+
+        foreach ($admins as $admin) {
+            try {
+                Mail::send(new KpiPlantillaCreada(
+                    kpiNombre:       $plantilla->nombre,
+                    kpiDescripcion:  $plantilla->descripcion ?? '',
+                    creadoPor:       $creadoPor,
+                    sucursalNombre:  $plantilla->sucursal?->nombre,
+                    tieneBono:       $plantilla->tiene_bono,
+                    linkUrl:         $link,
+                ));
+            } catch (\Throwable) {
+                // No interrumpir el flujo si el correo falla
+            }
+        }
     }
 }
