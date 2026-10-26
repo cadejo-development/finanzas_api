@@ -1,7 +1,8 @@
 name: Sync Kardex — Brilo Conteo Mensual
 
 on:
-  # Schedule automático DESACTIVADO — re-sync de períodos de auditoría solo manual
+  schedule:
+    - cron: '0 8 * * *'  # 2:00 AM CST (UTC-6) diario — procesa solo sucursales con período ya cerrado
   workflow_dispatch:
     inputs:
       sucursal_id:
@@ -81,12 +82,18 @@ jobs:
             node database/sync_brilo_kardex.js --sucursal=$SUC_INPUT --hasta=$HASTA_INPUT $DESDE_ARG
           else
             # ── Modo automático: leer periodos de database/kardex-periodos.json ──
-            echo "Leyendo periodos desde database/kardex-periodos.json …"
+            TODAY=$(date +%Y-%m-%d)
+            echo "Leyendo periodos desde database/kardex-periodos.json … (hoy=$TODAY)"
             node -e "
               const fs = require('fs');
               const p = JSON.parse(fs.readFileSync('database/kardex-periodos.json'));
               p.forEach(r => console.log(r.sucursal_id + '|' + r.hasta + '|' + (r.movs_hasta ?? '') + '|' + r.desde + '|' + r.bod + ' ' + r.nombre));
             " | while IFS='|' read SUC HASTA MOVS_HASTA DESDE LABEL; do
+              # Solo procesar si el período ya cerró (movs_hasta < hoy)
+              if [ -n "$MOVS_HASTA" ] && [[ "$MOVS_HASTA" >= "$TODAY" ]]; then
+                echo "⏭ $LABEL: período aún abierto (movs_hasta=$MOVS_HASTA) — omitiendo"
+                continue
+              fi
               echo "─── $LABEL  suc=$SUC  hasta=$HASTA  movs_hasta=$MOVS_HASTA  desde=$DESDE ───"
               MOVS_ARG=""
               if [ -n "$MOVS_HASTA" ]; then MOVS_ARG="--movs-hasta=$MOVS_HASTA"; fi
