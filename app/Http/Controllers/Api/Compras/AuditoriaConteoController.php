@@ -959,16 +959,17 @@ class AuditoriaConteoController extends Controller
         // Si se limpia la justificación, también limpiar imagen
         if (!$request->justificacion) $update['justificacion_imagen'] = null;
 
-        $rows = DB::connection('compras')
+        $base = DB::connection('compras')
             ->table('conteo_auditoria_items')
             ->where('auditoria_id', $auditoriaId)
             ->where('producto_id', $productoId)
-            ->where('auditor_email', '')  // actualizar solo fila base
-            ->update($update);
+            ->where('auditor_email', '');
 
-        if (!$rows) {
+        if (!$base->exists()) {
             return response()->json(['success' => false, 'message' => 'Producto no encontrado en esta auditoría.'], 404);
         }
+
+        $base->update($update);
 
         return response()->json(['success' => true]);
     }
