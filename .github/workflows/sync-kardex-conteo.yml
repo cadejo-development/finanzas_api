@@ -90,7 +90,7 @@ jobs:
               p.forEach(r => console.log(r.sucursal_id + '|' + r.hasta + '|' + (r.movs_hasta ?? '') + '|' + r.desde + '|' + r.bod + ' ' + r.nombre));
             " | while IFS='|' read SUC HASTA MOVS_HASTA DESDE LABEL; do
               # Solo procesar si el período ya cerró (movs_hasta < hoy)
-              if [ -n "$MOVS_HASTA" ] && [[ "$MOVS_HASTA" >= "$TODAY" ]]; then
+              if [ -n "$MOVS_HASTA" ] && [ "$(date -d "$MOVS_HASTA" +%s)" -ge "$(date -d "$TODAY" +%s)" ]; then
                 echo "⏭ $LABEL: período aún abierto (movs_hasta=$MOVS_HASTA) — omitiendo"
                 continue
               fi
