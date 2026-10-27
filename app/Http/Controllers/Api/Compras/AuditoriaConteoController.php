@@ -109,19 +109,32 @@ class AuditoriaConteoController extends Controller
             return response()->json(['success' => false, 'message' => 'No existe conteo aplicado para esta fecha.'], 422);
         }
 
-        // Último movimiento por producto gana (igual que conteoHoy)
+        // Para conteo_mensual puede haber varios movimientos por producto (un contador por sección).
+        // Acumulamos todos los total_contado y secciones en lugar de dejar que el último gane.
         $byProd = [];
         foreach ($movs as $mov) {
-            $d = is_string($mov->detalle) ? json_decode($mov->detalle, true) : (array)($mov->detalle ?? []);
-            $secsRaw = array_filter((array)($d['secciones'] ?? []), fn($v) => (float)$v > 0);
-            $byProd[$mov->producto_id] = [
-                'producto_id'       => $mov->producto_id,
-                'producto_nombre'   => $mov->producto_nombre,
-                'cantidad_contador' => $d['total_contado'] ?? 0,
-                'unidad'            => $mov->unidad ?? $mov->p_unidad,
-                'secciones_conteo'  => json_encode(empty($secsRaw) ? (object)[] : $secsRaw),
-            ];
+            $d   = is_string($mov->detalle) ? json_decode($mov->detalle, true) : (array)($mov->detalle ?? []);
+            $pid = $mov->producto_id;
+            if (!isset($byProd[$pid])) {
+                $byProd[$pid] = [
+                    'producto_id'     => $pid,
+                    'producto_nombre' => $mov->producto_nombre,
+                    'cantidad_contador' => 0,
+                    'unidad'          => $mov->unidad ?? $mov->p_unidad,
+                    '_secs'           => [],
+                ];
+            }
+            $byProd[$pid]['cantidad_contador'] += (float)($d['total_contado'] ?? 0);
+            foreach (array_filter((array)($d['secciones'] ?? []), fn($v) => (float)$v > 0) as $sec => $val) {
+                $byProd[$pid]['_secs'][$sec] = ($byProd[$pid]['_secs'][$sec] ?? 0) + (float)$val;
+            }
         }
+        foreach ($byProd as &$p) {
+            $secs = $p['_secs'];
+            $p['secciones_conteo'] = json_encode(empty($secs) ? (object)[] : $secs);
+            unset($p['_secs']);
+        }
+        unset($p);
 
         // Obtener nombre de la sucursal
         $sucursalNombre = DB::table('sucursales')
