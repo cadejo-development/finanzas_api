@@ -122,12 +122,24 @@ class ExportBriloController extends Controller
         $soloModificados = (bool) $request->query('solo_modificados', 1);
         $soloAprobados   = (bool) $request->query('solo_aprobados', 1);
 
-        // receta_ids: lista explícita de IDs (CSV). Cuando se proveen, bypasea solo_modificados/solo_con_codigo/solo_aprobados.
+        // receta_ids: lista explícita de IDs (CSV). Cuando se proveen, bypasea otros filtros.
         $recetaIds = array_values(array_filter(
             explode(',', $request->query('receta_ids', '')),
             fn ($v) => $v !== ''
         ));
         $tieneIdsExplicitos = count($recetaIds) > 0;
+
+        // estado_ids: filtrar por estados específicos (1=Borrador,2=Finalizada,3=Autorizada,4=Activa,5=Inactiva)
+        $estadoIds = array_values(array_filter(
+            array_map('intval', explode(',', $request->query('estado_ids', ''))),
+            fn ($v) => $v > 0
+        ));
+
+        // categoria_ids: filtrar por categorías de receta
+        $categoriaIds = array_values(array_filter(
+            array_map('intval', explode(',', $request->query('categoria_ids', ''))),
+            fn ($v) => $v > 0
+        ));
 
         $base = DB::connection('compras')
             ->table('recetas as r')
@@ -141,7 +153,15 @@ class ExportBriloController extends Controller
         } else {
             if ($soloModificados) $base->where('r.modificado_localmente', true);
             if ($soloConCodigo)   $base->whereNotNull('r.codigo_origen')->where('r.codigo_origen', '!=', '');
-            if ($soloAprobados)   $base->whereIn('r.estado_id', [3, 4]);
+            // Si se pasan estados explícitos, usarlos; si no, el default es solo Autorizadas y Activas
+            if (count($estadoIds) > 0) {
+                $base->whereIn('r.estado_id', $estadoIds);
+            } elseif ($soloAprobados) {
+                $base->whereIn('r.estado_id', [3, 4]);
+            }
+            if (count($categoriaIds) > 0) {
+                $base->whereIn('r.categoria_id', $categoriaIds);
+            }
         }
 
         // Excluir CP y MR — son materias primas, no recetas/sub-recetas
