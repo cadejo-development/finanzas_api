@@ -772,7 +772,8 @@ class AuditoriaConteoController extends Controller
             return response()->json(['success' => false, 'message' => 'sucursal_id y fecha son requeridos.'], 422);
         }
 
-        // Tomar un movimiento por producto (el real, no sin_contar)
+        // Sumar total_contado de TODOS los contadores por producto (conteo_mensual puede
+        // tener múltiples movimientos: uno por cada sección/usuario que aplicó)
         $movs = DB::connection('compras')
             ->table('movimientos_inventario as m')
             ->join('productos as p', 'p.id', '=', 'm.producto_id')
@@ -783,15 +784,13 @@ class AuditoriaConteoController extends Controller
             ->where('m.aud_usuario', '!=', 'sin_contar')
             ->where('p.excluir_estadisticas', false)
             ->select(
-                'm.producto_id', 'm.aud_usuario',
-                DB::raw("CAST(m.detalle->>'total_contado' AS numeric) AS total_contado"),
+                'm.producto_id',
+                DB::raw("SUM(CAST(m.detalle->>'total_contado' AS numeric)) AS total_contado"),
                 'p.codigo', 'p.nombre', 'p.unidad', 'p.costo',
                 'cat.nombre as categoria'
             )
-            ->orderBy('m.producto_id')
-            ->orderByDesc('m.created_at')
-            ->get()
-            ->unique('producto_id');
+            ->groupBy('m.producto_id', 'p.codigo', 'p.nombre', 'p.unidad', 'p.costo', 'cat.nombre')
+            ->get();
 
         // ── Kardex BRILO para el período ─────────────────────────────────────
         // Busca el kardex más reciente cuyo FIN PERÍODO caiga dentro de los 5 días
