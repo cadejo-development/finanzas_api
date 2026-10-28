@@ -273,6 +273,82 @@ class KpiPlantillasController extends Controller
         return response()->json($query->get());
     }
 
+    public function porPuesto(Request $request): JsonResponse
+    {
+        $sucursalId     = $request->input('sucursal_id');
+        $departamentoId = $request->input('departamento_id');
+
+        $query = DB::connection('pgsql')
+            ->table('kpi_plantilla_cargos as kpc')
+            ->join('cargos as c', 'c.id', '=', 'kpc.cargo_id')
+            ->join('kpi_plantillas as kp', 'kp.id', '=', 'kpc.kpi_plantilla_id')
+            ->where('kp.activo', true)
+            ->where('c.activo', true)
+            ->orderBy('c.nombre')
+            ->orderBy('kp.nombre')
+            ->select([
+                'c.id as cargo_id',
+                'c.nombre as cargo_nombre',
+                'c.codigo as cargo_codigo',
+                'kp.id as kpi_id',
+                'kp.nombre as kpi_nombre',
+                'kp.unidad_medida',
+                'kp.periodicidad',
+                'kp.tiene_bono',
+                'kp.monto_bono_base',
+                'kpc.peso',
+            ]);
+
+        if ($sucursalId) {
+            $query->where('kp.sucursal_id', (int) $sucursalId);
+        }
+        if ($departamentoId) {
+            $query->where('kp.departamento_id', (int) $departamentoId);
+        }
+
+        $rows = $query->get();
+
+        // Cargar escalas agrupadas por kpi_id
+        $kpiIds = $rows->pluck('kpi_id')->unique()->values()->toArray();
+        $escalas = empty($kpiIds) ? collect() : DB::connection('pgsql')
+            ->table('kpi_escala_bonificacion')
+            ->whereIn('kpi_plantilla_id', $kpiIds)
+            ->orderBy('porcentaje_desde')
+            ->get()
+            ->groupBy('kpi_plantilla_id');
+
+        // Agrupar por cargo
+        $resultado = $rows->groupBy('cargo_id')->map(function ($kpis) use ($escalas) {
+            $first     = $kpis->first();
+            $pesoTotal = round($kpis->sum(fn($k) => (float) ($k->peso ?? 0)), 2);
+
+            return [
+                'cargo_id'     => $first->cargo_id,
+                'cargo_nombre' => $first->cargo_nombre,
+                'cargo_codigo' => $first->cargo_codigo,
+                'peso_total'   => $pesoTotal,
+                'kpis'         => $kpis->map(fn($k) => [
+                    'id'              => $k->kpi_id,
+                    'nombre'          => $k->kpi_nombre,
+                    'unidad_medida'   => $k->unidad_medida,
+                    'periodicidad'    => $k->periodicidad ?? 'mensual',
+                    'tiene_bono'      => (bool) $k->tiene_bono,
+                    'monto_bono_base' => $k->monto_bono_base !== null ? (float) $k->monto_bono_base : null,
+                    'peso'            => $k->peso !== null ? (float) $k->peso : null,
+                    'escala'          => ($escalas[$k->kpi_id] ?? collect())->map(fn($e) => [
+                        'porcentaje_desde' => (float) $e->porcentaje_desde,
+                        'descripcion'      => $e->descripcion,
+                        'operador'         => $e->operador ?? '>=',
+                        'tipo'             => $e->tipo,
+                        'valor'            => $e->valor !== null ? (float) $e->valor : null,
+                    ])->values(),
+                ])->values(),
+            ];
+        })->values();
+
+        return response()->json($resultado);
+    }
+
     public function cargosDisponibles(Request $request): JsonResponse
     {
         $sucursalId     = $request->input('sucursal_id');

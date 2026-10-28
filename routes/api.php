@@ -918,6 +918,7 @@ Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh
 
     // KPIs
     Route::get('kpi-plantillas/cargos-disponibles', [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'cargosDisponibles']);
+    Route::get('kpi-plantillas/por-puesto',          [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'porPuesto']);
     Route::get('kpi-plantillas',                    [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'index']);
     Route::post('kpi-plantillas',                   [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'store']);
     Route::get('kpi-plantillas/{id}',               [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'show']);
