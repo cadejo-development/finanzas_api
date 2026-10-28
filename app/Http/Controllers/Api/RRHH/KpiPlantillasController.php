@@ -267,14 +267,19 @@ class KpiPlantillasController extends Controller
                 $countBindings
             );
 
-        // Si hay filtro de sucursal o departamento, mostrar solo los cargos que han tenido
-        // empleados (activos o inactivos) en ese scope — así aparecen plazas vacantes históricas.
-        if ($sucursalId || $departamentoId) {
-            $query->whereExists(function ($sub) use ($sucursalId, $departamentoId) {
+        // Filtrar por plazas autorizadas del departamento (cargo_plazas_autorizadas)
+        if ($departamentoId) {
+            $query->whereExists(function ($sub) use ($departamentoId) {
+                $sub->from('cargo_plazas_autorizadas as cpa')
+                    ->whereColumn('cpa.cargo_id', 'c.id')
+                    ->where('cpa.departamento_id', (int) $departamentoId);
+            });
+        } elseif ($sucursalId) {
+            // Sin departamento pero con sucursal: filtrar por empleados en esa sucursal
+            $query->whereExists(function ($sub) use ($sucursalId) {
                 $sub->from('empleados as e')
-                    ->whereColumn('e.cargo_id', 'c.id');
-                if ($sucursalId)     $sub->where('e.sucursal_id',     (int) $sucursalId);
-                if ($departamentoId) $sub->where('e.departamento_id', (int) $departamentoId);
+                    ->whereColumn('e.cargo_id', 'c.id')
+                    ->where('e.sucursal_id', (int) $sucursalId);
             });
         }
 
