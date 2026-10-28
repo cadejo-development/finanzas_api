@@ -15,6 +15,7 @@ class KpiPlantilla extends Model
     protected $fillable = [
         'nombre',
         'descripcion',
+        'comentarios',
         'sucursal_id',
         'departamento_id',
         'unidad_medida',
@@ -23,19 +24,22 @@ class KpiPlantilla extends Model
         'tipo_meta',
         'activo',
         'tiene_bono',
+        'periodicidad',
+        'cargo_responsable_id',
         'vigencia_desde',
         'vigencia_hasta',
         'aud_usuario',
     ];
 
     protected $casts = [
-        'activo'          => 'boolean',
-        'tiene_bono'      => 'boolean',
-        'sucursal_id'     => 'integer',
-        'departamento_id' => 'integer',
-        'monto_bono_base' => 'float',
-        'vigencia_desde'  => 'date',
-        'vigencia_hasta'  => 'date',
+        'activo'               => 'boolean',
+        'tiene_bono'           => 'boolean',
+        'sucursal_id'          => 'integer',
+        'departamento_id'      => 'integer',
+        'cargo_responsable_id' => 'integer',
+        'monto_bono_base'      => 'float',
+        'vigencia_desde'       => 'date',
+        'vigencia_hasta'       => 'date',
     ];
 
     public function sucursal(): BelongsTo
@@ -56,6 +60,12 @@ class KpiPlantilla extends Model
     public function cargos(): BelongsToMany
     {
         return $this->belongsToMany(Cargo::class, 'kpi_plantilla_cargos', 'kpi_plantilla_id', 'cargo_id')
+                    ->withPivot('peso')
                     ->withTimestamps();
+    }
+
+    public function cargoResponsable(): BelongsTo
+    {
+        return $this->belongsTo(Cargo::class, 'cargo_responsable_id');
     }
 }

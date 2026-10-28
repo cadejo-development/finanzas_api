@@ -13,6 +13,7 @@ class KpiEscalaBonificacion extends Model
     protected $fillable = [
         'kpi_plantilla_id',
         'porcentaje_desde',
+        'descripcion',
         'operador',
         'tipo',
         'valor',
