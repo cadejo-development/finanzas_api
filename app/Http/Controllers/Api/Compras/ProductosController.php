@@ -84,7 +84,12 @@ class ProductosController extends Controller
             });
         }
 
-        // Para MR con sucursal_id: filtrar solo los del catálogo de esa sucursal
+        // Para MR: siempre filtrar solo productos inventariados en Brilo
+        if ($prefijo === 'MR') {
+            $query->where('es_inventariado', true);
+        }
+
+        // Para MR con sucursal_id: además filtrar por catálogo de esa sucursal
         // (tabla pedido_catalogo_sucursal cargada desde Excel de Enrique — CENTRAL Y DESCENTRAL)
         if ($prefijo === 'MR' && $activeSucursalIdPrefijo) {
             $query->whereIn('codigo', function ($sub) use ($activeSucursalIdPrefijo) {
@@ -232,6 +237,7 @@ class ProductosController extends Controller
                 'costo'            => $costo,
                 'precio_unitario'  => $costo,
                 'activo'           => $p->activo,
+                'es_inventariado'  => (bool) $p->es_inventariado,
                 'categoria_id'     => $p->categoria_id,
                 'categoria_key'    => $p->categoria?->key,
                 'categoria_nombre' => $p->categoria?->nombre,
