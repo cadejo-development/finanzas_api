@@ -84,8 +84,9 @@ class ProductosController extends Controller
             });
         }
 
-        // Para MR: solo productos inventariados en Brilo (proTipo=0)
-        if ($prefijo === 'MR') {
+        // Para MR, BR, GT, PM: solo productos inventariados en Brilo (proTipo=0)
+        // PL no aplica — platos se muestran todos
+        if (in_array($prefijo, ['MR', 'BR', 'GT', 'PM'])) {
             $query->where('es_inventariado', true);
         }
 
