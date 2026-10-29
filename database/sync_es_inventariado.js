@@ -19,19 +19,19 @@ async function main() {
   const pg   = new Client(PG_CFG);
   await pg.connect();
 
-  // ── 1. Traer todos los productos activos de Brilo con su tipo ──────────
+  // ── 1. Traer TODOS los productos activos de Brilo con su tipo ───────────
+  // No filtramos por prefijo MR porque algunos productos del RDS tienen
+  // códigos custom (AEMR..., AE1MR..., PT...) que en Brilo existen con ese
+  // mismo código pero no empiezan con MR. Necesitamos el map completo.
   const briloRes = await pool.request().query(`
     SELECT
-      p.proCodigo  AS codigo,
-      p.proNombre  AS nombre,
-      p.proTipo    AS tipo,
-      p.proActivo  AS activo,
-      p.proCodigo  AS codigo_orig,
-      -- Campos necesarios para insertar los faltantes
+      p.proCodigo      AS codigo,
+      p.proNombre      AS nombre,
+      p.proTipo        AS tipo,
       u.uniAbreviacion AS unidad
     FROM dbo.Productos p WITH(NOLOCK)
     LEFT JOIN dbo.Unidades u WITH(NOLOCK) ON u.uniId = p.uniId
-    WHERE p.proActivo = 1 AND p.proCodigo LIKE 'MR%'
+    WHERE p.proActivo = 1
   `);
 
   const briloMap = {};
@@ -63,8 +63,10 @@ async function main() {
   await pg.query('COMMIT');
   console.log(`\n✓ es_inventariado sincronizado para ${actualizados} MR en RDS`);
 
-  // ── 4. Importar los MR activos en Brilo que faltan en RDS ─────────────
-  const faltantes = briloRes.recordset.filter(r => !rdsMap[r.codigo?.trim()]);
+  // ── 4. Importar los MR con código estándar en Brilo que faltan en RDS ──
+  const faltantes = briloRes.recordset.filter(r =>
+    r.codigo?.trim().startsWith('MR') && !rdsMap[r.codigo?.trim()]
+  );
   console.log(`\nMR faltantes en RDS: ${faltantes.length}`);
 
   // Necesitamos la categoria_id de MR-01 como fallback (cat de materias primas general)

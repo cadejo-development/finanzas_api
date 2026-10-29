@@ -84,9 +84,10 @@ class ProductosController extends Controller
             });
         }
 
-        // Para MR: siempre filtrar solo productos inventariados en Brilo
+        // Para MR: solo inventariados con código estándar MR* (sin custom de sucursal)
         if ($prefijo === 'MR') {
-            $query->where('es_inventariado', true);
+            $query->where('es_inventariado', true)
+                  ->where('codigo', 'ilike', 'MR%');
         }
 
         // Para MR con sucursal_id: además filtrar por catálogo de esa sucursal
