@@ -214,6 +214,17 @@ class PedidosController extends Controller
         $sucursalIds = $pedidos->pluck('sucursal_id')->unique()->filter()->values()->toArray();
         $sucursales  = Sucursal::whereIn('id', $sucursalIds)->get()->keyBy('id');
 
+        // Mapa origen: "sucursal_id:codigo" → origen (desde catálogo Excel de Enrique)
+        $catalogoMap = [];
+        if ($sucursalIds) {
+            DB::connection('compras')
+                ->table('pedido_catalogo_sucursal')
+                ->whereIn('sucursal_id', $sucursalIds)
+                ->select('sucursal_id', 'codigo', 'origen')
+                ->get()
+                ->each(fn ($r) => $catalogoMap[$r->sucursal_id . ':' . $r->codigo] = $r->origen);
+        }
+
         $map         = [];
         $pedidosMeta = [];
 
@@ -262,6 +273,7 @@ class PedidosController extends Controller
                 $sucCodigo = $suc?->codigo ?? '';
                 $keyS = $pedido->sucursal_id;
                 if (!isset($map[$pid]['por_sucursal'][$keyS])) {
+                    $codigoProd = $det->producto?->codigo ?? '';
                     $map[$pid]['por_sucursal'][$keyS] = [
                         'sucursal_id'     => $pedido->sucursal_id,
                         'sucursal_nombre' => $sucNombre,
@@ -269,6 +281,7 @@ class PedidosController extends Controller
                         'gerente'         => $pedido->aud_usuario ?? '',
                         'cantidad'        => 0.0,
                         'subtotal'        => 0.0,
+                        'origen'          => $catalogoMap[$pedido->sucursal_id . ':' . $codigoProd] ?? null,
                     ];
                 }
                 $map[$pid]['por_sucursal'][$keyS]['cantidad'] += (float) $det->cantidad;
@@ -288,6 +301,7 @@ class PedidosController extends Controller
                 'total_subtotal'  => round($r['total_subtotal'], 2),
                 'num_pedidos'     => $r['num_pedidos'],
                 'precio_promedio' => $promedio,
+                'origen'          => collect($r['por_sucursal'])->pluck('origen')->filter()->first(),
                 'por_sucursal'    => array_values($r['por_sucursal']),
             ];
         }, $map));
@@ -331,6 +345,17 @@ class PedidosController extends Controller
             ->get()
             ->keyBy('id');
 
+        // Mapa origen para el ODC
+        $catalogoMap = [];
+        if ($sucursalIds) {
+            DB::connection('compras')
+                ->table('pedido_catalogo_sucursal')
+                ->whereIn('sucursal_id', $sucursalIds)
+                ->select('sucursal_id', 'codigo', 'origen')
+                ->get()
+                ->each(fn ($r) => $catalogoMap[$r->sucursal_id . ':' . $r->codigo] = $r->origen);
+        }
+
         $filas = [];
 
         foreach ($pedidos as $pedido) {
@@ -343,17 +368,19 @@ class PedidosController extends Controller
             $sub       = $cecos->firstWhere('es_sub', true);
 
             foreach ($pedido->detalles as $det) {
+                $codigoProd = $det->producto?->codigo ?? '';
                 $filas[] = [
                     'pedido_id'       => $pedido->id,
                     'semana_inicio'   => substr((string) $pedido->semana_inicio, 0, 10),
                     'sucursal_codigo' => $suc?->codigo ?? '',
                     'ceco'            => $agrupador?->codigo ?? '',
                     'sub_ceco'        => $sub?->codigo ?? '',
-                    'producto_codigo' => $det->producto?->codigo ?? '',
+                    'producto_codigo' => $codigoProd,
                     'producto_nombre' => $det->producto?->nombre ?? '',
                     'unidad'          => $det->unidad ?? $det->producto?->unidad ?? '',
                     'cantidad'        => (float) $det->cantidad,
                     'precio_unitario' => (float) $det->precio_unitario,
+                    'origen'          => $catalogoMap[$pedido->sucursal_id . ':' . $codigoProd] ?? null,
                 ];
             }
         }
