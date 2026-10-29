@@ -86,13 +86,27 @@ class ProductosController extends Controller
 
         // Para MR con sucursal_id: filtrar solo los del catálogo de esa sucursal
         // (tabla pedido_catalogo_sucursal cargada desde Excel de Enrique — CENTRAL Y DESCENTRAL)
-        // Solo aplica a MR porque el catálogo de Enrique solo cubre materias primas.
-        // BR, GT y PM no están en ese catálogo, por lo que se muestran todos los activos de esa categoría.
         if ($prefijo === 'MR' && $activeSucursalIdPrefijo) {
             $query->whereIn('codigo', function ($sub) use ($activeSucursalIdPrefijo) {
                 $sub->select('codigo')
                     ->from('pedido_catalogo_sucursal')
                     ->where('sucursal_id', $activeSucursalIdPrefijo);
+            });
+        }
+
+        // Para BR con sucursal_id: mostrar solo los ingredientes BR usados en recetas
+        // de bebidas activas de esa sucursal (similar a cómo PL filtra por receta_sucursal)
+        if ($prefijo === 'BR' && $activeSucursalIdPrefijo) {
+            $query->whereIn('id', function ($sub) use ($activeSucursalIdPrefijo) {
+                $sub->select('ri.producto_id')
+                    ->from('receta_ingredientes as ri')
+                    ->join('recetas as r', 'r.id', '=', 'ri.receta_id')
+                    ->join('receta_sucursal as rs', 'rs.receta_id', '=', 'r.id')
+                    ->where('rs.sucursal_id', $activeSucursalIdPrefijo)
+                    ->where('rs.activa', true)
+                    ->where('r.activa', true)
+                    ->whereRaw("r.tipo ilike '%bebida%'")
+                    ->whereNotNull('ri.producto_id');
             });
         }
 
