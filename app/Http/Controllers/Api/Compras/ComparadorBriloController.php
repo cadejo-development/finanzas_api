@@ -434,7 +434,8 @@ class ComparadorBriloController extends Controller
             return response()->json(['data' => [], 'mensaje' => 'Receta no encontrada en nuestro sistema']);
         }
 
-        $rows = DB::connection('compras')
+        // ── Cambios de ingredientes ──────────────────────────────────────────
+        $ingRows = DB::connection('compras')
             ->table('aud_receta_ingredientes as a')
             ->leftJoin('productos as p',  'a.producto_id',   '=', 'p.id')
             ->leftJoin('recetas as sr',   'a.sub_receta_id', '=', 'sr.id')
@@ -451,9 +452,51 @@ class ComparadorBriloController extends Controller
             ])
             ->orderBy('a.fecha_accion', 'desc')
             ->limit(500)
+            ->get()
+            ->map(fn ($r) => array_merge((array) $r, ['tipo' => 'ingrediente']));
+
+        // ── Cambios de estado ────────────────────────────────────────────────
+        $estadosMap = DB::connection('compras')
+            ->table('estados_receta')
+            ->pluck('codigo', 'id')
+            ->all();
+
+        $audRecetas = DB::connection('compras')
+            ->table('aud_recetas')
+            ->where('receta_id', $receta->id)
+            ->select([
+                'aud_id',
+                'accion',
+                DB::raw("fecha_accion AT TIME ZONE 'America/El_Salvador' AS fecha_sv"),
+                'aud_usuario',
+                'estado_id',
+            ])
+            ->orderBy('fecha_accion', 'asc')
             ->get();
 
-        return response()->json(['data' => $rows]);
+        $estadoCambios = collect();
+        $prevEstadoId  = null;
+        foreach ($audRecetas as $row) {
+            if ((int) $row->estado_id !== (int) $prevEstadoId) {
+                $estadoCambios->push([
+                    'aud_id'        => 'e_' . $row->aud_id,
+                    'tipo'          => 'estado',
+                    'accion'        => $row->accion,
+                    'fecha_sv'      => $row->fecha_sv,
+                    'aud_usuario'   => $row->aud_usuario,
+                    'estado_nuevo'  => $estadosMap[(int) $row->estado_id] ?? 'desconocido',
+                    'estado_previo' => $prevEstadoId ? ($estadosMap[(int) $prevEstadoId] ?? 'desconocido') : null,
+                ]);
+                $prevEstadoId = $row->estado_id;
+            }
+        }
+
+        $combined = $ingRows
+            ->concat($estadoCambios)
+            ->sortByDesc('fecha_sv')
+            ->values();
+
+        return response()->json(['data' => $combined]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
