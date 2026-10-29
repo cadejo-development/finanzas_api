@@ -84,8 +84,15 @@ class ProductosController extends Controller
             });
         }
 
-        // sucursal_id solo se usa para datos de inventario (ver más abajo),
-        // NO filtra qué productos aparecen para MAT. PRIMAS — así el catálogo muestra todos los activos
+        // Para MR/BR/GT/PM con sucursal_id: filtrar solo los del catálogo de esa sucursal
+        // (tabla pedido_catalogo_sucursal cargada desde Excel de Enrique — CENTRAL Y DESCENTRAL)
+        if ($prefijo && $prefijo !== 'PL' && $activeSucursalIdPrefijo) {
+            $query->whereIn('codigo', function ($sub) use ($activeSucursalIdPrefijo) {
+                $sub->select('codigo')
+                    ->from('pedido_catalogo_sucursal')
+                    ->where('sucursal_id', $activeSucursalIdPrefijo);
+            });
+        }
 
         // Filtro por origen: 'restaurante' | 'centro_produccion'
         if ($origen = $request->query('origen')) {
@@ -117,9 +124,23 @@ class ProductosController extends Controller
 
         $paginado = $query->paginate($perPage);
 
+        // Origen de pedido por producto para la sucursal (del catálogo Excel de Enrique)
+        $origenData = [];
+        $activeSucursalId = (int) $request->query('sucursal_id', 0);
+        if ($activeSucursalId) {
+            $codigos = $paginado->getCollection()->pluck('codigo')->toArray();
+            if (!empty($codigos)) {
+                $origenData = DB::connection('compras')
+                    ->table('pedido_catalogo_sucursal')
+                    ->where('sucursal_id', $activeSucursalId)
+                    ->whereIn('codigo', $codigos)
+                    ->pluck('origen', 'codigo')
+                    ->toArray();
+            }
+        }
+
         // Datos de inventario por producto (stock actual + sugerido) para el pedido semanal
         $invData = [];
-        $activeSucursalId = (int) $request->query('sucursal_id', 0);
         if ($activeSucursalId && $request->boolean('con_inventario')) {
             $productIds = $paginado->getCollection()->pluck('id')->toArray();
             if (!empty($productIds)) {
@@ -199,6 +220,7 @@ class ProductosController extends Controller
                 'categoria_key'    => $p->categoria?->key,
                 'categoria_nombre' => $p->categoria?->nombre,
                 'origen'           => $p->origen ?? 'restaurante',
+                'origen_pedido'    => $origenData[$p->codigo] ?? null,
                 // Inventario — null si no se solicitó con_inventario
                 'saldo_actual'      => null,
                 'stock_minimo_inv'  => null,
