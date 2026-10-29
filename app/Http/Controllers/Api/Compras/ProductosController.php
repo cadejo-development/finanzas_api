@@ -99,19 +99,17 @@ class ProductosController extends Controller
             });
         }
 
-        // Para BR con sucursal_id: mostrar solo los ingredientes BR usados en recetas
-        // de bebidas activas de esa sucursal (similar a cómo PL filtra por receta_sucursal)
+        // Para BR con sucursal_id: mismo patrón que PL — productos cuyo codigo
+        // aparece como codigo_origen de una receta activa asignada a la sucursal
         if ($prefijo === 'BR' && $activeSucursalIdPrefijo) {
-            $query->whereIn('id', function ($sub) use ($activeSucursalIdPrefijo) {
-                $sub->select('ri.producto_id')
-                    ->from('receta_ingredientes as ri')
-                    ->join('recetas as r', 'r.id', '=', 'ri.receta_id')
+            $query->whereIn('codigo', function ($sub) use ($activeSucursalIdPrefijo) {
+                $sub->select('r.codigo_origen')
+                    ->from('recetas as r')
                     ->join('receta_sucursal as rs', 'rs.receta_id', '=', 'r.id')
                     ->where('rs.sucursal_id', $activeSucursalIdPrefijo)
                     ->where('rs.activa', true)
                     ->where('r.activa', true)
-                    ->whereRaw("r.tipo ilike '%bebida%'")
-                    ->whereNotNull('ri.producto_id');
+                    ->whereNotNull('r.codigo_origen');
             });
         }
 
