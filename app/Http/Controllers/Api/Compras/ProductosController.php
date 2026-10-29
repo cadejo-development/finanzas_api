@@ -84,9 +84,10 @@ class ProductosController extends Controller
             });
         }
 
-        // Para MR, BR, GT, PM: solo productos inventariados en Brilo (proTipo=0)
+        // Para MR, GT, PM: solo productos inventariados en Brilo (proTipo=0)
+        // BR no aplica (las bebidas del menú tienen proTipo!=0 en Brilo — se filtran por receta_sucursal)
         // PL no aplica — platos se muestran todos
-        if (in_array($prefijo, ['MR', 'BR', 'GT', 'PM'])) {
+        if (in_array($prefijo, ['MR', 'GT', 'PM'])) {
             $query->where('es_inventariado', true);
         }
 
