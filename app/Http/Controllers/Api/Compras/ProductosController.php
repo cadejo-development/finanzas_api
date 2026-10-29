@@ -84,9 +84,11 @@ class ProductosController extends Controller
             });
         }
 
-        // Para MR/BR/GT/PM con sucursal_id: filtrar solo los del catálogo de esa sucursal
+        // Para MR con sucursal_id: filtrar solo los del catálogo de esa sucursal
         // (tabla pedido_catalogo_sucursal cargada desde Excel de Enrique — CENTRAL Y DESCENTRAL)
-        if ($prefijo && $prefijo !== 'PL' && $activeSucursalIdPrefijo) {
+        // Solo aplica a MR porque el catálogo de Enrique solo cubre materias primas.
+        // BR, GT y PM no están en ese catálogo, por lo que se muestran todos los activos de esa categoría.
+        if ($prefijo === 'MR' && $activeSucursalIdPrefijo) {
             $query->whereIn('codigo', function ($sub) use ($activeSucursalIdPrefijo) {
                 $sub->select('codigo')
                     ->from('pedido_catalogo_sucursal')
