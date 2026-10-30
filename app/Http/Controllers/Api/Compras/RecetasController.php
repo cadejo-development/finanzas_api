@@ -1258,6 +1258,7 @@ class RecetasController extends Controller
                         'sucursal_nombre' => $nombres->get($s->sucursal_id),
                         'platos_semana'   => $s->platos_semana,
                         'activa'          => $s->activa,
+                        'precio'          => $s->precio !== null ? (float) $s->precio : null,
                     ])->values();
             })(),
             'ingredientes'  => $r->ingredientes->map(fn ($ing) => [

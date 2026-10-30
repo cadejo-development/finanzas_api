@@ -177,6 +177,23 @@ async function main() {
     // 1c. Ingredientes de todas las recetas de Brilo
     log('  Leyendo ingredientes Brilo...');
     const proIds = bRec.map(r => r.proId).join(',');
+
+    // 1c2. Precio por sucursal: tipo de precio de la sucursal → precio del producto para ese tipo
+    // `${proId}:${sucId}` → preMonto
+    const precioSucMap = {};
+    if (proIds.length > 0) {
+      const bPreciosSuc = (await sqlPool.request().query(`
+        SELECT pxp.proId, tps.sucId, pxp.preMonto
+        FROM olComun.dbo.PreciosXProducto pxp WITH(NOLOCK)
+        JOIN olComun.dbo.TiposPrecioXSucursal tps WITH(NOLOCK) ON tps.tprId = pxp.tprId
+          AND tps.tprxsucEliminado = 0
+        WHERE pxp.proId IN (${proIds})
+          AND pxp.preEliminado = 0
+          AND (pxp.preFecHasta IS NULL OR pxp.preFecHasta >= GETDATE())
+      `)).recordset;
+      bPreciosSuc.forEach(r => { precioSucMap[`${r.proId}:${r.sucId}`] = parseFloat(r.preMonto); });
+      log(`  Brilo: ${bPreciosSuc.length} precios por sucursal cargados`);
+    }
     const bIng = (await sqlPool.request().query(`
       SELECT mx.proId AS rec_proId, mx.proIdMaterial AS mat_proId,
              TRIM(mat.proCodigo) AS ing_codigo, mat.proNombre AS ing_nombre,
@@ -660,29 +677,56 @@ async function main() {
     // ── 4f. Sincronizar menú (receta_sucursal) — todas las recetas ──────────────
     // Inserta entradas de menú que Brilo tiene y RDS no tiene aún.
     // Nunca elimina entradas existentes en RDS (las asignaciones locales se respetan).
+    // Actualiza precio si cambió.
     log('\n  [4f] Sincronizando menú (receta_sucursal)...');
     let menuOk = 0;
+    let precioOk = 0;
+
+    // Mapa proId por codigo_origen para resolver precio por sucursal
+    const proIdPorCod = {};
+    bRec.forEach(r => { proIdPorCod[r.codigo] = r.proId; });
+
+    // Precio base por receta_id (desde nuestra tabla recetas)
+    const precioBaseRows = (await pg.query(`SELECT id, codigo_origen, precio FROM recetas WHERE codigo_origen IS NOT NULL`)).rows;
+    const precioBase = {}; // codigo_origen → precio
+    precioBaseRows.forEach(r => { precioBase[r.codigo_origen] = parseFloat(r.precio) || null; });
 
     for (const [cod, sucIds] of Object.entries(menuMap)) {
       if (!esCodReceta(cod)) continue;
-      // Buscar el id en RDS: primero en recién insertadas, luego en las ya existentes
       const recId = nuevaMap[cod] ?? rdsMap[cod]?.id;
       if (!recId) continue;
 
+      const proId = proIdPorCod[cod];
+
       for (const sucId of sucIds) {
+        // Precio: tipo especial de la sucursal → precio del producto; fallback precio base
+        const precioSuc = proId ? (precioSucMap[`${proId}:${sucId}`] ?? null) : null;
+        const precio    = precioSuc ?? precioBase[cod] ?? null;
+
         const key = `${recId}:${sucId}`;
-        if (rsSet.has(key)) continue;
+        if (rsSet.has(key)) {
+          // Actualizar precio si hay valor
+          if (precio !== null) {
+            await pg.query(
+              `UPDATE receta_sucursal SET precio = $1, updated_at = $2
+               WHERE receta_id = $3 AND sucursal_id = $4 AND (precio IS DISTINCT FROM $1)`,
+              [precio, NOW, recId, sucId]
+            ).then(r => { if (r.rowCount > 0) precioOk++; }).catch(() => {});
+          }
+          continue;
+        }
 
         await pg.query(
-          `INSERT INTO receta_sucursal (receta_id, sucursal_id, platos_semana, activa, aud_usuario, created_at, updated_at)
-           VALUES ($1, $2, 0, true, $3, $4, $4)
-           ON CONFLICT (receta_id, sucursal_id) DO NOTHING`,
-          [recId, sucId, AUD, NOW]
+          `INSERT INTO receta_sucursal (receta_id, sucursal_id, platos_semana, activa, precio, aud_usuario, created_at, updated_at)
+           VALUES ($1, $2, 0, true, $3, $4, $5, $5)
+           ON CONFLICT (receta_id, sucursal_id) DO UPDATE SET precio = EXCLUDED.precio, updated_at = EXCLUDED.updated_at`,
+          [recId, sucId, precio, AUD, NOW]
         ).catch(() => {});
         menuOk++;
       }
     }
     log(`  receta_sucursal insertadas: ${menuOk}`);
+    log(`  receta_sucursal precios actualizados: ${precioOk}`);
 
     // ═══════════════════════════════════════════════════════════════
     // FASE 5 — Resumen
@@ -697,6 +741,7 @@ async function main() {
     log(`  Ingredientes nuevos:          ${ingOk}`);
     log(`  sub_receta_id reconectados:   ${fixRes.rowCount}`);
     log(`  Menú (receta_sucursal):       ${menuOk}`);
+    log(`  Precios actualizados:         ${precioOk}`);
     log(`  Total activas en RDS ahora:   ${totalRec}`);
     log('════════════════════════════════════════════════════');
 
