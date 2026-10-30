@@ -279,11 +279,14 @@ class KpiPlantillasController extends Controller
             $query->where('e.sucursal_id', $plantilla->sucursal_id);
         }
         if ($plantilla->departamento_id) {
-            // Incluye empleados del departamento O con departamento NULL (el filtro principal ya es el cargo)
-            $deptId = $plantilla->departamento_id;
-            $query->where(function ($q) use ($deptId) {
-                $q->where('e.departamento_id', $deptId)
-                  ->orWhereNull('e.departamento_id');
+            // Incluye miembros del depto Y el jefe (que vive en departamentos.jefe_empleado_id, no en empleados.departamento_id)
+            $deptId    = $plantilla->departamento_id;
+            $jefeId    = DB::connection('pgsql')->table('departamentos')->where('id', $deptId)->value('jefe_empleado_id');
+            $query->where(function ($q) use ($deptId, $jefeId) {
+                $q->where('e.departamento_id', $deptId);
+                if ($jefeId) {
+                    $q->orWhere('e.id', $jefeId);
+                }
             });
         }
 
