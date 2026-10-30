@@ -279,7 +279,12 @@ class KpiPlantillasController extends Controller
             $query->where('e.sucursal_id', $plantilla->sucursal_id);
         }
         if ($plantilla->departamento_id) {
-            $query->where('e.departamento_id', $plantilla->departamento_id);
+            // Incluye empleados del departamento O con departamento NULL (el filtro principal ya es el cargo)
+            $deptId = $plantilla->departamento_id;
+            $query->where(function ($q) use ($deptId) {
+                $q->where('e.departamento_id', $deptId)
+                  ->orWhereNull('e.departamento_id');
+            });
         }
 
         return response()->json($query->get());
