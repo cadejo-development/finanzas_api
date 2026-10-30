@@ -192,9 +192,11 @@ class KpiResultadosController extends Controller
         $meta      = $this->resolverMeta($plantilla, $data['meta_periodo'] ?? null);
         $bonoBase  = (float) ($plantilla->monto_bono_base ?? $plantilla->monto_objetivo ?? 0);
 
+        $opCumplimiento = $plantilla->operador_cumplimiento ?? '>=';
+
         $out = [];
         foreach ($data['resultados'] as $fila) {
-            $pct     = $meta > 0 ? round((float) $fila['valor_real'] / $meta * 100, 2) : 0;
+            $pct     = $this->calcularPct((float) $fila['valor_real'], $meta, $opCumplimiento);
             $monBono = $this->calcularBono($escala, $pct, $bonoBase);
             $out[] = [
                 'empleado_id'             => $fila['empleado_id'],
@@ -265,13 +267,14 @@ class KpiResultadosController extends Controller
             return response()->json(['error' => 'No se encontró estado "Aprobada" en estados_bonificacion'], 500);
         }
 
-        $aprobadoPorId = Auth::user()?->empleado?->id;
+        $aprobadoPorId  = Auth::user()?->empleado?->id;
+        $opCumplimiento = $plantilla->operador_cumplimiento ?? '>=';
 
         DB::connection('pgsql')->beginTransaction();
         try {
             $creados = [];
             foreach ($data['resultados'] as $fila) {
-                $pct     = $meta > 0 ? round((float) $fila['valor_real'] / $meta * 100, 2) : 0;
+                $pct     = $this->calcularPct((float) $fila['valor_real'], $meta, $opCumplimiento);
                 $monBono = $this->calcularBono($escala, $pct, $montoObj);
 
                 // Insertar/actualizar resultado KPI
@@ -350,6 +353,16 @@ class KpiResultadosController extends Controller
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private function calcularPct(float $valorReal, float $meta, string $op = '>='): float
+    {
+        if ($meta <= 0) return 0.0;
+        // Para KPIs donde menor es mejor (<=), se invierte la proporción
+        if ($op === '<=' && $valorReal > 0) {
+            return round($meta / $valorReal * 100, 2);
+        }
+        return round($valorReal / $meta * 100, 2);
+    }
 
     private function resolverMeta(KpiPlantilla $plantilla, ?float $metaPeriodo): float
     {
