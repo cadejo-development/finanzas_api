@@ -14,9 +14,9 @@ use Illuminate\Support\Facades\Mail;
 
 class KpiPlantillasController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $plantillas = KpiPlantilla::with([
+        $query = KpiPlantilla::with([
                 'sucursal:id,nombre',
                 'departamento:id,nombre',
                 'cargos:id,nombre,codigo',
@@ -24,9 +24,19 @@ class KpiPlantillasController extends Controller
                 'escala',
             ])
             ->withCount('cargos')
-            ->orderBy('nombre')
-            ->get()
-            ->map(fn($p) => $this->format($p));
+            ->orderBy('nombre');
+
+        // Filtro para responsables: solo KPIs donde su cargo es el responsable de medir
+        if ($request->boolean('mis_responsabilidades')) {
+            $user = $request->user();
+            $cargoId = \DB::connection('pgsql')
+                ->table('empleados')
+                ->where('user_id', $user->id)
+                ->value('cargo_id');
+            $query->where('cargo_responsable_id', $cargoId);
+        }
+
+        $plantillas = $query->get()->map(fn($p) => $this->format($p));
 
         return response()->json($plantillas);
     }

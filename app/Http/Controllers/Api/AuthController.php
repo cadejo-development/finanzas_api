@@ -89,11 +89,13 @@ class AuthController extends Controller
             ->table('empleados as e')
             ->leftJoin('departamentos as d', 'd.id', '=', 'e.departamento_id')
             ->where('e.user_id', $user->id)
-            ->select('e.id as emp_id', 'e.sucursal_id as emp_sucursal_id', 'd.codigo as dept_codigo')
+            ->select('e.id as emp_id', 'e.cargo_id as emp_cargo_id', 'e.sucursal_id as emp_sucursal_id', 'd.id as dept_id', 'd.codigo as dept_codigo')
             ->first();
 
         $empleadoId         = $empRow?->emp_id;
+        $empleadoCargoId    = $empRow?->emp_cargo_id;
         $departamentoCodigo = $empRow?->dept_codigo;
+        $departamentoId     = $empRow?->dept_id;
         $sucursalIdEfectivo = $user->sucursal_id ?? $empRow?->emp_sucursal_id;
         if (!$sucursalNombre && $sucursalIdEfectivo && $sucursalIdEfectivo !== $user->sucursal_id) {
             $sucursalNombre = Sucursal::find($sucursalIdEfectivo)?->nombre;
@@ -135,6 +137,8 @@ class AuthController extends Controller
                 }
             })(),
             'empleado_id'           => $empleadoId,
+            'cargo_id'              => $empleadoCargoId ?? null,
+            'departamento_id'       => $departamentoId ?? null,
             'departamento_codigo'   => $departamentoCodigo,
         ];
 
