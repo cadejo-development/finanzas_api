@@ -66,15 +66,16 @@ class KpiPlantillasController extends Controller
             'cargo_ids.*'          => 'integer|exists:pgsql.cargos,id',
             'cargo_pesos'          => 'nullable|array',
             'cargo_pesos.*'        => 'nullable|numeric|min:0|max:100',
-            // Campos monetarios + tiene_bono: solo gerencia_financiera
+            // Monetarios: solo gerencia_financiera
             'tiene_bono'      => $esFinanciero ? 'boolean' : 'prohibited',
             'monto_bono_base' => $esFinanciero ? 'nullable|numeric|min:0' : 'prohibited',
-            'escala'          => $esFinanciero ? 'array' : 'prohibited',
-            'escala.*.porcentaje_desde' => 'required_with:escala|numeric|min:0|max:100',
+            // Escala de rangos: todos pueden definirla
+            'escala'                    => 'array',
+            'escala.*.porcentaje_desde' => 'required_with:escala|numeric|min:0',
             'escala.*.descripcion'      => 'nullable|string|max:100',
             'escala.*.operador'         => 'nullable|in:>=,>,<=,<',
-            'escala.*.tipo'             => 'required_with:escala|in:porcentaje_bono,monto_fijo',
-            'escala.*.valor'            => 'required_with:escala|numeric|min:0',
+            'escala.*.tipo'             => 'nullable|in:porcentaje_bono,monto_fijo,medicion',
+            'escala.*.valor'            => 'nullable|numeric|min:0',
         ]);
 
         DB::connection('pgsql')->beginTransaction();
@@ -107,18 +108,16 @@ class KpiPlantillasController extends Controller
                 $plantilla->cargos()->sync($pivotData);
             }
 
-            if ($esFinanciero) {
-                foreach (($data['escala'] ?? []) as $i => $fila) {
-                    KpiEscalaBonificacion::create([
-                        'kpi_plantilla_id' => $plantilla->id,
-                        'porcentaje_desde' => $fila['porcentaje_desde'],
-                        'descripcion'      => $fila['descripcion'] ?? null,
-                        'operador'         => $fila['operador'] ?? '>=',
-                        'tipo'             => $fila['tipo'],
-                        'valor'            => $fila['valor'],
-                        'orden'            => $i,
-                    ]);
-                }
+            foreach (($data['escala'] ?? []) as $i => $fila) {
+                KpiEscalaBonificacion::create([
+                    'kpi_plantilla_id' => $plantilla->id,
+                    'porcentaje_desde' => $fila['porcentaje_desde'],
+                    'descripcion'      => $fila['descripcion'] ?? null,
+                    'operador'         => $fila['operador'] ?? '>=',
+                    'tipo'             => $esFinanciero ? ($fila['tipo'] ?? 'monto_fijo') : 'medicion',
+                    'valor'            => $esFinanciero ? (float)($fila['valor'] ?? 0) : 0,
+                    'orden'            => $i,
+                ]);
             }
 
             DB::connection('pgsql')->commit();
@@ -160,12 +159,12 @@ class KpiPlantillasController extends Controller
             'cargo_pesos.*'        => 'nullable|numeric|min:0|max:100',
             'tiene_bono'      => $esFinanciero ? 'boolean' : 'prohibited',
             'monto_bono_base' => $esFinanciero ? 'nullable|numeric|min:0' : 'prohibited',
-            'escala'          => $esFinanciero ? 'array' : 'prohibited',
-            'escala.*.porcentaje_desde' => 'required_with:escala|numeric|min:0|max:100',
+            'escala'                    => 'array',
+            'escala.*.porcentaje_desde' => 'required_with:escala|numeric|min:0',
             'escala.*.descripcion'      => 'nullable|string|max:100',
             'escala.*.operador'         => 'nullable|in:>=,>,<=,<',
-            'escala.*.tipo'             => 'required_with:escala|in:porcentaje_bono,monto_fijo',
-            'escala.*.valor'            => 'required_with:escala|numeric|min:0',
+            'escala.*.tipo'             => 'nullable|in:porcentaje_bono,monto_fijo,medicion',
+            'escala.*.valor'            => 'nullable|numeric|min:0',
         ]);
 
         DB::connection('pgsql')->beginTransaction();
@@ -201,19 +200,17 @@ class KpiPlantillasController extends Controller
                 ->all();
             $plantilla->cargos()->sync($pivotData);
 
-            if ($esFinanciero) {
-                $plantilla->escala()->delete();
-                foreach (($data['escala'] ?? []) as $i => $fila) {
-                    KpiEscalaBonificacion::create([
-                        'kpi_plantilla_id' => $plantilla->id,
-                        'porcentaje_desde' => $fila['porcentaje_desde'],
-                        'descripcion'      => $fila['descripcion'] ?? null,
-                        'operador'         => $fila['operador'] ?? '>=',
-                        'tipo'             => $fila['tipo'],
-                        'valor'            => $fila['valor'],
-                        'orden'            => $i,
-                    ]);
-                }
+            $plantilla->escala()->delete();
+            foreach (($data['escala'] ?? []) as $i => $fila) {
+                KpiEscalaBonificacion::create([
+                    'kpi_plantilla_id' => $plantilla->id,
+                    'porcentaje_desde' => $fila['porcentaje_desde'],
+                    'descripcion'      => $fila['descripcion'] ?? null,
+                    'operador'         => $fila['operador'] ?? '>=',
+                    'tipo'             => $esFinanciero ? ($fila['tipo'] ?? 'monto_fijo') : 'medicion',
+                    'valor'            => $esFinanciero ? (float)($fila['valor'] ?? 0) : 0,
+                    'orden'            => $i,
+                ]);
             }
 
             DB::connection('pgsql')->commit();
