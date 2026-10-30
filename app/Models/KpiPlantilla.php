@@ -22,6 +22,7 @@ class KpiPlantilla extends Model
         'monto_objetivo',
         'monto_bono_base',
         'tipo_meta',
+        'operador_cumplimiento',
         'activo',
         'tiene_bono',
         'periodicidad',
