@@ -361,13 +361,29 @@ class KpiResultadosController extends Controller
 
     private function calcularBono(array $escala, float $porcentaje, float $montoObjetivo): float
     {
-        $sorted = collect($escala)->sortByDesc('porcentaje_desde');
+        if (empty($escala)) return 0.0;
+
+        $ops          = collect($escala)->pluck('operador')->filter()->unique();
+        $bajaEsMejor  = $ops->intersect(['<=', '<'])->isNotEmpty();
+        $sorted       = $bajaEsMejor
+            ? collect($escala)->sortBy('porcentaje_desde')
+            : collect($escala)->sortByDesc('porcentaje_desde');
+
         foreach ($sorted as $nivel) {
-            if ($porcentaje >= (float) $nivel['porcentaje_desde']) {
-                if ($nivel['tipo'] === 'porcentaje_bono') {
-                    return round($montoObjetivo * (float) $nivel['valor'] / 100, 2);
+            $op        = $nivel['operador'] ?? '>=';
+            $threshold = (float) ($nivel['porcentaje_desde'] ?? 0);
+            $match     = match ($op) {
+                '>='    => $porcentaje >= $threshold,
+                '>'     => $porcentaje > $threshold,
+                '<='    => $porcentaje <= $threshold,
+                '<'     => $porcentaje < $threshold,
+                default => $porcentaje >= $threshold,
+            };
+            if ($match) {
+                if (($nivel['tipo'] ?? '') === 'porcentaje_bono') {
+                    return round($montoObjetivo * (float) ($nivel['valor'] ?? 0) / 100, 2);
                 }
-                return round((float) $nivel['valor'], 2);
+                return round((float) ($nivel['valor'] ?? 0), 2);
             }
         }
         return 0.0;
@@ -375,9 +391,25 @@ class KpiResultadosController extends Controller
 
     private function nivelEscala(array $escala, float $porcentaje): ?array
     {
-        $sorted = collect($escala)->sortByDesc('porcentaje_desde');
+        if (empty($escala)) return null;
+
+        $ops         = collect($escala)->pluck('operador')->filter()->unique();
+        $bajaEsMejor = $ops->intersect(['<=', '<'])->isNotEmpty();
+        $sorted      = $bajaEsMejor
+            ? collect($escala)->sortBy('porcentaje_desde')
+            : collect($escala)->sortByDesc('porcentaje_desde');
+
         foreach ($sorted as $nivel) {
-            if ($porcentaje >= (float) $nivel['porcentaje_desde']) {
+            $op        = $nivel['operador'] ?? '>=';
+            $threshold = (float) ($nivel['porcentaje_desde'] ?? 0);
+            $match     = match ($op) {
+                '>='    => $porcentaje >= $threshold,
+                '>'     => $porcentaje > $threshold,
+                '<='    => $porcentaje <= $threshold,
+                '<'     => $porcentaje < $threshold,
+                default => $porcentaje >= $threshold,
+            };
+            if ($match) {
                 return (array) $nivel;
             }
         }
