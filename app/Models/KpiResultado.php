@@ -19,6 +19,8 @@ class KpiResultado extends Model
         'meta_periodo',
         'monto_bono',
         'bonificacion_id',
+        'comentario',
+        'archivo_adjunto',
         'aud_usuario',
     ];
 

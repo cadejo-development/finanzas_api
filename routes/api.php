@@ -927,9 +927,11 @@ Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh
     Route::get('kpi-plantillas/{id}/empleados',     [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'empleadosAfectados']);
     Route::delete('kpi-plantillas/{id}',            [\App\Http\Controllers\Api\RRHH\KpiPlantillasController::class, 'destroy']);
     Route::get('kpi-resultados/resumen',            [\App\Http\Controllers\Api\RRHH\KpiResultadosController::class, 'resumen']);
+    Route::get('kpi-resultados/pendientes',         [\App\Http\Controllers\Api\RRHH\KpiTableroController::class, 'pendientes']);
     Route::get('kpi-resultados',                    [\App\Http\Controllers\Api\RRHH\KpiResultadosController::class, 'index']);
     Route::post('kpi-resultados/preview',           [\App\Http\Controllers\Api\RRHH\KpiResultadosController::class, 'preview']);
     Route::post('kpi-resultados/aplicar',           [\App\Http\Controllers\Api\RRHH\KpiResultadosController::class, 'aplicar']);
+    Route::get('kpi-tablero',                       [\App\Http\Controllers\Api\RRHH\KpiTableroController::class, 'index']);
 });
 
 // ─── CADEJO VENTAS ───────────────────────────────────────────────────────────
