@@ -149,8 +149,12 @@ class KpiTableroController extends Controller
         // Empleados de cada KPI
         $empleadosPorKpi = $this->empleadosPorKpi($plantillas);
 
-        // Calcular fecha límite: último día hábil del mes siguiente
-        $fechaLimite = date('Y-m-d', strtotime('last day of ' . $periodo));
+        // Fecha límite: último día del período + dias_limite_ingreso (si está configurado)
+        $diasExtra   = $plantillas->max('dias_limite_ingreso') ?? 0;
+        $fechaFin    = date('Y-m-d', strtotime('last day of ' . $periodo));
+        $fechaLimite = $diasExtra > 0
+            ? date('Y-m-d', strtotime($fechaFin . ' +' . $diasExtra . ' days'))
+            : $fechaFin;
         $diasQuedan  = max(0, (int) ceil((strtotime($fechaLimite) - time()) / 86400));
 
         // Contar totales
@@ -206,6 +210,7 @@ class KpiTableroController extends Controller
                 'operador_cumplimiento' => $p->operador_cumplimiento ?? '>=',
                 'escala'           => $p->escala->map(fn($e) => [
                     'porcentaje_desde' => (float) $e->porcentaje_desde,
+                    'valor'            => (float) $e->valor,
                     'descripcion'      => $e->descripcion,
                     'operador'         => $e->operador ?? '>=',
                 ])->values(),

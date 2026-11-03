@@ -196,14 +196,15 @@ class KpiResultadosController extends Controller
 
         $out = [];
         foreach ($data['resultados'] as $fila) {
-            $pct     = $this->calcularPct((float) $fila['valor_real'], $meta, $opCumplimiento);
-            $monBono = $this->calcularBono($escala, $pct, $bonoBase);
+            $valorReal = (float) $fila['valor_real'];
+            $pct       = $this->calcularPct($valorReal, $meta, $opCumplimiento);
+            $monBono   = $this->calcularBono($escala, $valorReal, $bonoBase);
             $out[] = [
                 'empleado_id'             => $fila['empleado_id'],
                 'porcentaje_cumplimiento' => $pct,
-                'valor_real'              => (float) $fila['valor_real'],
+                'valor_real'              => $valorReal,
                 'monto_bono'              => $monBono,
-                'nivel_escala'            => $this->nivelEscala($escala, $pct),
+                'nivel_escala'            => $this->nivelEscala($escala, $valorReal),
             ];
         }
 
@@ -274,8 +275,9 @@ class KpiResultadosController extends Controller
         try {
             $creados = [];
             foreach ($data['resultados'] as $fila) {
-                $pct     = $this->calcularPct((float) $fila['valor_real'], $meta, $opCumplimiento);
-                $monBono = $this->calcularBono($escala, $pct, $montoObj);
+                $valorReal = (float) $fila['valor_real'];
+                $pct     = $this->calcularPct($valorReal, $meta, $opCumplimiento);
+                $monBono = $this->calcularBono($escala, $valorReal, $montoObj);
 
                 // Insertar/actualizar resultado KPI
                 $resultado = KpiResultado::updateOrCreate(
@@ -296,9 +298,9 @@ class KpiResultadosController extends Controller
                 // Crear/actualizar bonificación aprobada si el bono > 0
                 $bonId = null;
                 if ($monBono > 0) {
-                    $nivel = $this->nivelEscala($escala, $pct);
+                    $nivel = $this->nivelEscala($escala, $valorReal);
                     $desc  = "KPI: {$plantilla->nombre} · Período {$data['periodo']} · {$pct}% cumplimiento" .
-                             ($nivel ? " (nivel ≥{$nivel['porcentaje_desde']}%)" : '');
+                             ($nivel ? " (tramo {$nivel['operador']}{$nivel['porcentaje_desde']})" : '');
 
                     if ($resultado->bonificacion_id) {
                         // Actualizar si ya existe
@@ -372,13 +374,15 @@ class KpiResultadosController extends Controller
         return (float) ($plantilla->monto_objetivo ?? 0);
     }
 
-    private function calcularBono(array $escala, float $porcentaje, float $montoObjetivo): float
+    // Compara el valor real directamente contra los umbrales de la escala.
+    // La escala define tramos por valor absoluto (ej. "≥ 9.21 → 100 pts").
+    private function calcularBono(array $escala, float $valorReal, float $montoObjetivo): float
     {
         if (empty($escala)) return 0.0;
 
-        $ops          = collect($escala)->pluck('operador')->filter()->unique();
-        $bajaEsMejor  = $ops->intersect(['<=', '<'])->isNotEmpty();
-        $sorted       = $bajaEsMejor
+        $ops         = collect($escala)->pluck('operador')->filter()->unique();
+        $bajaEsMejor = $ops->intersect(['<=', '<'])->isNotEmpty();
+        $sorted      = $bajaEsMejor
             ? collect($escala)->sortBy('porcentaje_desde')
             : collect($escala)->sortByDesc('porcentaje_desde');
 
@@ -386,11 +390,11 @@ class KpiResultadosController extends Controller
             $op        = $nivel['operador'] ?? '>=';
             $threshold = (float) ($nivel['porcentaje_desde'] ?? 0);
             $match     = match ($op) {
-                '>='    => $porcentaje >= $threshold,
-                '>'     => $porcentaje > $threshold,
-                '<='    => $porcentaje <= $threshold,
-                '<'     => $porcentaje < $threshold,
-                default => $porcentaje >= $threshold,
+                '>='    => $valorReal >= $threshold,
+                '>'     => $valorReal > $threshold,
+                '<='    => $valorReal <= $threshold,
+                '<'     => $valorReal < $threshold,
+                default => $valorReal >= $threshold,
             };
             if ($match) {
                 if (($nivel['tipo'] ?? '') === 'porcentaje_bono') {
@@ -402,7 +406,7 @@ class KpiResultadosController extends Controller
         return 0.0;
     }
 
-    private function nivelEscala(array $escala, float $porcentaje): ?array
+    private function nivelEscala(array $escala, float $valorReal): ?array
     {
         if (empty($escala)) return null;
 
@@ -416,11 +420,11 @@ class KpiResultadosController extends Controller
             $op        = $nivel['operador'] ?? '>=';
             $threshold = (float) ($nivel['porcentaje_desde'] ?? 0);
             $match     = match ($op) {
-                '>='    => $porcentaje >= $threshold,
-                '>'     => $porcentaje > $threshold,
-                '<='    => $porcentaje <= $threshold,
-                '<'     => $porcentaje < $threshold,
-                default => $porcentaje >= $threshold,
+                '>='    => $valorReal >= $threshold,
+                '>'     => $valorReal > $threshold,
+                '<='    => $valorReal <= $threshold,
+                '<'     => $valorReal < $threshold,
+                default => $valorReal >= $threshold,
             };
             if ($match) {
                 return (array) $nivel;

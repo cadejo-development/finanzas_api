@@ -72,6 +72,7 @@ class KpiPlantillasController extends Controller
             'cargo_responsable_id' => 'nullable|integer|exists:pgsql.cargos,id',
             'vigencia_desde'       => 'nullable|date',
             'vigencia_hasta'       => 'nullable|date|after_or_equal:vigencia_desde',
+            'dias_limite_ingreso'  => 'nullable|integer|min:0|max:31',
             'cargo_ids'            => 'array',
             'cargo_ids.*'          => 'integer|exists:pgsql.cargos,id',
             'cargo_pesos'          => 'nullable|array',
@@ -115,6 +116,7 @@ class KpiPlantillasController extends Controller
                 'cargo_responsable_id' => $data['cargo_responsable_id'] ?? null,
                 'vigencia_desde'       => $data['vigencia_desde'] ?? null,
                 'vigencia_hasta'       => $data['vigencia_hasta'] ?? null,
+                'dias_limite_ingreso'  => $data['dias_limite_ingreso'] ?? null,
                 'aud_usuario'          => $request->user()?->email ?? 'sistema',
             ]);
 
@@ -172,6 +174,7 @@ class KpiPlantillasController extends Controller
             'cargo_responsable_id' => 'nullable|integer|exists:pgsql.cargos,id',
             'vigencia_desde'       => 'nullable|date',
             'vigencia_hasta'       => 'nullable|date|after_or_equal:vigencia_desde',
+            'dias_limite_ingreso'  => 'nullable|integer|min:0|max:31',
             'cargo_ids'            => 'array',
             'cargo_ids.*'          => 'integer|exists:pgsql.cargos,id',
             'cargo_pesos'          => 'nullable|array',
@@ -210,6 +213,7 @@ class KpiPlantillasController extends Controller
                 'cargo_responsable_id' => $data['cargo_responsable_id'] ?? null,
                 'vigencia_desde'       => $data['vigencia_desde'] ?? null,
                 'vigencia_hasta'       => $data['vigencia_hasta'] ?? null,
+                'dias_limite_ingreso'  => $data['dias_limite_ingreso'] ?? null,
                 'aud_usuario'          => $request->user()?->email ?? 'sistema',
             ];
 
@@ -458,6 +462,7 @@ class KpiPlantillasController extends Controller
             'cargo_responsable_nombre' => $p->cargoResponsable?->nombre,
             'vigencia_desde'           => $p->vigencia_desde?->format('Y-m-d'),
             'vigencia_hasta'           => $p->vigencia_hasta?->format('Y-m-d'),
+            'dias_limite_ingreso'      => $p->dias_limite_ingreso,
             'cargos_count'             => $p->cargos_count ?? $p->cargos->count(),
             'cargos'                   => $p->cargos->map(fn($c) => [
                                              'id'     => $c->id,

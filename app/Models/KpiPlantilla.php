@@ -32,6 +32,7 @@ class KpiPlantilla extends Model
         'cargo_responsable_id',
         'vigencia_desde',
         'vigencia_hasta',
+        'dias_limite_ingreso',
         'aud_usuario',
     ];
 
