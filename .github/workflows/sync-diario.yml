@@ -37,25 +37,38 @@ jobs:
 
       - name: Conectar VPN CLIN
         run: |
-          sudo openfortivpn ${{ secrets.VPN_HOST }}:${{ secrets.VPN_PORT }} \
-            --username="${{ secrets.VPN_USERNAME }}" \
-            --password="${{ secrets.VPN_PASSWORD }}" \
-            --trusted-cert="${{ secrets.VPN_TRUSTED_CERT }}" \
-            --no-routes \
-            2>&1 | tee /tmp/vpn.log &
-          VPN_PID=$!
+          conectar_vpn() {
+            sudo openfortivpn ${{ secrets.VPN_HOST }}:${{ secrets.VPN_PORT }} \
+              --username="${{ secrets.VPN_USERNAME }}" \
+              --password="${{ secrets.VPN_PASSWORD }}" \
+              --trusted-cert="${{ secrets.VPN_TRUSTED_CERT }}" \
+              --no-routes \
+              --pppd-accept-remote \
+              2>&1 | tee /tmp/vpn.log &
+            echo $!
+          }
+
+          VPN_PID=$(conectar_vpn)
           echo "VPN_PID=$VPN_PID" >> $GITHUB_ENV
 
-          for i in $(seq 1 30); do
+          # Esperar hasta 60s a que ppp0 tenga IP asignada
+          for i in $(seq 1 60); do
             if ip addr show ppp0 2>/dev/null | grep -q 'inet '; then
               echo "✓ VPN conectada con IP (en ${i}s)"
               break
+            fi
+            # Si el proceso murió, reintentarlo una vez (sesión previa puede estar activa)
+            if ! kill -0 $VPN_PID 2>/dev/null; then
+              echo "⚠ VPN process died, reintentando en 5s..."
+              sleep 5
+              VPN_PID=$(conectar_vpn)
+              echo "VPN_PID=$VPN_PID" >> $GITHUB_ENV
             fi
             sleep 1
           done
 
           if ! ip addr show ppp0 2>/dev/null | grep -q 'inet '; then
-            echo "✗ VPN no conectó en 30s"
+            echo "✗ VPN no conectó en 60s"
             cat /tmp/vpn.log
             exit 1
           fi
