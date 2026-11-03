@@ -20,4 +20,32 @@ class Vacacion extends Model
         'fecha_fin'    => 'date',
         'dias'         => 'decimal:1',
     ];
+
+    protected static function booted(): void
+    {
+        // Vacación creada directamente como aprobada (ej: admin aprueba para un subordinado)
+        static::created(function (self $v) {
+            if ($v->estado === 'aprobado') {
+                self::ajustarSaldo($v->empleado_id, (float) $v->dias);
+            }
+        });
+
+        // Transición a aprobado desde cualquier otro estado, por cualquier código
+        static::updated(function (self $v) {
+            if ($v->wasChanged('estado')
+                && $v->estado === 'aprobado'
+                && $v->getOriginal('estado') !== 'aprobado') {
+                self::ajustarSaldo($v->empleado_id, (float) $v->dias);
+            }
+        });
+    }
+
+    private static function ajustarSaldo(int $empleadoId, float $dias): void
+    {
+        $saldo = SaldoVacaciones::firstOrCreate(
+            ['empleado_id' => $empleadoId, 'anio' => now()->year],
+            ['dias_disponibles' => 15, 'dias_usados' => 0, 'dias_acumulados' => 0]
+        );
+        $saldo->increment('dias_usados', $dias);
+    }
 }

@@ -61,10 +61,6 @@ class VacacionesController extends RRHHBaseController
                 'aud_usuario' => Auth::user()->email,
             ]));
 
-            if ($estadoInicial === 'aprobado') {
-                $this->descontarSaldo($vacacion->empleado_id, $vacacion->dias);
-            }
-
             if ($this->debeNotificar($validated['empleado_id'])) {
                 $detalles = array_filter([
                     'Desde' => $validated['fecha_inicio'],
@@ -116,11 +112,6 @@ class VacacionesController extends RRHHBaseController
 
             $estadoAnterior = $vacacion->estado;
             $vacacion->update(array_merge($validated, ['aud_usuario' => Auth::user()->email]));
-
-            // Descontar saldo solo en la transición pendiente→aprobado
-            if (($validated['estado'] ?? null) === 'aprobado' && $estadoAnterior !== 'aprobado') {
-                $this->descontarSaldo($vacacion->empleado_id, $vacacion->dias);
-            }
 
             return response()->json(['success' => true, 'data' => $vacacion]);
         });
@@ -180,13 +171,4 @@ class VacacionesController extends RRHHBaseController
         return response()->json(['success' => true, 'data' => $result]);
     }
 
-    private function descontarSaldo(int $empleadoId, float $dias): void
-    {
-        $anio = now()->year;
-        $saldo = SaldoVacaciones::firstOrCreate(
-            ['empleado_id' => $empleadoId, 'anio' => $anio],
-            ['dias_disponibles' => 15, 'dias_usados' => 0, 'dias_acumulados' => 0]
-        );
-        $saldo->increment('dias_usados', $dias);
-    }
 }
