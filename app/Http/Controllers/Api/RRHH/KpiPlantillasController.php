@@ -136,7 +136,7 @@ class KpiPlantillasController extends Controller
                     'descripcion'      => $fila['descripcion'] ?? null,
                     'operador'         => $fila['operador'] ?? '>=',
                     'tipo'             => $esFinanciero ? ($fila['tipo'] ?? 'monto_fijo') : 'medicion',
-                    'valor'            => $esFinanciero ? (float)($fila['valor'] ?? 0) : 0,
+                    'valor'            => (float)($fila['valor'] ?? 0),
                     'orden'            => $i,
                 ]);
             }
@@ -239,7 +239,7 @@ class KpiPlantillasController extends Controller
                     'descripcion'      => $fila['descripcion'] ?? null,
                     'operador'         => $fila['operador'] ?? '>=',
                     'tipo'             => $esFinanciero ? ($fila['tipo'] ?? 'monto_fijo') : 'medicion',
-                    'valor'            => $esFinanciero ? (float)($fila['valor'] ?? 0) : 0,
+                    'valor'            => (float)($fila['valor'] ?? 0),
                     'orden'            => $i,
                 ]);
             }
