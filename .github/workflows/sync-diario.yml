@@ -37,6 +37,9 @@ jobs:
 
       - name: Conectar VPN CLIN
         run: |
+          # Desactivar LCP echo para evitar desconexión por "No response to echo-requests"
+          echo "lcp-echo-interval 0" | sudo tee -a /etc/ppp/options
+
           conectar_vpn() {
             sudo openfortivpn ${{ secrets.VPN_HOST }}:${{ secrets.VPN_PORT }} \
               --username="${{ secrets.VPN_USERNAME }}" \
@@ -51,8 +54,8 @@ jobs:
           VPN_PID=$(conectar_vpn)
           echo "VPN_PID=$VPN_PID" >> $GITHUB_ENV
 
-          # Esperar hasta 60s a que ppp0 tenga IP asignada
-          for i in $(seq 1 60); do
+          # Esperar hasta 90s a que ppp0 tenga IP asignada
+          for i in $(seq 1 90); do
             if ip addr show ppp0 2>/dev/null | grep -q 'inet '; then
               echo "✓ VPN conectada con IP (en ${i}s)"
               break
@@ -68,7 +71,7 @@ jobs:
           done
 
           if ! ip addr show ppp0 2>/dev/null | grep -q 'inet '; then
-            echo "✗ VPN no conectó en 60s"
+            echo "✗ VPN no conectó en 90s"
             cat /tmp/vpn.log
             exit 1
           fi
