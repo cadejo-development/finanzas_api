@@ -77,12 +77,13 @@ jobs:
             sudo ip route add 10.0.0.0/8 dev ppp0 2>/dev/null || true
             echo "✓ Ruta 10.0.0.0/8 agregada"
 
-            if ping -c 3 -W 5 $BRILO_IP > /dev/null 2>&1; then
-              echo "✓ VPN OK — trafico verificado a $BRILO_IP (intento $attempt)"
+            # Verificar TCP al puerto SQL Server (ICMP puede estar bloqueado)
+            if timeout 10 bash -c "echo > /dev/tcp/$BRILO_IP/2033" 2>/dev/null; then
+              echo "✓ VPN OK — TCP $BRILO_IP:2033 accesible (intento $attempt)"
               VPN_CONECTADA=true
               break
             else
-              echo "⚠ Intento $attempt: tunel UP pero sin trafico a $BRILO_IP, reintentando..."
+              echo "⚠ Intento $attempt: tunel UP pero TCP $BRILO_IP:2033 no responde, reintentando..."
             fi
           done
 
