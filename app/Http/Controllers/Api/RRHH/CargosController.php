@@ -40,9 +40,8 @@ class CargosController extends Controller
                             $q->select('id', 'cargo_id', 'departamento_id', 'activo')
                               ->with('departamento:id,nombre'),
                         'empleados' => fn($q) =>
-                            $q->select('id', 'cargo_id', 'departamento_id')
-                              ->where('activo', true)
-                              ->when($dptoId, fn($q) => $q->where('departamento_id', $dptoId)),
+                            $q->select('id', 'cargo_id', 'departamento_id', 'plaza_id')
+                              ->where('activo', true),
                     ])
                     ->withCount(['empleados as total_empleados' => fn($q) =>
                         $q->where('activo', true)
@@ -62,11 +61,12 @@ class CargosController extends Controller
                             ->whereNotNull('departamento_id')
                             ->groupBy('departamento_id')
                             ->map(function ($dptoPlazas, $did) use ($empleados) {
+                                $plazaIdsActivas = $dptoPlazas->where('activo', true)->pluck('id');
                                 return [
                                     'id'              => $did,
                                     'nombre'          => $dptoPlazas->first()->departamento?->nombre,
-                                    'total_plazas'    => $dptoPlazas->where('activo', true)->count(),
-                                    'total_empleados' => $empleados->where('departamento_id', $did)->count(),
+                                    'total_plazas'    => $plazaIdsActivas->count(),
+                                    'total_empleados' => $empleados->whereIn('plaza_id', $plazaIdsActivas)->count(),
                                 ];
                             })
                             ->filter(fn($d) => $d['nombre'])
