@@ -372,6 +372,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
         Route::get('lotes/{id}/reporte',       [BrewLotesController::class, 'reporte']);
 
         // Etapas del wizard
+        Route::patch('lotes/{id}/num-cocciones', [BrewLotesController::class, 'cambiarNumCocciones']);
         Route::put('lotes/{id}/coccion',       [BrewLotesController::class, 'guardarCoccion']);
         Route::put('lotes/{id}/filtracion',    [BrewLotesController::class, 'guardarFiltracion']);
         Route::put('lotes/{id}/fermentacion',  [BrewLotesController::class, 'guardarFermentacion']);

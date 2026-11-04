@@ -305,6 +305,33 @@ class BrewLotesController extends Controller
         return $lote->load(['receta:id,nombre,estilo,codigo']);
     }
 
+    // ─── Gestión de número de cocciones ─────────────────────────────────────
+
+    public function cambiarNumCocciones(Request $request, $id)
+    {
+        $data = $request->validate(['action' => 'required|in:add,remove']);
+        $lote = BrewLote::with(['receta.maceradoPasos', 'receta.boilPasos', 'maceradoPasos', 'boilPasos'])->findOrFail($id);
+        $actual = (int) ($lote->num_cocciones ?? 1);
+
+        if ($data['action'] === 'add') {
+            if ($actual >= 10) return response()->json(['message' => 'Máximo 10 cocciones.'], 422);
+            $nuevo = $actual + 1;
+            $lote->update(['num_cocciones' => $nuevo]);
+            $lote->num_cocciones = $nuevo;
+            $this->syncPasosDesdeReceta($lote);
+        } else {
+            if ($actual <= 1) return response()->json(['message' => 'El lote debe tener al menos 1 cocción.'], 422);
+            DB::connection('compras')->transaction(function () use ($lote, $actual) {
+                $lote->cocciones()->where('numero', $actual)->delete();
+                $lote->maceradoPasos()->where('coccion_numero', $actual)->delete();
+                $lote->boilPasos()->where('coccion_numero', $actual)->delete();
+                $lote->update(['num_cocciones' => $actual - 1]);
+            });
+        }
+
+        return $this->show($id);
+    }
+
     // ─── Etapas del wizard ───────────────────────────────────────────────────
 
     public function guardarCoccion(Request $request, $id)
