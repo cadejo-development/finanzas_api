@@ -38,41 +38,30 @@ class CargosController extends Controller
         $cargos = $q->with([
                         'plazas' => fn($q) =>
                             $q->select('id', 'cargo_id', 'departamento_id', 'activo')
-                              ->with('departamento:id,nombre'),
-                        'empleados' => fn($q) =>
-                            $q->select('id', 'cargo_id', 'departamento_id', 'plaza_id')
-                              ->where('activo', true),
-                    ])
-                    ->withCount(['empleados as total_empleados' => fn($q) =>
-                        $q->where('activo', true)
-                          ->when($dptoId, fn($q) => $q->where('departamento_id', $dptoId))
-                    ])
-                    ->withCount(['plazas as total_plazas' => fn($q) =>
-                        $q->where('activo', true)
-                          ->when($dptoId, fn($q) => $q->where('departamento_id', $dptoId))
+                              ->with('departamento:id,nombre')
+                              ->withExists(['empleado as ocupada' => fn($q) => $q->where('activo', true)]),
                     ])
                     ->orderBy('nombre')
                     ->get()
                     ->map(function ($c) use ($dptoId) {
-                        $plazas    = $dptoId ? $c->plazas->where('departamento_id', $dptoId)    : $c->plazas;
-                        $empleados = $dptoId ? $c->empleados->where('departamento_id', $dptoId) : $c->empleados;
+                        $plazas = $dptoId ? $c->plazas->where('departamento_id', $dptoId) : $c->plazas;
 
                         $c->departamentos = $plazas
                             ->whereNotNull('departamento_id')
                             ->groupBy('departamento_id')
-                            ->map(function ($dptoPlazas, $did) use ($empleados) {
-                                $plazaIdsActivas = $dptoPlazas->where('activo', true)->pluck('id');
+                            ->map(function ($dptoPlazas, $did) {
+                                $activas = $dptoPlazas->where('activo', true);
                                 return [
                                     'id'              => $did,
                                     'nombre'          => $dptoPlazas->first()->departamento?->nombre,
-                                    'total_plazas'    => $plazaIdsActivas->count(),
-                                    'total_empleados' => $empleados->whereIn('plaza_id', $plazaIdsActivas)->count(),
+                                    'total_plazas'    => $activas->count(),
+                                    'total_empleados' => $activas->where('ocupada', true)->count(),
                                 ];
                             })
                             ->filter(fn($d) => $d['nombre'])
                             ->values();
 
-                        unset($c->plazas, $c->empleados);
+                        unset($c->plazas);
                         return $c;
                     });
 
