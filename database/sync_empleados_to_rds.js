@@ -494,16 +494,29 @@ async function syncExpedientes(mssqlPool, pg, pgRrhh, codigoToId) {
 
     // ── Datos personales ──────────────────────────────────────────────────────
     const dp = dpMap[empId];
-    if (dp) {
-      const updates = {};
-      const fechaNac  = fmtDate(emp.empFechaNacimiento);
-      const genero    = emp.empSexo === 'M' ? 'masculino' : emp.empSexo === 'F' ? 'femenino' : null;
-      const estadoCiv = ESTADO_CIVIL[emp.empEstadoCivil] ?? null;
-      const lugarNac  = clean(emp.empLugarNacimiento, 200);
-      const grupoSang = clean(emp.empTipoSangre, 10);
-      const profesion = clean(emp.empProfesionDUI, 150);
-      const domBrilo  = [emp.resMuni, emp.resDpto].filter(Boolean).join(', ') || null;
+    const fechaNac  = fmtDate(emp.empFechaNacimiento);
+    const genero    = emp.empSexo === 'M' ? 'masculino' : emp.empSexo === 'F' ? 'femenino' : null;
+    const estadoCiv = ESTADO_CIVIL[emp.empEstadoCivil] ?? null;
+    const lugarNac  = clean(emp.empLugarNacimiento, 200);
+    const grupoSang = clean(emp.empTipoSangre, 10);
+    const profesion = clean(emp.empProfesionDUI, 150);
+    const domBrilo  = [emp.resMuni, emp.resDpto].filter(Boolean).join(', ') || null;
 
+    if (!dp) {
+      // No existe fila → INSERT con todo lo que traiga Brilo
+      if (!DRY_RUN) await pgRrhh.query(
+        `INSERT INTO expediente_datos_personales
+           (empleado_id, fecha_nacimiento, genero, estado_civil, lugar_nacimiento,
+            grupo_sanguineo, profesion, domicilio, nacionalidad, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'salvadoreña',$9,$9)
+         ON CONFLICT (empleado_id) DO NOTHING`,
+        [empId, fechaNac || null, genero, estadoCiv, lugarNac,
+         grupoSang, profesion, domBrilo, ahora]
+      );
+      dpActualiz++;
+    } else {
+      // Ya existe → solo rellenar campos vacíos (fill-only)
+      const updates = {};
       if (fechaNac  && !dp.fecha_nacimiento)        updates.fecha_nacimiento = fechaNac;
       if (genero    && !dp.genero?.trim())           updates.genero = genero;
       if (estadoCiv && !dp.estado_civil?.trim())     updates.estado_civil = estadoCiv;
