@@ -56,8 +56,6 @@ class KpiPlantillasController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $esFinanciero = $request->user()?->hasRole('gerencia_financiera') ?? false;
-
         $data = $request->validate([
             'nombre'               => 'required|string|max:150',
             'descripcion'          => 'nullable|string|max:1000',
@@ -77,15 +75,12 @@ class KpiPlantillasController extends Controller
             'cargo_ids.*'          => 'integer|exists:pgsql.cargos,id',
             'cargo_pesos'          => 'nullable|array',
             'cargo_pesos.*'        => 'nullable|numeric|min:0|max:100',
-            // Dirección de cumplimiento (todos pueden definirla)
             'operador_cumplimiento' => 'nullable|in:>=,<=',
             'tipo_evaluacion'       => 'nullable|in:comparar_meta,contar_periodos,sumar_logros',
             'evidencia_tipo'        => 'nullable|in:comentario_opcional,adjunto_obligatorio,no_requiere',
             'fuente_informacion'    => 'nullable|string|max:500',
-            // Monetarios: solo gerencia_financiera
-            'tiene_bono'      => $esFinanciero ? 'boolean' : 'prohibited',
-            'monto_bono_base' => $esFinanciero ? 'nullable|numeric|min:0' : 'prohibited',
-            // Escala de rangos: todos pueden definirla
+            'tiene_bono'            => 'boolean',
+            'monto_bono_base'       => 'nullable|numeric|min:0',
             'escala'                    => 'array',
             'escala.*.porcentaje_desde' => 'required_with:escala|numeric|min:0',
             'escala.*.descripcion'      => 'nullable|string|max:100',
@@ -104,14 +99,14 @@ class KpiPlantillasController extends Controller
                 'departamento_id'      => $data['departamento_id'] ?? null,
                 'unidad_medida'        => $data['unidad_medida'],
                 'monto_objetivo'       => $data['monto_objetivo'] ?? null,
-                'monto_bono_base'         => $esFinanciero && isset($data['monto_bono_base']) ? (float) $data['monto_bono_base'] : null,
-                'operador_cumplimiento'   => $data['operador_cumplimiento'] ?? '>=',
+                'monto_bono_base'      => isset($data['monto_bono_base']) ? (float) $data['monto_bono_base'] : null,
+                'operador_cumplimiento' => $data['operador_cumplimiento'] ?? '>=',
                 'tipo_evaluacion'      => $data['tipo_evaluacion'] ?? 'comparar_meta',
                 'evidencia_tipo'       => $data['evidencia_tipo'] ?? 'comentario_opcional',
                 'fuente_informacion'   => $data['fuente_informacion'] ?? null,
                 'tipo_meta'            => $data['tipo_meta'] ?? 'fijo',
                 'activo'               => $data['activo'] ?? true,
-                'tiene_bono'           => $esFinanciero ? ($data['tiene_bono'] ?? false) : false,
+                'tiene_bono'           => $data['tiene_bono'] ?? false,
                 'periodicidad'         => $data['periodicidad'] ?? 'mensual',
                 'cargo_responsable_id' => $data['cargo_responsable_id'] ?? null,
                 'vigencia_desde'       => $data['vigencia_desde'] ?? null,
@@ -135,7 +130,7 @@ class KpiPlantillasController extends Controller
                     'porcentaje_desde' => $fila['porcentaje_desde'],
                     'descripcion'      => $fila['descripcion'] ?? null,
                     'operador'         => $fila['operador'] ?? '>=',
-                    'tipo'             => $esFinanciero ? ($fila['tipo'] ?? 'monto_fijo') : 'medicion',
+                    'tipo'             => $fila['tipo'] ?? 'medicion',
                     'valor'            => (float)($fila['valor'] ?? 0),
                     'orden'            => $i,
                 ]);
@@ -157,8 +152,7 @@ class KpiPlantillasController extends Controller
 
     public function update(Request $request, int $id): JsonResponse
     {
-        $plantilla    = KpiPlantilla::findOrFail($id);
-        $esFinanciero = $request->user()?->hasRole('gerencia_financiera') ?? false;
+        $plantilla = KpiPlantilla::findOrFail($id);
 
         $data = $request->validate([
             'nombre'               => 'required|string|max:150',
@@ -183,8 +177,8 @@ class KpiPlantillasController extends Controller
             'tipo_evaluacion'       => 'nullable|in:comparar_meta,contar_periodos,sumar_logros',
             'evidencia_tipo'        => 'nullable|in:comentario_opcional,adjunto_obligatorio,no_requiere',
             'fuente_informacion'    => 'nullable|string|max:500',
-            'tiene_bono'      => $esFinanciero ? 'boolean' : 'prohibited',
-            'monto_bono_base' => $esFinanciero ? 'nullable|numeric|min:0' : 'prohibited',
+            'tiene_bono'            => 'boolean',
+            'monto_bono_base'       => 'nullable|numeric|min:0',
             'escala'                    => 'array',
             'escala.*.porcentaje_desde' => 'required_with:escala|numeric|min:0',
             'escala.*.descripcion'      => 'nullable|string|max:100',
@@ -215,12 +209,9 @@ class KpiPlantillasController extends Controller
                 'vigencia_hasta'       => $data['vigencia_hasta'] ?? null,
                 'dias_limite_ingreso'  => $data['dias_limite_ingreso'] ?? null,
                 'aud_usuario'          => $request->user()?->email ?? 'sistema',
+                'tiene_bono'           => $data['tiene_bono'] ?? $plantilla->tiene_bono,
+                'monto_bono_base'      => isset($data['monto_bono_base']) ? (float) $data['monto_bono_base'] : null,
             ];
-
-            if ($esFinanciero) {
-                $updateData['tiene_bono']      = $data['tiene_bono'] ?? $plantilla->tiene_bono;
-                $updateData['monto_bono_base'] = isset($data['monto_bono_base']) ? (float) $data['monto_bono_base'] : null;
-            }
 
             $plantilla->update($updateData);
 
@@ -238,7 +229,7 @@ class KpiPlantillasController extends Controller
                     'porcentaje_desde' => $fila['porcentaje_desde'],
                     'descripcion'      => $fila['descripcion'] ?? null,
                     'operador'         => $fila['operador'] ?? '>=',
-                    'tipo'             => $esFinanciero ? ($fila['tipo'] ?? 'monto_fijo') : 'medicion',
+                    'tipo'             => $fila['tipo'] ?? 'medicion',
                     'valor'            => (float)($fila['valor'] ?? 0),
                     'orden'            => $i,
                 ]);
