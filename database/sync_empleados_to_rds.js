@@ -653,8 +653,7 @@ async function syncExpedientes(mssqlPool, pg, pgRrhh, codigoToId) {
     }
 
     // ── Dirección de residencia ───────────────────────────────────────────────
-    const domBrilo = [emp.resMuni, emp.resDpto].filter(Boolean).join(', ');
-    const calle    = clean(emp.empDireccion, 300) || domBrilo;
+    const calle = clean(emp.empDireccion, 300) || domBrilo;
 
     if (!tieneDir.has(empId) && calle) {
       // No tiene ninguna dirección → insertar con IDs geo
