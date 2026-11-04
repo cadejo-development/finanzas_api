@@ -478,7 +478,7 @@ class BrewLotesController extends Controller
     {
         $lote = BrewLote::findOrFail($id);
         $data = $request->validate([
-            'fecha_pitch'           => 'required|date',
+            'fecha_pitch'           => 'nullable|date',
             'temp_pitch'            => 'nullable|numeric',
             'og_pitch'              => 'nullable|numeric',
             'vol_pitch'             => 'nullable|numeric',
@@ -494,6 +494,11 @@ class BrewLotesController extends Controller
             'pitch_hora_inicio'     => 'nullable|string|max:8',
             'pitch_hora_fin'        => 'nullable|string|max:8',
         ]);
+
+        // Si no viene fecha_pitch, usar la fecha actual en El Salvador (UTC-6)
+        if (empty($data['fecha_pitch'])) {
+            $data['fecha_pitch'] = now()->subHours(6)->toDateString();
+        }
 
         $lote->fermentacion()->updateOrCreate(
             ['brew_lote_id' => $lote->id],
