@@ -713,8 +713,9 @@ class BrewLotesController extends Controller
     public function reporte($id)
     {
         $lote = BrewLote::with([
-            'receta', 'cocciones', 'filtracion', 'fermentacion',
+            'receta', 'cocciones', 'filtracion', 'filtracionCorridas', 'fermentacion',
             'fermSeguimiento', 'llenadoBotellas', 'llenadoBarriles',
+            'llenadoBotellasCorridas', 'llenadoBarrilesCorridas',
         ])->findOrFail($id);
 
         return $this->calcularReporte($lote);
@@ -727,6 +728,9 @@ class BrewLotesController extends Controller
         $cocciones = $lote->relationLoaded('cocciones')
             ? $lote->cocciones
             : $lote->cocciones()->get();
+        $filtrCorridas = $lote->relationLoaded('filtracionCorridas')
+            ? $lote->filtracionCorridas
+            : $lote->filtracionCorridas()->get();
         $filtr    = $lote->filtracion;
         $botellas = $lote->llenadoBotellas;
         $barriles = $lote->llenadoBarriles;
@@ -734,7 +738,9 @@ class BrewLotesController extends Controller
         // Volúmenes reales — suma de todas las cocciones
         $volPreboil  = $cocciones->sum(fn($c) => (float) ($c->vol_preboil_real  ?? 0));
         $volPostboil = $cocciones->sum(fn($c) => (float) ($c->vol_postboil_real ?? 0));
-        $volBbt      = (float) ($filtr->vol_bbt_real ?? 0);
+        // Vol. BBT = suma de lo realmente recibido en BBT (corridas vol_final); fallback a vol_bbt_real
+        $volBbtCorridas = $filtrCorridas->sum(fn($c) => (float) ($c->vol_final ?? 0));
+        $volBbt = $volBbtCorridas > 0 ? $volBbtCorridas : (float) ($filtr->vol_bbt_real ?? 0);
 
         // Llenado — volumen desde tablas legacy (resumen multi-corrida)
         $volBotellas = 0;
