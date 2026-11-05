@@ -13,6 +13,7 @@ use App\Models\Empleado;
 use App\Models\Departamento;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class BrewLotesController extends Controller
 {
@@ -388,8 +389,18 @@ class BrewLotesController extends Controller
             );
 
             if (isset($data['macerado_pasos'])) {
+                Log::info('[guardarCoccion] macerado_pasos recibido', [
+                    'lote_id' => $lote->id,
+                    'count'   => count($data['macerado_pasos']),
+                    'pasos'   => array_map(fn($r) => [
+                        'id'             => $r['id'] ?? 'NO-ID',
+                        'temp_real'      => $r['temp_real'] ?? 'NULL',
+                        'ph_real'        => $r['ph_real'] ?? 'NULL',
+                        'vol_agua_real_l'=> $r['vol_agua_real_l'] ?? 'NULL',
+                    ], $data['macerado_pasos']),
+                ]);
                 foreach ($data['macerado_pasos'] as $row) {
-                    $lote->maceradoPasos()->where('id', $row['id'])->update([
+                    $affected = $lote->maceradoPasos()->where('id', $row['id'])->update([
                         'temp_real'       => $row['temp_real']       ?? null,
                         'hora_inicio'     => $row['hora_inicio']     ?? null,
                         'hora_fin'        => $row['hora_fin']        ?? null,
@@ -398,6 +409,12 @@ class BrewLotesController extends Controller
                         'adiciones_reales'=> $row['adiciones_reales'] ?? null,
                         'notas'           => $row['notas']           ?? null,
                     ]);
+                    if ($affected === 0) {
+                        Log::warning('[guardarCoccion] 0 filas actualizadas para paso', [
+                            'lote_id' => $lote->id,
+                            'row_id'  => $row['id'] ?? null,
+                        ]);
+                    }
                 }
             }
             if (isset($data['boil_pasos'])) {
