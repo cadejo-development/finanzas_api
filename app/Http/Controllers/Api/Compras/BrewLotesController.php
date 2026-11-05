@@ -401,13 +401,13 @@ class BrewLotesController extends Controller
                 ]);
                 foreach ($data['macerado_pasos'] as $row) {
                     $affected = $lote->maceradoPasos()->where('id', $row['id'])->update([
-                        'temp_real'       => $row['temp_real']       ?? null,
-                        'hora_inicio'     => $row['hora_inicio']     ?? null,
-                        'hora_fin'        => $row['hora_fin']        ?? null,
-                        'ph_real'         => $row['ph_real']         ?? null,
-                        'vol_agua_real_l' => $row['vol_agua_real_l'] ?? null,
-                        'adiciones_reales'=> $row['adiciones_reales'] ?? null,
-                        'notas'           => $row['notas']           ?? null,
+                        'temp_real'       => is_numeric($row['temp_real']       ?? null) ? $row['temp_real']       : null,
+                        'hora_inicio'     => ($row['hora_inicio']     ?? '') !== '' ? $row['hora_inicio']     : null,
+                        'hora_fin'        => ($row['hora_fin']        ?? '') !== '' ? $row['hora_fin']        : null,
+                        'ph_real'         => is_numeric($row['ph_real']         ?? null) ? $row['ph_real']         : null,
+                        'vol_agua_real_l' => is_numeric($row['vol_agua_real_l'] ?? null) ? $row['vol_agua_real_l'] : null,
+                        'adiciones_reales'=> ($row['adiciones_reales'] ?? '') !== '' ? $row['adiciones_reales'] : null,
+                        'notas'           => ($row['notas']           ?? '') !== '' ? $row['notas']           : null,
                     ]);
                     if ($affected === 0) {
                         Log::warning('[guardarCoccion] 0 filas actualizadas para paso', [
