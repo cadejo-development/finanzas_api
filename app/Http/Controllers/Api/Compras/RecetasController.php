@@ -1318,7 +1318,10 @@ class RecetasController extends Controller
                 if ($mod->producto) {
                     $costoUnit = $this->costoPorUnidadReceta($mod->producto, strtolower(trim($mod->unidad ?? '')));
                     if ($costoUnit === 0.0 && $mod->producto->codigo_origen && isset($recetasModif[$mod->producto->codigo_origen])) {
-                        $costoUnit = $this->calcularBatchCostoDirecto($recetasModif[$mod->producto->codigo_origen]);
+                        $recetaMod   = $recetasModif[$mod->producto->codigo_origen];
+                        $batchCosto  = $this->calcularBatchCostoDirecto($recetaMod);
+                        $rendimiento = (float) ($recetaMod->rendimiento ?? 0);
+                        $costoUnit   = $rendimiento > 0 ? $batchCosto / $rendimiento : $batchCosto;
                     }
                 }
                 $costoOp = $costoUnit * (float) ($mod->cantidad ?? 0);
