@@ -355,6 +355,8 @@ class BrewLotesController extends Controller
             'molino_tiempo_min'     => 'nullable|integer|min:0',
             'molino_hora_inicio'    => 'nullable|string|max:8',
             'molino_hora_fin'       => 'nullable|string|max:8',
+            'molino_notas'          => 'nullable|string',
+            'macerado_tiempo_min'   => 'nullable|integer|min:0',
             'whirlpool_hora'        => 'nullable|string|max:8',
             'whirlpool_temp'        => 'nullable|numeric',
             'enf_temp_entrada'      => 'nullable|numeric',
