@@ -401,6 +401,7 @@ class PedidosController extends Controller
             'items'           => $p->detalles->map(fn ($d) => [
                 'id'              => $d->id,
                 'producto_id'     => $d->producto_id,
+                'producto_codigo' => $d->producto?->codigo ?? '',
                 'producto_nombre' => $d->producto?->nombre ?? ('Producto ' . $d->producto_id),
                 'unidad'          => $d->unidad ?? $d->producto?->unidad ?? '',
                 'cantidad'        => (float) $d->cantidad,
