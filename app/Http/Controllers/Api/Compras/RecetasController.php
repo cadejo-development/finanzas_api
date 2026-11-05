@@ -1326,6 +1326,7 @@ class RecetasController extends Controller
                     'nombre'          => $mod->opcion_nombre,
                     'producto_id'     => $mod->producto_id,
                     'producto_nombre' => $mod->producto?->nombre,
+                    'producto_codigo' => $mod->producto?->codigo,
                     'cantidad'        => $mod->cantidad,
                     'unidad'          => $mod->unidad,
                     'costo'           => $costoUnit,
