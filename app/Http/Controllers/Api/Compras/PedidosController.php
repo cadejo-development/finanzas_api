@@ -90,7 +90,7 @@ class PedidosController extends Controller
                 );
             }
 
-            $pedido->load('detalles.producto');
+            $pedido->load('detalles.producto.categoria');
             return response()->json(['success' => true, 'data' => $this->formatPedido($pedido)]);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('miBorrador error', [
@@ -151,7 +151,7 @@ class PedidosController extends Controller
             ]);
         });
 
-        $pedido->load('detalles.producto');
+        $pedido->load('detalles.producto.categoria');
         return response()->json(['success' => true, 'data' => $this->formatPedido($pedido)]);
     }
 
@@ -175,7 +175,7 @@ class PedidosController extends Controller
             'aud_usuario' => auth('sanctum')->user()?->email ?? 'api',
         ]);
 
-        $pedido->load('detalles.producto');
+        $pedido->load('detalles.producto.categoria');
         return response()->json(['success' => true, 'data' => $this->formatPedido($pedido)]);
     }
 
@@ -184,7 +184,7 @@ class PedidosController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        $pedido   = Pedido::with('detalles.producto')->findOrFail($id);
+        $pedido   = Pedido::with('detalles.producto.categoria')->findOrFail($id);
         $sucursal = Sucursal::find($pedido->sucursal_id);
 
         return response()->json([
@@ -402,6 +402,7 @@ class PedidosController extends Controller
                 'id'              => $d->id,
                 'producto_id'     => $d->producto_id,
                 'producto_codigo' => $d->producto?->codigo ?? '',
+                'categoria_key'   => substr($d->producto?->categoria?->key ?? '', 0, 2),
                 'producto_nombre' => $d->producto?->nombre ?? ('Producto ' . $d->producto_id),
                 'unidad'          => $d->unidad ?? $d->producto?->unidad ?? '',
                 'cantidad'        => (float) $d->cantidad,
