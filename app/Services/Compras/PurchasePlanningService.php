@@ -101,9 +101,10 @@ class PurchasePlanningService
         $response = Http::withHeaders(['Content-Type' => 'application/json'])
             ->timeout(90)
             ->post($url, [
-                'fechaInicio' => $fechaInicio,
-                'fechaFin'    => $fechaFin,
-                'items'       => $items,
+                'fechaInicio'          => $fechaInicio,
+                'fechaFin'             => $fechaFin,
+                'useActiveItemsFilter' => true,
+                'items'                => $items,
             ]);
 
         if (!$response->successful()) {
