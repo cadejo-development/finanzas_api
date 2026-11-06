@@ -103,7 +103,7 @@ class PurchasePlanningService
             ->post($url, [
                 'fechaInicio'          => $fechaInicio,
                 'fechaFin'             => $fechaFin,
-                'useActiveItemsFilter' => true,
+                'useActiveItemsFilter' => 'true',
                 'items'                => $items,
             ]);
 
