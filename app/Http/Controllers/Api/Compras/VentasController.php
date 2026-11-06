@@ -579,7 +579,17 @@ class VentasController extends Controller
         }
 
         // ── Llamar a la API ───────────────────────────────────────────────
-        $resultadosAPI = $service->proyectar($sucursalId, $desde, $hasta, $productosParaAPI);
+        try {
+            $resultadosAPI = $service->proyectar($sucursalId, $desde, $hasta, $productosParaAPI);
+        } catch (\Throwable $e) {
+            Log::warning('PurchasePlanning no disponible', ['msg' => $e->getMessage(), 'sucursal' => $sucursalId]);
+            return response()->json([
+                'success'         => false,
+                'error'           => 'Proyección no disponible temporalmente',
+                'proyecciones'    => [],
+                'sucursal_id'     => $sucursalId,
+            ], 200);
+        }
 
         // ── Construir respuesta ───────────────────────────────────────────
         $proyecciones = [];
