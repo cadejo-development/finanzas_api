@@ -37,14 +37,16 @@ function rangoFechas() {
 }
 
 // Brilo sucIdOrigenSync → pg sucursal_id
-// Solo sucursales que operan cerveza draft
 const SUCURSAL_MAP = {
+   3: { pg_id:  1, nombre: 'ZONA ROSA'     },
    6: { pg_id:  3, nombre: 'LA LIBERTAD'   },
+   7: { pg_id:  4, nombre: 'AEROPUERTO 1'  },
    8: { pg_id:  5, nombre: 'AEROPUERTO 2'  },
   10: { pg_id:  7, nombre: 'PASEO VENECIA' },
   11: { pg_id:  8, nombre: 'SANTA ELENA'   },
   12: { pg_id:  9, nombre: 'HUIZUCAR'      },
   13: { pg_id: 10, nombre: 'OPICO'         },
+  19: { pg_id: 11, nombre: 'CASA GUIROLA'  },
 };
 
 // ── Conexiones ───────────────────────────────────────────────────────────────
