@@ -53,9 +53,12 @@ class AuthController extends Controller
         // Cargar roles y permisos del sistema indicado (default: 'pagos')
         $sistemaCodigo = $request->input('sistema', 'pagos');
 
-        // Revocar solo los tokens anteriores del mismo sistema para no invalidar otras sesiones activas
+        // Permitir múltiples sesiones activas; solo limpiar si hay más de 10 tokens del mismo sistema
         $tokenName = $sistemaCodigo . '-token';
-        $user->tokens()->where('name', $tokenName)->delete();
+        $existentes = $user->tokens()->where('name', $tokenName)->orderBy('created_at')->get();
+        if ($existentes->count() >= 10) {
+            $existentes->take($existentes->count() - 9)->each->delete();
+        }
 
         $token = $user->createToken($tokenName)->plainTextToken;
         $sistema = System::where('codigo', $sistemaCodigo)->first();
