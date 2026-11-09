@@ -36,6 +36,11 @@ class AuditoriaRecetasController extends Controller
 
         $query = AuditoriaReceta::with(['estacion', 'receta', 'fotos'])
             ->withCount('recetaItems')
+            ->withExists([
+                'recetaItems as tiene_bar' => fn ($q) => $q->whereHas(
+                    'estacion', fn ($eq) => $eq->whereRaw("UPPER(nombre) LIKE 'BAR%'")
+                ),
+            ])
             ->orderByDesc('fecha')
             ->orderByDesc('hora');
 
@@ -530,6 +535,11 @@ class AuditoriaRecetasController extends Controller
 
         // Últimas 5 auditorías
         $ultimas = AuditoriaReceta::with(['estacion', 'receta'])
+            ->withExists([
+                'recetaItems as tiene_bar' => fn ($q) => $q->whereHas(
+                    'estacion', fn ($eq) => $eq->whereRaw("UPPER(nombre) LIKE 'BAR%'")
+                ),
+            ])
             ->when($tipo,        fn ($q) => $q->where('tipo', $tipo))
             ->when($sucursalId,  fn ($q) => $q->where('sucursal_id', $sucursalId))
             ->when($sucursalIds, fn ($q) => $q->whereIn('sucursal_id', $sucursalIds))
@@ -550,6 +560,7 @@ class AuditoriaRecetasController extends Controller
             'hora'               => substr($a->hora ?? '', 0, 5),
             'sucursal'           => $sucUltimas[$a->sucursal_id] ?? '',
             'estacion'           => $a->estacion?->nombre,
+            'tiene_bar'          => (bool) ($a->tiene_bar ?? str_starts_with(strtoupper($a->estacion?->nombre ?? ''), 'BAR')),
             'receta'             => $a->receta?->nombre,
             'evaluador_nombre'   => $a->evaluador_nombre,
             'responsable_nombre' => $a->responsable_nombre,
@@ -1417,6 +1428,7 @@ class AuditoriaRecetasController extends Controller
             'sucursal'                => $sucursales[$a->sucursal_id] ?? null,
             'estacion_id'             => $a->estacion_id,
             'estacion'                => $a->estacion?->nombre,
+            'tiene_bar'               => (bool) ($a->tiene_bar ?? str_starts_with(strtoupper($a->estacion?->nombre ?? ''), 'BAR')),
             'receta_id'               => $a->receta_id,
             'receta'                  => $a->receta?->nombre,
             'tipo_receta'             => $a->tipo_receta,
