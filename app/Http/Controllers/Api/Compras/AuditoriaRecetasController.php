@@ -35,9 +35,9 @@ class AuditoriaRecetasController extends Controller
         $tipo = $request->query('tipo');
 
         $query = AuditoriaReceta::with(['estacion', 'receta', 'fotos'])
-            ->withCount('recetaItems')
-            ->withExists([
-                'recetaItems as tiene_bar' => fn ($q) => $q->whereHas(
+            ->withCount([
+                'recetaItems',
+                'recetaItems as items_bar_count' => fn ($q) => $q->whereHas(
                     'estacion', fn ($eq) => $eq->whereRaw("UPPER(nombre) LIKE 'BAR%'")
                 ),
             ])
@@ -535,8 +535,9 @@ class AuditoriaRecetasController extends Controller
 
         // Últimas 5 auditorías
         $ultimas = AuditoriaReceta::with(['estacion', 'receta'])
-            ->withExists([
-                'recetaItems as tiene_bar' => fn ($q) => $q->whereHas(
+            ->withCount([
+                'recetaItems',
+                'recetaItems as items_bar_count' => fn ($q) => $q->whereHas(
                     'estacion', fn ($eq) => $eq->whereRaw("UPPER(nombre) LIKE 'BAR%'")
                 ),
             ])
@@ -560,7 +561,7 @@ class AuditoriaRecetasController extends Controller
             'hora'               => substr($a->hora ?? '', 0, 5),
             'sucursal'           => $sucUltimas[$a->sucursal_id] ?? '',
             'estacion'           => $a->estacion?->nombre,
-            'tiene_bar'          => (bool) ($a->tiene_bar ?? str_starts_with(strtoupper($a->estacion?->nombre ?? ''), 'BAR')),
+            'tiene_bar'          => $this->calcularTieneBar($a),
             'receta'             => $a->receta?->nombre,
             'evaluador_nombre'   => $a->evaluador_nombre,
             'responsable_nombre' => $a->responsable_nombre,
@@ -1428,7 +1429,7 @@ class AuditoriaRecetasController extends Controller
             'sucursal'                => $sucursales[$a->sucursal_id] ?? null,
             'estacion_id'             => $a->estacion_id,
             'estacion'                => $a->estacion?->nombre,
-            'tiene_bar'               => (bool) ($a->tiene_bar ?? str_starts_with(strtoupper($a->estacion?->nombre ?? ''), 'BAR')),
+            'tiene_bar'               => $this->calcularTieneBar($a),
             'receta_id'               => $a->receta_id,
             'receta'                  => $a->receta?->nombre,
             'tipo_receta'             => $a->tipo_receta,
@@ -1488,6 +1489,20 @@ class AuditoriaRecetasController extends Controller
             'orden'              => $ri->orden,
             'es_bar'             => str_starts_with(strtoupper($estacionNombre), 'BAR'),
         ];
+    }
+
+    // Es bar solo cuando TODOS los items son de estación BAR (o la estación directa empieza con BAR).
+    // Si hay mezcla cocina+bar → cocina.
+    private function calcularTieneBar(AuditoriaReceta $a): bool
+    {
+        // Modo receta única: usar la estación directa de la auditoría
+        if ($a->receta_id !== null) {
+            return str_starts_with(strtoupper($a->estacion?->nombre ?? ''), 'BAR');
+        }
+        // Modo multi-receta: solo bar si TODOS los items son de bar
+        $total = (int) ($a->receta_items_count ?? 0);
+        $bar   = (int) ($a->items_bar_count   ?? 0);
+        return $total > 0 && $bar === $total;
     }
 
     private function calcularClasificacion(?float $calificacion, ?string $tipo): ?string
