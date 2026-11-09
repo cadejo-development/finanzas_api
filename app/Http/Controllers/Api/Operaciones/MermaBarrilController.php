@@ -106,7 +106,7 @@ class MermaBarrilController extends Controller
     {
         $sucursalId = $request->query('sucursal_id') ?? $request->user()->sucursal_id ?? null;
 
-        $inv = MermaInventario::with([
+        $withs = [
             'items.cerveza',
             'items.barrilesConectados',
             'entradas',
@@ -114,16 +114,44 @@ class MermaBarrilController extends Controller
             'cocina.cerveza',
             'otrosUsos.cerveza',
             'ventasBrilo',
-        ])
-        ->where('sucursal_id', $sucursalId)
-        ->where('fecha', today())
-        ->first();
+        ];
+
+        // Primero intentar el inventario de hoy
+        $inv = MermaInventario::with($withs)
+            ->where('sucursal_id', $sucursalId)
+            ->where('fecha', today())
+            ->first();
+
+        // Si no hay inventario de hoy, buscar el borrador más reciente de ayer
+        // (para restaurantes que trabajan hasta después de medianoche)
+        if (!$inv) {
+            $inv = MermaInventario::with($withs)
+                ->where('sucursal_id', $sucursalId)
+                ->where('fecha', today()->subDay())
+                ->where('estado', 'borrador')
+                ->first();
+        }
 
         if ($inv) {
             $inv->primer_dia = $this->esPrimerDia($inv->sucursal_id, $inv->fecha);
         }
 
         return response()->json($inv);
+    }
+
+    // Lista de inventarios recientes incluyendo borradores (para retomar días incompletos)
+    public function historial(Request $request)
+    {
+        $sucursalId = $request->query('sucursal_id');
+        $limite     = min((int) ($request->query('limit', 30)), 90);
+
+        $rows = MermaInventario::select('id', 'sucursal_id', 'fecha', 'estado', 'hora_inicio', 'hora_cierre')
+            ->when($sucursalId, fn ($q) => $q->where('sucursal_id', $sucursalId))
+            ->orderByDesc('fecha')
+            ->limit($limite)
+            ->get();
+
+        return response()->json($rows);
     }
 
     public function show($id)
@@ -493,11 +521,8 @@ class MermaBarrilController extends Controller
 
     public function ventasBrilo(Request $request, $invId)
     {
-        $inv = MermaInventario::findOrFail($invId);
-
-        $ventas = MermaVentaBrilo::where('fecha', $inv->fecha)
-                                 ->where('suc_id_brilo', $request->query('suc_id_brilo', $inv->sucursal_id))
-                                 ->get();
+        // Buscar por inventario_id (el script sync lo vincula directamente)
+        $ventas = MermaVentaBrilo::where('inventario_id', $invId)->get();
 
         return response()->json($ventas);
     }

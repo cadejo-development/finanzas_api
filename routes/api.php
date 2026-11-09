@@ -421,6 +421,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
 
         // Inventario
         Route::get('inventarios/hoy',           [MermaBarrilController::class, 'inventarioHoy']);
+        Route::get('inventarios/historial',     [MermaBarrilController::class, 'historial']);
         Route::post('inventarios',              [MermaBarrilController::class, 'store']);
         Route::get('inventarios/{id}',          [MermaBarrilController::class, 'show']);
         Route::post('inventarios/{id}/cerrar',  [MermaBarrilController::class, 'cerrar']);
