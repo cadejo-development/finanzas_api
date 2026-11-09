@@ -16,7 +16,7 @@ class MermaInventario extends Model
     ];
 
     protected $casts = [
-        'fecha'       => 'date',
+        'fecha'       => 'date:Y-m-d',
         'aprobado_at' => 'datetime',
     ];
 
