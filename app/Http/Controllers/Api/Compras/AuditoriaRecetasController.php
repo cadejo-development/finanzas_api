@@ -1460,26 +1460,28 @@ class AuditoriaRecetasController extends Controller
 
     private function formatRecetaItem(AuditoriaRecetaItem $ri): array
     {
+        $estacionNombre = $ri->estacion?->nombre ?? '';
         return [
             'id'                 => $ri->id,
             'receta_id'          => $ri->receta_id,
             'receta_nombre'      => $ri->receta_nombre ?? $ri->receta?->nombre,
             'tipo_receta'        => $ri->tipo_receta,
             'estacion_id'        => $ri->estacion_id,
-            'estacion_nombre'    => $ri->estacion?->nombre,
+            'estacion_nombre'    => $estacionNombre,
             'responsable_id'     => $ri->responsable_id,
             'responsable_nombre' => $ri->responsable_nombre,
             'calificacion'       => $ri->calificacion !== null ? (float) $ri->calificacion : null,
             'clasificacion'      => $ri->clasificacion,
             'notas'              => $ri->notas,
             'orden'              => $ri->orden,
+            'es_bar'             => str_starts_with(strtoupper($estacionNombre), 'BAR'),
         ];
     }
 
     private function calcularClasificacion(?float $calificacion, ?string $tipo): ?string
     {
         if ($calificacion === null) return null;
-        if ($tipo === 'operaciones') {
+        if ($tipo === 'operaciones' || $tipo === 'operaciones_bar') {
             if ($calificacion >= 98) return 'Excelente';
             if ($calificacion >= 90) return 'Muy Bueno';
             if ($calificacion >= 80) return 'Bueno';
