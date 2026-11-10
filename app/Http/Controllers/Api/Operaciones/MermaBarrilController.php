@@ -623,6 +623,115 @@ class MermaBarrilController extends Controller
         ]);
     }
 
+    // ── Estadísticas multi-sucursal ───────────────────────────────────────────
+
+    public function estadisticas(Request $request)
+    {
+        $desde = $request->query('desde', today()->subDays(29)->toDateString());
+        $hasta = $request->query('hasta', today()->toDateString());
+
+        $invs = DB::connection('compras')
+            ->table('merma_inventarios')
+            ->select('id', 'sucursal_id', 'fecha')
+            ->whereBetween('fecha', [$desde, $hasta])
+            ->whereIn('estado', ['enviado', 'aprobado'])
+            ->orderBy('fecha')
+            ->get();
+
+        if ($invs->isEmpty()) {
+            return response()->json(['por_sucursal' => [], 'tendencia' => [], 'global' => null]);
+        }
+
+        $ids = $invs->pluck('id')->toArray();
+
+        $fisicos = DB::connection('compras')->table('merma_inv_items')
+            ->selectRaw('inventario_id, SUM(inicial_oz) AS oz')
+            ->whereIn('inventario_id', $ids)
+            ->groupBy('inventario_id')->pluck('oz', 'inventario_id');
+
+        $ventas = DB::connection('compras')->table('merma_ventas_brilo')
+            ->selectRaw('inventario_id, SUM(oz_efectivas) AS oz')
+            ->whereIn('inventario_id', $ids)
+            ->groupBy('inventario_id')->pluck('oz', 'inventario_id');
+
+        $cocina = DB::connection('compras')->table('merma_cocina')
+            ->selectRaw('inventario_id, SUM(oz_calculado) AS oz')
+            ->whereIn('inventario_id', $ids)
+            ->groupBy('inventario_id')->pluck('oz', 'inventario_id');
+
+        $otros = DB::connection('compras')->table('merma_otros_usos')
+            ->selectRaw('inventario_id, SUM(oz_calculado) AS oz')
+            ->whereIn('inventario_id', $ids)
+            ->groupBy('inventario_id')->pluck('oz', 'inventario_id');
+
+        $mfisica = DB::connection('compras')->table('merma_fisica')
+            ->selectRaw('inventario_id, oz_calculado AS oz')
+            ->whereIn('inventario_id', $ids)
+            ->pluck('oz', 'inventario_id');
+
+        $sucursalesNombres = \App\Models\Sucursal::select('id', 'nombre')->pluck('nombre', 'id');
+
+        $rows = $invs->map(function ($inv) use ($fisicos, $ventas, $cocina, $otros, $mfisica) {
+            $fisicoOz = (float)($fisicos[$inv->id] ?? 0);
+            $ventasOz = (float)($ventas[$inv->id]  ?? 0);
+            $cocinaOz = (float)($cocina[$inv->id]  ?? 0);
+            $otrosOz  = (float)($otros[$inv->id]   ?? 0);
+            $mfOz     = (float)($mfisica[$inv->id] ?? 0);
+            $netaOz   = $fisicoOz - $ventasOz - $cocinaOz - $otrosOz - $mfOz;
+            $pct      = $fisicoOz > 0 ? round($netaOz / $fisicoOz * 100, 2) : 0;
+            return [
+                'inv_id'      => $inv->id,
+                'sucursal_id' => $inv->sucursal_id,
+                'fecha'       => is_string($inv->fecha) ? $inv->fecha : (string)$inv->fecha,
+                'fisico_oz'   => round($fisicoOz, 1),
+                'ventas_oz'   => round($ventasOz, 1),
+                'neta_oz'     => round($netaOz, 1),
+                'pct'         => $pct,
+            ];
+        });
+
+        $porSucursal = $rows->groupBy('sucursal_id')->map(function ($diasSuc, $sucId) use ($sucursalesNombres) {
+            $pctProm = round($diasSuc->avg('pct'), 2);
+            $peor    = $diasSuc->sortByDesc('pct')->first();
+            return [
+                'sucursal_id'  => $sucId,
+                'nombre'       => $sucursalesNombres[$sucId] ?? "Sucursal $sucId",
+                'dias'         => $diasSuc->count(),
+                'pct_promedio' => $pctProm,
+                'fisico_oz'    => round($diasSuc->sum('fisico_oz'), 1),
+                'ventas_oz'    => round($diasSuc->sum('ventas_oz'), 1),
+                'neta_oz'      => round($diasSuc->sum('neta_oz'), 1),
+                'peor_dia'     => $peor ? ['fecha' => $peor['fecha'], 'pct' => $peor['pct']] : null,
+            ];
+        })->sortBy('pct_promedio')->values();
+
+        $tendencia = $rows->groupBy('fecha')->map(function ($diasFecha, $fecha) {
+            return [
+                'fecha'  => $fecha,
+                'puntos' => $diasFecha->map(fn($d) => [
+                    'sucursal_id' => $d['sucursal_id'],
+                    'pct'         => $d['pct'],
+                ])->values(),
+            ];
+        })->sortBy('fecha')->values();
+
+        $totalDias = $rows->count();
+        $globalPct = $totalDias > 0 ? round($rows->avg('pct'), 2) : 0;
+        $mejor     = $porSucursal->first();
+        $peorSuc   = $porSucursal->last();
+
+        return response()->json([
+            'por_sucursal' => $porSucursal,
+            'tendencia'    => $tendencia,
+            'global'       => [
+                'dias_total'     => $totalDias,
+                'pct_promedio'   => $globalPct,
+                'mejor_sucursal' => $mejor   ? ['nombre' => $mejor['nombre'],   'pct' => $mejor['pct_promedio']]   : null,
+                'peor_sucursal'  => $peorSuc  ? ['nombre' => $peorSuc['nombre'],  'pct' => $peorSuc['pct_promedio']]  : null,
+            ],
+        ]);
+    }
+
     // ── Helper ────────────────────────────────────────────────────────────────
 
     private function log($invId, $userId, $userName, $sucId, $sucNombre, $evento, $original, $nuevo, $comentario)

@@ -459,6 +459,9 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
 
         // Dashboard gerencial
         Route::get('dashboard',                              [MermaBarrilController::class, 'dashboard']);
+
+        // Estadísticas multi-sucursal (admin / cervecero)
+        Route::get('estadisticas',                           [MermaBarrilController::class, 'estadisticas']);
     });
 });
 
