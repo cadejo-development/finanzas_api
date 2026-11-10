@@ -632,14 +632,18 @@ class MermaBarrilController extends Controller
 
         $invs = DB::connection('compras')
             ->table('merma_inventarios')
-            ->select('id', 'sucursal_id', 'fecha')
+            ->select('id', 'sucursal_id', 'fecha', 'hora_inicio', 'hora_cierre')
             ->whereBetween('fecha', [$desde, $hasta])
             ->whereIn('estado', ['enviado', 'aprobado'])
             ->orderBy('fecha')
             ->get();
 
         if ($invs->isEmpty()) {
-            return response()->json(['por_sucursal' => [], 'tendencia' => [], 'global' => null]);
+            return response()->json([
+                'por_sucursal' => [], 'tendencia' => [], 'global' => null,
+                'causas' => null, 'por_cerveza' => [], 'por_dia_semana' => [],
+                'eficiencia' => null, 'vs_anterior' => null,
+            ]);
         }
 
         $ids = $invs->pluck('id')->toArray();
@@ -669,8 +673,22 @@ class MermaBarrilController extends Controller
             ->whereIn('inventario_id', $ids)
             ->pluck('oz', 'inventario_id');
 
+        $itemsPorCerveza = DB::connection('compras')->table('merma_inv_items')
+            ->selectRaw('cerveza_id, SUM(inicial_oz) AS oz')
+            ->whereIn('inventario_id', $ids)
+            ->groupBy('cerveza_id')->get()->keyBy('cerveza_id');
+
+        $ventasPorCerveza = DB::connection('compras')->table('merma_ventas_brilo')
+            ->selectRaw('cerveza_id, SUM(oz_efectivas) AS oz')
+            ->whereNotNull('cerveza_id')
+            ->whereIn('inventario_id', $ids)
+            ->groupBy('cerveza_id')->get()->keyBy('cerveza_id');
+
+        $cervezas          = DB::connection('compras')->table('merma_cervezas')
+            ->select('id', 'nombre', 'color_hex', 'estilo')->orderBy('orden')->get();
         $sucursalesNombres = \App\Models\Sucursal::select('id', 'nombre')->pluck('nombre', 'id');
 
+        // ── Rows por inventario ──────────────────────────────────────────
         $rows = $invs->map(function ($inv) use ($fisicos, $ventas, $cocina, $otros, $mfisica) {
             $fisicoOz = (float)($fisicos[$inv->id] ?? 0);
             $ventasOz = (float)($ventas[$inv->id]  ?? 0);
@@ -679,17 +697,32 @@ class MermaBarrilController extends Controller
             $mfOz     = (float)($mfisica[$inv->id] ?? 0);
             $netaOz   = $fisicoOz - $ventasOz - $cocinaOz - $otrosOz - $mfOz;
             $pct      = $fisicoOz > 0 ? round($netaOz / $fisicoOz * 100, 2) : 0;
+
+            $durMinutos = null;
+            if ($inv->hora_inicio && $inv->hora_cierre) {
+                $t1 = strtotime($inv->hora_inicio);
+                $t2 = strtotime($inv->hora_cierre);
+                if ($t2 > $t1) {
+                    $durMinutos = (int)round(($t2 - $t1) / 60);
+                }
+            }
+
             return [
                 'inv_id'      => $inv->id,
                 'sucursal_id' => $inv->sucursal_id,
                 'fecha'       => is_string($inv->fecha) ? $inv->fecha : (string)$inv->fecha,
                 'fisico_oz'   => round($fisicoOz, 1),
                 'ventas_oz'   => round($ventasOz, 1),
+                'cocina_oz'   => round($cocinaOz, 1),
+                'otros_oz'    => round($otrosOz, 1),
+                'mfisica_oz'  => round($mfOz, 1),
                 'neta_oz'     => round($netaOz, 1),
                 'pct'         => $pct,
+                'dur_minutos' => $durMinutos,
             ];
         });
 
+        // ── Por sucursal ─────────────────────────────────────────────────
         $porSucursal = $rows->groupBy('sucursal_id')->map(function ($diasSuc, $sucId) use ($sucursalesNombres) {
             $pctProm = round($diasSuc->avg('pct'), 2);
             $peor    = $diasSuc->sortByDesc('pct')->first();
@@ -705,6 +738,7 @@ class MermaBarrilController extends Controller
             ];
         })->sortBy('pct_promedio')->values();
 
+        // ── Tendencia ────────────────────────────────────────────────────
         $tendencia = $rows->groupBy('fecha')->map(function ($diasFecha, $fecha) {
             return [
                 'fecha'  => $fecha,
@@ -715,20 +749,123 @@ class MermaBarrilController extends Controller
             ];
         })->sortBy('fecha')->values();
 
+        // ── Global ───────────────────────────────────────────────────────
         $totalDias = $rows->count();
         $globalPct = $totalDias > 0 ? round($rows->avg('pct'), 2) : 0;
         $mejor     = $porSucursal->first();
         $peorSuc   = $porSucursal->last();
 
+        // ── Causas ───────────────────────────────────────────────────────
+        $totalFisico  = round((float)$rows->sum('fisico_oz'), 1);
+        $causas = [
+            'fisico_oz'  => $totalFisico,
+            'breakdown'  => array_values(array_filter([
+                ['causa' => 'No explicada', 'oz' => round((float)$rows->sum('neta_oz'), 1),
+                 'pct' => $totalFisico > 0 ? round((float)$rows->sum('neta_oz') / $totalFisico * 100, 2) : 0],
+                ['causa' => 'Cocina',       'oz' => round((float)$rows->sum('cocina_oz'), 1),
+                 'pct' => $totalFisico > 0 ? round((float)$rows->sum('cocina_oz') / $totalFisico * 100, 2) : 0],
+                ['causa' => 'Otros usos',   'oz' => round((float)$rows->sum('otros_oz'), 1),
+                 'pct' => $totalFisico > 0 ? round((float)$rows->sum('otros_oz') / $totalFisico * 100, 2) : 0],
+                ['causa' => 'Merma física', 'oz' => round((float)$rows->sum('mfisica_oz'), 1),
+                 'pct' => $totalFisico > 0 ? round((float)$rows->sum('mfisica_oz') / $totalFisico * 100, 2) : 0],
+            ])),
+        ];
+
+        // ── Por cerveza ──────────────────────────────────────────────────
+        $porCerveza = $cervezas->map(function ($c) use ($itemsPorCerveza, $ventasPorCerveza, $totalFisico) {
+            $ozFisico = (float)($itemsPorCerveza[$c->id]->oz ?? 0);
+            if ($ozFisico == 0) return null;
+            $ozVentas = (float)($ventasPorCerveza[$c->id]->oz ?? 0);
+            return [
+                'cerveza_id'    => $c->id,
+                'nombre'        => $c->nombre,
+                'color_hex'     => $c->color_hex,
+                'estilo'        => $c->estilo,
+                'fisico_oz'     => round($ozFisico, 1),
+                'ventas_oz'     => round($ozVentas, 1),
+                'pct_del_total' => $totalFisico > 0 ? round($ozFisico / $totalFisico * 100, 2) : 0,
+            ];
+        })->filter()->sortByDesc('fisico_oz')->values();
+
+        // ── Por día de semana ────────────────────────────────────────────
+        $diasNombres = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+        $porDiaSemana = $rows->groupBy(function ($r) {
+            return (int)date('N', strtotime($r['fecha']));
+        })->map(function ($g, $dow) use ($diasNombres) {
+            return [
+                'dow'          => $dow,
+                'nombre'       => $diasNombres[$dow] ?? "Día $dow",
+                'registros'    => $g->count(),
+                'pct_promedio' => round((float)$g->avg('pct'), 2),
+                'neta_oz'      => round((float)$g->sum('neta_oz'), 1),
+            ];
+        })->sortBy('dow')->values();
+
+        // ── Eficiencia ────────────────────────────────────────────────────
+        $conCierre  = $rows->filter(fn($r) => $r['dur_minutos'] !== null);
+        $eficiencia = [
+            'total_inventarios' => $totalDias,
+            'con_cierre'        => $conCierre->count(),
+            'adherencia_pct'    => $totalDias > 0 ? round($conCierre->count() / $totalDias * 100, 1) : 0,
+            'dur_promedio_min'  => $conCierre->count() > 0 ? (int)round((float)$conCierre->avg('dur_minutos')) : null,
+            'sucursales_sin_cierre' => $rows->filter(fn($r) => $r['dur_minutos'] === null)
+                ->groupBy('sucursal_id')
+                ->map(fn($g, $id) => ['sucursal_id' => $id, 'dias_sin_cierre' => $g->count()])
+                ->values(),
+        ];
+
+        // ── Vs período anterior ───────────────────────────────────────────
+        $diasPeriodo = \Carbon\Carbon::parse($desde)->diffInDays(\Carbon\Carbon::parse($hasta)) + 1;
+        $antHasta    = \Carbon\Carbon::parse($desde)->subDay()->toDateString();
+        $antDesde    = \Carbon\Carbon::parse($antHasta)->subDays($diasPeriodo - 1)->toDateString();
+
+        $idsAnt = DB::connection('compras')->table('merma_inventarios')
+            ->selectRaw('id')
+            ->whereBetween('fecha', [$antDesde, $antHasta])
+            ->whereIn('estado', ['enviado', 'aprobado'])
+            ->pluck('id')->toArray();
+
+        $vsAnterior = null;
+        if (!empty($idsAnt)) {
+            $fisicoAnt = (float)DB::connection('compras')->table('merma_inv_items')
+                ->whereIn('inventario_id', $idsAnt)->sum('inicial_oz');
+            $ventasAnt = (float)DB::connection('compras')->table('merma_ventas_brilo')
+                ->whereIn('inventario_id', $idsAnt)->sum('oz_efectivas');
+            $cocinaAnt = (float)DB::connection('compras')->table('merma_cocina')
+                ->whereIn('inventario_id', $idsAnt)->sum('oz_calculado');
+            $otrosAnt  = (float)DB::connection('compras')->table('merma_otros_usos')
+                ->whereIn('inventario_id', $idsAnt)->sum('oz_calculado');
+            $mfAnt     = (float)DB::connection('compras')->table('merma_fisica')
+                ->whereIn('inventario_id', $idsAnt)->sum('oz_calculado');
+
+            $netaAnt  = $fisicoAnt - $ventasAnt - $cocinaAnt - $otrosAnt - $mfAnt;
+            $pctAnt   = $fisicoAnt > 0 ? round($netaAnt / $fisicoAnt * 100, 2) : 0;
+
+            $vsAnterior = [
+                'desde'        => $antDesde,
+                'hasta'        => $antHasta,
+                'dias'         => count($idsAnt),
+                'pct_promedio' => $pctAnt,
+                'neta_oz'      => round($netaAnt, 1),
+                'fisico_oz'    => round($fisicoAnt, 1),
+                'delta_pct'    => round($globalPct - $pctAnt, 2),
+            ];
+        }
+
         return response()->json([
-            'por_sucursal' => $porSucursal,
-            'tendencia'    => $tendencia,
-            'global'       => [
+            'por_sucursal'   => $porSucursal,
+            'tendencia'      => $tendencia,
+            'global'         => [
                 'dias_total'     => $totalDias,
                 'pct_promedio'   => $globalPct,
                 'mejor_sucursal' => $mejor   ? ['nombre' => $mejor['nombre'],   'pct' => $mejor['pct_promedio']]   : null,
                 'peor_sucursal'  => $peorSuc  ? ['nombre' => $peorSuc['nombre'],  'pct' => $peorSuc['pct_promedio']]  : null,
             ],
+            'causas'         => $causas,
+            'por_cerveza'    => $porCerveza,
+            'por_dia_semana' => $porDiaSemana,
+            'eficiencia'     => $eficiencia,
+            'vs_anterior'    => $vsAnterior,
         ]);
     }
 
