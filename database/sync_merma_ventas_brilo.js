@@ -101,7 +101,7 @@ async function main() {
   const cervezasRes  = await pg.query('SELECT id, nombre FROM merma_cervezas WHERE estado=\'activo\'');
   const presRes      = await pg.query('SELECT id, presentacion, oz_efectivas FROM merma_presentaciones WHERE activa=true');
   const invRes       = await pg.query(
-    "SELECT id FROM merma_inventarios WHERE fecha=$1 AND sucursal_id=$2 AND estado='borrador' LIMIT 1",
+    "SELECT id, estado FROM merma_inventarios WHERE fecha=$1 AND sucursal_id=$2 AND estado IN ('borrador','enviado','aprobado') ORDER BY CASE estado WHEN 'borrador' THEN 0 WHEN 'enviado' THEN 1 ELSE 2 END LIMIT 1",
     [FECHA, suc.pg_id]
   );
 
@@ -110,12 +110,12 @@ async function main() {
   const invId        = invRes.rows[0]?.id;
 
   if (!invId) {
-    console.log(`\nNo hay inventario borrador en pg para ${suc.nombre} / ${FECHA}. Crea el borrador primero en la app.`);
+    console.log(`\nNo hay inventario en pg para ${suc.nombre} / ${FECHA}.`);
     await pg.end();
     return;
   }
+  console.log(`\nInventario pg id=${invId} (estado=${invRes.rows[0].estado})`);
 
-  console.log(`\nInventario pg id=${invId}`);
 
   // ── 3. Parsear producto_nombre → (cerveza, presentacion) ──────────────────
   // Nombre Brilo ejemplo: "WAPA 16oz", "Roja 23 Oz", "Nacional 1 Lt"
