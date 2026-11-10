@@ -627,14 +627,16 @@ class MermaBarrilController extends Controller
 
     public function estadisticas(Request $request)
     {
-        $desde = $request->query('desde', today()->subDays(29)->toDateString());
-        $hasta = $request->query('hasta', today()->toDateString());
+        $desde      = $request->query('desde', today()->subDays(29)->toDateString());
+        $hasta      = $request->query('hasta', today()->toDateString());
+        $sucursalId = $request->query('sucursal_id');
 
         $invs = DB::connection('compras')
             ->table('merma_inventarios')
             ->select('id', 'sucursal_id', 'fecha', 'hora_inicio', 'hora_cierre')
             ->whereBetween('fecha', [$desde, $hasta])
             ->whereIn('estado', ['enviado', 'aprobado'])
+            ->when($sucursalId, fn($q) => $q->where('sucursal_id', $sucursalId))
             ->orderBy('fecha')
             ->get();
 
@@ -823,6 +825,7 @@ class MermaBarrilController extends Controller
             ->selectRaw('id')
             ->whereBetween('fecha', [$antDesde, $antHasta])
             ->whereIn('estado', ['enviado', 'aprobado'])
+            ->when($sucursalId, fn($q) => $q->where('sucursal_id', $sucursalId))
             ->pluck('id')->toArray();
 
         $vsAnterior = null;
