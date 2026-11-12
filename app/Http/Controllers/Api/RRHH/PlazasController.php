@@ -142,7 +142,13 @@ class PlazasController extends Controller
             WHERE e.activo = true
               AND e.cargo_id = ?
               AND (e.plaza_id IS NULL
-                   OR NOT EXISTS (SELECT 1 FROM plazas p WHERE p.id = e.plaza_id AND p.activo = true))
+                   OR NOT EXISTS (
+                       SELECT 1 FROM plazas p
+                       WHERE p.id = e.plaza_id
+                         AND p.activo = true
+                         AND p.codigo IS NOT NULL
+                         AND p.codigo <> ''
+                   ))
             ORDER BY e.apellidos, e.nombres
         ", [$plaza->cargo_id]);
 
