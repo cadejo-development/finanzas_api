@@ -123,10 +123,26 @@ class PlazasController extends Controller
 
             $data = $request->validate(['empleado_id' => 'required|integer|exists:pgsql.empleados,id']);
 
+            // Si el empleado tenía una plaza fantasma (sin código), eliminarla.
+            $fantasma = DB::connection('pgsql')->selectOne(
+                "SELECT p.id FROM plazas p
+                 JOIN empleados e ON e.plaza_id = p.id
+                 WHERE e.id = ? AND e.activo = true
+                   AND p.activo = true
+                   AND (p.codigo IS NULL OR p.codigo = '')",
+                [$data['empleado_id']]
+            );
+
             DB::connection('pgsql')->statement(
                 "UPDATE empleados SET plaza_id = ?, updated_at = NOW() WHERE id = ?",
                 [$id, $data['empleado_id']]
             );
+
+            if ($fantasma) {
+                DB::connection('pgsql')->statement(
+                    "DELETE FROM plazas WHERE id = ?", [$fantasma->id]
+                );
+            }
 
             return response()->json(['ok' => true]);
         });
