@@ -881,6 +881,7 @@ Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh
     Route::post('plazas',               [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'store']);
     Route::put('plazas/{id}',           [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'update']);
     Route::patch('plazas/{id}/toggle',  [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'toggleActivo']);
+    Route::get('plazas/{id}/empleados-sin-plaza', [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'empleadosSinPlaza']);
     Route::patch('plazas/{id}/liberar', [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'liberarEmpleado']);
     Route::post('plazas/{id}/asignar',  [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'asignarEmpleado']);
     Route::get('plazas/{id}/historial', [\App\Http\Controllers\Api\RRHH\PlazasController::class, 'historial']);

@@ -132,6 +132,23 @@ class PlazasController extends Controller
         });
     }
 
+    public function empleadosSinPlaza(int $id)
+    {
+        $plaza = Plaza::findOrFail($id);
+
+        $rows = DB::connection('pgsql')->select("
+            SELECT e.id, e.codigo, e.nombres, e.apellidos
+            FROM empleados e
+            WHERE e.activo = true
+              AND e.cargo_id = ?
+              AND (e.plaza_id IS NULL
+                   OR NOT EXISTS (SELECT 1 FROM plazas p WHERE p.id = e.plaza_id AND p.activo = true))
+            ORDER BY e.apellidos, e.nombres
+        ", [$plaza->cargo_id]);
+
+        return response()->json($rows);
+    }
+
     public function liberarEmpleado(int $id)
     {
         return $this->captureAndRespond(request(), function () use ($id) {
