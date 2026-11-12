@@ -933,7 +933,7 @@ class VentasController extends Controller
             ->select(
                 'r.codigo_origen as plato_codigo', 'r.nombre as plato_nombre_receta',
                 'p.id as producto_id', 'p.nombre', 'p.codigo as prod_codigo', 'p.unidad', 'p.costo',
-                DB::raw('ri.cantidad_por_plato * ri2.cantidad_por_plato AS cantidad_por_plato'),
+                DB::raw('ri.cantidad_por_plato * (ri2.cantidad_por_plato / NULLIF(COALESCE(sr.rendimiento, 1), 0)) AS cantidad_por_plato'),
                 'ri2.unidad as unidad_receta', 'sr.nombre as sub_nombre'
             )
             ->get();
