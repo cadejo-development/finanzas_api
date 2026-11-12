@@ -133,9 +133,11 @@ class PlazasController extends Controller
                 [$data['empleado_id']]
             );
 
+            // Sincronizar cargo_id del empleado con el de la plaza (pueden diferir
+            // en cargos homónimos como CRG0003/CRG0010 "Gerente de Sucursal").
             DB::connection('pgsql')->statement(
-                "UPDATE empleados SET plaza_id = ?, updated_at = NOW() WHERE id = ?",
-                [$id, $data['empleado_id']]
+                "UPDATE empleados SET plaza_id = ?, cargo_id = ?, updated_at = NOW() WHERE id = ?",
+                [$id, $plaza->cargo_id, $data['empleado_id']]
             );
 
             if ($fantasma) {
