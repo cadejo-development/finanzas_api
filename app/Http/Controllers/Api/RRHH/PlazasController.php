@@ -136,11 +136,14 @@ class PlazasController extends Controller
     {
         $plaza = Plaza::findOrFail($id);
 
+        // Filtra por nombre de cargo (no cargo_id) para incluir empleados
+        // con cargos homónimos (ej: CRG0003 y CRG0010 ambos "Gerente de Sucursal").
         $rows = DB::connection('pgsql')->select("
             SELECT e.id, e.codigo, e.nombres, e.apellidos
             FROM empleados e
+            JOIN cargos c ON c.id = e.cargo_id
             WHERE e.activo = true
-              AND e.cargo_id = ?
+              AND c.nombre = (SELECT nombre FROM cargos WHERE id = ?)
               AND (e.plaza_id IS NULL
                    OR NOT EXISTS (
                        SELECT 1 FROM plazas p
