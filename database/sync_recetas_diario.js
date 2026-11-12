@@ -532,6 +532,29 @@ async function main() {
     console.log();
     log(`  Recetas actualizadas: ${updOk}`);
 
+    // ── 4b2. Limpiar ingredientes producto_id que Brilo ya no tiene ──────────────
+    // Para cada receta con mod_local=false, eliminar filas producto_id cuyo código
+    // ya no aparece en Brilo (Brilo es la fuente de verdad para estas recetas).
+    // Solo se limpia si Brilo tiene al menos 1 ingrediente (evita borrar todo por error de API).
+    log('\n  [4b2] Limpiando ingredientes obsoletos (mod_local=false)...');
+    let limpiados = 0;
+    for (const { b, r } of paraUpdate) {
+      const bIngs = briloIngMap[b.proId] || [];
+      if (bIngs.length === 0) continue;
+      const codigosValidos = bIngs.map(ing => ing.ing_codigo);
+      const ph = codigosValidos.map((_, i) => `$${i + 2}`).join(',');
+      const del = await pg.query(
+        `DELETE FROM receta_ingredientes ri
+         USING productos p
+         WHERE ri.receta_id    = $1
+           AND ri.producto_id  = p.id
+           AND p.codigo NOT IN (${ph})`,
+        [r.id, ...codigosValidos]
+      );
+      limpiados += del.rowCount;
+    }
+    log(`  Ingredientes obsoletos eliminados: ${limpiados}`);
+
     // ── 4c. Solo flags (mod_local=true): activa + sincronizado_brilo ──
     // Regla: ingredientes NO se tocan. modificado_localmente NO se toca.
     // Si Brilo tiene activa=true → activar en RDS. Si false → desactivar.
