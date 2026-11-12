@@ -397,11 +397,13 @@ async function main() {
     log('\n  [4b] Actualizando recetas existentes (mod_local=false)...');
     let updOk = 0;
 
-    // Mapa codigo_origen → sub_receta_id para todos los productos que en RDS son sub-recetas.
-    // Cuando Brilo lista un ingrediente cuyo código existe como sub-receta en RDS, hay que
-    // vincularlo con sub_receta_id (no con producto_id) y usar cantidad de Brilo con unidad 'tanda'.
+    // Mapa codigo_origen → sub_receta_id SOLO para recetas con tipo_receta='sub_receta'.
+    // Excluir explícitamente tipos 'plato' con código MR/BR que son materias primas, no sub-recetas.
+    // Incluirlos causaba duplicados: se insertaba una fila sub_receta_id tanda además del producto_id.
     const subRecetaIdMap = {}; // codigo_origen → receta.id
-    rdsRec.forEach(r => { subRecetaIdMap[r.codigo_origen] = r.id; });
+    rdsRec.forEach(r => {
+      if (r.tipo_receta === 'sub_receta') subRecetaIdMap[r.codigo_origen] = r.id;
+    });
 
     // Cargar unidades actuales de ingredientes producto para preservarlas durante el sync.
     // Brilo almacena en unidad base (lb, lt) pero nuestro sistema puede tener unidades de
