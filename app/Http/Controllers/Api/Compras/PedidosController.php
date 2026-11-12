@@ -128,7 +128,7 @@ class PedidosController extends Controller
 
             $total = 0;
             foreach ($validated['items'] as $item) {
-                if ((float) $item['cantidad'] <= 0) continue;
+                if ((float) $item['cantidad'] < 0) continue;
                 $subtotal = round((float) $item['cantidad'] * (float) $item['precio_unitario'], 2);
                 $total   += $subtotal;
 
@@ -166,7 +166,7 @@ class PedidosController extends Controller
             return response()->json(['success' => false, 'message' => 'El pedido ya fue enviado'], 422);
         }
 
-        if ($pedido->detalles->isEmpty()) {
+        if ($pedido->detalles->where('cantidad', '>', 0)->isEmpty()) {
             return response()->json(['success' => false, 'message' => 'El pedido esta vacio'], 422);
         }
 
