@@ -132,6 +132,36 @@ class PlazasController extends Controller
         });
     }
 
+    public function liberarEmpleado(int $id)
+    {
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $emp = DB::connection('pgsql')
+                ->selectOne("SELECT id FROM empleados WHERE plaza_id = ? AND activo = true LIMIT 1", [$id]);
+
+            if (!$emp) {
+                return response()->json(['message' => 'La plaza no tiene empleado activo asignado.'], 422);
+            }
+
+            $now = now();
+
+            DB::connection('pgsql')->statement(
+                "UPDATE empleados SET plaza_id = NULL, updated_at = ? WHERE id = ?",
+                [$now, $emp->id]
+            );
+
+            try {
+                DB::connection('rrhh')->statement(
+                    "UPDATE empleados SET plaza_id = NULL, updated_at = ? WHERE id = ?",
+                    [$now, $emp->id]
+                );
+            } catch (\Throwable) {}
+
+            app(\App\Services\RRHH\PlazaHistorialService::class)->liberar($id, $now, 'traslado');
+
+            return response()->json(['ok' => true]);
+        });
+    }
+
     public function store(Request $request)
     {
         return $this->captureAndRespond($request, function () use ($request) {
