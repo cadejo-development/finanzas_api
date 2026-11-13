@@ -567,10 +567,32 @@ class MermaBarrilController extends Controller
 
         $ids = $invs->pluck('id')->toArray();
 
+        $cfg  = DB::connection('compras')->table('merma_config')->first();
+        $ozPd = (float)($cfg->barril_pequeno_oz ?? 1984);
+        $ozGd = (float)($cfg->barril_grande_oz  ?? 3968);
+
         $fisicos = DB::connection('compras')->table('merma_inv_items')
             ->selectRaw('inventario_id, SUM(inicial_oz) AS oz')
             ->whereIn('inventario_id', $ids)
             ->groupBy('inventario_id')->pluck('oz', 'inventario_id');
+
+        $finalesDash = DB::connection('compras')->table('merma_inv_items')
+            ->selectRaw('inventario_id, SUM(final_oz) AS oz')
+            ->whereIn('inventario_id', $ids)
+            ->groupBy('inventario_id')->pluck('oz', 'inventario_id');
+
+        $entRawDash = DB::connection('compras')->table('merma_entradas')
+            ->selectRaw("inventario_id, tamanio, SUM(cantidad) AS cnt")
+            ->whereIn('inventario_id', $ids)
+            ->groupBy('inventario_id', 'tamanio')->get();
+        $entradasDash = collect();
+        foreach ($entRawDash->groupBy('inventario_id') as $invId => $rows) {
+            $oz = 0;
+            foreach ($rows as $r) {
+                $oz += $r->tamanio === 'p' ? $r->cnt * $ozPd : $r->cnt * $ozGd;
+            }
+            $entradasDash[$invId] = $oz;
+        }
 
         $ventas = DB::connection('compras')->table('merma_ventas_brilo')
             ->selectRaw('inventario_id, SUM(oz_efectivas) AS oz')
@@ -592,14 +614,17 @@ class MermaBarrilController extends Controller
             ->whereIn('inventario_id', $ids)
             ->pluck('oz', 'inventario_id');
 
-        $porDia = $invs->map(function ($inv) use ($fisicos, $ventas, $cocina, $otros, $mfisica) {
-            $fisicoOz = (float)($fisicos[$inv->id] ?? 0);
-            $ventasOz = (float)($ventas[$inv->id]  ?? 0);
-            $cocinaOz = (float)($cocina[$inv->id]  ?? 0);
-            $otrosOz  = (float)($otros[$inv->id]   ?? 0);
-            $mfOz     = (float)($mfisica[$inv->id] ?? 0);
-            $netaOz   = $fisicoOz - $ventasOz - $cocinaOz - $otrosOz - $mfOz;
-            $pct      = $fisicoOz > 0 ? round($netaOz / $fisicoOz * 100, 2) : 0;
+        $porDia = $invs->map(function ($inv) use ($fisicos, $finalesDash, $entradasDash, $ventas, $cocina, $otros, $mfisica) {
+            $inicialOz   = (float)($fisicos[$inv->id]      ?? 0);
+            $entradasOz  = (float)($entradasDash[$inv->id] ?? 0);
+            $finalOz     = (float)($finalesDash[$inv->id]  ?? 0);
+            $fisicoOz    = $inicialOz + $entradasOz;
+            $ventasOz    = (float)($ventas[$inv->id]       ?? 0);
+            $cocinaOz    = (float)($cocina[$inv->id]       ?? 0);
+            $otrosOz     = (float)($otros[$inv->id]        ?? 0);
+            $mfOz        = (float)($mfisica[$inv->id]      ?? 0);
+            $netaOz      = $fisicoOz - $ventasOz - $cocinaOz - $otrosOz - $mfOz - $finalOz;
+            $pct         = $fisicoOz > 0 ? round($netaOz / $fisicoOz * 100, 2) : 0;
 
             return [
                 'fecha'     => is_string($inv->fecha) ? $inv->fecha : (string)$inv->fecha,
