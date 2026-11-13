@@ -855,9 +855,23 @@ class MermaBarrilController extends Controller
             ];
         }
 
+        $detalleDiario = $rows->map(fn($r) => [
+            'fecha'      => $r['fecha'],
+            'sucursal'   => $sucursalesNombres[$r['sucursal_id']] ?? "Suc {$r['sucursal_id']}",
+            'fisico_oz'  => $r['fisico_oz'],
+            'ventas_oz'  => $r['ventas_oz'],
+            'neta_oz'    => $r['neta_oz'],
+            'cocina_oz'  => $r['cocina_oz'],
+            'otros_oz'   => $r['otros_oz'],
+            'mfisica_oz' => $r['mfisica_oz'],
+            'pct'        => $r['pct'],
+            'dur_min'    => $r['dur_minutos'],
+        ])->sortBy(['fecha', 'sucursal'])->values();
+
         return response()->json([
             'por_sucursal'   => $porSucursal,
             'tendencia'      => $tendencia,
+            'detalle_diario' => $detalleDiario,
             'global'         => [
                 'dias_total'     => $totalDias,
                 'pct_promedio'   => $globalPct,
