@@ -568,18 +568,15 @@ class MermaBarrilController extends Controller
         $ids = $invs->pluck('id')->toArray();
 
         $cfg  = DB::connection('compras')->table('merma_config')->first();
-        $ozPd = (float)($cfg->barril_pequeno_oz ?? 1984);
-        $ozGd = (float)($cfg->barril_grande_oz  ?? 3968);
+        $ozPd = (float)($cfg->barril_pequeno_oz ?? 661);
+        $ozGd = (float)($cfg->barril_grande_oz  ?? 1986.26);
 
         $fisicos = DB::connection('compras')->table('merma_inv_items')
             ->selectRaw('inventario_id, SUM(inicial_oz) AS oz')
             ->whereIn('inventario_id', $ids)
             ->groupBy('inventario_id')->pluck('oz', 'inventario_id');
 
-        $finalesDash = DB::connection('compras')->table('merma_inv_items')
-            ->selectRaw('inventario_id, SUM(final_oz) AS oz')
-            ->whereIn('inventario_id', $ids)
-            ->groupBy('inventario_id')->pluck('oz', 'inventario_id');
+        $finalesDash = $this->calcularFinalesOz($ids, $cfg);
 
         $entRawDash = DB::connection('compras')->table('merma_entradas')
             ->selectRaw("inventario_id, tamanio, SUM(cantidad) AS cnt")
@@ -678,18 +675,15 @@ class MermaBarrilController extends Controller
         $ids = $invs->pluck('id')->toArray();
 
         $cfg = DB::connection('compras')->table('merma_config')->first();
-        $ozP = (float)($cfg->barril_pequeno_oz ?? 1984);
-        $ozG = (float)($cfg->barril_grande_oz  ?? 3968);
+        $ozP = (float)($cfg->barril_pequeno_oz ?? 661);
+        $ozG = (float)($cfg->barril_grande_oz  ?? 1986.26);
 
         $fisicos = DB::connection('compras')->table('merma_inv_items')
             ->selectRaw('inventario_id, SUM(inicial_oz) AS oz')
             ->whereIn('inventario_id', $ids)
             ->groupBy('inventario_id')->pluck('oz', 'inventario_id');
 
-        $finales = DB::connection('compras')->table('merma_inv_items')
-            ->selectRaw('inventario_id, SUM(final_oz) AS oz')
-            ->whereIn('inventario_id', $ids)
-            ->groupBy('inventario_id')->pluck('oz', 'inventario_id');
+        $finales = $this->calcularFinalesOz($ids, $cfg);
 
         // Entradas convertidas a oz usando la config
         $entradasRaw = DB::connection('compras')->table('merma_entradas')
@@ -886,8 +880,8 @@ class MermaBarrilController extends Controller
         if (!empty($idsAnt)) {
             $inicialAnt  = (float)DB::connection('compras')->table('merma_inv_items')
                 ->whereIn('inventario_id', $idsAnt)->sum('inicial_oz');
-            $finalAnt    = (float)DB::connection('compras')->table('merma_inv_items')
-                ->whereIn('inventario_id', $idsAnt)->sum('final_oz');
+            $finalesAnt  = $this->calcularFinalesOz($idsAnt, $cfg);
+            $finalAnt    = $finalesAnt->sum();
             $entRawAnt   = DB::connection('compras')->table('merma_entradas')
                 ->selectRaw("tamanio, SUM(cantidad) AS cnt")
                 ->whereIn('inventario_id', $idsAnt)
@@ -984,5 +978,60 @@ class MermaBarrilController extends Controller
             ->where('id', $usuarioId)
             ->value('name');
         return $u ?? 'Bartender';
+    }
+
+    /**
+     * Calcula el inventario final (oz) por inventario_id.
+     * Suma barriles conectados (por peso) + barriles cerrados (por cantidad × capacidad).
+     * Nunca usa merma_inv_items.final_oz porque el frontend nunca lo envía.
+     */
+    private function calcularFinalesOz(array $ids, object $cfg): \Illuminate\Support\Collection
+    {
+        if (empty($ids)) return collect();
+
+        $ozP   = (float)($cfg->barril_pequeno_oz ?? 661);
+        $ozG   = (float)($cfg->barril_grande_oz  ?? 1986.26);
+        $taraP = (float)($cfg->tara_pequeno_lb   ?? 14);
+        $taraG = (float)($cfg->tara_grande_lb    ?? 28);
+        $dens  = (float)($cfg->densidad_kg_l     ?? 1.0100);
+        $LB2KG = 0.453592;
+        $L2OZ  = 33.814;
+
+        // Open kegs (connected): weight-based
+        $conectados = DB::connection('compras')
+            ->table('merma_barriles_conectados as bc')
+            ->join('merma_inv_items as ii', 'ii.id', '=', 'bc.item_id')
+            ->whereIn('ii.inventario_id', $ids)
+            ->select('ii.inventario_id', 'bc.tamanio', 'bc.peso_lb')
+            ->get();
+
+        $totales = collect();
+        foreach ($ids as $invId) {
+            $totales[$invId] = 0.0;
+        }
+        foreach ($conectados as $bc) {
+            $tara = $bc->tamanio === 'p' ? $taraP : $taraG;
+            $neto = max(0.0, (float)$bc->peso_lb - $tara);
+            $totales[$bc->inventario_id] = ($totales[$bc->inventario_id] ?? 0.0) + $neto * $LB2KG / $dens * $L2OZ;
+        }
+
+        // Sealed kegs: count × capacity
+        $cerradosP = DB::connection('compras')->table('merma_inv_items')
+            ->selectRaw('inventario_id, SUM(COALESCE(final_cerrados_p,0)) AS cnt')
+            ->whereIn('inventario_id', $ids)
+            ->groupBy('inventario_id')->pluck('cnt', 'inventario_id');
+
+        $cerradosG = DB::connection('compras')->table('merma_inv_items')
+            ->selectRaw('inventario_id, SUM(COALESCE(final_cerrados_g,0)) AS cnt')
+            ->whereIn('inventario_id', $ids)
+            ->groupBy('inventario_id')->pluck('cnt', 'inventario_id');
+
+        foreach ($ids as $invId) {
+            $totales[$invId] = ($totales[$invId] ?? 0.0)
+                + (float)($cerradosP[$invId] ?? 0) * $ozP
+                + (float)($cerradosG[$invId] ?? 0) * $ozG;
+        }
+
+        return $totales;
     }
 }
