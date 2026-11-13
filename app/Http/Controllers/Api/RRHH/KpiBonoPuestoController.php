@@ -42,13 +42,12 @@ class KpiBonoPuestoController extends Controller
     {
         $data = $request->validate([
             'cargo_id'      => 'required|integer|exists:pgsql.cargos,id',
-            'sucursal_id'   => 'nullable|integer|exists:pgsql.sucursales,id',
             'monto_bono'    => 'required|numeric|min:0.01',
             'umbral_minimo' => 'required|numeric|min:0|max:100',
         ]);
 
         $bono = KpiBonoPuesto::updateOrCreate(
-            ['cargo_id' => $data['cargo_id'], 'sucursal_id' => $data['sucursal_id'] ?? null],
+            ['cargo_id' => $data['cargo_id'], 'sucursal_id' => null],
             [
                 'monto_bono'    => $data['monto_bono'],
                 'umbral_minimo' => $data['umbral_minimo'],
