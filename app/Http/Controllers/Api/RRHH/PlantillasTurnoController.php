@@ -20,6 +20,11 @@ class PlantillasTurnoController extends RRHHBaseController
     {
         $sucursalId = $request->query('sucursal_id');
 
+        // No-admins sin filtro explícito: restringir a la sucursal del usuario efectivo
+        if (!$sucursalId && !$this->esAdminRrhh() && !$this->esAnalistaRrhh()) {
+            $sucursalId = $this->getEffectiveUser()->sucursal_id;
+        }
+
         $query = PlantillaTurno::where('activo', true)->orderBy('hora_inicio');
 
         if ($sucursalId) {
