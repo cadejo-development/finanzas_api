@@ -133,7 +133,8 @@ class MermaBarrilController extends Controller
         }
 
         if ($inv) {
-            $inv->primer_dia = $this->esPrimerDia($inv->sucursal_id, $inv->fecha);
+            $inv->primer_dia    = $this->esPrimerDia($inv->sucursal_id, $inv->fecha);
+            $inv->usuario_nombre = $this->resolverNombreUsuario($inv->usuario_id);
         }
 
         return response()->json($inv);
@@ -167,7 +168,8 @@ class MermaBarrilController extends Controller
             'auditLog',
         ])->findOrFail($id);
 
-        $inv->primer_dia = $this->esPrimerDia($inv->sucursal_id, $inv->fecha);
+        $inv->primer_dia     = $this->esPrimerDia($inv->sucursal_id, $inv->fecha);
+        $inv->usuario_nombre = $this->resolverNombreUsuario($inv->usuario_id);
 
         return response()->json($inv);
     }
@@ -948,5 +950,14 @@ class MermaBarrilController extends Controller
             ->where('fecha', '<', $fecha)
             ->whereIn('estado', ['enviado', 'aprobado'])
             ->exists();
+    }
+
+    private function resolverNombreUsuario(?int $usuarioId): string
+    {
+        if (!$usuarioId) return 'Bartender';
+        $u = DB::connection('pgsql')->table('users')
+            ->where('id', $usuarioId)
+            ->value('name');
+        return $u ?? 'Bartender';
     }
 }
