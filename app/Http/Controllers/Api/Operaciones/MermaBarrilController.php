@@ -650,10 +650,33 @@ class MermaBarrilController extends Controller
 
         $ids = $invs->pluck('id')->toArray();
 
+        $cfg = DB::connection('compras')->table('merma_config')->first();
+        $ozP = (float)($cfg->barril_pequeno_oz ?? 1984);
+        $ozG = (float)($cfg->barril_grande_oz  ?? 3968);
+
         $fisicos = DB::connection('compras')->table('merma_inv_items')
             ->selectRaw('inventario_id, SUM(inicial_oz) AS oz')
             ->whereIn('inventario_id', $ids)
             ->groupBy('inventario_id')->pluck('oz', 'inventario_id');
+
+        $finales = DB::connection('compras')->table('merma_inv_items')
+            ->selectRaw('inventario_id, SUM(final_oz) AS oz')
+            ->whereIn('inventario_id', $ids)
+            ->groupBy('inventario_id')->pluck('oz', 'inventario_id');
+
+        // Entradas convertidas a oz usando la config
+        $entradasRaw = DB::connection('compras')->table('merma_entradas')
+            ->selectRaw("inventario_id, tamanio, SUM(cantidad) AS cnt")
+            ->whereIn('inventario_id', $ids)
+            ->groupBy('inventario_id', 'tamanio')->get();
+        $entradas = collect();
+        foreach ($entradasRaw->groupBy('inventario_id') as $invId => $rows) {
+            $oz = 0;
+            foreach ($rows as $r) {
+                $oz += $r->tamanio === 'p' ? $r->cnt * $ozP : $r->cnt * $ozG;
+            }
+            $entradas[$invId] = $oz;
+        }
 
         $ventas = DB::connection('compras')->table('merma_ventas_brilo')
             ->selectRaw('inventario_id, SUM(oz_efectivas) AS oz')
@@ -691,14 +714,18 @@ class MermaBarrilController extends Controller
         $sucursalesNombres = \App\Models\Sucursal::select('id', 'nombre')->pluck('nombre', 'id');
 
         // ── Rows por inventario ──────────────────────────────────────────
-        $rows = $invs->map(function ($inv) use ($fisicos, $ventas, $cocina, $otros, $mfisica) {
-            $fisicoOz = (float)($fisicos[$inv->id] ?? 0);
-            $ventasOz = (float)($ventas[$inv->id]  ?? 0);
-            $cocinaOz = (float)($cocina[$inv->id]  ?? 0);
-            $otrosOz  = (float)($otros[$inv->id]   ?? 0);
-            $mfOz     = (float)($mfisica[$inv->id] ?? 0);
-            $netaOz   = $fisicoOz - $ventasOz - $cocinaOz - $otrosOz - $mfOz;
-            $pct      = $fisicoOz > 0 ? round($netaOz / $fisicoOz * 100, 2) : 0;
+        $rows = $invs->map(function ($inv) use ($fisicos, $finales, $entradas, $ventas, $cocina, $otros, $mfisica) {
+            $inicialOz   = (float)($fisicos[$inv->id]  ?? 0);
+            $entradasOz  = (float)($entradas[$inv->id] ?? 0);
+            $finalOz     = (float)($finales[$inv->id]  ?? 0);
+            $fisicoOz    = $inicialOz + $entradasOz;   // stock disponible total
+            $ventasOz    = (float)($ventas[$inv->id]   ?? 0);
+            $cocinaOz    = (float)($cocina[$inv->id]   ?? 0);
+            $otrosOz     = (float)($otros[$inv->id]    ?? 0);
+            $mfOz        = (float)($mfisica[$inv->id]  ?? 0);
+            // merma no explicada = disponible - ventas - cocina - otros - mfisica - final
+            $netaOz      = $fisicoOz - $ventasOz - $cocinaOz - $otrosOz - $mfOz - $finalOz;
+            $pct         = $fisicoOz > 0 ? round($netaOz / $fisicoOz * 100, 2) : 0;
 
             $durMinutos = null;
             if ($inv->hora_inicio && $inv->hora_cierre) {
@@ -830,18 +857,29 @@ class MermaBarrilController extends Controller
 
         $vsAnterior = null;
         if (!empty($idsAnt)) {
-            $fisicoAnt = (float)DB::connection('compras')->table('merma_inv_items')
+            $inicialAnt  = (float)DB::connection('compras')->table('merma_inv_items')
                 ->whereIn('inventario_id', $idsAnt)->sum('inicial_oz');
-            $ventasAnt = (float)DB::connection('compras')->table('merma_ventas_brilo')
+            $finalAnt    = (float)DB::connection('compras')->table('merma_inv_items')
+                ->whereIn('inventario_id', $idsAnt)->sum('final_oz');
+            $entRawAnt   = DB::connection('compras')->table('merma_entradas')
+                ->selectRaw("tamanio, SUM(cantidad) AS cnt")
+                ->whereIn('inventario_id', $idsAnt)
+                ->groupBy('tamanio')->get();
+            $entradasAnt = 0;
+            foreach ($entRawAnt as $r) {
+                $entradasAnt += $r->tamanio === 'p' ? $r->cnt * $ozP : $r->cnt * $ozG;
+            }
+            $fisicoAnt   = $inicialAnt + $entradasAnt;
+            $ventasAnt   = (float)DB::connection('compras')->table('merma_ventas_brilo')
                 ->whereIn('inventario_id', $idsAnt)->sum('oz_efectivas');
-            $cocinaAnt = (float)DB::connection('compras')->table('merma_cocina')
+            $cocinaAnt   = (float)DB::connection('compras')->table('merma_cocina')
                 ->whereIn('inventario_id', $idsAnt)->sum('oz_calculado');
-            $otrosAnt  = (float)DB::connection('compras')->table('merma_otros_usos')
+            $otrosAnt    = (float)DB::connection('compras')->table('merma_otros_usos')
                 ->whereIn('inventario_id', $idsAnt)->sum('oz_calculado');
-            $mfAnt     = (float)DB::connection('compras')->table('merma_fisica')
+            $mfAnt       = (float)DB::connection('compras')->table('merma_fisica')
                 ->whereIn('inventario_id', $idsAnt)->sum('oz_calculado');
 
-            $netaAnt  = $fisicoAnt - $ventasAnt - $cocinaAnt - $otrosAnt - $mfAnt;
+            $netaAnt  = $fisicoAnt - $ventasAnt - $cocinaAnt - $otrosAnt - $mfAnt - $finalAnt;
             $pctAnt   = $fisicoAnt > 0 ? round($netaAnt / $fisicoAnt * 100, 2) : 0;
 
             $vsAnterior = [
