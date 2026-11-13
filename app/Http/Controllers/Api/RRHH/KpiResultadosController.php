@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\RRHH;
 
 use App\Http\Controllers\Controller;
+use App\Models\KpiBonoPuesto;
 use App\Models\KpiPlantilla;
 use App\Models\KpiResultado;
 use App\Models\RRHH\Bonificacion;
@@ -344,13 +345,31 @@ class KpiResultadosController extends Controller
             throw $e;
         }
 
+        // ── Recalcular bono ponderado por puesto para cada empleado afectado ──
+        $bonosPonderados = [];
+        foreach ($data['resultados'] as $fila) {
+            $bpResult = $this->recalcularBonoPonderado(
+                $fila['empleado_id'],
+                $data['periodo'],
+                $tipoBonId,
+                $estadoAprobada->id,
+                $aprobadoPorId,
+                $audUser,
+                $fechaAplicar,
+            );
+            if ($bpResult !== null) {
+                $bonosPonderados[$fila['empleado_id']] = $bpResult;
+            }
+        }
+
         return response()->json([
-            'success'      => true,
-            'periodo'      => $data['periodo'],
-            'plantilla'    => $plantilla->nombre,
-            'aplicados'    => count($creados),
-            'total_bono'   => collect($creados)->sum('monto_bono'),
-            'resultados'   => $creados,
+            'success'          => true,
+            'periodo'          => $data['periodo'],
+            'plantilla'        => $plantilla->nombre,
+            'aplicados'        => count($creados),
+            'total_bono'       => collect($creados)->sum('monto_bono'),
+            'resultados'       => $creados,
+            'bonos_ponderados' => array_values($bonosPonderados),
         ]);
     }
 
@@ -431,5 +450,128 @@ class KpiResultadosController extends Controller
             }
         }
         return null;
+    }
+
+    /**
+     * Recalcula el bono ponderado de un empleado para un período dado.
+     * Suma (peso_kpi × pct_cumplimiento) para todos sus KPIs registrados en ese período.
+     * Si el cumplimiento ponderado >= umbral_minimo del puesto → crea/actualiza bonificación ponderada.
+     * Si no llega → elimina la bonificación ponderada si existía.
+     * Retorna null si el puesto del empleado no tiene kpi_bono_puesto configurado.
+     */
+    private function recalcularBonoPonderado(
+        int $empleadoId,
+        string $periodo,
+        int $tipoBonId,
+        int $estadoAprobadaId,
+        ?int $aprobadoPorId,
+        string $audUser,
+        string $fechaAplicar,
+    ): ?array {
+        // Obtener cargo y sucursal del empleado
+        $emp = DB::connection('pgsql')
+            ->table('empleados')
+            ->where('id', $empleadoId)
+            ->select('cargo_id', 'sucursal_id')
+            ->first();
+
+        if (!$emp?->cargo_id) return null;
+
+        // Buscar configuración de bono: primero cargo+sucursal, luego solo cargo (null sucursal)
+        $bonoPuesto = KpiBonoPuesto::where('cargo_id', $emp->cargo_id)
+            ->where(function ($q) use ($emp) {
+                $q->where('sucursal_id', $emp->sucursal_id)
+                  ->orWhereNull('sucursal_id');
+            })
+            ->orderByRaw('sucursal_id IS NULL ASC') // preferir la específica de sucursal
+            ->first();
+
+        if (!$bonoPuesto) return null;
+
+        // Obtener todos los KPIs asignados al cargo del empleado con sus pesos
+        $kpisDelCargo = DB::connection('pgsql')
+            ->table('kpi_plantilla_cargos as kpc')
+            ->join('kpi_plantillas as kp', 'kp.id', '=', 'kpc.kpi_plantilla_id')
+            ->where('kpc.cargo_id', $emp->cargo_id)
+            ->where('kp.activo', true)
+            ->whereNotNull('kpc.peso')
+            ->where('kpc.peso', '>', 0)
+            ->select('kpc.kpi_plantilla_id', 'kpc.peso')
+            ->get();
+
+        if ($kpisDelCargo->isEmpty()) return null;
+
+        $periodoDate = $periodo . '-01';
+
+        // Obtener resultados registrados del empleado en este período
+        $resultadosRegistrados = KpiResultado::where('empleado_id', $empleadoId)
+            ->where('periodo', $periodoDate)
+            ->whereIn('kpi_plantilla_id', $kpisDelCargo->pluck('kpi_plantilla_id'))
+            ->get()
+            ->keyBy('kpi_plantilla_id');
+
+        // Calcular cumplimiento ponderado: Σ(peso × pct) / peso_total_del_cargo
+        $pesoTotal       = $kpisDelCargo->sum('peso');
+        $cumplimientoSum = 0.0;
+
+        foreach ($kpisDelCargo as $kpi) {
+            $resultado = $resultadosRegistrados->get($kpi->kpi_plantilla_id);
+            $pct       = $resultado ? (float) $resultado->porcentaje_cumplimiento : 0.0;
+            $cumplimientoSum += ($kpi->peso / $pesoTotal) * $pct;
+        }
+
+        $cumplimientoPonderado = round($cumplimientoSum, 2);
+        $alcanzaUmbral         = $cumplimientoPonderado >= $bonoPuesto->umbral_minimo;
+        $montoBono             = $alcanzaUmbral ? $bonoPuesto->monto_bono : 0.0;
+
+        // Buscar si ya existe un bono ponderado para este empleado/período
+        $bonExistente = DB::connection('pgsql')
+            ->table('bonificaciones')
+            ->where('empleado_id', $empleadoId)
+            ->where('tipo_bonificacion_id', $tipoBonId)
+            ->whereRaw("descripcion LIKE ?", ["%[ponderado] Período {$periodo}%"])
+            ->first();
+
+        $desc = "[ponderado] Período {$periodo} · {$cumplimientoPonderado}% cumplimiento ponderado";
+
+        if ($alcanzaUmbral) {
+            if ($bonExistente) {
+                DB::connection('pgsql')->table('bonificaciones')
+                    ->where('id', $bonExistente->id)
+                    ->update([
+                        'monto'           => $montoBono,
+                        'descripcion'     => $desc,
+                        'estado_id'       => $estadoAprobadaId,
+                        'aprobado_por_id' => $aprobadoPorId,
+                        'aud_usuario'     => $audUser,
+                        'updated_at'      => now(),
+                    ]);
+            } else {
+                DB::connection('pgsql')->table('bonificaciones')->insert([
+                    'empleado_id'          => $empleadoId,
+                    'tipo_bonificacion_id'  => $tipoBonId,
+                    'estado_id'            => $estadoAprobadaId,
+                    'monto'                => $montoBono,
+                    'descripcion'          => $desc,
+                    'fecha_aplicar'        => $fechaAplicar,
+                    'solicitado_por_id'    => $aprobadoPorId ?? $empleadoId,
+                    'aprobado_por_id'      => $aprobadoPorId,
+                    'aud_usuario'          => $audUser,
+                    'created_at'           => now(),
+                    'updated_at'           => now(),
+                ]);
+            }
+        } elseif ($bonExistente) {
+            // No alcanza el umbral: eliminar el bono ponderado si ya existía
+            DB::connection('pgsql')->table('bonificaciones')->where('id', $bonExistente->id)->delete();
+        }
+
+        return [
+            'empleado_id'            => $empleadoId,
+            'cumplimiento_ponderado' => $cumplimientoPonderado,
+            'umbral_minimo'          => $bonoPuesto->umbral_minimo,
+            'alcanza_umbral'         => $alcanzaUmbral,
+            'monto_bono_ponderado'   => $montoBono,
+        ];
     }
 }

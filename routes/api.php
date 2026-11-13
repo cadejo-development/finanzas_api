@@ -939,6 +939,10 @@ Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh
     Route::post('kpi-resultados/preview',           [\App\Http\Controllers\Api\RRHH\KpiResultadosController::class, 'preview']);
     Route::post('kpi-resultados/aplicar',           [\App\Http\Controllers\Api\RRHH\KpiResultadosController::class, 'aplicar']);
     Route::get('kpi-tablero',                       [\App\Http\Controllers\Api\RRHH\KpiTableroController::class, 'index']);
+    // Bonos ponderados por puesto
+    Route::get('kpi-bono-puesto',                   [\App\Http\Controllers\Api\RRHH\KpiBonoPuestoController::class, 'index']);
+    Route::post('kpi-bono-puesto',                  [\App\Http\Controllers\Api\RRHH\KpiBonoPuestoController::class, 'store']);
+    Route::delete('kpi-bono-puesto/{id}',           [\App\Http\Controllers\Api\RRHH\KpiBonoPuestoController::class, 'destroy']);
 });
 
 // ─── CADEJO VENTAS ───────────────────────────────────────────────────────────
