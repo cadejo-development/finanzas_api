@@ -303,7 +303,7 @@ class PlanillasController extends RRHHBaseController
                     $planilla->id, $empleados,
                     $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
                     $asuetos, $horariosAsueto, $horasExtrasMap,
-                    $fechaInicio, $fechaFin, $diasQuincena
+                    $fechaInicio, $fechaFin, $diasQuincena, $ordenesMap
                 );
 
                 DB::connection('rrhh')->commit();
@@ -990,7 +990,7 @@ class PlanillasController extends RRHHBaseController
                     $id, $eid,
                     $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
                     $asuetos, $horariosAsueto, $horasExtrasMap,
-                    $fechaInicio, $fechaFin, $diasQuincena, $salBase
+                    $fechaInicio, $fechaFin, $diasQuincena, $salBase, $ordenesMap
                 );
 
                 DB::connection('rrhh')->commit();
@@ -1150,7 +1150,7 @@ class PlanillasController extends RRHHBaseController
                     $id, $empleadosRows,
                     $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
                     $asuetos, $horariosAsueto, $horasExtrasMap,
-                    $fechaInicio, $fechaFin, $diasQuincena
+                    $fechaInicio, $fechaFin, $diasQuincena, $ordenesMap
                 );
 
                 DB::connection('rrhh')->commit();
@@ -1194,7 +1194,7 @@ class PlanillasController extends RRHHBaseController
         array $empleados,
         $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
         $asuetos, array $horariosAsueto, array $horasExtrasMap,
-        Carbon $fechaInicio, Carbon $fechaFin, int $diasQuincena
+        Carbon $fechaInicio, Carbon $fechaFin, int $diasQuincena, array $ordenesMap = []
     ): void {
         // Borrar snapshot anterior
         PlanillaMovimiento::where('planilla_id', $planillaId)->delete();
@@ -1206,7 +1206,7 @@ class PlanillasController extends RRHHBaseController
                 $planillaId, $eid,
                 $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
                 $asuetos, $horariosAsueto, $horasExtrasMap,
-                $fechaInicio, $fechaFin, $diasQuincena, $salBase
+                $fechaInicio, $fechaFin, $diasQuincena, $salBase, $ordenesMap
             );
         }
     }
@@ -1219,7 +1219,8 @@ class PlanillasController extends RRHHBaseController
         int $eid,
         $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
         $asuetos, array $horariosAsueto, array $horasExtrasMap,
-        Carbon $fechaInicio, Carbon $fechaFin, int $diasQuincena, float $salBase
+        Carbon $fechaInicio, Carbon $fechaFin, int $diasQuincena, float $salBase,
+        array $ordenesMap = []
     ): void {
         $rows = [];
 
@@ -1357,6 +1358,27 @@ class PlanillasController extends RRHHBaseController
                 'fecha_fin'    => null,
                 'dias'         => 0,
                 'monto'        => $montoExt,
+                'referencia_id'=> null,
+                'created_at'   => now(),
+                'updated_at'   => now(),
+            ];
+        }
+
+        // Órdenes de descuento activas (egresos fijos)
+        foreach ($ordenesMap[$eid] ?? [] as $ord) {
+            $monto = (float) $ord['monto_quincenal'];
+            if ($monto <= 0) continue;
+            $acreedor  = $ord['acreedor_nombre'] ?? null;
+            $concepto  = $ord['concepto'] ?? 'Orden de descuento';
+            $rows[] = [
+                'planilla_id'  => $planillaId,
+                'empleado_id'  => $eid,
+                'tipo'         => 'orden_descuento',
+                'concepto'     => $acreedor ? "{$acreedor} — {$concepto}" : $concepto,
+                'fecha_inicio' => null,
+                'fecha_fin'    => null,
+                'dias'         => 0,
+                'monto'        => -$monto,
                 'referencia_id'=> null,
                 'created_at'   => now(),
                 'updated_at'   => now(),
