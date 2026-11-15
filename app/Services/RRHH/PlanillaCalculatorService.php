@@ -211,6 +211,7 @@ class PlanillaCalculatorService
      * @param int   $diasQuincena      Siempre 15 (estándar 30 días/mes, El Salvador)
      * @param array $ordenes           Órdenes de descuento activas [{concepto, monto_quincenal, acreedor_nombre}]
      * @param array $bonificaciones    Bonificaciones aprobadas [{id, concepto, monto}]
+     * @param bool  $esPensionado      Pensionados no pagan ISSS (empleado ni patronal), sí AFP
      * @return array
      */
     public function calcularPlanillaEmpleado(
@@ -218,7 +219,8 @@ class PlanillaCalculatorService
         float $diasLaborados,
         int   $diasQuincena,
         array $ordenes = [],
-        array $bonificaciones = []
+        array $bonificaciones = [],
+        bool  $esPensionado = false
     ): array {
         // Quincenal = mensual / 2 (estándar 30 días/mes)
         $salarioBase = round($salarioMensual / 2, 2);
@@ -226,9 +228,9 @@ class PlanillaCalculatorService
         // Proporcional
         $salarioProp = $this->calcularSalarioProporcional($salarioBase, $diasLaborados, $diasQuincena);
 
-        // Deducciones empleado
+        // Deducciones empleado — pensionados exentos de ISSS (Art. 7 Ley ISSS)
         $afpEmp  = $this->calcularAFPEmpleado($salarioProp);
-        $isssEmp = $this->calcularISSSEmpleado($salarioProp);
+        $isssEmp = $esPensionado ? 0.0 : $this->calcularISSSEmpleado($salarioProp);
 
         // Base para renta = salario prop - AFP - ISSS (Art. 29 Ley ISR El Salvador)
         $baseRenta = round($salarioProp - $afpEmp - $isssEmp, 2);
@@ -270,9 +272,9 @@ class PlanillaCalculatorService
         $totalBonif  = round($totalBonif, 2);
         $salarioNeto = round($salarioProp - $totalDescEmp + $totalBonif, 2);
 
-        // Cargas patronales
+        // Cargas patronales — pensionados exentos de ISSS patronal también
         $afpPat      = $this->calcularAFPPatronal($salarioProp);
-        $isssPat     = $this->calcularISSSPatronal($salarioProp);
+        $isssPat     = $esPensionado ? 0.0 : $this->calcularISSSPatronal($salarioProp);
         $insaforpPat = $this->calcularINCAF($salarioProp);
         $totalPat    = round($afpPat + $isssPat + $insaforpPat, 2);
         $costoTotal  = round($salarioProp + $totalPat, 2);

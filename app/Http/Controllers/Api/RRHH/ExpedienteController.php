@@ -124,6 +124,7 @@ class ExpedienteController extends RRHHBaseController
             'fecha_ingreso'     => $empleado->fecha_ingreso?->toDateString(),
             'anios_servicio'    => $anios,
             'activo'            => $empleado->activo,
+            'es_pensionado'     => (bool) $empleado->es_pensionado,
             'foto_url'          => $fotoRuta,
         ];
     }

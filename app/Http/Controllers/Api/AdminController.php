@@ -197,12 +197,13 @@ class AdminController extends Controller
         abort_unless($this->db()->table('empleados')->where('id', $id)->exists(), 404);
 
         $data = $request->validate([
-            'nombres'     => 'sometimes|required|string|max:100',
-            'apellidos'   => 'sometimes|required|string|max:100',
-            'email'       => 'sometimes|required|email|max:150',
-            'cargo_id'    => 'sometimes|nullable|integer|exists:pgsql.cargos,id',
-            'sucursal_id' => 'sometimes|nullable|integer|exists:pgsql.sucursales,id',
-            'activo'      => 'sometimes|boolean',
+            'nombres'       => 'sometimes|required|string|max:100',
+            'apellidos'     => 'sometimes|required|string|max:100',
+            'email'         => 'sometimes|required|email|max:150',
+            'cargo_id'      => 'sometimes|nullable|integer|exists:pgsql.cargos,id',
+            'sucursal_id'   => 'sometimes|nullable|integer|exists:pgsql.sucursales,id',
+            'activo'        => 'sometimes|boolean',
+            'es_pensionado' => 'sometimes|boolean',
         ]);
 
         $this->db()->table('empleados')->where('id', $id)->update($data);

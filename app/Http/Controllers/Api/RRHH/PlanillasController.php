@@ -235,8 +235,9 @@ class PlanillasController extends RRHHBaseController
                     $bonificEmp    = $bonificacionesMap[$eid] ?? [];
 
                     // Calcular
+                    $esPensionado = (bool) ($emp['es_pensionado'] ?? false);
                     $resultado = $this->calc->calcularPlanillaEmpleado(
-                        $salBase, (float) $diasLab, $diasQuincena, $ordenes, $bonificEmp
+                        $salBase, (float) $diasLab, $diasQuincena, $ordenes, $bonificEmp, $esPensionado
                     );
 
                     // Asuetos: empleados con horario 'normal' ese día cobran 100% extra
@@ -441,7 +442,7 @@ class PlanillasController extends RRHHBaseController
                     $q->orWhereIn('e.id', $desvinculadosIds);
                 }
             })
-            ->select('e.id', 'e.salario_base', 's.geo_departamento_id');
+            ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado');
 
         if ($sucursalId) {
             $query->where('e.sucursal_id', $sucursalId);
