@@ -11,7 +11,7 @@ class PlanillaMovimiento extends Model
 
     protected $fillable = [
         'planilla_id', 'empleado_id', 'tipo', 'concepto',
-        'fecha_inicio', 'fecha_fin', 'dias', 'monto', 'referencia_id',
+        'fecha_inicio', 'fecha_fin', 'dias', 'monto', 'referencia_id', 'estado',
     ];
 
     protected $casts = [

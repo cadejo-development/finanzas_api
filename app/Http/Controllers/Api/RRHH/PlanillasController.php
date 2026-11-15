@@ -878,19 +878,24 @@ class PlanillasController extends RRHHBaseController
     // ─── Movimientos ─────────────────────────────────────────────────────────
 
     /**
-     * GET /api/rrhh/planillas/{id}/movimientos
-     * Lista los movimientos snapshotados para una planilla, agrupados por empleado.
+     * GET /api/rrhh/planillas/{id}/movimientos?empleado_id=X
+     * Lista los movimientos snapshotados para una planilla, opcionalmente filtrados por empleado.
      */
-    public function movimientos(int $id): JsonResponse
+    public function movimientos(int $id, Request $request): JsonResponse
     {
-        $planilla = Planilla::findOrFail($id);
+        $planilla  = Planilla::findOrFail($id);
+        $empleadoId = $request->query('empleado_id');
 
-        $movs = PlanillaMovimiento::where('planilla_id', $id)
+        $query = PlanillaMovimiento::where('planilla_id', $id)
             ->orderBy('empleado_id')
-            ->orderBy('tipo')
-            ->get();
+            ->orderBy('tipo');
 
-        $empIds   = $movs->pluck('empleado_id')->unique()->all();
+        if ($empleadoId) {
+            $query->where('empleado_id', (int) $empleadoId);
+        }
+
+        $movs      = $query->get();
+        $empIds    = $movs->pluck('empleado_id')->unique()->all();
         $empleados = $this->buildEmpleadosMap($empIds);
 
         $data = $movs->map(function ($m) use ($empleados) {
@@ -902,6 +907,47 @@ class PlanillasController extends RRHHBaseController
         });
 
         return response()->json(['success' => true, 'data' => $data, 'planilla_estado' => $planilla->estado]);
+    }
+
+    /**
+     * PUT /api/rrhh/planillas/{id}/movimientos/{movId}/anular
+     * Marca un movimiento como anulado (solo en planillas borrador).
+     */
+    public function anularMovimiento(int $id, int $movId): JsonResponse
+    {
+        $planilla = Planilla::findOrFail($id);
+
+        if ($planilla->estado !== 'borrador') {
+            return response()->json(['success' => false, 'message' => 'Solo se pueden anular movimientos en planillas en borrador.'], 422);
+        }
+
+        $mov = PlanillaMovimiento::where('planilla_id', $id)->findOrFail($movId);
+
+        if ($mov->estado === 'anulado') {
+            return response()->json(['success' => false, 'message' => 'El movimiento ya está anulado.'], 422);
+        }
+
+        $mov->update(['estado' => 'anulado']);
+
+        return response()->json(['success' => true, 'message' => 'Movimiento anulado.', 'data' => $mov]);
+    }
+
+    /**
+     * PUT /api/rrhh/planillas/{id}/movimientos/{movId}/reactivar
+     * Reactiva un movimiento previamente anulado (solo en planillas borrador).
+     */
+    public function reactivarMovimiento(int $id, int $movId): JsonResponse
+    {
+        $planilla = Planilla::findOrFail($id);
+
+        if ($planilla->estado !== 'borrador') {
+            return response()->json(['success' => false, 'message' => 'Solo se pueden reactivar movimientos en planillas en borrador.'], 422);
+        }
+
+        $mov = PlanillaMovimiento::where('planilla_id', $id)->findOrFail($movId);
+        $mov->update(['estado' => 'activo']);
+
+        return response()->json(['success' => true, 'message' => 'Movimiento reactivado.', 'data' => $mov]);
     }
 
     // ─── Add / Remove empleado ────────────────────────────────────────────────
@@ -1196,8 +1242,13 @@ class PlanillasController extends RRHHBaseController
         $asuetos, array $horariosAsueto, array $horasExtrasMap,
         Carbon $fechaInicio, Carbon $fechaFin, int $diasQuincena, array $ordenesMap = []
     ): void {
-        // Borrar snapshot anterior
-        PlanillaMovimiento::where('planilla_id', $planillaId)->delete();
+        // Borrar solo los movimientos 'activo' de toda la planilla.
+        // Los 'anulado' se conservan; snapshotMovimientosEmpleado los respeta al reconstruir.
+        DB::connection('rrhh')
+            ->table('planilla_movimientos')
+            ->where('planilla_id', $planillaId)
+            ->where('estado', 'activo')
+            ->delete();
 
         foreach ($empleados as $emp) {
             $eid     = (int) $emp['id'];
@@ -1222,6 +1273,25 @@ class PlanillasController extends RRHHBaseController
         Carbon $fechaInicio, Carbon $fechaFin, int $diasQuincena, float $salBase,
         array $ordenesMap = []
     ): void {
+        // Cargar fingerprints de movimientos anulados para este empleado en esta planilla.
+        // Un movimiento anulado NO se recrea ni se toca durante el recálculo.
+        $anuladosSet = DB::connection('rrhh')
+            ->table('planilla_movimientos')
+            ->where('planilla_id', $planillaId)
+            ->where('empleado_id', $eid)
+            ->where('estado', 'anulado')
+            ->get(['tipo', 'referencia_id', 'concepto'])
+            ->mapWithKeys(fn($r) => [$r->tipo . '|' . ($r->referencia_id ?? $r->concepto) => true])
+            ->all();
+
+        // Eliminar solo los movimientos 'activo' de este empleado; los anulados se conservan intactos.
+        DB::connection('rrhh')
+            ->table('planilla_movimientos')
+            ->where('planilla_id', $planillaId)
+            ->where('empleado_id', $eid)
+            ->where('estado', 'activo')
+            ->delete();
+
         $rows = [];
 
         // Permisos
@@ -1384,6 +1454,12 @@ class PlanillasController extends RRHHBaseController
                 'updated_at'   => now(),
             ];
         }
+
+        // Filtrar filas que ya tienen un movimiento anulado con el mismo fingerprint.
+        $rows = array_values(array_filter($rows, function ($row) use ($anuladosSet) {
+            $key = $row['tipo'] . '|' . ($row['referencia_id'] ?? $row['concepto']);
+            return !isset($anuladosSet[$key]);
+        }));
 
         if (!empty($rows)) {
             DB::connection('rrhh')->table('planilla_movimientos')->insert($rows);
