@@ -783,6 +783,19 @@ Route::prefix('rrhh/planillas')->middleware(['auth:sanctum', 'role:rrhh_admin'])
     Route::get('{id}/boleta/{empleadoId}',          [PlanillasController::class, 'boletaPdf']);
 });
 
+// ─── RRHH Planillas SP — Servicios Profesionales (solo rrhh_admin) ───────────
+Route::prefix('rrhh/planillas-sp')->middleware(['auth:sanctum', 'role:rrhh_admin'])->group(function () {
+    Route::get('',                                  [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'index']);
+    Route::post('',                                 [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'store']);
+    Route::get('{id}',                              [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'show']);
+    Route::delete('{id}',                           [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'destroy']);
+    Route::put('{id}/cerrar',                       [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'cerrar']);
+    Route::get('{id}/exportar',                     [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'exportar']);
+    Route::post('{id}/lineas',                      [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'storeLinea']);
+    Route::put('{id}/lineas/{lineaId}',             [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'updateLinea']);
+    Route::delete('{id}/lineas/{lineaId}',          [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'destroyLinea']);
+});
+
 // ─── RRHH Propinas (solo rrhh_admin) ─────────────────────────────────────────
 Route::prefix('rrhh/propinas')->middleware(['auth:sanctum', 'role:rrhh_admin'])->group(function () {
     // Mantenimiento
