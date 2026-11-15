@@ -774,6 +774,11 @@ Route::prefix('rrhh/planillas')->middleware(['auth:sanctum', 'role:rrhh_admin'])
     Route::get('',                                  [PlanillasController::class, 'index']);
     Route::get('{id}',                              [PlanillasController::class, 'show']);
     Route::put('{id}/aprobar',                      [PlanillasController::class, 'aprobar']);
+    Route::put('{id}/cerrar',                       [PlanillasController::class, 'cerrar']);
+    Route::post('{id}/recalcular',                  [PlanillasController::class, 'recalcular']);
+    Route::get('{id}/movimientos',                  [PlanillasController::class, 'movimientos']);
+    Route::post('{id}/empleados',                   [PlanillasController::class, 'addEmpleado']);
+    Route::delete('{id}/empleados/{empleadoId}',    [PlanillasController::class, 'removeEmpleado']);
     Route::get('{id}/exportar',                     [PlanillasController::class, 'exportar']);
     Route::get('{id}/boleta/{empleadoId}',          [PlanillasController::class, 'boletaPdf']);
 });

@@ -11,6 +11,7 @@ use App\Models\RRHH\Incapacidad;
 use App\Models\RRHH\Permiso;
 use App\Models\RRHH\Planilla;
 use App\Models\RRHH\PlanillaLinea;
+use App\Models\RRHH\PlanillaMovimiento;
 use App\Models\RRHH\Vacacion;
 use App\Services\RRHH\PlanillaCalculatorService;
 use Carbon\Carbon;
@@ -146,10 +147,10 @@ class PlanillasController extends RRHHBaseController
                 ->where('sucursal_id', $sucursalId)
                 ->first();
 
-            if ($planilla && $planilla->estado === 'pagada') {
+            if ($planilla && in_array($planilla->estado, ['pagada', 'cerrada', 'historica'])) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No se puede regenerar una planilla con estado pagada.',
+                    'message' => 'No se puede regenerar una planilla con estado ' . $planilla->estado . '.',
                 ], 422);
             }
 
@@ -296,6 +297,14 @@ class PlanillasController extends RRHHBaseController
                 // Actualizar totales de la planilla
                 $totales = $this->calc->calcularTotalesPlanilla($lineasCalc);
                 $planilla->update($totales);
+
+                // Snapshot de movimientos por empleado
+                $this->snapshotMovimientos(
+                    $planilla->id, $empleados,
+                    $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
+                    $asuetos, $horariosAsueto, $horasExtrasMap,
+                    $fechaInicio, $fechaFin, $diasQuincena
+                );
 
                 DB::connection('rrhh')->commit();
             } catch (\Throwable $e) {
@@ -864,5 +873,515 @@ class PlanillasController extends RRHHBaseController
             ->whereIn('s.id', $sucursalIds)
             ->pluck('ts.codigo', 's.id')
             ->all();
+    }
+
+    // ─── Movimientos ─────────────────────────────────────────────────────────
+
+    /**
+     * GET /api/rrhh/planillas/{id}/movimientos
+     * Lista los movimientos snapshotados para una planilla, agrupados por empleado.
+     */
+    public function movimientos(int $id): JsonResponse
+    {
+        $planilla = Planilla::findOrFail($id);
+
+        $movs = PlanillaMovimiento::where('planilla_id', $id)
+            ->orderBy('empleado_id')
+            ->orderBy('tipo')
+            ->get();
+
+        $empIds   = $movs->pluck('empleado_id')->unique()->all();
+        $empleados = $this->buildEmpleadosMap($empIds);
+
+        $data = $movs->map(function ($m) use ($empleados) {
+            $arr = $m->toArray();
+            $emp = $empleados[$m->empleado_id] ?? null;
+            $arr['empleado_nombre'] = $emp ? trim($emp->nombres . ' ' . $emp->apellidos) : null;
+            $arr['empleado_codigo'] = $emp?->codigo;
+            return $arr;
+        });
+
+        return response()->json(['success' => true, 'data' => $data, 'planilla_estado' => $planilla->estado]);
+    }
+
+    // ─── Add / Remove empleado ────────────────────────────────────────────────
+
+    /**
+     * POST /api/rrhh/planillas/{id}/empleados
+     * Agrega un empleado a una planilla en borrador y calcula su línea.
+     */
+    public function addEmpleado(int $id, Request $request): JsonResponse
+    {
+        return $this->captureAndRespond($request, function () use ($id, $request) {
+            $validated = $request->validate(['empleado_id' => 'required|integer']);
+            $eid = (int) $validated['empleado_id'];
+
+            $planilla = Planilla::findOrFail($id);
+
+            if ($planilla->estado !== 'borrador') {
+                return response()->json(['success' => false, 'message' => 'Solo se pueden agregar empleados a planillas en borrador.'], 422);
+            }
+
+            if (PlanillaLinea::where('planilla_id', $id)->where('empleado_id', $eid)->exists()) {
+                return response()->json(['success' => false, 'message' => 'El empleado ya está en esta planilla.'], 422);
+            }
+
+            $empRow = DB::connection('pgsql')
+                ->table('empleados as e')
+                ->leftJoin('sucursales as s', 's.id', '=', 'e.sucursal_id')
+                ->where('e.id', $eid)
+                ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado')
+                ->first();
+
+            if (!$empRow) {
+                return response()->json(['success' => false, 'message' => 'Empleado no encontrado.'], 404);
+            }
+            $emp = (array) $empRow;
+
+            [$fechaInicio, $fechaFin] = $this->calc->rangoQuincena($planilla->anio, $planilla->mes, $planilla->quincena);
+            $diasQuincena = PlanillaCalculatorService::DIAS_QUINCENA;
+
+            $permisos      = $this->getPermisos([$eid], $fechaInicio, $fechaFin);
+            $incapacidades = $this->getIncapacidades([$eid], $fechaInicio, $fechaFin);
+            $vacaciones    = $this->getVacaciones([$eid], $fechaInicio, $fechaFin);
+            $ausencias     = $this->getAusencias([$eid], $fechaInicio, $fechaFin);
+            $suspensiones  = $this->getSuspensiones([$eid], $fechaInicio, $fechaFin);
+            $asuetos       = $this->getAsuetosEnRango($fechaInicio, $fechaFin);
+            $horariosAsueto = $this->getHorariosNormalEnAsuetos([$eid], $asuetos);
+            $horasExtrasMap = $this->getHorasExtrasMap([$eid], $planilla->anio, $planilla->mes, $planilla->quincena);
+            $ordenesMap    = $this->getOrdenesActivasMap([$eid], $fechaInicio->toDateString(), $planilla->quincena);
+            $bonificMap    = $this->getBonificacionesMap([$eid], $fechaInicio, $fechaFin);
+
+            $salBase   = (float) ($emp['salario_base'] ?? 0);
+            $diasNoTrab = $this->calcDiasNoTrabajados($eid, $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones, $fechaInicio, $fechaFin);
+            $diasLab   = min($diasQuincena, max(0, $diasQuincena - $diasNoTrab));
+
+            $esPensionado = (bool) ($emp['es_pensionado'] ?? false);
+            $resultado = $this->calc->calcularPlanillaEmpleado(
+                $salBase, (float) $diasLab, $diasQuincena,
+                $ordenesMap[$eid] ?? [], $bonificMap[$eid] ?? [], $esPensionado
+            );
+
+            $geoDptoEmp   = $emp['geo_departamento_id'] ?? null;
+            $diasAsueto   = $this->contarAsuetosEmpleado($eid, $geoDptoEmp, $asuetos, $horariosAsueto);
+            $salarioAsueto = $diasAsueto > 0 ? round(($salBase / 30) * $diasAsueto, 2) : 0.0;
+            $resultado['dias_asueto']    = $diasAsueto;
+            $resultado['salario_asueto'] = $salarioAsueto;
+            if ($salarioAsueto > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $salarioAsueto, 2);
+
+            $horasExt = (float) ($horasExtrasMap[$eid] ?? 0);
+            $montoExt = $horasExt > 0 ? round(($salBase / 240) * 2 * $horasExt, 2) : 0.0;
+            $resultado['horas_extras']      = round($horasExt, 2);
+            $resultado['monto_horas_extras'] = $montoExt;
+            if ($montoExt > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoExt, 2);
+
+            DB::connection('rrhh')->beginTransaction();
+            try {
+                $linea = PlanillaLinea::create(array_merge(
+                    ['planilla_id' => $id, 'empleado_id' => $eid],
+                    $resultado
+                ));
+
+                // Recalcular totales
+                $this->recalcularTotalesPlanilla($planilla);
+
+                // Snapshot movimientos solo para este empleado
+                $this->snapshotMovimientosEmpleado(
+                    $id, $eid,
+                    $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
+                    $asuetos, $horariosAsueto, $horasExtrasMap,
+                    $fechaInicio, $fechaFin, $diasQuincena, $salBase
+                );
+
+                DB::connection('rrhh')->commit();
+            } catch (\Throwable $e) {
+                DB::connection('rrhh')->rollBack();
+                throw $e;
+            }
+
+            return response()->json(['success' => true, 'message' => 'Empleado agregado a la planilla.', 'data' => $linea]);
+        });
+    }
+
+    /**
+     * DELETE /api/rrhh/planillas/{id}/empleados/{empleadoId}
+     * Quita un empleado de una planilla en borrador.
+     */
+    public function removeEmpleado(int $id, int $empleadoId): JsonResponse
+    {
+        return $this->captureAndRespond(request(), function () use ($id, $empleadoId) {
+            $planilla = Planilla::findOrFail($id);
+
+            if ($planilla->estado !== 'borrador') {
+                return response()->json(['success' => false, 'message' => 'Solo se pueden eliminar empleados de planillas en borrador.'], 422);
+            }
+
+            $deleted = PlanillaLinea::where('planilla_id', $id)
+                ->where('empleado_id', $empleadoId)
+                ->delete();
+
+            if (!$deleted) {
+                return response()->json(['success' => false, 'message' => 'El empleado no está en esta planilla.'], 404);
+            }
+
+            // Borrar sus movimientos
+            PlanillaMovimiento::where('planilla_id', $id)
+                ->where('empleado_id', $empleadoId)
+                ->delete();
+
+            $this->recalcularTotalesPlanilla($planilla);
+
+            return response()->json(['success' => true, 'message' => 'Empleado eliminado de la planilla.']);
+        });
+    }
+
+    // ─── Recalcular ───────────────────────────────────────────────────────────
+
+    /**
+     * POST /api/rrhh/planillas/{id}/recalcular
+     * Recalcula todas las líneas con los eventos actuales (mismo set de empleados).
+     */
+    public function recalcular(int $id): JsonResponse
+    {
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $planilla = Planilla::with('lineas')->findOrFail($id);
+
+            if (!in_array($planilla->estado, ['borrador', 'aprobada'])) {
+                return response()->json(['success' => false, 'message' => 'Solo se pueden recalcular planillas en borrador o aprobadas.'], 422);
+            }
+
+            [$fechaInicio, $fechaFin] = $this->calc->rangoQuincena($planilla->anio, $planilla->mes, $planilla->quincena);
+            $diasQuincena = PlanillaCalculatorService::DIAS_QUINCENA;
+
+            // Usar exactamente los empleados que ya están en la planilla
+            $empIds = $planilla->lineas->pluck('empleado_id')->unique()->toArray();
+            if (empty($empIds)) {
+                return response()->json(['success' => false, 'message' => 'La planilla no tiene empleados.'], 422);
+            }
+
+            $empleadosRows = DB::connection('pgsql')
+                ->table('empleados as e')
+                ->leftJoin('sucursales as s', 's.id', '=', 'e.sucursal_id')
+                ->whereIn('e.id', $empIds)
+                ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado')
+                ->get()
+                ->map(fn($r) => (array) $r)
+                ->all();
+
+            $permisos      = $this->getPermisos($empIds, $fechaInicio, $fechaFin);
+            $incapacidades = $this->getIncapacidades($empIds, $fechaInicio, $fechaFin);
+            $vacaciones    = $this->getVacaciones($empIds, $fechaInicio, $fechaFin);
+            $ausencias     = $this->getAusencias($empIds, $fechaInicio, $fechaFin);
+            $suspensiones  = $this->getSuspensiones($empIds, $fechaInicio, $fechaFin);
+            $asuetos       = $this->getAsuetosEnRango($fechaInicio, $fechaFin);
+            $horariosAsueto = $this->getHorariosNormalEnAsuetos($empIds, $asuetos);
+            $horasExtrasMap = $this->getHorasExtrasMap($empIds, $planilla->anio, $planilla->mes, $planilla->quincena);
+            $ordenesMap    = $this->getOrdenesActivasMap($empIds, $fechaInicio->toDateString(), $planilla->quincena);
+            $bonificMap    = $this->getBonificacionesMap($empIds, $fechaInicio, $fechaFin);
+
+            // Mapa de desvinculados (por si alguno fue desvinculado después de generar)
+            $desvinculados = DB::connection('rrhh')
+                ->table('desvinculaciones')
+                ->where('estado', 'aprobado')
+                ->where('fecha_efectiva', '>=', $fechaInicio->toDateString())
+                ->where('fecha_efectiva', '<=', $fechaFin->toDateString())
+                ->whereIn('empleado_id', $empIds)
+                ->select('empleado_id', 'fecha_efectiva')
+                ->get()
+                ->keyBy('empleado_id');
+
+            $lineasCalc = [];
+
+            DB::connection('rrhh')->beginTransaction();
+            try {
+                PlanillaLinea::where('planilla_id', $id)->delete();
+
+                foreach ($empleadosRows as $emp) {
+                    $eid     = (int) $emp['id'];
+                    $salBase = (float) ($emp['salario_base'] ?? 0);
+
+                    $desvinc = $desvinculados->get($eid);
+                    if ($desvinc) {
+                        $fechaTerm    = Carbon::parse($desvinc->fecha_efectiva);
+                        $hastaEfectivo = $fechaTerm->lessThan($fechaFin) ? $fechaTerm : $fechaFin;
+                        $diasEfectivos = min($diasQuincena, max(1, $fechaInicio->diffInDays($hastaEfectivo) + 1));
+                    } else {
+                        $hastaEfectivo = $fechaFin;
+                        $diasEfectivos = $diasQuincena;
+                    }
+
+                    $diasNoTrab = $this->calcDiasNoTrabajados($eid, $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones, $fechaInicio, $hastaEfectivo);
+                    $diasLab   = min($diasQuincena, max(0, $diasEfectivos - $diasNoTrab));
+
+                    $esPensionado = (bool) ($emp['es_pensionado'] ?? false);
+                    $resultado = $this->calc->calcularPlanillaEmpleado(
+                        $salBase, (float) $diasLab, $diasQuincena,
+                        $ordenesMap[$eid] ?? [], $bonificMap[$eid] ?? [], $esPensionado
+                    );
+
+                    $geoDptoEmp   = $emp['geo_departamento_id'] ?? null;
+                    $diasAsueto   = $this->contarAsuetosEmpleado($eid, $geoDptoEmp, $asuetos, $horariosAsueto);
+                    $salarioAsueto = $diasAsueto > 0 ? round(($salBase / 30) * $diasAsueto, 2) : 0.0;
+                    $resultado['dias_asueto']    = $diasAsueto;
+                    $resultado['salario_asueto'] = $salarioAsueto;
+                    if ($salarioAsueto > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $salarioAsueto, 2);
+
+                    $horasExt = (float) ($horasExtrasMap[$eid] ?? 0);
+                    $montoExt = $horasExt > 0 ? round(($salBase / 240) * 2 * $horasExt, 2) : 0.0;
+                    $resultado['horas_extras']      = round($horasExt, 2);
+                    $resultado['monto_horas_extras'] = $montoExt;
+                    if ($montoExt > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoExt, 2);
+
+                    $diasSusp = $suspensiones->filter(fn($s) => $s->amonestacion?->empleado_id === $eid)->count();
+                    if ($diasSusp > 0) {
+                        $detalle   = json_decode($resultado['detalle_descuentos'] ?? '[]', true) ?: [];
+                        $detalle[] = ['concepto' => "Suspensión disciplinaria ({$diasSusp} día(s))", 'tipo' => 'suspension', 'dias' => $diasSusp, 'monto' => 0];
+                        $resultado['detalle_descuentos'] = json_encode($detalle);
+                    }
+
+                    PlanillaLinea::create(array_merge(['planilla_id' => $id, 'empleado_id' => $eid], $resultado));
+                    $lineasCalc[] = $resultado;
+                }
+
+                $totales = $this->calc->calcularTotalesPlanilla($lineasCalc);
+                $planilla->update($totales);
+
+                $this->snapshotMovimientos(
+                    $id, $empleadosRows,
+                    $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
+                    $asuetos, $horariosAsueto, $horasExtrasMap,
+                    $fechaInicio, $fechaFin, $diasQuincena
+                );
+
+                DB::connection('rrhh')->commit();
+            } catch (\Throwable $e) {
+                DB::connection('rrhh')->rollBack();
+                throw $e;
+            }
+
+            return $this->show($id);
+        });
+    }
+
+    // ─── Cerrar planilla ──────────────────────────────────────────────────────
+
+    /**
+     * PUT /api/rrhh/planillas/{id}/cerrar
+     * Cambia estado a 'cerrada'. Solo desde 'aprobada'.
+     */
+    public function cerrar(int $id): JsonResponse
+    {
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $planilla = Planilla::findOrFail($id);
+
+            if ($planilla->estado !== 'aprobada') {
+                return response()->json(['success' => false, 'message' => 'Solo se pueden cerrar planillas aprobadas.'], 422);
+            }
+
+            $planilla->update(['estado' => 'cerrada']);
+
+            return response()->json(['success' => true, 'message' => 'Planilla cerrada.', 'data' => $planilla->fresh()]);
+        });
+    }
+
+    // ─── Snapshot helpers ─────────────────────────────────────────────────────
+
+    /**
+     * Genera/reemplaza el snapshot de movimientos para todos los empleados de la planilla.
+     */
+    private function snapshotMovimientos(
+        int $planillaId,
+        array $empleados,
+        $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
+        $asuetos, array $horariosAsueto, array $horasExtrasMap,
+        Carbon $fechaInicio, Carbon $fechaFin, int $diasQuincena
+    ): void {
+        // Borrar snapshot anterior
+        PlanillaMovimiento::where('planilla_id', $planillaId)->delete();
+
+        foreach ($empleados as $emp) {
+            $eid     = (int) $emp['id'];
+            $salBase = (float) ($emp['salario_base'] ?? 0);
+            $this->snapshotMovimientosEmpleado(
+                $planillaId, $eid,
+                $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
+                $asuetos, $horariosAsueto, $horasExtrasMap,
+                $fechaInicio, $fechaFin, $diasQuincena, $salBase
+            );
+        }
+    }
+
+    /**
+     * Genera el snapshot de movimientos para un único empleado.
+     */
+    private function snapshotMovimientosEmpleado(
+        int $planillaId,
+        int $eid,
+        $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
+        $asuetos, array $horariosAsueto, array $horasExtrasMap,
+        Carbon $fechaInicio, Carbon $fechaFin, int $diasQuincena, float $salBase
+    ): void {
+        $rows = [];
+
+        // Permisos
+        foreach ($permisos->where('empleado_id', $eid) as $p) {
+            $categoria = $p->tipoPermiso?->categoria ?? 'con_goce';
+            $tipo      = $categoria === 'sin_goce' ? 'permiso_sin_goce' : 'permiso_con_goce';
+            $dias      = (float) ($p->dias ?? ($p->horas_solicitadas ? $p->horas_solicitadas / 8 : 0));
+            if ($dias <= 0) continue;
+            $rows[] = [
+                'planilla_id'  => $planillaId,
+                'empleado_id'  => $eid,
+                'tipo'         => $tipo,
+                'concepto'     => $p->tipoPermiso?->nombre ?? 'Permiso',
+                'fecha_inicio' => $p->fecha,
+                'fecha_fin'    => $p->fecha,
+                'dias'         => $categoria === 'sin_goce' ? -$dias : 0,
+                'monto'        => null,
+                'referencia_id'=> $p->id,
+                'created_at'   => now(),
+                'updated_at'   => now(),
+            ];
+        }
+
+        // Incapacidades
+        foreach ($incapacidades->where('empleado_id', $eid) as $inc) {
+            $diasEnQ = $this->diasSolapados($inc->fecha_inicio, $inc->fecha_fin, $fechaInicio, $fechaFin);
+            if ($diasEnQ <= 0) continue;
+            $diasDesc = $inc->tipo_institucion === 'privada'
+                ? $diasEnQ
+                : max(0, min((int) $inc->dias - 3, $diasEnQ));
+            $tipo = $inc->tipo_institucion === 'isss' ? 'incapacidad_isss' : 'incapacidad_privada';
+            $rows[] = [
+                'planilla_id'  => $planillaId,
+                'empleado_id'  => $eid,
+                'tipo'         => $tipo,
+                'concepto'     => 'Incapacidad ' . strtoupper($inc->tipo_institucion ?? ''),
+                'fecha_inicio' => $inc->fecha_inicio,
+                'fecha_fin'    => $inc->fecha_fin,
+                'dias'         => -$diasDesc,
+                'monto'        => null,
+                'referencia_id'=> $inc->id,
+                'created_at'   => now(),
+                'updated_at'   => now(),
+            ];
+        }
+
+        // Vacaciones
+        foreach ($vacaciones->where('empleado_id', $eid) as $v) {
+            $diasEnQ = $this->diasSolapados($v->fecha_inicio, $v->fecha_fin, $fechaInicio, $fechaFin);
+            if ($diasEnQ <= 0) continue;
+            $rows[] = [
+                'planilla_id'  => $planillaId,
+                'empleado_id'  => $eid,
+                'tipo'         => 'vacacion',
+                'concepto'     => 'Vacaciones',
+                'fecha_inicio' => $v->fecha_inicio,
+                'fecha_fin'    => $v->fecha_fin,
+                'dias'         => -$diasEnQ,
+                'monto'        => null,
+                'referencia_id'=> $v->id,
+                'created_at'   => now(),
+                'updated_at'   => now(),
+            ];
+        }
+
+        // Ausencias injustificadas
+        foreach ($ausencias->where('empleado_id', $eid) as $a) {
+            $rows[] = [
+                'planilla_id'  => $planillaId,
+                'empleado_id'  => $eid,
+                'tipo'         => 'ausencia',
+                'concepto'     => 'Ausencia injustificada',
+                'fecha_inicio' => $a->fecha,
+                'fecha_fin'    => $a->fecha,
+                'dias'         => -1,
+                'monto'        => null,
+                'referencia_id'=> $a->id,
+                'created_at'   => now(),
+                'updated_at'   => now(),
+            ];
+        }
+
+        // Suspensiones disciplinarias
+        foreach ($suspensiones->filter(fn($s) => $s->amonestacion?->empleado_id === $eid) as $s) {
+            $rows[] = [
+                'planilla_id'  => $planillaId,
+                'empleado_id'  => $eid,
+                'tipo'         => 'suspension',
+                'concepto'     => 'Suspensión disciplinaria',
+                'fecha_inicio' => $s->fecha,
+                'fecha_fin'    => $s->fecha,
+                'dias'         => -1,
+                'monto'        => null,
+                'referencia_id'=> $s->id,
+                'created_at'   => now(),
+                'updated_at'   => now(),
+            ];
+        }
+
+        // Asuetos (positivos)
+        $geoDptoEmp = null; // No disponible aquí; se omite filtro departamental para el snapshot
+        foreach ($asuetos as $asueto) {
+            $fechaStr = $asueto->fecha instanceof Carbon
+                ? $asueto->fecha->toDateString()
+                : substr((string) $asueto->fecha, 0, 10);
+            $fechasNormal = $horariosAsueto[$eid] ?? [];
+            if (!in_array($fechaStr, $fechasNormal)) continue;
+            $montoAsueto = round(($salBase / 30), 2);
+            $rows[] = [
+                'planilla_id'  => $planillaId,
+                'empleado_id'  => $eid,
+                'tipo'         => 'asueto',
+                'concepto'     => 'Asueto trabajado',
+                'fecha_inicio' => $fechaStr,
+                'fecha_fin'    => $fechaStr,
+                'dias'         => 1,
+                'monto'        => $montoAsueto,
+                'referencia_id'=> $asueto->id,
+                'created_at'   => now(),
+                'updated_at'   => now(),
+            ];
+        }
+
+        // Horas extras (positivas)
+        $horasExt = (float) ($horasExtrasMap[$eid] ?? 0);
+        if ($horasExt > 0) {
+            $montoExt = round(($salBase / 240) * 2 * $horasExt, 2);
+            $rows[] = [
+                'planilla_id'  => $planillaId,
+                'empleado_id'  => $eid,
+                'tipo'         => 'horas_extras',
+                'concepto'     => "Horas extras aprobadas ({$horasExt}h)",
+                'fecha_inicio' => null,
+                'fecha_fin'    => null,
+                'dias'         => 0,
+                'monto'        => $montoExt,
+                'referencia_id'=> null,
+                'created_at'   => now(),
+                'updated_at'   => now(),
+            ];
+        }
+
+        if (!empty($rows)) {
+            DB::connection('rrhh')->table('planilla_movimientos')->insert($rows);
+        }
+    }
+
+    /**
+     * Recalcula y actualiza los totales de la planilla desde sus líneas actuales.
+     */
+    private function recalcularTotalesPlanilla(Planilla $planilla): void
+    {
+        $lineas = PlanillaLinea::where('planilla_id', $planilla->id)->get();
+
+        $totals = [
+            'total_salarios'   => $lineas->sum(fn($l) => (float) $l->salario_proporcional),
+            'total_descuentos' => $lineas->sum(fn($l) => (float) $l->total_descuentos_empleado),
+            'total_patronal'   => $lineas->sum(fn($l) => (float) $l->total_patronal),
+            'total_neto'       => $lineas->sum(fn($l) => (float) $l->salario_neto),
+        ];
+
+        $planilla->update(array_map(fn($v) => round($v, 2), $totals));
     }
 }

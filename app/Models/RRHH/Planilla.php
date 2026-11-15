@@ -29,4 +29,9 @@ class Planilla extends Model
     {
         return $this->hasMany(PlanillaLinea::class, 'planilla_id');
     }
+
+    public function movimientos()
+    {
+        return $this->hasMany(PlanillaMovimiento::class, 'planilla_id');
+    }
 }
