@@ -194,7 +194,8 @@ class PlanillasController extends RRHHBaseController
             $horariosAsueto = $this->getHorariosNormalEnAsuetos($empIds, $asuetos);
 
             // Cargar horas extras aprobadas para esta quincena de pago
-            $horasExtrasMap = $this->getHorasExtrasMap($empIds, $anio, $mes, $quincena);
+            $horasExtrasMap     = $this->getHorasExtrasMap($empIds, $anio, $mes, $quincena);
+            $nocturnidadesMap   = $this->getNocturnidadesMap($empIds, $anio, $mes, $quincena);
 
             // Cargar órdenes de descuento activas del período
             $ordenesMap      = $this->getOrdenesActivasMap($empIds, $fechaInicio->toDateString(), $quincena);
@@ -268,6 +269,18 @@ class PlanillasController extends RRHHBaseController
                         $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoHorasExtras, 2);
                     }
 
+                    // Nocturnidades (25% sobre tarifa hora base, Art. 161 CT-SV)
+                    $horasNoct    = (float) ($nocturnidadesMap[$eid] ?? 0);
+                    $montoNoct    = $horasNoct > 0
+                        ? round(($salBase / 240) * 0.25 * $horasNoct, 2)
+                        : 0.0;
+
+                    $resultado['horas_nocturnas']     = round($horasNoct, 2);
+                    $resultado['monto_nocturnidades'] = $montoNoct;
+                    if ($montoNoct > 0) {
+                        $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoNoct, 2);
+                    }
+
                     // Anotar días de suspensión en detalle para trazabilidad
                     $diasSusp = $suspensiones
                         ->filter(fn($s) => $s->amonestacion?->empleado_id === $eid)
@@ -302,7 +315,7 @@ class PlanillasController extends RRHHBaseController
                 $this->snapshotMovimientos(
                     $planilla->id, $empleados,
                     $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
-                    $asuetos, $horariosAsueto, $horasExtrasMap,
+                    $asuetos, $horariosAsueto, $horasExtrasMap, $nocturnidadesMap,
                     $fechaInicio, $fechaFin, $diasQuincena, $ordenesMap
                 );
 
@@ -790,6 +803,65 @@ class PlanillasController extends RRHHBaseController
     }
 
     /**
+     * Mapa empleado_id → horas nocturnas acumuladas en el período de TRABAJO
+     * correspondiente a la quincena de pago dada (Art. 161 CT-SV).
+     *
+     * Regla de pago vencido:
+     *   pago Q1 → trabajo Q2 del mes anterior
+     *   pago Q2 → trabajo Q1 del mismo mes
+     *
+     * Zona nocturna: 19:00–24:00 y 00:00–06:00.
+     */
+    private function getNocturnidadesMap(array $empIds, int $anioP, int $mesP, int $quincenaP): array
+    {
+        if (empty($empIds)) return [];
+
+        // Período de trabajo (quincena anterior al pago)
+        if ($quincenaP === 1) {
+            // Trabajo: Q2 del mes anterior
+            $mesTrab   = $mesP === 1 ? 12 : $mesP - 1;
+            $anioTrab  = $mesP === 1 ? $anioP - 1 : $anioP;
+            $desde     = Carbon::create($anioTrab, $mesTrab, 16);
+            $hasta     = Carbon::create($anioTrab, $mesTrab)->endOfMonth()->startOfDay();
+        } else {
+            // Trabajo: Q1 del mismo mes
+            $anioTrab  = $anioP;
+            $desde     = Carbon::create($anioTrab, $mesP, 1);
+            $hasta     = Carbon::create($anioTrab, $mesP, 15);
+        }
+
+        $horarios = DB::connection('pgsql')
+            ->table('horarios_empleado')
+            ->whereIn('empleado_id', $empIds)
+            ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->where('tipo', 'normal')
+            ->whereNotNull('hora_inicio')
+            ->whereNotNull('hora_fin')
+            ->get(['empleado_id', 'hora_inicio', 'hora_fin']);
+
+        $result = [];
+        $toMins = fn(string $t): int => (int) explode(':', $t)[0] * 60 + (int) (explode(':', $t)[1] ?? 0);
+
+        foreach ($horarios as $h) {
+            $eid    = (int) $h->empleado_id;
+            $inicio = $toMins($h->hora_inicio);
+            $fin    = $toMins($h->hora_fin);
+            if ($fin <= $inicio) $fin += 1440; // cruza medianoche
+
+            $noct = 0;
+            // 19:00–24:00
+            $z1s = max($inicio, 19 * 60); $z1e = min($fin, 24 * 60);
+            if ($z1e > $z1s) $noct += $z1e - $z1s;
+            // 00:00–06:00 (solo turnos que cruzan medianoche)
+            if ($fin > 1440) $noct += min($fin, 1440 + 6 * 60) - 1440;
+
+            $result[$eid] = ($result[$eid] ?? 0.0) + $noct / 60.0;
+        }
+
+        return array_map(fn($h) => round($h, 2), $result);
+    }
+
+    /**
      * Todos los asuetos activos dentro de un rango de fechas (sin filtrar por sucursal).
      * El filtro por geo_departamento se hace por empleado en memoria.
      */
@@ -994,7 +1066,8 @@ class PlanillasController extends RRHHBaseController
             $suspensiones  = $this->getSuspensiones([$eid], $fechaInicio, $fechaFin);
             $asuetos       = $this->getAsuetosEnRango($fechaInicio, $fechaFin);
             $horariosAsueto = $this->getHorariosNormalEnAsuetos([$eid], $asuetos);
-            $horasExtrasMap = $this->getHorasExtrasMap([$eid], $planilla->anio, $planilla->mes, $planilla->quincena);
+            $horasExtrasMap   = $this->getHorasExtrasMap([$eid], $planilla->anio, $planilla->mes, $planilla->quincena);
+            $nocturnidadesMap = $this->getNocturnidadesMap([$eid], $planilla->anio, $planilla->mes, $planilla->quincena);
             $ordenesMap    = $this->getOrdenesActivasMap([$eid], $fechaInicio->toDateString(), $planilla->quincena);
             $bonificMap    = $this->getBonificacionesMap([$eid], $fechaInicio, $fechaFin);
 
@@ -1021,6 +1094,12 @@ class PlanillasController extends RRHHBaseController
             $resultado['monto_horas_extras'] = $montoExt;
             if ($montoExt > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoExt, 2);
 
+            $horasNoct = (float) ($nocturnidadesMap[$eid] ?? 0);
+            $montoNoct = $horasNoct > 0 ? round(($salBase / 240) * 0.25 * $horasNoct, 2) : 0.0;
+            $resultado['horas_nocturnas']     = round($horasNoct, 2);
+            $resultado['monto_nocturnidades'] = $montoNoct;
+            if ($montoNoct > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoNoct, 2);
+
             DB::connection('rrhh')->beginTransaction();
             try {
                 $linea = PlanillaLinea::create(array_merge(
@@ -1035,7 +1114,7 @@ class PlanillasController extends RRHHBaseController
                 $this->snapshotMovimientosEmpleado(
                     $id, $eid,
                     $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
-                    $asuetos, $horariosAsueto, $horasExtrasMap,
+                    $asuetos, $horariosAsueto, $horasExtrasMap, $nocturnidadesMap,
                     $fechaInicio, $fechaFin, $diasQuincena, $salBase, $ordenesMap
                 );
 
@@ -1121,7 +1200,8 @@ class PlanillasController extends RRHHBaseController
             $suspensiones  = $this->getSuspensiones($empIds, $fechaInicio, $fechaFin);
             $asuetos       = $this->getAsuetosEnRango($fechaInicio, $fechaFin);
             $horariosAsueto = $this->getHorariosNormalEnAsuetos($empIds, $asuetos);
-            $horasExtrasMap = $this->getHorasExtrasMap($empIds, $planilla->anio, $planilla->mes, $planilla->quincena);
+            $horasExtrasMap   = $this->getHorasExtrasMap($empIds, $planilla->anio, $planilla->mes, $planilla->quincena);
+            $nocturnidadesMap = $this->getNocturnidadesMap($empIds, $planilla->anio, $planilla->mes, $planilla->quincena);
             $ordenesMap    = $this->getOrdenesActivasMap($empIds, $fechaInicio->toDateString(), $planilla->quincena);
             $bonificMap    = $this->getBonificacionesMap($empIds, $fechaInicio, $fechaFin);
 
@@ -1178,6 +1258,12 @@ class PlanillasController extends RRHHBaseController
                     $resultado['monto_horas_extras'] = $montoExt;
                     if ($montoExt > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoExt, 2);
 
+                    $horasNoct = (float) ($nocturnidadesMap[$eid] ?? 0);
+                    $montoNoct = $horasNoct > 0 ? round(($salBase / 240) * 0.25 * $horasNoct, 2) : 0.0;
+                    $resultado['horas_nocturnas']     = round($horasNoct, 2);
+                    $resultado['monto_nocturnidades'] = $montoNoct;
+                    if ($montoNoct > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoNoct, 2);
+
                     $diasSusp = $suspensiones->filter(fn($s) => $s->amonestacion?->empleado_id === $eid)->count();
                     if ($diasSusp > 0) {
                         $detalle   = json_decode($resultado['detalle_descuentos'] ?? '[]', true) ?: [];
@@ -1195,7 +1281,7 @@ class PlanillasController extends RRHHBaseController
                 $this->snapshotMovimientos(
                     $id, $empleadosRows,
                     $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
-                    $asuetos, $horariosAsueto, $horasExtrasMap,
+                    $asuetos, $horariosAsueto, $horasExtrasMap, $nocturnidadesMap,
                     $fechaInicio, $fechaFin, $diasQuincena, $ordenesMap
                 );
 
@@ -1239,7 +1325,7 @@ class PlanillasController extends RRHHBaseController
         int $planillaId,
         array $empleados,
         $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
-        $asuetos, array $horariosAsueto, array $horasExtrasMap,
+        $asuetos, array $horariosAsueto, array $horasExtrasMap, array $nocturnidadesMap,
         Carbon $fechaInicio, Carbon $fechaFin, int $diasQuincena, array $ordenesMap = []
     ): void {
         // Borrar solo los movimientos 'activo' de toda la planilla.
@@ -1256,7 +1342,7 @@ class PlanillasController extends RRHHBaseController
             $this->snapshotMovimientosEmpleado(
                 $planillaId, $eid,
                 $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
-                $asuetos, $horariosAsueto, $horasExtrasMap,
+                $asuetos, $horariosAsueto, $horasExtrasMap, $nocturnidadesMap,
                 $fechaInicio, $fechaFin, $diasQuincena, $salBase, $ordenesMap
             );
         }
@@ -1269,7 +1355,7 @@ class PlanillasController extends RRHHBaseController
         int $planillaId,
         int $eid,
         $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
-        $asuetos, array $horariosAsueto, array $horasExtrasMap,
+        $asuetos, array $horariosAsueto, array $horasExtrasMap, array $nocturnidadesMap,
         Carbon $fechaInicio, Carbon $fechaFin, int $diasQuincena, float $salBase,
         array $ordenesMap = []
     ): void {
@@ -1428,6 +1514,25 @@ class PlanillasController extends RRHHBaseController
                 'fecha_fin'    => null,
                 'dias'         => 0,
                 'monto'        => $montoExt,
+                'referencia_id'=> null,
+                'created_at'   => now(),
+                'updated_at'   => now(),
+            ];
+        }
+
+        // Nocturnidades (25% sobre tarifa hora base, Art. 161 CT-SV)
+        $horasNoct = (float) ($nocturnidadesMap[$eid] ?? 0);
+        if ($horasNoct > 0) {
+            $montoNoct = round(($salBase / 240) * 0.25 * $horasNoct, 2);
+            $rows[] = [
+                'planilla_id'  => $planillaId,
+                'empleado_id'  => $eid,
+                'tipo'         => 'nocturnidad',
+                'concepto'     => "Recargo nocturno ({$horasNoct}h)",
+                'fecha_inicio' => null,
+                'fecha_fin'    => null,
+                'dias'         => 0,
+                'monto'        => $montoNoct,
                 'referencia_id'=> null,
                 'created_at'   => now(),
                 'updated_at'   => now(),

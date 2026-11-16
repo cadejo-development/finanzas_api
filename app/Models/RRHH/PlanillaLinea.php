@@ -19,6 +19,7 @@ class PlanillaLinea extends Model
         'costo_total', 'detalle_descuentos', 'notas',
         'dias_asueto', 'salario_asueto',
         'horas_extras', 'monto_horas_extras',
+        'horas_nocturnas', 'monto_nocturnidades',
     ];
 
     protected $casts = [
@@ -42,6 +43,8 @@ class PlanillaLinea extends Model
         'salario_asueto'            => 'decimal:2',
         'horas_extras'              => 'decimal:2',
         'monto_horas_extras'        => 'decimal:2',
+        'horas_nocturnas'           => 'decimal:2',
+        'monto_nocturnidades'       => 'decimal:2',
     ];
 
     public function planilla()

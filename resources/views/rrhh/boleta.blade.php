@@ -83,7 +83,9 @@ hr.divider { border: none; border-top: 1.5px solid #1a3a5c; margin: 8px 0 12px 0
         al
         {{ \Carbon\Carbon::parse($planilla->fecha_fin)->format('d/m/Y') }}
       </div>
+      @if($planilla->estado !== 'borrador')
       <span class="badge">{{ ucfirst($planilla->estado) }}</span>
+      @endif
     </td>
     @if($logoB64)
     <td class="logo-cell"><img src="{{ $logoB64 }}" alt="Logo" /></td>
@@ -168,8 +170,9 @@ hr.divider { border: none; border-top: 1.5px solid #1a3a5c; margin: 8px 0 12px 0
           </tr>
           @endif
           @php
-            $salAsueto       = (float)($linea->salario_asueto ?? 0);
+            $salAsueto        = (float)($linea->salario_asueto ?? 0);
             $montoHorasExtras = (float)($linea->monto_horas_extras ?? 0);
+            $montoNocturnidad = (float)($linea->monto_nocturnidades ?? 0);
           @endphp
           @if($salAsueto > 0)
           <tr>
@@ -183,9 +186,15 @@ hr.divider { border: none; border-top: 1.5px solid #1a3a5c; margin: 8px 0 12px 0
             <td class="r">${{ number_format($montoHorasExtras, 2) }}</td>
           </tr>
           @endif
+          @if($montoNocturnidad > 0)
+          <tr>
+            <td>Recargo nocturno ({{ number_format((float)($linea->horas_nocturnas ?? 0), 1) }} h)</td>
+            <td class="r">${{ number_format($montoNocturnidad, 2) }}</td>
+          </tr>
+          @endif
           <tr class="total">
             <td>Total Ingresos:</td>
-            <td class="r">${{ number_format($linea->salario_proporcional + $salAsueto + $montoHorasExtras, 2) }}</td>
+            <td class="r">${{ number_format($linea->salario_proporcional + $salAsueto + $montoHorasExtras + $montoNocturnidad, 2) }}</td>
           </tr>
         </tbody>
       </table>
