@@ -1068,9 +1068,10 @@ class PlanillasController extends RRHHBaseController
 
         $mov->update($data);
         $this->ajustarLineaTrasMov($id, $mov->empleado_id);
+        $this->recalcularTotalesPlanilla($planilla->fresh());
         $linea = PlanillaLinea::where('planilla_id', $id)->where('empleado_id', $mov->empleado_id)->first();
 
-        return response()->json(['success' => true, 'message' => 'Movimiento actualizado.', 'data' => $mov, 'linea' => $linea]);
+        return response()->json(['success' => true, 'message' => 'Movimiento actualizado.', 'data' => $mov, 'linea' => $linea, 'planilla_totales' => $planilla->fresh()->only(['total_salarios','total_descuentos','total_patronal','total_neto'])]);
     }
 
     /**
@@ -1093,9 +1094,10 @@ class PlanillasController extends RRHHBaseController
 
         $mov->update(['estado' => 'anulado']);
         $this->ajustarLineaTrasMov($id, $mov->empleado_id);
+        $this->recalcularTotalesPlanilla($planilla->fresh());
         $linea = PlanillaLinea::where('planilla_id', $id)->where('empleado_id', $mov->empleado_id)->first();
 
-        return response()->json(['success' => true, 'message' => 'Movimiento anulado.', 'data' => $mov, 'linea' => $linea]);
+        return response()->json(['success' => true, 'message' => 'Movimiento anulado.', 'data' => $mov, 'linea' => $linea, 'planilla_totales' => $planilla->fresh()->only(['total_salarios','total_descuentos','total_patronal','total_neto'])]);
     }
 
     /**
@@ -1113,9 +1115,10 @@ class PlanillasController extends RRHHBaseController
         $mov = PlanillaMovimiento::where('planilla_id', $id)->findOrFail($movId);
         $mov->update(['estado' => 'activo']);
         $this->ajustarLineaTrasMov($id, $mov->empleado_id);
+        $this->recalcularTotalesPlanilla($planilla->fresh());
         $linea = PlanillaLinea::where('planilla_id', $id)->where('empleado_id', $mov->empleado_id)->first();
 
-        return response()->json(['success' => true, 'message' => 'Movimiento reactivado.', 'data' => $mov, 'linea' => $linea]);
+        return response()->json(['success' => true, 'message' => 'Movimiento reactivado.', 'data' => $mov, 'linea' => $linea, 'planilla_totales' => $planilla->fresh()->only(['total_salarios','total_descuentos','total_patronal','total_neto'])]);
     }
 
     /**
