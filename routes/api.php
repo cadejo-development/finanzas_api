@@ -646,6 +646,7 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     // Reportes quincenales
     Route::get('reportes/quincena',       [ReportesRRHHController::class, 'quincena']);
     Route::get('reportes/horas-quincena', [ReportesRRHHController::class, 'horasQuincena']);
+    Route::get('reportes/asistencias',    [ReportesRRHHController::class, 'asistencia']);
     Route::get('reportes/unidades',       [ReportesRRHHController::class, 'unidades']);
 
     // Horarios semanales

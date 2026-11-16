@@ -774,6 +774,223 @@ class ReportesRRHHController extends RRHHBaseController
         return $result;
     }
 
+    // ─── Endpoint: Asistencias quincenales ───────────────────────────────────
+
+    /**
+     * Reporte de asistencias: días laborados y ausencias desglosadas por tipo.
+     * Incluye empleados activos + desvinculados (retiro) dentro de la quincena.
+     */
+    public function asistencia(Request $request): JsonResponse
+    {
+        try {
+            $subordinadosIds = $this->getSubordinadosIds();
+
+            $anio       = (int) ($request->query('anio', now()->year));
+            $mes        = (int) ($request->query('mes', now()->month));
+            $quincena   = (int) ($request->query('quincena', now()->day <= 15 ? 1 : 2));
+            $sucursalId = $request->query('sucursal_id');
+            $deptoId    = $request->query('departamento_id');
+
+            [$desde, $hasta] = $this->calc->rangoQuincena($anio, $mes, $quincena);
+            $diasQuincena    = PlanillaCalculatorService::DIAS_QUINCENA;
+
+            // Empleados activos
+            $empleados    = $this->getEmpleadosFiltrados($subordinadosIds, $sucursalId, $deptoId);
+            $idsActivos   = array_column($empleados, 'id');
+
+            // Empleados desvinculados en la quincena
+            $desvinculados = $this->getDesvinculadosEnPeriodo(
+                $subordinadosIds, $desde, $hasta, $sucursalId, $deptoId
+            );
+            foreach ($desvinculados as $d) {
+                if (!in_array($d['id'], $idsActivos)) {
+                    $empleados[] = $d;
+                }
+            }
+
+            $empIds = array_column($empleados, 'id');
+
+            // Cargar eventos
+            $permisos      = $this->getPermisos($empIds, $desde, $hasta);
+            $incapacidades = $this->getIncapacidades($empIds, $desde, $hasta);
+            $vacaciones    = $this->getVacaciones($empIds, $desde, $hasta);
+            $ausencias     = $this->getAusencias($empIds, $desde, $hasta);
+            $suspensiones  = $this->getSuspensionesEnPeriodo($empIds, $desde, $hasta);
+            $desvinMap     = $this->getDesvinculacionesMap($empIds, $desde, $hasta);
+
+            $reporte = [];
+            foreach ($empleados as $emp) {
+                $eid = $emp['id'];
+
+                // Incapacidades
+                $diasIncapIsss    = 0;
+                $diasIncapPrivada = 0;
+                foreach ($incapacidades->where('empleado_id', $eid) as $inc) {
+                    $dias = $this->diasSolapados($inc->fecha_inicio, $inc->fecha_fin, $desde, $hasta);
+                    if ($inc->tipo_institucion === 'isss') {
+                        $diasIncapIsss += $dias;
+                    } else {
+                        $diasIncapPrivada += $dias;
+                    }
+                }
+
+                // Permisos sin goce
+                $diasPermSinGoce = 0.0;
+                foreach ($permisos->where('empleado_id', $eid) as $p) {
+                    if ($p->tipoPermiso && $p->tipoPermiso->categoria === 'sin_goce') {
+                        $diasPermSinGoce += (float) ($p->dias ?? ($p->horas_solicitadas ? $p->horas_solicitadas / 8 : 0));
+                    }
+                }
+
+                // Vacaciones
+                $diasVacaciones = 0;
+                foreach ($vacaciones->where('empleado_id', $eid) as $v) {
+                    $diasVacaciones += $this->diasSolapados($v->fecha_inicio, $v->fecha_fin, $desde, $hasta);
+                }
+
+                // Ausencias injustificadas
+                $diasAusencias = $ausencias->where('empleado_id', $eid)->count();
+
+                // Suspensiones (días específicos en la quincena)
+                $diasSuspension = $suspensiones->filter(fn($s) => (int) $s->empleado_id === $eid)->count();
+
+                // Retiro (despido / renuncia durante la quincena)
+                $diasRetiro  = 0;
+                $retiroTipo  = null;
+                if (isset($desvinMap[$eid])) {
+                    $fechaEfectiva = Carbon::parse($desvinMap[$eid]['fecha_efectiva']);
+                    // Días posteriores a la fecha efectiva hasta el fin de la quincena
+                    if ($fechaEfectiva->lt($hasta)) {
+                        $diasRetiro = max(0, $fechaEfectiva->copy()->addDay()->diffInDays($hasta->copy()->addDay()));
+                    }
+                    $retiroTipo = $desvinMap[$eid]['tipo'];
+                }
+
+                $totalNoTrabajados = $diasIncapIsss + $diasIncapPrivada + $diasPermSinGoce
+                    + $diasVacaciones + $diasAusencias + $diasSuspension + $diasRetiro;
+
+                $reporte[] = [
+                    'empleado_id'       => $eid,
+                    'codigo'            => $emp['codigo'] ?? null,
+                    'nombre'            => $emp['nombre'] ?? '—',
+                    'cargo'             => $emp['cargo'] ?? null,
+                    'sucursal'          => $emp['sucursal'] ?? null,
+                    'sucursal_tipo'     => $emp['sucursal_tipo'] ?? null,
+                    'departamento'      => $emp['departamento'] ?? null,
+                    'dias_periodo'      => $diasQuincena,
+                    'dias_laborados'    => max(0, $diasQuincena - $totalNoTrabajados),
+                    'incap_isss'        => $diasIncapIsss,
+                    'incap_privada'     => $diasIncapPrivada,
+                    'perm_sin_goce'     => round($diasPermSinGoce, 2),
+                    'vacaciones'        => $diasVacaciones,
+                    'ausencias'         => $diasAusencias,
+                    'suspensiones'      => $diasSuspension,
+                    'retiro'            => $diasRetiro,
+                    'retiro_tipo'       => $retiroTipo,
+                    'total_no_trabajados' => round($totalNoTrabajados, 2),
+                ];
+            }
+
+            usort($reporte, fn($a, $b) => strcmp($a['nombre'] ?? '', $b['nombre'] ?? ''));
+
+            return response()->json([
+                'success' => true,
+                'data'    => $reporte,
+                'meta'    => [
+                    'anio'     => $anio,
+                    'mes'      => $mes,
+                    'quincena' => $quincena,
+                    'desde'    => $desde->toDateString(),
+                    'hasta'    => $hasta->toDateString(),
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'file'    => $e->getFile() . ':' . $e->getLine(),
+            ], 500);
+        }
+    }
+
+    private function getDesvinculadosEnPeriodo(
+        array $ids, Carbon $desde, Carbon $hasta, $sucursalId, $deptoId
+    ): array {
+        if (empty($ids)) return [];
+
+        $desvinIds = DB::connection('rrhh')
+            ->table('desvinculaciones')
+            ->whereIn('empleado_id', $ids)
+            ->where('estado', 'aprobado')
+            ->whereBetween('fecha_efectiva', [$desde->toDateString(), $hasta->toDateString()])
+            ->pluck('empleado_id')
+            ->toArray();
+
+        if (empty($desvinIds)) return [];
+
+        $query = DB::connection('pgsql')
+            ->table('empleados as e')
+            ->join('sucursales as s', 's.id', '=', 'e.sucursal_id')
+            ->leftJoin('tipos_sucursal as ts', 'ts.id', '=', 's.tipo_sucursal_id')
+            ->leftJoin('cargos as c', 'c.id', '=', 'e.cargo_id')
+            ->leftJoin('departamentos as d', 'd.id', '=', 'e.departamento_id')
+            ->leftJoin('departamentos as dj', 'dj.jefe_empleado_id', '=', 'e.id')
+            ->whereIn('e.id', $desvinIds);
+
+        if ($sucursalId) $query->where('e.sucursal_id', (int) $sucursalId);
+        if ($deptoId) {
+            $query->where(function ($q) use ($deptoId) {
+                $q->where('e.departamento_id', (int) $deptoId)
+                  ->orWhere('dj.id', (int) $deptoId);
+            });
+        }
+
+        return $query->select(
+            'e.id', 'e.codigo',
+            DB::raw("CONCAT(e.nombres, ' ', e.apellidos) as nombre"),
+            's.nombre as sucursal',
+            'ts.codigo as sucursal_tipo',
+            'e.sucursal_id',
+            'e.departamento_id',
+            DB::raw("COALESCE(d.nombre, dj.nombre) as departamento"),
+            'c.nombre as cargo'
+        )->get()->map(fn($r) => (array) $r)->toArray();
+    }
+
+    private function getDesvinculacionesMap(array $empIds, Carbon $desde, Carbon $hasta): array
+    {
+        if (empty($empIds)) return [];
+
+        $rows = DB::connection('rrhh')
+            ->table('desvinculaciones')
+            ->whereIn('empleado_id', $empIds)
+            ->where('estado', 'aprobado')
+            ->whereBetween('fecha_efectiva', [$desde->toDateString(), $hasta->toDateString()])
+            ->get(['empleado_id', 'fecha_efectiva', 'tipo']);
+
+        $map = [];
+        foreach ($rows as $r) {
+            $map[(int) $r->empleado_id] = [
+                'fecha_efectiva' => $r->fecha_efectiva,
+                'tipo'           => $r->tipo,
+            ];
+        }
+        return $map;
+    }
+
+    private function getSuspensionesEnPeriodo(array $empIds, Carbon $desde, Carbon $hasta): \Illuminate\Support\Collection
+    {
+        if (empty($empIds)) return collect();
+
+        return DB::connection('rrhh')
+            ->table('dias_suspension as ds')
+            ->join('amonestaciones as a', 'a.id', '=', 'ds.amonestacion_id')
+            ->whereIn('a.empleado_id', $empIds)
+            ->whereBetween('ds.fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->select('a.empleado_id', 'ds.fecha')
+            ->get();
+    }
+
     /**
      * Devuelve el tipo de sucursal ('operativa' | 'area_corporativa' | null)
      * para un array de sucursal_id. Usado como fallback cuando el LEFT JOIN
