@@ -1798,7 +1798,6 @@ class PlanillasController extends RRHHBaseController
                         'dias'          => 0,
                         'monto'         => $montoVacaciones,
                         'referencia_id' => null,
-                        'estado'        => 'activo',
                         'created_at'    => now(),
                         'updated_at'    => now(),
                     ];
