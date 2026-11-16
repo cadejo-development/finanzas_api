@@ -408,7 +408,8 @@ async function syncExpedientes(mssqlPool, pg, pgRrhh, codigoToId) {
         nombres=EXCLUDED.nombres, apellidos=EXCLUDED.apellidos,
         email=EXCLUDED.email, activo=EXCLUDED.activo,
         cargo_id=EXCLUDED.cargo_id, sucursal_id=EXCLUDED.sucursal_id,
-        fecha_ingreso=EXCLUDED.fecha_ingreso, updated_at=EXCLUDED.updated_at
+        fecha_ingreso=EXCLUDED.fecha_ingreso, salario_base=EXCLUDED.salario_base,
+        updated_at=EXCLUDED.updated_at
     `, [e.id, e.codigo, e.nombres, e.apellidos, e.email ?? null,
         e.cargo_id ?? null, e.sucursal_id ?? null, e.activo,
         e.aud_usuario, e.created_at, e.updated_at, e.fecha_ingreso ?? null,
@@ -841,8 +842,8 @@ async function run() {
                SET departamento_id = COALESCE($1, departamento_id),
                    sucursal_id     = COALESCE($2, sucursal_id),
                    fecha_ingreso   = COALESCE($3, fecha_ingreso),
-                   cargo_id        = COALESCE(cargo_id, $4),
-                   salario_base    = COALESCE(salario_base, $5),
+                   cargo_id        = COALESCE($4, cargo_id),
+                   salario_base    = COALESCE($5, salario_base),
                    email           = COALESCE(NULLIF(email, ''), $6),
                    updated_at      = $7
                WHERE codigo = $8`,
