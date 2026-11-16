@@ -1026,6 +1026,40 @@ class PlanillasController extends RRHHBaseController
     }
 
     /**
+     * PUT /api/rrhh/planillas/{id}/movimientos/{movId}
+     * Actualiza monto/dias de un movimiento (solo planillas borrador, no orden_descuento).
+     */
+    public function updateMovimiento(int $id, int $movId, Request $request): JsonResponse
+    {
+        $planilla = Planilla::findOrFail($id);
+
+        if ($planilla->estado !== 'borrador') {
+            return response()->json(['success' => false, 'message' => 'Solo se pueden editar movimientos en planillas en borrador.'], 422);
+        }
+
+        $mov = PlanillaMovimiento::where('planilla_id', $id)->findOrFail($movId);
+
+        if ($mov->tipo === 'orden_descuento') {
+            return response()->json(['success' => false, 'message' => 'Las órdenes de descuento no se pueden editar aquí.'], 422);
+        }
+
+        if ($mov->estado === 'anulado') {
+            return response()->json(['success' => false, 'message' => 'No se puede editar un movimiento anulado.'], 422);
+        }
+
+        $data = $request->validate([
+            'monto' => 'nullable|numeric',
+            'dias'  => 'nullable|numeric',
+        ]);
+
+        $mov->update($data);
+        $this->ajustarLineaTrasMov($id, $mov->empleado_id);
+        $linea = PlanillaLinea::where('planilla_id', $id)->where('empleado_id', $mov->empleado_id)->first();
+
+        return response()->json(['success' => true, 'message' => 'Movimiento actualizado.', 'data' => $mov, 'linea' => $linea]);
+    }
+
+    /**
      * PUT /api/rrhh/planillas/{id}/movimientos/{movId}/anular
      * Marca un movimiento como anulado (solo en planillas borrador).
      */
