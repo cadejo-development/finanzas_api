@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api\RRHH;
 
 use App\Models\Asueto;
 use App\Models\RRHH\Amonestacion;
-use App\Models\RRHH\HorasExtrasSolicitud;
 use App\Models\RRHH\AusenciaInjustificada;
 use App\Models\RRHH\DiaSuspension;
 use App\Models\RRHH\Incapacidad;
@@ -779,27 +778,72 @@ class PlanillasController extends RRHHBaseController
     }
 
     /**
-     * Mapa empleado_id → total de horas_extras aprobadas cuya quincena de pago es la dada.
-     * Tarifa doble: salario_mensual / 240 × 2 × horas (cálculo en el caller).
+     * Mapa empleado_id → horas extra calculadas desde horarios_empleado del período
+     * de TRABAJO correspondiente a la quincena de pago (pago vencido).
+     *
+     * Regla de pago vencido (igual que nocturnidades):
+     *   pago Q1 → trabajo Q2 del mes anterior
+     *   pago Q2 → trabajo Q1 del mismo mes
+     *
+     * Exceso por día: >8h en jornada diurna, >7h si la jornada es nocturna (>4h noct).
+     * Arts. 161-162 CT-SV. Tarifa doble aplicada en el caller.
      */
-    private function getHorasExtrasMap(array $empIds, int $anio, int $mes, int $quincena): array
+    private function getHorasExtrasMap(array $empIds, int $anioP, int $mesP, int $quincenaP): array
     {
         if (empty($empIds)) return [];
 
-        $map = [];
-        HorasExtrasSolicitud::where('estado', 'aprobada')
-            ->where('quincena_pago_anio', $anio)
-            ->where('quincena_pago_mes', $mes)
-            ->where('quincena_pago_num', $quincena)
-            ->whereIn('empleado_id', $empIds)
-            ->select('empleado_id', 'horas')
-            ->get()
-            ->each(function ($r) use (&$map) {
-                $eid = (int) $r->empleado_id;
-                $map[$eid] = ($map[$eid] ?? 0.0) + (float) $r->horas;
-            });
+        // Período de trabajo (quincena anterior al pago)
+        if ($quincenaP === 1) {
+            $mesTrab  = $mesP === 1 ? 12 : $mesP - 1;
+            $anioTrab = $mesP === 1 ? $anioP - 1 : $anioP;
+            $desde    = Carbon::create($anioTrab, $mesTrab, 16);
+            $hasta    = Carbon::create($anioTrab, $mesTrab)->endOfMonth()->startOfDay();
+        } else {
+            $desde = Carbon::create($anioP, $mesP, 1);
+            $hasta = Carbon::create($anioP, $mesP, 15);
+        }
 
-        return $map;
+        $horarios = DB::connection('pgsql')
+            ->table('horarios_empleado')
+            ->whereIn('empleado_id', $empIds)
+            ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->where('tipo', 'normal')
+            ->whereNotNull('hora_inicio')
+            ->whereNotNull('hora_fin')
+            ->get(['empleado_id', 'fecha', 'hora_inicio', 'hora_fin']);
+
+        $toMins = fn(string $t): int => (int) explode(':', $t)[0] * 60 + (int) (explode(':', $t)[1] ?? 0);
+        $horasNoct = function (int $i, int $f): float {
+            $n = 0;
+            $z2s = max($i, 19 * 60); $z2e = min($f, 24 * 60);
+            if ($z2e > $z2s) $n += $z2e - $z2s;
+            if ($f > 24 * 60) $n += min($f, 30 * 60) - 24 * 60;
+            return $n / 60.0;
+        };
+
+        // Agrupar por empleado → fecha → turnos
+        $grouped = [];
+        foreach ($horarios as $h) {
+            $grouped[(int) $h->empleado_id][$h->fecha][] = $h;
+        }
+
+        $result = [];
+        foreach ($grouped as $eid => $dias) {
+            $result[$eid] = 0.0;
+            foreach ($dias as $turnos) {
+                $totalH = 0.0; $totalN = 0.0;
+                foreach ($turnos as $t) {
+                    $i = $toMins($t->hora_inicio); $f = $toMins($t->hora_fin);
+                    if ($f <= $i) $f += 1440;
+                    $totalH += ($f - $i) / 60.0;
+                    $totalN += $horasNoct($i, $f);
+                }
+                $maxHoras = $totalN > 4 ? 7 : 8;
+                $result[$eid] += max(0.0, $totalH - $maxHoras);
+            }
+        }
+
+        return array_map(fn($h) => round($h, 2), $result);
     }
 
     /**
