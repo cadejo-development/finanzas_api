@@ -1044,8 +1044,10 @@ class PlanillasController extends RRHHBaseController
         }
 
         $mov->update(['estado' => 'anulado']);
+        $this->ajustarLineaTrasMov($id, $mov->empleado_id);
+        $linea = PlanillaLinea::where('planilla_id', $id)->where('empleado_id', $mov->empleado_id)->first();
 
-        return response()->json(['success' => true, 'message' => 'Movimiento anulado.', 'data' => $mov]);
+        return response()->json(['success' => true, 'message' => 'Movimiento anulado.', 'data' => $mov, 'linea' => $linea]);
     }
 
     /**
@@ -1062,8 +1064,79 @@ class PlanillasController extends RRHHBaseController
 
         $mov = PlanillaMovimiento::where('planilla_id', $id)->findOrFail($movId);
         $mov->update(['estado' => 'activo']);
+        $this->ajustarLineaTrasMov($id, $mov->empleado_id);
+        $linea = PlanillaLinea::where('planilla_id', $id)->where('empleado_id', $mov->empleado_id)->first();
 
-        return response()->json(['success' => true, 'message' => 'Movimiento reactivado.', 'data' => $mov]);
+        return response()->json(['success' => true, 'message' => 'Movimiento reactivado.', 'data' => $mov, 'linea' => $linea]);
+    }
+
+    /**
+     * Recalcula los campos totales de planilla_lineas desde los movimientos activos.
+     * Se llama tras anular o reactivar un movimiento para mantener coherencia.
+     */
+    private function ajustarLineaTrasMov(int $planillaId, int $eid): void
+    {
+        $linea = PlanillaLinea::where('planilla_id', $planillaId)->where('empleado_id', $eid)->first();
+        if (!$linea) return;
+
+        $movs = PlanillaMovimiento::where('planilla_id', $planillaId)
+            ->where('empleado_id', $eid)
+            ->where('estado', 'activo')
+            ->get();
+
+        $otrosDesc   = 0.0;
+        $montoExtras = 0.0;
+        $horasExtras = 0.0;
+        $montoNoct   = 0.0;
+        $horasNoct   = 0.0;
+        $salAsueto   = 0.0;
+        $diasAsueto  = 0.0;
+
+        foreach ($movs as $m) {
+            switch ($m->tipo) {
+                case 'orden_descuento':
+                    $otrosDesc  += abs((float) $m->monto);
+                    break;
+                case 'horas_extras':
+                    $horasExtras += (float) $m->dias;
+                    $montoExtras += (float) $m->monto;
+                    break;
+                case 'nocturnidad':
+                    $montoNoct  += (float) $m->monto;
+                    $horasNoct  += (float) $m->dias;
+                    break;
+                case 'asueto':
+                    if ((float) $m->dias > 0)  $diasAsueto += (float) $m->dias;
+                    if ((float) $m->monto > 0) $salAsueto  += (float) $m->monto;
+                    break;
+            }
+        }
+
+        $totalDesc = round(
+            (float) $linea->afp_empleado + (float) $linea->isss_empleado +
+            (float) $linea->renta + $otrosDesc, 2
+        );
+        $salNeto = round(
+            (float) $linea->salario_proporcional + $salAsueto + $montoExtras +
+            $montoNoct + (float) $linea->bonificaciones - $totalDesc, 2
+        );
+
+        $update = [
+            'otros_descuentos'          => round($otrosDesc,   2),
+            'total_descuentos_empleado' => $totalDesc,
+            'salario_neto'              => $salNeto,
+            'monto_horas_extras'        => round($montoExtras, 2),
+            'horas_extras'              => round($horasExtras, 2),
+            'monto_nocturnidades'       => round($montoNoct,   2),
+            'dias_asueto'               => round($diasAsueto,  2),
+            'salario_asueto'            => round($salAsueto,   2),
+        ];
+        // Solo sobreescribir horas_nocturnas si los movimientos traen dias > 0
+        if ($horasNoct > 0) {
+            $update['horas_nocturnas'] = round($horasNoct, 2);
+        }
+
+        $linea->update($update);
     }
 
     // ─── Add / Remove empleado ────────────────────────────────────────────────
