@@ -280,6 +280,13 @@ class PlanillasController extends RRHHBaseController
                         $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoNoct, 2);
                     }
 
+                    // Pago de vacaciones (30% s.mensual al cumplir aniversario, Art. 177 CT-SV)
+                    $montoVacaciones = $this->calcularMontoVacaciones($emp, $fechaInicio, $fechaFin);
+                    $resultado['vacaciones'] = $montoVacaciones;
+                    if ($montoVacaciones > 0) {
+                        $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoVacaciones, 2);
+                    }
+
                     // Anotar días de suspensión en detalle para trazabilidad
                     $diasSusp = $suspensiones
                         ->filter(fn($s) => $s->amonestacion?->empleado_id === $eid)
@@ -413,6 +420,7 @@ class PlanillasController extends RRHHBaseController
                 'horas_nocturnas'           => (float) ($l->horas_nocturnas ?? 0),
                 'monto_nocturnidades'       => (float) ($l->monto_nocturnidades ?? 0),
                 'bonificaciones'            => (float) ($l->bonificaciones ?? 0),
+                'vacaciones'               => (float) ($l->vacaciones ?? 0),
                 'afp_empleado'              => (float) $l->afp_empleado,
                 'isss_empleado'             => (float) $l->isss_empleado,
                 'renta'                     => (float) $l->renta,
@@ -437,6 +445,7 @@ class PlanillasController extends RRHHBaseController
                     'total_horas_extras'    => $filas->sum('monto_horas_extras'),
                     'total_nocturnidades'   => $filas->sum('monto_nocturnidades'),
                     'total_bonificaciones'  => $filas->sum('bonificaciones'),
+                    'total_vacaciones'      => $filas->sum('vacaciones'),
                     'total_afp_empleado'    => $filas->sum('afp_empleado'),
                     'total_isss_empleado'   => $filas->sum('isss_empleado'),
                     'total_renta'           => $filas->sum('renta'),
@@ -477,7 +486,7 @@ class PlanillasController extends RRHHBaseController
                     $q->orWhereIn('e.id', $desvinculadosIds);
                 }
             })
-            ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado');
+            ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado', 'e.fecha_ingreso');
 
         if ($sucursalId) {
             $query->where('e.sucursal_id', $sucursalId);
@@ -1142,6 +1151,7 @@ class PlanillasController extends RRHHBaseController
         $horasNoct   = 0.0;
         $salAsueto   = 0.0;
         $diasAsueto  = 0.0;
+        $montoVacac  = 0.0;
 
         foreach ($movs as $m) {
             switch ($m->tipo) {
@@ -1160,6 +1170,9 @@ class PlanillasController extends RRHHBaseController
                     if ((float) $m->dias > 0)  $diasAsueto += (float) $m->dias;
                     if ((float) $m->monto > 0) $salAsueto  += (float) $m->monto;
                     break;
+                case 'pago_vacaciones':
+                    $montoVacac += (float) $m->monto;
+                    break;
             }
         }
 
@@ -1169,7 +1182,7 @@ class PlanillasController extends RRHHBaseController
         );
         $salNeto = round(
             (float) $linea->salario_proporcional + $salAsueto + $montoExtras +
-            $montoNoct + (float) $linea->bonificaciones - $totalDesc, 2
+            $montoNoct + (float) $linea->bonificaciones + $montoVacac - $totalDesc, 2
         );
 
         $update = [
@@ -1181,6 +1194,7 @@ class PlanillasController extends RRHHBaseController
             'monto_nocturnidades'       => round($montoNoct,   2),
             'dias_asueto'               => round($diasAsueto,  2),
             'salario_asueto'            => round($salAsueto,   2),
+            'vacaciones'                => round($montoVacac,  2),
         ];
         // Solo sobreescribir horas_nocturnas si los movimientos traen dias > 0
         if ($horasNoct > 0) {
@@ -1216,7 +1230,7 @@ class PlanillasController extends RRHHBaseController
                 ->table('empleados as e')
                 ->leftJoin('sucursales as s', 's.id', '=', 'e.sucursal_id')
                 ->where('e.id', $eid)
-                ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado')
+                ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado', 'e.fecha_ingreso')
                 ->first();
 
             if (!$empRow) {
@@ -1268,6 +1282,10 @@ class PlanillasController extends RRHHBaseController
             $resultado['monto_nocturnidades'] = $montoNoct;
             if ($montoNoct > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoNoct, 2);
 
+            $montoVacaciones = $this->calcularMontoVacaciones($emp, $fechaInicio, $fechaFin);
+            $resultado['vacaciones'] = $montoVacaciones;
+            if ($montoVacaciones > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoVacaciones, 2);
+
             DB::connection('rrhh')->beginTransaction();
             try {
                 $linea = PlanillaLinea::create(array_merge(
@@ -1283,7 +1301,8 @@ class PlanillasController extends RRHHBaseController
                     $id, $eid,
                     $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
                     $asuetos, $horariosAsueto, $horasExtrasMap, $nocturnidadesMap,
-                    $fechaInicio, $fechaFin, $diasQuincena, $salBase, $ordenesMap
+                    $fechaInicio, $fechaFin, $diasQuincena, $salBase, $ordenesMap,
+                    $emp['fecha_ingreso'] ?? null
                 );
 
                 DB::connection('rrhh')->commit();
@@ -1356,7 +1375,7 @@ class PlanillasController extends RRHHBaseController
                 ->table('empleados as e')
                 ->leftJoin('sucursales as s', 's.id', '=', 'e.sucursal_id')
                 ->whereIn('e.id', $empIds)
-                ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado')
+                ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado', 'e.fecha_ingreso')
                 ->get()
                 ->map(fn($r) => (array) $r)
                 ->all();
@@ -1432,6 +1451,10 @@ class PlanillasController extends RRHHBaseController
                     $resultado['monto_nocturnidades'] = $montoNoct;
                     if ($montoNoct > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoNoct, 2);
 
+                    $montoVacaciones = $this->calcularMontoVacaciones($emp, $fechaInicio, $fechaFin);
+                    $resultado['vacaciones'] = $montoVacaciones;
+                    if ($montoVacaciones > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoVacaciones, 2);
+
                     $diasSusp = $suspensiones->filter(fn($s) => $s->amonestacion?->empleado_id === $eid)->count();
                     if ($diasSusp > 0) {
                         $detalle   = json_decode($resultado['detalle_descuentos'] ?? '[]', true) ?: [];
@@ -1480,6 +1503,30 @@ class PlanillasController extends RRHHBaseController
 
             $planilla->update(['estado' => 'cerrada']);
 
+            // Histórico de pagos de vacaciones
+            $movsPagVac = DB::connection('rrhh')
+                ->table('planilla_movimientos')
+                ->where('planilla_id', $id)
+                ->where('tipo', 'pago_vacaciones')
+                ->where('estado', 'activo')
+                ->get();
+
+            foreach ($movsPagVac as $mov) {
+                $linea = PlanillaLinea::where('planilla_id', $id)
+                    ->where('empleado_id', $mov->empleado_id)
+                    ->first();
+                DB::connection('rrhh')->table('historico_pago_vacaciones')->updateOrInsert(
+                    ['empleado_id' => $mov->empleado_id, 'fecha_aniversario' => $mov->fecha_inicio],
+                    [
+                        'planilla_id'  => $id,
+                        'salario_base' => $linea?->salario_base ?? 0,
+                        'monto'        => $mov->monto,
+                        'created_at'   => now(),
+                        'updated_at'   => now(),
+                    ]
+                );
+            }
+
             return response()->json(['success' => true, 'message' => 'Planilla cerrada.', 'data' => $planilla->fresh()]);
         });
     }
@@ -1505,13 +1552,14 @@ class PlanillasController extends RRHHBaseController
             ->delete();
 
         foreach ($empleados as $emp) {
-            $eid     = (int) $emp['id'];
-            $salBase = (float) ($emp['salario_base'] ?? 0);
+            $eid          = (int) $emp['id'];
+            $salBase      = (float) ($emp['salario_base'] ?? 0);
+            $fechaIngreso = $emp['fecha_ingreso'] ?? null;
             $this->snapshotMovimientosEmpleado(
                 $planillaId, $eid,
                 $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
                 $asuetos, $horariosAsueto, $horasExtrasMap, $nocturnidadesMap,
-                $fechaInicio, $fechaFin, $diasQuincena, $salBase, $ordenesMap
+                $fechaInicio, $fechaFin, $diasQuincena, $salBase, $ordenesMap, $fechaIngreso
             );
         }
     }
@@ -1525,7 +1573,7 @@ class PlanillasController extends RRHHBaseController
         $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
         $asuetos, array $horariosAsueto, array $horasExtrasMap, array $nocturnidadesMap,
         Carbon $fechaInicio, Carbon $fechaFin, int $diasQuincena, float $salBase,
-        array $ordenesMap = []
+        array $ordenesMap = [], ?string $fechaIngreso = null
     ): void {
         // Cargar fingerprints de movimientos anulados para este empleado en esta planilla.
         // Un movimiento anulado NO se recrea ni se toca durante el recálculo.
@@ -1728,6 +1776,36 @@ class PlanillasController extends RRHHBaseController
             ];
         }
 
+        // Pago de vacaciones (ingreso positivo al cumplir aniversario, Art. 177 CT-SV)
+        if ($fechaIngreso) {
+            $ingreso = Carbon::parse($fechaIngreso);
+            if ($ingreso->lt($fechaInicio)) {
+                $anioQ = $fechaInicio->year;
+                try {
+                    $aniversario = Carbon::create($anioQ, $ingreso->month, $ingreso->day);
+                } catch (\Exception $e) {
+                    $aniversario = Carbon::create($anioQ, $ingreso->month, 28);
+                }
+                if ($aniversario && $aniversario->between($fechaInicio, $fechaFin)) {
+                    $montoVacaciones = round($salBase * 0.30, 2);
+                    $rows[] = [
+                        'planilla_id'   => $planillaId,
+                        'empleado_id'   => $eid,
+                        'tipo'          => 'pago_vacaciones',
+                        'concepto'      => "Pago vacaciones ({$anioQ})",
+                        'fecha_inicio'  => $aniversario->toDateString(),
+                        'fecha_fin'     => $aniversario->toDateString(),
+                        'dias'          => 0,
+                        'monto'         => $montoVacaciones,
+                        'referencia_id' => null,
+                        'estado'        => 'activo',
+                        'created_at'    => now(),
+                        'updated_at'    => now(),
+                    ];
+                }
+            }
+        }
+
         // Filtrar filas que ya tienen un movimiento anulado con el mismo fingerprint.
         $rows = array_values(array_filter($rows, function ($row) use ($anuladosSet) {
             $key = $row['tipo'] . '|' . ($row['referencia_id'] ?? $row['concepto']);
@@ -1737,6 +1815,32 @@ class PlanillasController extends RRHHBaseController
         if (!empty($rows)) {
             DB::connection('rrhh')->table('planilla_movimientos')->insert($rows);
         }
+    }
+
+    /**
+     * Calcula el monto de vacaciones (30% del salario mensual) si el empleado
+     * cumple su aniversario de ingreso dentro de la quincena dada (Art. 177 CT-SV).
+     */
+    private function calcularMontoVacaciones(array $emp, Carbon $fechaInicio, Carbon $fechaFin): float
+    {
+        $fechaIngreso = $emp['fecha_ingreso'] ?? null;
+        if (!$fechaIngreso) return 0.0;
+
+        $salBase = (float) ($emp['salario_base'] ?? 0);
+        $ingreso = Carbon::parse($fechaIngreso);
+
+        if ($ingreso->gte($fechaInicio)) return 0.0;
+
+        $anioQ = $fechaInicio->year;
+        try {
+            $aniversario = Carbon::create($anioQ, $ingreso->month, $ingreso->day);
+        } catch (\Exception $e) {
+            $aniversario = Carbon::create($anioQ, $ingreso->month, 28);
+        }
+
+        return ($aniversario && $aniversario->between($fechaInicio, $fechaFin))
+            ? round($salBase * 0.30, 2)
+            : 0.0;
     }
 
     /**
