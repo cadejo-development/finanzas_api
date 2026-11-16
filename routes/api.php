@@ -869,6 +869,8 @@ Route::prefix('rrhh/admin')->middleware(['auth:sanctum', 'role:portal_admin,rrhh
     Route::patch('departamentos/{id}/jefe/{empId}',          [DepartamentosController::class, 'asignarJefe']);
     Route::delete('departamentos/{id}/jefe',                 [DepartamentosController::class, 'quitarJefe']);
     Route::get('empleados',                                  [DepartamentosController::class, 'todosEmpleados']);
+    Route::get('sucursales',                                 [\App\Http\Controllers\Api\RRHH\NuevoColaboradorController::class, 'sucursales']);
+    Route::post('nuevo-colaborador', [\App\Http\Controllers\Api\RRHH\NuevoColaboradorController::class, 'store'])->middleware('role:rrhh_admin');
     Route::get('empleados/inactivos',                        [DepartamentosController::class, 'empleadosInactivos']);
 
     // ── Error logs (visible solo para GEN_INF en el frontend) ────────────
