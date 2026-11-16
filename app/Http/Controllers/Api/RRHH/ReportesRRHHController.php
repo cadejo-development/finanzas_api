@@ -158,6 +158,7 @@ class ReportesRRHHController extends RRHHBaseController
     {
         return Permiso::with('tipoPermiso')
             ->whereIn('empleado_id', $empIds)
+            ->where('estado', 'aprobado')
             ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->get();
     }
@@ -173,6 +174,7 @@ class ReportesRRHHController extends RRHHBaseController
     private function getVacaciones(array $empIds, Carbon $desde, Carbon $hasta): \Illuminate\Support\Collection
     {
         return Vacacion::whereIn('empleado_id', $empIds)
+            ->where('estado', 'aprobado')
             ->where('fecha_inicio', '<=', $hasta->toDateString())
             ->where('fecha_fin',    '>=', $desde->toDateString())
             ->get();
