@@ -92,6 +92,8 @@ class PlanillasController extends RRHHBaseController
             $arr = $l->toArray();
             $emp = $empleados[$l->empleado_id] ?? null;
             $arr['empleado_nombre']     = $emp ? trim($emp->nombres . ' ' . $emp->apellidos) : null;
+            $arr['empleado_apellidos']  = $emp?->apellidos;
+            $arr['empleado_nombres']    = $emp?->nombres;
             $arr['empleado_codigo']     = $emp?->codigo;
             $arr['cargo_nombre']        = $emp?->cargo_nombre;
             $arr['sucursal_nombre']     = $emp?->sucursal_nombre;
@@ -100,7 +102,7 @@ class PlanillasController extends RRHHBaseController
             $arr['jefe_de_deptos']      = $emp?->jefe_de_deptos ?? [];
             $arr['jefe_en_sucs']        = $emp?->jefe_en_sucs   ?? [];
             return $arr;
-        })->sortBy(fn($l) => $l['empleado_codigo'] ?? '')->values();
+        })->sortBy(fn($l) => strtolower($l['empleado_apellidos'] ?? ''))->values();
 
         $sucursalNombre = null;
         if ($planilla->sucursal_id) {
@@ -489,7 +491,7 @@ class PlanillasController extends RRHHBaseController
                 'numero_cuenta'             => $cuenta?->numero_cuenta ?? '',
                 'observaciones'             => implode(' | ', $obs),
             ];
-        });
+        })->sortBy(fn($f) => strtolower($f['apellidos'] ?? ''))->values();
 
         return response()->json([
             'success' => true,
