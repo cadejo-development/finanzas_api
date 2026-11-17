@@ -391,7 +391,7 @@ class ExpedienteController extends RRHHBaseController
             $this->autorizarAcceso($empleadoId);
 
             $data = $request->validate([
-                'tipo'                  => 'required|in:dui,nit,isss,afp,pasaporte,licencia_conducir,otro',
+                'tipo'                  => 'required|in:dui,nit,isss,afp,pasaporte,licencia_conducir,carnet_manipulador,otro',
                 'numero'                => 'nullable|string|max:60',
                 'entidad_emisora'       => 'nullable|string|max:60',
                 'fecha_emision'         => 'nullable|date',
@@ -424,7 +424,7 @@ class ExpedienteController extends RRHHBaseController
             $doc = ExpedienteDocumento::where('empleado_id', $empleadoId)->findOrFail($docId);
 
             $data = $request->validate([
-                'tipo'                  => 'sometimes|in:dui,nit,isss,afp,pasaporte,licencia_conducir,otro',
+                'tipo'                  => 'sometimes|in:dui,nit,isss,afp,pasaporte,licencia_conducir,carnet_manipulador,otro',
                 'numero'                => 'nullable|string|max:60',
                 'entidad_emisora'       => 'nullable|string|max:60',
                 'fecha_emision'         => 'nullable|date',
