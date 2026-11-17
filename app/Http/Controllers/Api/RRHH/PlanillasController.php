@@ -412,11 +412,11 @@ class PlanillasController extends RRHHBaseController
             ->get()
             ->keyBy('empleado_id');
 
-        // AFP por empleado (rrhh_db) — tipo='AFP', entidad_emisora = 'AFP CONFIA' | 'AFP CRECER'
+        // AFP por empleado (rrhh_db) — tipo='afp', entidad_emisora = 'AFP CONFIA' | 'AFP CRECER'
         $afpMap = DB::connection('rrhh')
             ->table('expediente_documentos')
             ->whereIn('empleado_id', $empIds)
-            ->where('tipo', 'AFP')
+            ->where('tipo', 'afp')
             ->select('empleado_id', 'entidad_emisora')
             ->get()
             ->keyBy('empleado_id');
