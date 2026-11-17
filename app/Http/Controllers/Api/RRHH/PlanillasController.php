@@ -433,14 +433,24 @@ class PlanillasController extends RRHHBaseController
             $bonif     = (float) ($l->bonificaciones ?? 0);
             $vac       = (float) ($l->vacaciones ?? 0);
 
-            // AFP: si es Crecer va en afp_crecer, si es Confía en afp_confia
+            // AFP: desglosar según entidad registrada en expediente
             $afpEntidad = $afpDoc ? strtoupper($afpDoc->entidad_emisora ?? '') : '';
             $afpTotal   = (float) $l->afp_empleado;
             $afpCrecer  = str_contains($afpEntidad, 'CRECER') ? $afpTotal : 0.0;
             $afpConfia  = str_contains($afpEntidad, 'CONFIA') || str_contains($afpEntidad, 'CONFÍA') ? $afpTotal : 0.0;
-            // Si no se pudo determinar la AFP, reportar en crecer por default (nunca cero doble)
-            if ($afpCrecer === 0.0 && $afpConfia === 0.0 && $afpTotal > 0) {
-                $afpCrecer = $afpTotal;
+
+            // Observaciones — alertas de datos faltantes o inconsistencias
+            $obs = [];
+            if (!$cuenta) {
+                $obs[] = 'Sin cuenta BAC configurada';
+            }
+            if (!$afpDoc || $afpEntidad === '') {
+                $obs[] = 'Sin AFP registrada';
+            } elseif ($afpCrecer === 0.0 && $afpConfia === 0.0 && $afpTotal > 0) {
+                $obs[] = 'AFP no identificada: ' . ($afpDoc->entidad_emisora ?? '');
+            }
+            if ((float) $l->salario_base <= 0) {
+                $obs[] = 'Sin salario base configurado';
             }
 
             return [
@@ -477,6 +487,7 @@ class PlanillasController extends RRHHBaseController
                 'forma_pago'                => 'Transferencia',
                 'cuenta_banco'              => $cuenta?->banco ?? '',
                 'numero_cuenta'             => $cuenta?->numero_cuenta ?? '',
+                'observaciones'             => implode(' | ', $obs),
             ];
         });
 
