@@ -403,25 +403,68 @@ class PlanillasController extends RRHHBaseController
                 ->value('nombre');
         }
 
-        $filas = $planilla->lineas->map(function ($l) use ($empleados) {
-            $emp = $empleados[$l->empleado_id] ?? null;
+        // Cuentas bancarias principales (rrhh_db)
+        $cuentasMap = DB::connection('rrhh')
+            ->table('expediente_cuentas_banco')
+            ->whereIn('empleado_id', $empIds)
+            ->where('es_principal', true)
+            ->select('empleado_id', 'banco', 'numero_cuenta')
+            ->get()
+            ->keyBy('empleado_id');
+
+        // AFP por empleado (rrhh_db) — tipo='AFP', entidad_emisora = 'AFP CONFIA' | 'AFP CRECER'
+        $afpMap = DB::connection('rrhh')
+            ->table('expediente_documentos')
+            ->whereIn('empleado_id', $empIds)
+            ->where('tipo', 'AFP')
+            ->select('empleado_id', 'entidad_emisora')
+            ->get()
+            ->keyBy('empleado_id');
+
+        $filas = $planilla->lineas->map(function ($l) use ($empleados, $cuentasMap, $afpMap) {
+            $emp    = $empleados[$l->empleado_id] ?? null;
+            $cuenta = $cuentasMap[$l->empleado_id] ?? null;
+            $afpDoc = $afpMap[$l->empleado_id] ?? null;
+
+            $salProp   = (float) $l->salario_proporcional;
+            $salAsueto = (float) ($l->salario_asueto ?? 0);
+            $montoHE   = (float) ($l->monto_horas_extras ?? 0);
+            $montoNoct = (float) ($l->monto_nocturnidades ?? 0);
+            $bonif     = (float) ($l->bonificaciones ?? 0);
+            $vac       = (float) ($l->vacaciones ?? 0);
+
+            // AFP: si es Crecer va en afp_crecer, si es Confía en afp_confia
+            $afpEntidad = $afpDoc ? strtoupper($afpDoc->entidad_emisora ?? '') : '';
+            $afpTotal   = (float) $l->afp_empleado;
+            $afpCrecer  = str_contains($afpEntidad, 'CRECER') ? $afpTotal : 0.0;
+            $afpConfia  = str_contains($afpEntidad, 'CONFIA') || str_contains($afpEntidad, 'CONFÍA') ? $afpTotal : 0.0;
+            // Si no se pudo determinar la AFP, reportar en crecer por default (nunca cero doble)
+            if ($afpCrecer === 0.0 && $afpConfia === 0.0 && $afpTotal > 0) {
+                $afpCrecer = $afpTotal;
+            }
+
             return [
                 'codigo'                    => $emp?->codigo ?? '',
-                'nombres'                   => $emp ? trim($emp->nombres . ' ' . $emp->apellidos) : '',
+                'nombres'                   => $emp?->nombres ?? '',
+                'apellidos'                 => $emp?->apellidos ?? '',
                 'departamento_sucursal'     => $emp?->sucursal_nombre ?? $emp?->departamento_nombre ?? '',
                 'cargo'                     => $emp?->cargo_nombre ?? '',
                 'dias_laborados'            => (float) $l->dias_laborados,
+                'horas_laboradas'           => round((float) $l->dias_laborados * 8, 2),
                 'salario_base'              => (float) $l->salario_base,
-                'salario_proporcional'      => (float) $l->salario_proporcional,
+                'salario_proporcional'      => $salProp,
                 'dias_asueto'               => (float) ($l->dias_asueto ?? 0),
-                'salario_asueto'            => (float) ($l->salario_asueto ?? 0),
+                'salario_asueto'            => $salAsueto,
                 'horas_extras'              => (float) ($l->horas_extras ?? 0),
-                'monto_horas_extras'        => (float) ($l->monto_horas_extras ?? 0),
+                'monto_horas_extras'        => $montoHE,
                 'horas_nocturnas'           => (float) ($l->horas_nocturnas ?? 0),
-                'monto_nocturnidades'       => (float) ($l->monto_nocturnidades ?? 0),
-                'bonificaciones'            => (float) ($l->bonificaciones ?? 0),
-                'vacaciones'               => (float) ($l->vacaciones ?? 0),
-                'afp_empleado'              => (float) $l->afp_empleado,
+                'monto_nocturnidades'       => $montoNoct,
+                'bonificaciones'            => $bonif,
+                'vacaciones'                => $vac,
+                'total_ingresos'            => round($salProp + $salAsueto + $montoHE + $montoNoct + $bonif + $vac, 2),
+                'afp_crecer'                => $afpCrecer,
+                'afp_confia'                => $afpConfia,
+                'afp_empleado'              => $afpTotal,
                 'isss_empleado'             => (float) $l->isss_empleado,
                 'renta'                     => (float) $l->renta,
                 'otros_descuentos'          => (float) $l->otros_descuentos,
@@ -431,6 +474,9 @@ class PlanillasController extends RRHHBaseController
                 'isss_patronal'             => (float) $l->isss_patronal,
                 'insaforp'                  => (float) $l->insaforp_patronal,
                 'total_patronal'            => (float) $l->total_patronal,
+                'forma_pago'                => 'Transferencia',
+                'cuenta_banco'              => $cuenta?->banco ?? '',
+                'numero_cuenta'             => $cuenta?->numero_cuenta ?? '',
             ];
         });
 
@@ -446,7 +492,10 @@ class PlanillasController extends RRHHBaseController
                     'total_nocturnidades'   => $filas->sum('monto_nocturnidades'),
                     'total_bonificaciones'  => $filas->sum('bonificaciones'),
                     'total_vacaciones'      => $filas->sum('vacaciones'),
+                    'total_ingresos'        => $filas->sum('total_ingresos'),
                     'total_afp_empleado'    => $filas->sum('afp_empleado'),
+                    'total_afp_crecer'      => $filas->sum('afp_crecer'),
+                    'total_afp_confia'      => $filas->sum('afp_confia'),
                     'total_isss_empleado'   => $filas->sum('isss_empleado'),
                     'total_renta'           => $filas->sum('renta'),
                     'total_otros_descuentos'=> $filas->sum('otros_descuentos'),
