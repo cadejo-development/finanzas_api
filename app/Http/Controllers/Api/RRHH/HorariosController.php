@@ -354,6 +354,26 @@ class HorariosController extends RRHHBaseController
             return array_map('intval', $this->getSubordinadosIds());
         }
 
+        // Si pide una sucursal adicional (user_sucursales), devolver todos sus empleados
+        if ($sucursalId) {
+            $user = $this->getEffectiveUser();
+            $esSucursalAdicional = DB::connection('pgsql')
+                ->table('user_sucursales')
+                ->where('user_id', $user->id)
+                ->where('sucursal_id', (int)$sucursalId)
+                ->exists();
+
+            if ($esSucursalAdicional) {
+                return DB::connection('pgsql')
+                    ->table('empleados')
+                    ->where('sucursal_id', (int)$sucursalId)
+                    ->where('activo', true)
+                    ->pluck('id')
+                    ->map(fn($id) => (int)$id)
+                    ->all();
+            }
+        }
+
         $todos = array_map('intval', $this->getSubordinadosIds());
 
         // Incluir el propio empleado del jefe/gerente (getSubordinadosIds lo excluye)
@@ -382,7 +402,7 @@ class HorariosController extends RRHHBaseController
     /**
      * Lista de sucursales para el selector del frontend.
      * Admin/gerencia_ops: todas las sucursales operativas.
-     * Jefatura: sucursales distintas de su equipo (null si solo tiene una).
+     * Jefatura: sucursales del equipo + sucursales adicionales en user_sucursales.
      */
     private function getSucursalesParaSelector(): ?array
     {
@@ -398,22 +418,36 @@ class HorariosController extends RRHHBaseController
                 ->toArray();
         }
 
-        $ids = $this->getSubordinadosIds();
-        if (empty($ids)) return null;
+        $user = $this->getEffectiveUser();
 
-        $sucursales = DB::connection('pgsql')
+        // Sucursales del equipo (vía subordinados)
+        $ids = $this->getSubordinadosIds();
+        $sucursalesEquipo = empty($ids) ? collect() : DB::connection('pgsql')
             ->table('empleados as e')
             ->join('sucursales as s', 's.id', '=', 'e.sucursal_id')
             ->whereIn('e.id', $ids)
             ->where('e.activo', true)
             ->whereNotNull('e.sucursal_id')
-            ->orderBy('s.nombre')
             ->select('s.id', 's.nombre')
             ->distinct()
-            ->get()
+            ->get();
+
+        // Sucursales adicionales asignadas en user_sucursales
+        $sucursalesAdicionales = DB::connection('pgsql')
+            ->table('user_sucursales as us')
+            ->join('sucursales as s', 's.id', '=', 'us.sucursal_id')
+            ->where('us.user_id', $user->id)
+            ->where('s.activa', true)
+            ->select('s.id', 's.nombre')
+            ->get();
+
+        $todas = $sucursalesEquipo->merge($sucursalesAdicionales)
+            ->unique('id')
+            ->sortBy('nombre')
+            ->values()
             ->toArray();
 
-        return count($sucursales) > 1 ? $sucursales : null;
+        return count($todas) > 1 ? $todas : null;
     }
 
     /**
