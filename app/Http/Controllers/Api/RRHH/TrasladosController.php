@@ -84,8 +84,19 @@ class TrasladosController extends RRHHBaseController
 
         if (!empty($jefaturas)) return $jefaturas;
 
-        // 3. Fallback: sucursal propia del usuario
-        return $user->sucursal_id ? [(int) $user->sucursal_id] : [];
+        // 3. Sucursales adicionales asignadas en user_sucursales (gerentes multi-sucursal)
+        $userSucursales = DB::connection('pgsql')
+            ->table('user_sucursales')
+            ->where('user_id', $user->id)
+            ->pluck('sucursal_id')
+            ->map(fn($id) => (int) $id)
+            ->all();
+
+        $propia = $user->sucursal_id ? [(int) $user->sucursal_id] : [];
+        $todas  = array_values(array_unique(array_merge($propia, $userSucursales)));
+        if (!empty($todas)) return $todas;
+
+        return [];
     }
 
     /**
@@ -148,7 +159,18 @@ class TrasladosController extends RRHHBaseController
                     ->pluck('sucursal_id')
                     ->unique()
                     ->toArray();
-                if (in_array((int) $validated['sucursal_destino_id'], $sucursalesDelJefe)) {
+
+                // También considerar user_sucursales (gerentes multi-sucursal como Lilliam)
+                $userSucursalesJefe = DB::connection('pgsql')
+                    ->table('user_sucursales')
+                    ->where('user_id', $this->getEffectiveUser()->id)
+                    ->pluck('sucursal_id')
+                    ->map(fn($id) => (int) $id)
+                    ->toArray();
+
+                $todasSucursalesJefe = array_unique(array_merge($sucursalesDelJefe, $userSucursalesJefe));
+
+                if (in_array((int) $validated['sucursal_destino_id'], $todasSucursalesJefe)) {
                     $estado = 'aprobado';
                 }
             }
