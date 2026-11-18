@@ -20,20 +20,40 @@ class PlantillasTurnoController extends RRHHBaseController
     {
         $sucursalId = $request->query('sucursal_id');
 
-        // No-admins sin filtro explícito: restringir a la sucursal del usuario efectivo
-        if (!$sucursalId && !$this->esAdminRrhh() && !$this->esAnalistaRrhh()) {
-            $sucursalId = $this->getEffectiveUser()->sucursal_id;
-        }
-
         $query = PlantillaTurno::where('activo', true)->orderBy('hora_inicio');
 
         if ($sucursalId) {
+            // Filtro explícito por sucursal (ej: ModalPlantillas del admin)
             $query->where(fn($q) =>
                 $q->whereNull('sucursal_id')->orWhere('sucursal_id', (int) $sucursalId)
             );
+        } elseif (!$this->esAdminRrhh() && !$this->esAnalistaRrhh()) {
+            // Sin filtro explícito para no-admin: incluir todas sus sucursales gestionadas
+            $ids = $this->getSucursalesGestionadasIds();
+            if (!empty($ids)) {
+                $query->where(fn($q) =>
+                    $q->whereNull('sucursal_id')->orWhereIn('sucursal_id', $ids)
+                );
+            }
         }
 
         return response()->json(['data' => $query->get()]);
+    }
+
+    private function getSucursalesGestionadasIds(): array
+    {
+        $user = $this->getEffectiveUser();
+
+        $propia = $user->sucursal_id ? [(int) $user->sucursal_id] : [];
+
+        $adicionales = DB::connection('pgsql')
+            ->table('user_sucursales')
+            ->where('user_id', $user->id)
+            ->pluck('sucursal_id')
+            ->map(fn($id) => (int) $id)
+            ->toArray();
+
+        return array_values(array_unique(array_merge($propia, $adicionales)));
     }
 
     /**
