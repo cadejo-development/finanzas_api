@@ -33,7 +33,6 @@ function ayer() {
 // ── Sucursales monitoreadas (sucId Brilo → nombre legible) ───────────────────
 const SUCURSALES = {
    1: 'FAB - ZONA ROSA',
-   2: 'RES - SANTA ROSA',
    3: 'RES - ZONA ROSA',
    6: 'RES - LA LIBERTAD',
    7: 'RES - AEROPUERTO #1',
