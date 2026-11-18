@@ -145,12 +145,8 @@ async function main() {
         MFA.sucId,
         SUC.sucNombre,
         COUNT(*)                                                                AS total_facturas,
-        SUM(
-          MFA.mfaSumasAfecto * (1 + MFA.mfaPorcentIVA) + MFA.mfaSumasExento
-        ) * ISNULL(TDVN.tdvnSignoVenta, 1)                                     AS total_venta
+        SUM(MFA.mfaSumasAfecto * (1 + MFA.mfaPorcentIVA) + MFA.mfaSumasExento) AS total_venta
       FROM olVentas.dbo.maeFacturas MFA WITH (NOLOCK)
-      LEFT JOIN olVentas.dbo.TiposDocVen TDVN WITH (NOLOCK)
-        ON MFA.mfaTipoDoc = TDVN.tdvnCodigo AND TDVN.tdvnEsVenta = 1
       LEFT JOIN olComun.dbo.Sucursales SUC WITH (NOLOCK)
         ON MFA.sucId = SUC.sucId
       WHERE MFA.mfaPosteada = 1
