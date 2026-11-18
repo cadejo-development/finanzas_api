@@ -42,6 +42,22 @@ class AplicarTrasladosPendientes extends Command
                     if ($traslado->cargo_destino_id) {
                         $updates['cargo_id'] = $traslado->cargo_destino_id;
                     }
+
+                    // Actualizar departamento para que el organigrama refleje el traslado
+                    if ($traslado->departamento_destino_id) {
+                        $updates['departamento_id'] = $traslado->departamento_destino_id;
+                    } else {
+                        $deptDestino = $pgsql->table('departamentos')
+                            ->where('sucursal_id', $traslado->sucursal_destino_id)
+                            ->where('activo', true)
+                            ->pluck('id');
+
+                        if ($deptDestino->count() === 1) {
+                            $updates['departamento_id'] = $deptDestino->first();
+                        } else {
+                            $updates['departamento_id'] = null;
+                        }
+                    }
                 }
 
                 // ── Plazas ────────────────────────────────────────────────
