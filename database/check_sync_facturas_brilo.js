@@ -30,19 +30,21 @@ function ayer() {
   return d.toISOString().slice(0, 10);
 }
 
-// ── Sucursales monitoreadas (sucId Brilo → nombre legible) ───────────────────
+// ── Sucursales monitoreadas por cjavId (campo más preciso que sucId)
+// cjavId identifica el punto de venta exacto; sucId puede compartirse entre
+// sucursales en el mismo servidor (ej: Aeropuerto 2 y Malcriadas AE2 comparten sucId=8)
 const SUCURSALES = {
    1: 'FAB - ZONA ROSA',
-   3: 'RES - ZONA ROSA',
-   6: 'RES - LA LIBERTAD',
+   4: 'RES - ZONA ROSA',
+   5: 'RES - LA LIBERTAD',
    7: 'RES - AEROPUERTO #1',
    8: 'RES - AEROPUERTO #2',
-  10: 'RES - PASEO VENECIA',
-  11: 'RES - SANTA ELENA',
-  12: 'RES - HUIZUCAR',
-  13: 'RES - OPICO',
+  12: 'RES - PASEO VENECIA',
+  13: 'RES - SANTA ELENA',
+  14: 'RES - HUIZUCAR',
+  15: 'RES - OPICO',
   16: 'RES - MALCRIADAS AE2',
-  19: 'RES - CASA GUIROLA',
+  20: 'RES - CASA GUIROLA',
 };
 
 const DESTINATARIOS = [
@@ -141,31 +143,28 @@ async function main() {
     .input('fecha', sql.VarChar(10), fecha)
     .query(`
       SELECT
-        MFA.sucId,
-        SUC.sucNombre,
+        MFA.cjavId,
         COUNT(*)                                                                AS total_facturas,
         SUM(MFA.mfaSumasAfecto * (1 + MFA.mfaPorcentIVA) + MFA.mfaSumasExento) AS total_venta
       FROM olVentas.dbo.maeFacturas MFA WITH (NOLOCK)
-      LEFT JOIN olComun.dbo.Sucursales SUC WITH (NOLOCK)
-        ON MFA.sucId = SUC.sucId
       WHERE MFA.mfaPosteada = 1
         AND MFA.mfaAnulada  = 0
         AND CONVERT(DATE, MFA.mfaFecha) = @fecha
-        AND MFA.sucId IN (${Object.keys(SUCURSALES).join(',')})
-      GROUP BY MFA.sucId, SUC.sucNombre
+        AND MFA.cjavId IN (${Object.keys(SUCURSALES).join(',')})
+      GROUP BY MFA.cjavId
     `);
 
   await pool.close();
 
   // Comparar resultado vs sucursales esperadas
-  const conFacturas = new Set(result.recordset.map(r => r.sucId));
+  const conFacturas = new Set(result.recordset.map(r => r.cjavId));
   const faltantes   = Object.entries(SUCURSALES)
     .filter(([id]) => !conFacturas.has(Number(id)))
     .map(([, nombre]) => nombre);
 
   // Construir resumen completo para la tabla del correo
   const resumen = Object.entries(SUCURSALES).map(([id, nombre]) => {
-    const row = result.recordset.find(r => r.sucId === Number(id));
+    const row = result.recordset.find(r => r.cjavId === Number(id));
     return {
       nombre,
       sin_facturas:   !row,
