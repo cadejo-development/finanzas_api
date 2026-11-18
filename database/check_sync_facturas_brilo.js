@@ -11,7 +11,7 @@
  *   node database/check_sync_facturas_brilo.js --dry-run
  *
  * Crontab EC2 (6:00 AM hora SV):
- *   0 11 * * * node /var/app/current/database/check_sync_facturas_brilo.js >> /var/log/check-sync-facturas.log 2>&1
+ *   0 12 * * * node /var/app/current/database/check_sync_facturas_brilo.js >> /var/log/check-sync-facturas.log 2>&1
  *   (UTC-6 → 06:00 SV = 12:00 UTC)
  */
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
