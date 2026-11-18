@@ -19,9 +19,11 @@ const sql = require('mssql');
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 
 // ── Argumentos ───────────────────────────────────────────────────────────────
-const args    = process.argv.slice(2);
-const DRY_RUN = args.includes('--dry-run');
+const args     = process.argv.slice(2);
+const DRY_RUN  = args.includes('--dry-run');
+const FORCE    = args.includes('--force');
 const fechaArg = args.find(a => a.startsWith('--fecha='))?.split('=')[1] ?? null;
+const toArg    = args.find(a => a.startsWith('--to='))?.split('=')[1] ?? null;
 
 function ayer() {
   if (fechaArg) return fechaArg;
@@ -91,33 +93,40 @@ function buildEmail(fecha, faltantes, resumen) {
     </td>
   </tr>
   <tr>
-    <td style="background:#dc2626;padding:14px 40px;text-align:center;">
+    <td style="background:${faltantes.length ? '#dc2626' : '#16a34a'};padding:14px 40px;text-align:center;">
       <p style="margin:0;color:#ffffff;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">
-        ⚠ Alerta de Sincronización Brilo
+        ${faltantes.length ? '⚠ Alerta de Sincronización Brilo' : '✓ Sincronización Brilo — Todo OK'}
       </p>
     </td>
   </tr>
   <tr>
     <td style="padding:28px 40px 20px;">
-      <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:#1a1a1a;">Facturas no sincronizadas — ${fecha}</p>
+      <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:#1a1a1a;">
+        ${faltantes.length ? `Facturas no sincronizadas — ${fecha}` : `Reporte de estatus — ${fecha}`}
+      </p>
       <p style="margin:0 0 20px;font-size:13px;color:#78716c;">
-        Las siguientes sucursales <strong>no registraron facturas</strong> para el día <strong>${fecha}</strong>
-        en la base de datos central de Brilo (olVentas):
+        ${faltantes.length
+          ? `Las siguientes sucursales <strong>no registraron facturas</strong> para el día <strong>${fecha}</strong> en la base de datos central de Brilo (olVentas):`
+          : `Todas las sucursales registraron facturas correctamente para el día <strong>${fecha}</strong> en la base de datos central de Brilo (olVentas).`
+        }
       </p>
 
-      <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #fecaca;border-radius:8px;overflow:hidden;margin-bottom:24px;">
-        <tr style="background:#fee2e2;">
-          <td style="padding:10px 14px;font-size:11px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:1px;">Sucursal</td>
-          <td style="padding:10px 14px;font-size:11px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:1px;text-align:center;">Estado</td>
-          <td style="padding:10px 14px;font-size:11px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:1px;text-align:right;">Venta Total</td>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${faltantes.length ? '#fecaca' : '#bbf7d0'};border-radius:8px;overflow:hidden;margin-bottom:24px;">
+        <tr style="background:${faltantes.length ? '#fee2e2' : '#dcfce7'};">
+          <td style="padding:10px 14px;font-size:11px;font-weight:700;color:${faltantes.length ? '#991b1b' : '#166534'};text-transform:uppercase;letter-spacing:1px;">Sucursal</td>
+          <td style="padding:10px 14px;font-size:11px;font-weight:700;color:${faltantes.length ? '#991b1b' : '#166534'};text-transform:uppercase;letter-spacing:1px;text-align:center;">Estado</td>
+          <td style="padding:10px 14px;font-size:11px;font-weight:700;color:${faltantes.length ? '#991b1b' : '#166534'};text-transform:uppercase;letter-spacing:1px;text-align:right;">Venta Total</td>
         </tr>
         ${filasResumen}
       </table>
 
       <p style="margin:0 0 4px;font-size:13px;color:#44403c;">
-        <strong>${faltantes.length}</strong> de <strong>${Object.keys(SUCURSALES).length}</strong> sucursales sin sincronizar.
+        ${faltantes.length
+          ? `<strong>${faltantes.length}</strong> de <strong>${Object.keys(SUCURSALES).length}</strong> sucursales sin sincronizar.`
+          : `<strong>${Object.keys(SUCURSALES).length}</strong> de <strong>${Object.keys(SUCURSALES).length}</strong> sucursales sincronizadas correctamente.`
+        }
       </p>
-      <p style="margin:0;font-size:12px;color:#a8a29e;">Alerta generada: ${fechaSV}</p>
+      <p style="margin:0;font-size:12px;color:#a8a29e;">Reporte generado: ${fechaSV}</p>
     </td>
   </tr>
   <tr>
@@ -179,20 +188,26 @@ async function main() {
     console.log(`  ${r.nombre.padEnd(28)} ${estado}`);
   });
 
-  if (!faltantes.length) {
+  if (!faltantes.length && !FORCE) {
     console.log(`[OK] Todas las sucursales tienen facturas para ${fecha}.`);
     return;
   }
 
-  console.log(`[ALERTA] ${faltantes.length} sucursal(es) sin facturas: ${faltantes.join(', ')}`);
+  if (faltantes.length)
+    console.log(`[ALERTA] ${faltantes.length} sucursal(es) sin facturas: ${faltantes.join(', ')}`);
+  else
+    console.log(`[FORCE] Sin alertas — enviando reporte de estatus completo.`);
 
   if (DRY_RUN) {
     console.log('[DRY RUN] Correo NO enviado.');
     return;
   }
 
-  const html    = buildEmail(fecha, faltantes, resumen);
-  const asunto  = `[Brilo] ⚠ ${faltantes.length} sucursal(es) sin sincronizar — ${fecha}`;
+  const destinos = toArg ? [toArg] : DESTINATARIOS;
+  const html     = buildEmail(fecha, faltantes, resumen);
+  const asunto   = faltantes.length
+    ? `[Brilo] ⚠ ${faltantes.length} sucursal(es) sin sincronizar — ${fecha}`
+    : `[Brilo] ✓ Todas las sucursales sincronizadas — ${fecha}`;
 
   const ses = new SESClient({
     region: process.env.SES_REGION ?? 'us-east-1',
@@ -204,14 +219,14 @@ async function main() {
 
   await ses.send(new SendEmailCommand({
     Source:      `"Cadejo · Alertas Brilo" <${process.env.MAIL_FROM_ADDRESS ?? 'notificaciones@cervezacadejo.com'}>`,
-    Destination: { ToAddresses: DESTINATARIOS },
+    Destination: { ToAddresses: destinos },
     Message: {
       Subject: { Data: asunto,  Charset: 'UTF-8' },
       Body:    { Html: { Data: html, Charset: 'UTF-8' } },
     },
   }));
 
-  console.log(`[OK] Alerta enviada a ${DESTINATARIOS.join(', ')}`);
+  console.log(`[OK] Correo enviado a ${destinos.join(', ')}`);
 }
 
 main().catch(err => {
