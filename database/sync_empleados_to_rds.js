@@ -839,7 +839,7 @@ async function run() {
           for (const [dId, sId, fi, cId, sb, em, codigo] of batch) {
             await pg.query(
               `UPDATE empleados
-               SET departamento_id = COALESCE($1, departamento_id),
+               SET departamento_id = COALESCE(departamento_id, $1),
                    sucursal_id     = COALESCE($2, sucursal_id),
                    fecha_ingreso   = COALESCE($3, fecha_ingreso),
                    cargo_id        = COALESCE($4, cargo_id),
