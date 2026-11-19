@@ -352,6 +352,43 @@ class InventarioController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // PATCH /api/compras/inventario/toggle-activo-producto
+    // Oculta/muestra un producto en el pedido semanal por sucursal.
+    // Si no existe registro de inventario, crea uno con activo=false.
+    // ─────────────────────────────────────────────────────────────────────────
+    public function toggleActivoPorProducto(Request $request): JsonResponse
+    {
+        $request->validate([
+            'sucursal_id' => 'required|integer|min:1',
+            'producto_id' => 'required|integer|min:1',
+        ]);
+
+        $sucursalId = (int) $request->input('sucursal_id');
+        $productoId = (int) $request->input('producto_id');
+
+        $inv = Inventario::where('sucursal_id', $sucursalId)
+            ->where('producto_id', $productoId)
+            ->first();
+
+        if ($inv) {
+            $nuevoActivo = ! $inv->activo;
+            $inv->update(['activo' => $nuevoActivo, 'aud_usuario' => Auth::user()->email]);
+        } else {
+            Inventario::create([
+                'sucursal_id'           => $sucursalId,
+                'producto_id'           => $productoId,
+                'activo'                => false,
+                'cantidad_inicial'      => 0,
+                'cantidad_inicial_base' => 0,
+                'aud_usuario'           => Auth::user()->email,
+            ]);
+            $nuevoActivo = false;
+        }
+
+        return response()->json(['success' => true, 'activo' => $nuevoActivo]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // PATCH /api/compras/inventario/{id}/activo
     // Activa u oculta un producto del inventario (depuración por sucursal)
     // ─────────────────────────────────────────────────────────────────────────

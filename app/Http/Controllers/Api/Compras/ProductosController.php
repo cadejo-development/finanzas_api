@@ -101,6 +101,17 @@ class ProductosController extends Controller
             });
         }
 
+        // Para MR con sucursal_id: excluir productos ocultos en esta sucursal
+        if ($prefijo === 'MR' && $activeSucursalIdPrefijo) {
+            $query->whereNotExists(function ($sub) use ($activeSucursalIdPrefijo) {
+                $sub->select(DB::raw(1))
+                    ->from('inventarios')
+                    ->whereColumn('inventarios.producto_id', 'productos.id')
+                    ->where('inventarios.sucursal_id', $activeSucursalIdPrefijo)
+                    ->where('inventarios.activo', false);
+            });
+        }
+
         // Para BR con sucursal_id: mismo patrón que PL — productos cuyo codigo
         // aparece como codigo_origen de una receta activa asignada a la sucursal
         if ($prefijo === 'BR' && $activeSucursalIdPrefijo) {

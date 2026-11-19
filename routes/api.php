@@ -322,6 +322,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::post('inventario/secciones-masivas',     [InventarioController::class, 'asignarSeccionesMasivas']);
     Route::put('inventario/{id}/stock-minimo',  [InventarioController::class, 'actualizarStockMinimo']);
     Route::patch('inventario/{id}/seccion',     [InventarioController::class, 'actualizarSeccion']);
+    Route::patch('inventario/toggle-activo-producto', [InventarioController::class, 'toggleActivoPorProducto']);
     Route::patch('inventario/{id}/activo',      [InventarioController::class, 'toggleActivo']);
     Route::get('inventario/borradores-activos', [InventarioController::class, 'borradoresActivos']);
     Route::get('inventario/borrador',           [InventarioController::class, 'getBorrador']);
