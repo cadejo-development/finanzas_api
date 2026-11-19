@@ -11,6 +11,7 @@ class PlanillaSPLinea extends Model
 
     protected $fillable = [
         'planilla_sp_id', 'empleado_id', 'nombre', 'nit', 'descripcion_servicio',
+        'dias_periodo', 'dias_permiso', 'dias_incapacidad', 'dias_trabajados',
         'monto_honorario', 'retencion_isr', 'liquido', 'notas',
     ];
 

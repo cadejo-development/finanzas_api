@@ -146,7 +146,7 @@ class PlanillaSPController extends RRHHBaseController
             }
 
             // Obtener salario_base de cada empleado
-            $empIds = $ingresos->pluck('empleado_id')->unique();
+            $empIds = $ingresos->pluck('empleado_id')->unique()->values()->all();
             $empleados = DB::connection('pgsql')
                 ->table('empleados')
                 ->whereIn('id', $empIds)
@@ -157,6 +157,53 @@ class PlanillaSPController extends RRHHBaseController
             $inicioQ = Carbon::parse($fechaInicioQ);
             $finQ    = Carbon::parse($fechaFinQ);
             $diasQ   = $inicioQ->diffInDays($finQ) + 1; // 15 para Q1, variable para Q2
+
+            // Cargar permisos aprobados de día completo en el período (batch)
+            $permisosRaw = DB::connection('rrhh')
+                ->table('permisos')
+                ->whereIn('empleado_id', $empIds)
+                ->where('estado', 'aprobado')
+                ->where('es_dia_completo', true)
+                ->where('fecha', '<=', $fechaFinQ)
+                ->where(function ($q) use ($fechaInicioQ) {
+                    // Permiso que termina después del inicio: fecha + dias - 1 >= inicioQ
+                    // Simplificamos filtrando fecha >= inicioQ - 30 días y calculamos solapamiento en PHP
+                    $q->where('fecha', '>=', Carbon::parse($fechaInicioQ)->subDays(30)->toDateString());
+                })
+                ->select('empleado_id', 'fecha', DB::raw('COALESCE(dias, 1) as dias_permiso'))
+                ->get();
+
+            // Cargar incapacidades que cruzan el período (batch)
+            $incapacidadesRaw = DB::connection('rrhh')
+                ->table('incapacidades')
+                ->whereIn('empleado_id', $empIds)
+                ->where('fecha_inicio', '<=', $fechaFinQ)
+                ->where('fecha_fin',    '>=', $fechaInicioQ)
+                ->select('empleado_id', 'fecha_inicio', 'fecha_fin')
+                ->get();
+
+            // Precalcular días de permiso e incapacidad por empleado en el período
+            $diasPermisoMap      = [];
+            $diasIncapacidadMap  = [];
+
+            foreach ($permisosRaw as $p) {
+                $permisoInicio = Carbon::parse($p->fecha);
+                $permisoFin    = $permisoInicio->copy()->addDays((int) $p->dias_permiso - 1);
+                // Solapamiento con [inicioQ, finQ]
+                $overlapStart  = $permisoInicio->lt($inicioQ) ? $inicioQ : $permisoInicio;
+                $overlapEnd    = $permisoFin->gt($finQ)       ? $finQ    : $permisoFin;
+                $dias          = max(0, $overlapStart->diffInDays($overlapEnd) + 1);
+                $diasPermisoMap[$p->empleado_id] = ($diasPermisoMap[$p->empleado_id] ?? 0) + $dias;
+            }
+
+            foreach ($incapacidadesRaw as $inc) {
+                $incInicio    = Carbon::parse($inc->fecha_inicio);
+                $incFin       = Carbon::parse($inc->fecha_fin);
+                $overlapStart = $incInicio->lt($inicioQ) ? $inicioQ : $incInicio;
+                $overlapEnd   = $incFin->gt($finQ)       ? $finQ    : $incFin;
+                $dias         = max(0, $overlapStart->diffInDays($overlapEnd) + 1);
+                $diasIncapacidadMap[$inc->empleado_id] = ($diasIncapacidadMap[$inc->empleado_id] ?? 0) + $dias;
+            }
 
             DB::connection('rrhh')->beginTransaction();
             try {
@@ -170,14 +217,15 @@ class PlanillaSPController extends RRHHBaseController
                     $emp = $empleados[$ing->empleado_id] ?? null;
                     $salarioBase = $emp ? (float) $emp->salario_base : 0;
 
-                    // Días trabajados en la quincena: si ingresó antes del inicio paga completa,
-                    // si ingresó dentro de la quincena paga proporcional desde su fecha
-                    $fechaIng = Carbon::parse($ing->fecha_ingreso);
-                    if ($fechaIng->lt($inicioQ)) {
-                        $diasTrabajados = $diasQ;
-                    } else {
-                        $diasTrabajados = $finQ->diffInDays($fechaIng) + 1;
-                    }
+                    // Días del período: desde la fecha de ingreso (o inicio Q si ingresó antes) hasta fin Q
+                    $fechaIng        = Carbon::parse($ing->fecha_ingreso);
+                    $inicioEfectiva  = $fechaIng->gt($inicioQ) ? $fechaIng->copy() : $inicioQ->copy();
+                    $diasPeriodo     = $inicioEfectiva->diffInDays($finQ) + 1; // siempre positivo
+
+                    // Descontar permisos e incapacidades
+                    $diasPermiso      = min($diasPermisoMap[$ing->empleado_id] ?? 0, $diasPeriodo);
+                    $diasIncapacidad  = min($diasIncapacidadMap[$ing->empleado_id] ?? 0, $diasPeriodo - $diasPermiso);
+                    $diasTrabajados   = max(0, $diasPeriodo - $diasPermiso - $diasIncapacidad);
 
                     $monto     = round($salarioBase / 30 * $diasTrabajados, 2);
                     $retencion = round($monto * self::RETENCION_ISR_PCT, 2);
@@ -188,8 +236,11 @@ class PlanillaSPController extends RRHHBaseController
                         : $ing->empleado_nombre;
 
                     $desc = 'Honorarios SP - ' . $ing->cargo_nombre . ' (' . $ing->fecha_ingreso . ')';
-                    if ($diasTrabajados < $diasQ) {
-                        $desc .= " — {$diasTrabajados} días";
+                    if ($diasPeriodo < $diasQ) {
+                        $desc .= " — {$diasPeriodo} días en período";
+                    }
+                    if ($diasPermiso > 0 || $diasIncapacidad > 0) {
+                        $desc .= " ({$diasTrabajados} trabajados)";
                     }
 
                     PlanillaSPLinea::create([
@@ -197,6 +248,10 @@ class PlanillaSPController extends RRHHBaseController
                         'empleado_id'          => $ing->empleado_id,
                         'nombre'               => $nombre,
                         'descripcion_servicio' => $desc,
+                        'dias_periodo'         => $diasPeriodo,
+                        'dias_permiso'         => $diasPermiso,
+                        'dias_incapacidad'     => $diasIncapacidad,
+                        'dias_trabajados'      => $diasTrabajados,
                         'monto_honorario'      => $monto,
                         'retencion_isr'        => $retencion,
                         'liquido'              => $liquido,
