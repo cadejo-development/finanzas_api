@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\RRHH;
 
 use App\Models\RRHH\PlanillaSP;
 use App\Models\RRHH\PlanillaSPLinea;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -61,6 +62,7 @@ class PlanillaSPController extends RRHHBaseController
             $validated = $request->validate([
                 'anio'        => 'required|integer|min:2020|max:2099',
                 'mes'         => 'required|integer|min:1|max:12',
+                'quincena'    => 'nullable|integer|in:1,2',
                 'descripcion' => 'nullable|string|max:200',
                 'sucursal_id' => 'nullable|integer',
             ]);
@@ -68,6 +70,7 @@ class PlanillaSPController extends RRHHBaseController
             $planilla = PlanillaSP::create([
                 'anio'        => (int) $validated['anio'],
                 'mes'         => (int) $validated['mes'],
+                'quincena'    => isset($validated['quincena']) ? (int) $validated['quincena'] : null,
                 'descripcion' => $validated['descripcion'] ?? null,
                 'sucursal_id' => isset($validated['sucursal_id']) ? (int) $validated['sucursal_id'] : null,
                 'estado'      => 'borrador',
@@ -75,6 +78,127 @@ class PlanillaSPController extends RRHHBaseController
             ]);
 
             return response()->json(['success' => true, 'data' => $planilla], 201);
+        });
+    }
+
+    // ─── Cargar nuevo ingreso ─────────────────────────────────────────────────
+
+    /**
+     * POST /api/rrhh/planillas-sp/{id}/cargar-nuevo-ingreso
+     *
+     * Busca empleados con confirmacion='se_presento' en ingresos_personal cuya
+     * fecha_ingreso cae dentro del período de 30 días de SP que toca esta quincena,
+     * y los agrega a la planilla con monto = salario_base / 2.
+     * Empleados ya presentes en la planilla se omiten.
+     */
+    public function cargarNuevoIngreso(int $id): JsonResponse
+    {
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $planilla = PlanillaSP::findOrFail($id);
+
+            if ($planilla->estado !== 'borrador') {
+                return response()->json(['success' => false, 'message' => 'Solo se puede cargar en planillas en borrador.'], 422);
+            }
+
+            if (!$planilla->quincena) {
+                return response()->json(['success' => false, 'message' => 'La planilla no tiene quincena definida. Elimínala y crea una nueva con quincena.'], 422);
+            }
+
+            [$fechaInicioQ, $fechaFinQ] = $this->rangoQuincena(
+                (int) $planilla->anio,
+                (int) $planilla->mes,
+                (int) $planilla->quincena
+            );
+
+            // Un empleado en SP de 30 días cae en esta quincena si:
+            //   fecha_ingreso ≤ fin quincena  (ya empezó)
+            //   fecha_ingreso ≥ inicio quincena - 30 días  (el período aún no terminó)
+            $cutoff = Carbon::parse($fechaInicioQ)->subDays(30)->toDateString();
+
+            // Empleados ya en la planilla (evitar duplicados)
+            $yaEnPlanilla = PlanillaSPLinea::where('planilla_sp_id', $id)
+                ->whereNotNull('empleado_id')
+                ->pluck('empleado_id')
+                ->all();
+
+            $query = DB::connection('rrhh')
+                ->table('ingresos_personal as ip')
+                ->where('ip.confirmacion', 'se_presento')
+                ->where('ip.fecha_ingreso', '>=', $cutoff)
+                ->where('ip.fecha_ingreso', '<=', $fechaFinQ)
+                ->whereNotIn('ip.empleado_id', $yaEnPlanilla)
+                ->select('ip.empleado_id', 'ip.fecha_ingreso',
+                         'ip.empleado_nombre', 'ip.cargo_nombre', 'ip.sucursal_nombre')
+                ->groupBy('ip.empleado_id', 'ip.fecha_ingreso',
+                          'ip.empleado_nombre', 'ip.cargo_nombre', 'ip.sucursal_nombre');
+
+            // Filtrar por sucursal si la planilla tiene una
+            if ($planilla->sucursal_id) {
+                $empIds = DB::connection('pgsql')
+                    ->table('empleados')
+                    ->where('sucursal_id', $planilla->sucursal_id)
+                    ->pluck('id');
+                $query->whereIn('ip.empleado_id', $empIds);
+            }
+
+            $ingresos = $query->get();
+
+            if ($ingresos->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No se encontraron empleados de nuevo ingreso para este período.',
+                    'agregados' => 0,
+                ]);
+            }
+
+            // Obtener salario_base de cada empleado
+            $empIds = $ingresos->pluck('empleado_id')->unique();
+            $empleados = DB::connection('pgsql')
+                ->table('empleados')
+                ->whereIn('id', $empIds)
+                ->select('id', 'salario_base', 'nombres', 'apellidos')
+                ->get()
+                ->keyBy('id');
+
+            DB::connection('rrhh')->beginTransaction();
+            try {
+                $agregados = 0;
+                foreach ($ingresos as $ing) {
+                    $emp = $empleados[$ing->empleado_id] ?? null;
+                    $salarioBase = $emp ? (float) $emp->salario_base : 0;
+                    $monto     = round($salarioBase / 2, 2);
+                    $retencion = round($monto * self::RETENCION_ISR_PCT, 2);
+                    $liquido   = round($monto - $retencion, 2);
+
+                    $nombre = $emp
+                        ? trim($emp->nombres . ' ' . $emp->apellidos)
+                        : $ing->empleado_nombre;
+
+                    PlanillaSPLinea::create([
+                        'planilla_sp_id'       => $id,
+                        'empleado_id'          => $ing->empleado_id,
+                        'nombre'               => $nombre,
+                        'descripcion_servicio' => 'Honorarios SP - ' . $ing->cargo_nombre . ' (' . $ing->fecha_ingreso . ')',
+                        'monto_honorario'      => $monto,
+                        'retencion_isr'        => $retencion,
+                        'liquido'              => $liquido,
+                    ]);
+                    $agregados++;
+                }
+
+                $this->recalcularTotales($planilla);
+                DB::connection('rrhh')->commit();
+            } catch (\Throwable $e) {
+                DB::connection('rrhh')->rollBack();
+                throw $e;
+            }
+
+            return response()->json([
+                'success'  => true,
+                'message'  => "Se agregaron {$agregados} empleado(s) de nuevo ingreso.",
+                'agregados' => $agregados,
+                'data'     => $planilla->fresh()->load('lineas'),
+            ]);
         });
     }
 
@@ -268,5 +392,17 @@ class PlanillaSPController extends RRHHBaseController
             'total_retencion'  => round($lineas->sum(fn($l) => (float) $l->retencion_isr), 2),
             'total_neto'       => round($lineas->sum(fn($l) => (float) $l->liquido), 2),
         ]);
+    }
+
+    private function rangoQuincena(int $anio, int $mes, int $q): array
+    {
+        if ($q === 1) {
+            $inicio = Carbon::create($anio, $mes, 1)->toDateString();
+            $fin    = Carbon::create($anio, $mes, 15)->toDateString();
+        } else {
+            $inicio = Carbon::create($anio, $mes, 16)->toDateString();
+            $fin    = Carbon::create($anio, $mes)->endOfMonth()->toDateString();
+        }
+        return [$inicio, $fin];
     }
 }

@@ -795,6 +795,7 @@ Route::prefix('rrhh/planillas-sp')->middleware(['auth:sanctum', 'role:rrhh_admin
     Route::delete('{id}',                           [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'destroy']);
     Route::put('{id}/cerrar',                       [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'cerrar']);
     Route::get('{id}/exportar',                     [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'exportar']);
+    Route::post('{id}/cargar-nuevo-ingreso',        [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'cargarNuevoIngreso']);
     Route::post('{id}/lineas',                      [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'storeLinea']);
     Route::put('{id}/lineas/{lineaId}',             [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'updateLinea']);
     Route::delete('{id}/lineas/{lineaId}',          [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'destroyLinea']);

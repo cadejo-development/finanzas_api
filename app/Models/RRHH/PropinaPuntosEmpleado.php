@@ -10,7 +10,7 @@ class PropinaPuntosEmpleado extends Model
     protected $table = 'propina_puntos_empleado';
 
     protected $fillable = [
-        'empleado_id', 'puntos_propina',
+        'empleado_id', 'puntos_propina', 'aplica_propina_override',
         'fecha_desde', 'fecha_hasta', 'motivo', 'registrado_por',
     ];
 

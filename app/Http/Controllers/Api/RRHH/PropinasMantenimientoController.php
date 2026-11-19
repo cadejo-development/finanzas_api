@@ -102,12 +102,17 @@ class PropinasMantenimientoController extends RRHHBaseController
         $validated = $request->validate([
             'cargo_id'       => 'required|integer',
             'puntos_propina' => 'required|numeric|min:0|max:5',
+            'aplica_propina' => 'sometimes|boolean',
             'notas'          => 'nullable|string',
         ]);
 
         $config = PropinaPuntosCargo::updateOrCreate(
             ['cargo_id' => $validated['cargo_id']],
-            ['puntos_propina' => $validated['puntos_propina'], 'notas' => $validated['notas'] ?? null]
+            [
+                'puntos_propina' => $validated['puntos_propina'],
+                'aplica_propina' => $validated['aplica_propina'] ?? false,
+                'notas'          => $validated['notas'] ?? null,
+            ]
         );
 
         return response()->json(['success' => true, 'data' => $config]);

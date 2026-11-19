@@ -10,7 +10,7 @@ class PlanillaSPLinea extends Model
     protected $table      = 'planilla_sp_lineas';
 
     protected $fillable = [
-        'planilla_sp_id', 'nombre', 'nit', 'descripcion_servicio',
+        'planilla_sp_id', 'empleado_id', 'nombre', 'nit', 'descripcion_servicio',
         'monto_honorario', 'retencion_isr', 'liquido', 'notas',
     ];
 

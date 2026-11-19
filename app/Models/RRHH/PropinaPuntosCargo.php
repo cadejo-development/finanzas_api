@@ -9,7 +9,10 @@ class PropinaPuntosCargo extends Model
     protected $connection = 'rrhh';
     protected $table = 'propina_puntos_cargo';
 
-    protected $fillable = ['cargo_id', 'puntos_propina', 'notas'];
+    protected $fillable = ['cargo_id', 'puntos_propina', 'aplica_propina', 'notas'];
 
-    protected $casts = ['puntos_propina' => 'decimal:2'];
+    protected $casts = [
+        'puntos_propina' => 'decimal:2',
+        'aplica_propina' => 'boolean',
+    ];
 }

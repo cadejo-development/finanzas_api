@@ -10,7 +10,7 @@ class PlanillaSP extends Model
     protected $table      = 'planillas_sp';
 
     protected $fillable = [
-        'anio', 'mes', 'descripcion', 'sucursal_id', 'estado',
+        'anio', 'mes', 'quincena', 'descripcion', 'sucursal_id', 'estado',
         'total_honorarios', 'total_retencion', 'total_neto', 'creado_por',
     ];
 

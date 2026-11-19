@@ -20,9 +20,10 @@ class PropinaCalculatorService
 {
     /**
      * Resuelve los puntos de propina de un empleado en una fecha dada.
-     * Prioridad: override vigente > default del cargo > 1.0
+     * Prioridad: override vigente > default del cargo.
+     * Retorna null si el empleado/cargo no aplica propina.
      */
-    public function resolverPuntos(int $empleadoId, int $cargoId, Carbon $fecha): array
+    public function resolverPuntos(int $empleadoId, int $cargoId, Carbon $fecha): ?array
     {
         $override = PropinaPuntosEmpleado::where('empleado_id', $empleadoId)
             ->where('fecha_desde', '<=', $fecha->toDateString())
@@ -31,15 +32,21 @@ class PropinaCalculatorService
             ->first();
 
         if ($override) {
+            // aplica_propina_override = false excluye explícitamente al empleado
+            if ($override->aplica_propina_override === false) {
+                return null;
+            }
+            // aplica_propina_override = true o null → usa los puntos del override
             return ['puntos' => (float) $override->puntos_propina, 'fuente' => 'override'];
         }
 
         $puntoCargo = PropinaPuntosCargo::where('cargo_id', $cargoId)->first();
-        if ($puntoCargo) {
+        if ($puntoCargo && $puntoCargo->aplica_propina) {
             return ['puntos' => (float) $puntoCargo->puntos_propina, 'fuente' => 'cargo'];
         }
 
-        return ['puntos' => 1.0, 'fuente' => 'default'];
+        // Cargo sin configuración o con aplica_propina=false → no participa
+        return null;
     }
 
     /**
@@ -233,6 +240,8 @@ class PropinaCalculatorService
 
         foreach ($empleados as $emp) {
             $puntoRes = $this->resolverPuntos($emp->empleado_id, $emp->cargo_id, $desde);
+            if ($puntoRes === null) continue; // Cargo/empleado no aplica propina
+
             $diasMax  = $this->diasMaxDisponibles($emp->empleado_id, $desde, $hasta);
             if ($diasMax <= 0) continue; // No estuvo en el período
 
