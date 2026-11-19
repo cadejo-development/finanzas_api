@@ -918,7 +918,9 @@ class VentasController extends Controller
             )
             ->get();
 
-        // Sub-recetas regulares (no CP): se expanden en sus ingredientes
+        // Sub-recetas regulares (no CP): se expanden en sus ingredientes.
+        // La fracción se calcula en PHP para poder convertir unidades entre ri.unidad y sr.rendimiento_unidad.
+        // Ejemplo: receta usa 2 oz de sub-receta que rinde 1 kg → fracción = 2 oz * (oz→kg) / 1 = 0.0567
         $subRecetas = DB::connection('compras')
             ->table('recetas as r')
             ->join('receta_ingredientes as ri', 'ri.receta_id', '=', 'r.id')
@@ -933,10 +935,27 @@ class VentasController extends Controller
             ->select(
                 'r.codigo_origen as plato_codigo', 'r.nombre as plato_nombre_receta',
                 'p.id as producto_id', 'p.nombre', 'p.codigo as prod_codigo', 'p.unidad', 'p.costo',
-                DB::raw('ri.cantidad_por_plato * (ri2.cantidad_por_plato / NULLIF(COALESCE(sr.rendimiento, 1), 0)) AS cantidad_por_plato'),
-                'ri2.unidad as unidad_receta', 'sr.nombre as sub_nombre'
+                'ri.cantidad_por_plato as qty_ri',       // cantidad de sub-receta usada en plato
+                'ri.unidad as unidad_ri',                // unidad de esa cantidad
+                'sr.rendimiento as sr_rendimiento',      // rendimiento de la sub-receta
+                'sr.rendimiento_unidad as sr_rend_unidad', // unidad del rendimiento
+                'ri2.cantidad_por_plato as qty_ri2',     // cantidad del ingrediente en sub-receta
+                'ri2.unidad as unidad_receta',           // unidad del ingrediente (para conversión a p.unidad)
+                'sr.nombre as sub_nombre'
             )
-            ->get();
+            ->get()
+            ->map(function ($row) use ($unitConv) {
+                // Convertir qty_ri (en unidad_ri) a la unidad del rendimiento de la sub-receta
+                $riU   = strtolower(trim($row->unidad_ri ?? ''));
+                $rendU = strtolower(trim($row->sr_rend_unidad ?? ''));
+                $riFact = ($riU !== '' && $rendU !== '' && $riU !== $rendU)
+                          ? ($unitConv["$riU|$rendU"] ?? 1.0)
+                          : 1.0;
+                $rend = max((float) ($row->sr_rendimiento ?? 1), 0.0001);
+                // fracción del batch que usa este plato × cantidad del ingrediente en ese batch
+                $row->cantidad_por_plato = (((float) $row->qty_ri * $riFact) / $rend) * (float) $row->qty_ri2;
+                return $row;
+            });
 
         $mapa  = [];
         $filas = [];
