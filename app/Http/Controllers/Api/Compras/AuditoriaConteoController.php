@@ -1098,6 +1098,10 @@ class AuditoriaConteoController extends Controller
                 'nombre' => 'Rosa Marroquín',
                 'tipos'  => ['error_traslado'],
             ],
+            'soporteit@cervezacadejo.com' => [
+                'nombre' => 'Soporte IT',
+                'tipos'  => ['cruce_productos', 'descarga_incorrecta'],
+            ],
         ];
 
         $justificacionLabel = [
