@@ -1105,6 +1105,8 @@ class AuditoriaConteoController extends Controller
             'error_posteo'          => 'Error en posteo',
             'error_traslado'        => 'Error en traslado entre sucursales',
             'codigo_mp_equivocado'  => 'Código de materia prima equivocado',
+            'cruce_productos'       => 'Cruce de productos',
+            'descarga_incorrecta'   => 'Descarga incorrecta en sistema',
         ];
 
         // 3. Agrupar items por destinatario y enviar UN correo por destinatario
