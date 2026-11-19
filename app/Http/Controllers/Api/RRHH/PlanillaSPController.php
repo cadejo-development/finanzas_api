@@ -88,7 +88,8 @@ class PlanillaSPController extends RRHHBaseController
      *
      * Busca empleados con confirmacion='se_presento' en ingresos_personal cuya
      * fecha_ingreso cae dentro del período de 30 días de SP que toca esta quincena,
-     * y los agrega con monto proporcional: salario_base/30 × días trabajados en la quincena.
+     * Recalcula las líneas de nuevo ingreso: elimina las existentes cargadas automáticamente
+     * y las recrea con monto proporcional: salario_base/30 × días trabajados en la quincena.
      * Empleados ya presentes en la planilla se omiten.
      */
     public function cargarNuevoIngreso(int $id): JsonResponse
@@ -115,18 +116,11 @@ class PlanillaSPController extends RRHHBaseController
             //   fecha_ingreso ≥ inicio quincena - 30 días  (el período aún no terminó)
             $cutoff = Carbon::parse($fechaInicioQ)->subDays(30)->toDateString();
 
-            // Empleados ya en la planilla (evitar duplicados)
-            $yaEnPlanilla = PlanillaSPLinea::where('planilla_sp_id', $id)
-                ->whereNotNull('empleado_id')
-                ->pluck('empleado_id')
-                ->all();
-
             $query = DB::connection('rrhh')
                 ->table('ingresos_personal as ip')
                 ->where('ip.confirmacion', 'se_presento')
                 ->where('ip.fecha_ingreso', '>=', $cutoff)
                 ->where('ip.fecha_ingreso', '<=', $fechaFinQ)
-                ->whereNotIn('ip.empleado_id', $yaEnPlanilla)
                 ->select('ip.empleado_id', 'ip.fecha_ingreso',
                          'ip.empleado_nombre', 'ip.cargo_nombre', 'ip.sucursal_nombre')
                 ->groupBy('ip.empleado_id', 'ip.fecha_ingreso',
@@ -166,6 +160,11 @@ class PlanillaSPController extends RRHHBaseController
 
             DB::connection('rrhh')->beginTransaction();
             try {
+                // Eliminar líneas previamente auto-cargadas (empleado_id no nulo) para recalcular
+                PlanillaSPLinea::where('planilla_sp_id', $id)
+                    ->whereNotNull('empleado_id')
+                    ->delete();
+
                 $agregados = 0;
                 foreach ($ingresos as $ing) {
                     $emp = $empleados[$ing->empleado_id] ?? null;
