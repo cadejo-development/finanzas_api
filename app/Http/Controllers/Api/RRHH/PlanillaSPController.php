@@ -88,7 +88,7 @@ class PlanillaSPController extends RRHHBaseController
      *
      * Busca empleados con confirmacion='se_presento' en ingresos_personal cuya
      * fecha_ingreso cae dentro del período de 30 días de SP que toca esta quincena,
-     * y los agrega a la planilla con monto = salario_base / 2.
+     * y los agrega con monto proporcional: salario_base/30 × días trabajados en la quincena.
      * Empleados ya presentes en la planilla se omiten.
      */
     public function cargarNuevoIngreso(int $id): JsonResponse
@@ -160,13 +160,27 @@ class PlanillaSPController extends RRHHBaseController
                 ->get()
                 ->keyBy('id');
 
+            $inicioQ = Carbon::parse($fechaInicioQ);
+            $finQ    = Carbon::parse($fechaFinQ);
+            $diasQ   = $inicioQ->diffInDays($finQ) + 1; // 15 para Q1, variable para Q2
+
             DB::connection('rrhh')->beginTransaction();
             try {
                 $agregados = 0;
                 foreach ($ingresos as $ing) {
                     $emp = $empleados[$ing->empleado_id] ?? null;
                     $salarioBase = $emp ? (float) $emp->salario_base : 0;
-                    $monto     = round($salarioBase / 2, 2);
+
+                    // Días trabajados en la quincena: si ingresó antes del inicio paga completa,
+                    // si ingresó dentro de la quincena paga proporcional desde su fecha
+                    $fechaIng = Carbon::parse($ing->fecha_ingreso);
+                    if ($fechaIng->lt($inicioQ)) {
+                        $diasTrabajados = $diasQ;
+                    } else {
+                        $diasTrabajados = $finQ->diffInDays($fechaIng) + 1;
+                    }
+
+                    $monto     = round($salarioBase / 30 * $diasTrabajados, 2);
                     $retencion = round($monto * self::RETENCION_ISR_PCT, 2);
                     $liquido   = round($monto - $retencion, 2);
 
@@ -174,11 +188,16 @@ class PlanillaSPController extends RRHHBaseController
                         ? trim($emp->nombres . ' ' . $emp->apellidos)
                         : $ing->empleado_nombre;
 
+                    $desc = 'Honorarios SP - ' . $ing->cargo_nombre . ' (' . $ing->fecha_ingreso . ')';
+                    if ($diasTrabajados < $diasQ) {
+                        $desc .= " — {$diasTrabajados} días";
+                    }
+
                     PlanillaSPLinea::create([
                         'planilla_sp_id'       => $id,
                         'empleado_id'          => $ing->empleado_id,
                         'nombre'               => $nombre,
-                        'descripcion_servicio' => 'Honorarios SP - ' . $ing->cargo_nombre . ' (' . $ing->fecha_ingreso . ')',
+                        'descripcion_servicio' => $desc,
                         'monto_honorario'      => $monto,
                         'retencion_isr'        => $retencion,
                         'liquido'              => $liquido,
