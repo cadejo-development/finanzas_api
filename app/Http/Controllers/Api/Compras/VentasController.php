@@ -1101,4 +1101,56 @@ class VentasController extends Controller
         }
         return null;
     }
+
+    /**
+     * GET /api/compras/ventas/consumo-brilo
+     *
+     * Devuelve el consumo de materias primas por explosión de recetas para
+     * una sucursal y rango de fechas dado.
+     *
+     * Parámetros:
+     *   sucursal_id   int     requerido
+     *   desde         date    requerido  (YYYY-MM-DD)
+     *   hasta         date    requerido  (YYYY-MM-DD)
+     *
+     * Respuesta: [ { codigo, consumo } ]  donde código = productos.codigo
+     */
+    public function consumoBrilo(Request $request): JsonResponse
+    {
+        $sucursalId = (int) $request->query('sucursal_id');
+        $desde      = $request->query('desde');
+        $hasta      = $request->query('hasta');
+
+        if (!$sucursalId || !$desde || !$hasta) {
+            return response()->json(['success' => false, 'message' => 'Parámetros requeridos: sucursal_id, desde, hasta'], 422);
+        }
+
+        $rows = DB::connection('compras')->select("
+            SELECT
+                bsi.ingrediente_codigo  AS codigo,
+                ROUND(SUM(vsd.cantidad_vendida::numeric * bsi.cantidad_base::numeric), 4) AS consumo
+            FROM ventas_semanales      vs
+            JOIN ventas_semanales_detalle vsd  ON vsd.venta_semanal_id = vs.id
+            JOIN brilo_snapshot_ingredientes bsi
+                ON  bsi.receta_codigo = vsd.producto_codigo
+                AND bsi.activo        = true
+            WHERE vs.sucursal_id   = :sucursal_id
+              AND vs.semana_inicio BETWEEN :desde AND :hasta
+              AND bsi.cantidad_base IS NOT NULL
+              AND bsi.cantidad_base > 0
+            GROUP BY bsi.ingrediente_codigo
+            HAVING SUM(vsd.cantidad_vendida::numeric * bsi.cantidad_base::numeric) > 0
+            ORDER BY consumo DESC
+        ", [
+            'sucursal_id' => $sucursalId,
+            'desde'       => $desde,
+            'hasta'       => $hasta,
+        ]);
+
+        $data = collect($rows)->mapWithKeys(fn($r) => [
+            $r->codigo => round((float) $r->consumo, 4)
+        ]);
+
+        return response()->json(['success' => true, 'data' => $data]);
+    }
 }

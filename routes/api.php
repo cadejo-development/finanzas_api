@@ -278,6 +278,7 @@ Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
     Route::get('ventas/proyeccion',                       [VentasController::class, 'proyeccion']);
     Route::get('ventas/proyeccion-ingredientes',          [VentasController::class, 'proyeccionIngredientes']);
     Route::get('ventas/proyeccion-ingrediente-detalle',   [VentasController::class, 'proyeccionIngredienteDetalle']);
+    Route::get('ventas/consumo-brilo',                    [VentasController::class, 'consumoBrilo']);
     Route::get('ventas/{id}',                  [VentasController::class, 'show']);
     Route::post('ventas/import',      [VentasController::class, 'import']);
 
