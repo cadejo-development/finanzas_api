@@ -40,9 +40,14 @@ try {
   process.exit(1);
 }
 
+// En modo automático (sin --fecha) solo ejecuta períodos cuyo hasta = AYER,
+// garantizando que el día de fin de período ya cerró completamente en Brilo.
+const FECHA_AYER = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+const FECHA_BUSCAR = argMap.fecha ?? FECHA_AYER;
+
 const targets = periodos.filter(p => {
   if (SUCURSAL_ID) return p.sucursal_id === SUCURSAL_ID;
-  return p.hasta === FECHA_HOY;
+  return p.hasta === FECHA_BUSCAR;
 });
 
 if (targets.length === 0) {
@@ -50,7 +55,7 @@ if (targets.length === 0) {
   process.exit(0);
 }
 
-console.log(`\n=== Kardex Scheduler — ${FECHA_HOY} ===`);
+console.log(`\n=== Kardex Scheduler — buscando hasta=${FECHA_BUSCAR} (hoy=${FECHA_HOY}) ===`);
 console.log(`Sucursales: ${targets.map(t => `${t.bod} (suc=${t.sucursal_id})`).join(', ')}\n`);
 
 // ── Ejecutar por sucursal ─────────────────────────────────────────────────────
