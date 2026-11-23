@@ -378,10 +378,42 @@ class PlanillasController extends RRHHBaseController
                 }
             }
 
+            // Auto-crear la siguiente quincena si no existe
+            $sigAnio = $planilla->anio;
+            $sigMes  = $planilla->mes;
+            $sigQ    = $planilla->quincena === 1 ? 2 : 1;
+            if ($sigQ === 1) {
+                $sigMes++;
+                if ($sigMes > 12) { $sigMes = 1; $sigAnio++; }
+            }
+
+            $yaExiste = Planilla::where('anio', $sigAnio)
+                ->where('mes', $sigMes)
+                ->where('quincena', $sigQ)
+                ->when($planilla->sucursal_id, fn($q) => $q->where('sucursal_id', $planilla->sucursal_id))
+                ->exists();
+
+            $siguientePlanillaId = null;
+            if (!$yaExiste) {
+                [$fechaInicio, $fechaFin] = $this->calc->rangoQuincena($sigAnio, $sigMes, $sigQ);
+                $nueva = Planilla::create([
+                    'anio'         => $sigAnio,
+                    'mes'          => $sigMes,
+                    'quincena'     => $sigQ,
+                    'fecha_inicio' => $fechaInicio->toDateString(),
+                    'fecha_fin'    => $fechaFin->toDateString(),
+                    'sucursal_id'  => $planilla->sucursal_id,
+                    'estado'       => 'borrador',
+                    'creado_por'   => Auth::id(),
+                ]);
+                $siguientePlanillaId = $nueva->id;
+            }
+
             return response()->json([
-                'success' => true,
-                'message' => 'Planilla aprobada correctamente.',
-                'data'    => $planilla->fresh(),
+                'success'               => true,
+                'message'               => 'Planilla aprobada correctamente.',
+                'data'                  => $planilla->fresh(),
+                'siguiente_planilla_id' => $siguientePlanillaId,
             ]);
         });
     }
