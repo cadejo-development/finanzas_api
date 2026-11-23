@@ -409,6 +409,11 @@ class AuditoriaConteoController extends Controller
             // El email no bloquea el cierre
         }
 
+        // Aplicar correcciones de auditoría al inventario:
+        // Si el auditor registró una cantidad diferente a la contada, crear un movimiento
+        // ajuste_auditoria para que el stock quede correcto.
+        $this->_aplicarAjustesAuditoria($auditoria, $auditoriaId, Auth::user()->email);
+
         return $this->_buildResponse($auditoriaId);
     }
 
@@ -1323,5 +1328,96 @@ class AuditoriaConteoController extends Controller
             'success' => true,
             'data'    => compact('auditoria', 'items', 'respuesta'),
         ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Genera movimientos ajuste_auditoria para corregir el stock cuando el
+    // auditor registró una cantidad diferente a la contada por la sucursal.
+    // Se llama al cerrar la auditoría. Idempotente: no crea duplicados.
+    // ─────────────────────────────────────────────────────────────────────────
+    private function _aplicarAjustesAuditoria(object $auditoria, int $auditoriaId, string $auditorEmail): void
+    {
+        $sucursalId = $auditoria->sucursal_id;
+        $fecha      = $auditoria->fecha_conteo;
+
+        // Items donde el auditor registró cantidad_auditor (consolidado por producto)
+        $auditados = DB::connection('compras')
+            ->table('conteo_auditoria_items')
+            ->where('auditoria_id', $auditoriaId)
+            ->where('auditor_email', '!=', '')
+            ->whereNotNull('cantidad_auditor')
+            ->selectRaw('producto_id, SUM(cantidad_auditor) as cant_auditada')
+            ->groupBy('producto_id')
+            ->get();
+
+        if ($auditados->isEmpty()) return;
+
+        $productoIds = $auditados->pluck('producto_id')->all();
+
+        // Total contado por contadores en movimientos_inventario (todos los contadores)
+        $totalesContados = DB::connection('compras')
+            ->table('movimientos_inventario')
+            ->where('sucursal_id', $sucursalId)
+            ->whereIn('producto_id', $productoIds)
+            ->where('tipo', 'conteo_mensual')
+            ->where('fecha', $fecha)
+            ->where('aud_usuario', '!=', 'sin_contar')
+            ->selectRaw("producto_id, SUM( (detalle->>'total_contado')::numeric ) as total_contado")
+            ->groupBy('producto_id')
+            ->get()
+            ->keyBy('producto_id');
+
+        // Productos ya con ajuste de esta auditoría (evitar duplicados si se llama dos veces)
+        $yaAjustados = DB::connection('compras')
+            ->table('movimientos_inventario')
+            ->where('sucursal_id', $sucursalId)
+            ->whereIn('producto_id', $productoIds)
+            ->where('tipo', 'ajuste_auditoria')
+            ->where('referencia_id', (string) $auditoriaId)
+            ->pluck('producto_id')
+            ->flip();
+
+        $productos = DB::connection('compras')
+            ->table('productos')
+            ->whereIn('id', $productoIds)
+            ->select('id', 'factor_conversion', 'unidad')
+            ->get()
+            ->keyBy('id');
+
+        $ahora = now();
+        foreach ($auditados as $item) {
+            $pid = $item->producto_id;
+            if (isset($yaAjustados[$pid])) continue;
+
+            $cantAuditada = (float) $item->cant_auditada;
+            $cantContada  = (float) ($totalesContados[$pid]?->total_contado ?? 0);
+            $diferencia   = $cantAuditada - $cantContada;
+
+            if (abs($diferencia) < 0.0001) continue;
+
+            $prod   = $productos[$pid] ?? null;
+            $factor = max((float) ($prod?->factor_conversion ?? 1), 0.0001);
+
+            DB::connection('compras')->table('movimientos_inventario')->insert([
+                'sucursal_id'     => $sucursalId,
+                'producto_id'     => $pid,
+                'tipo'            => 'ajuste_auditoria',
+                'cantidad'        => round($diferencia, 4),
+                'unidad'          => $prod?->unidad ?? '',
+                'cantidad_base'   => round($diferencia * $factor, 6),
+                'motivo'          => "Ajuste de auditoría — {$fecha}",
+                'fecha'           => $fecha,
+                'referencia_tipo' => 'auditoria',
+                'referencia_id'   => (string) $auditoriaId,
+                'detalle'         => json_encode([
+                    'cantidad_auditada' => $cantAuditada,
+                    'cantidad_contada'  => $cantContada,
+                    'diferencia'        => round($diferencia, 4),
+                ]),
+                'aud_usuario'     => $auditorEmail,
+                'created_at'      => $ahora,
+                'updated_at'      => $ahora,
+            ]);
+        }
     }
 }
