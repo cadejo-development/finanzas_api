@@ -1,0 +1,12 @@
+[
+  { "sucursal_id": 1,  "bod": "BOD-03", "nombre": "REST. ZONA ROSA",       "hasta": "2026-11-22", "movs_hasta": "2026-11-22", "desde": "2026-10-26" },
+  { "sucursal_id": 3,  "bod": "BOD-06", "nombre": "REST. LA LIBERTAD",     "hasta": "2026-11-22", "movs_hasta": "2026-11-22", "desde": "2026-10-26" },
+  { "sucursal_id": 7,  "bod": "BOD-11", "nombre": "REST. PASEO VENECIA",   "hasta": "2026-11-22", "movs_hasta": "2026-11-22", "desde": "2026-10-26" },
+  { "sucursal_id": 8,  "bod": "BOD-12", "nombre": "REST. SANTA ELENA",     "hasta": "2026-11-22", "movs_hasta": "2026-11-22", "desde": "2026-10-26" },
+  { "sucursal_id": 9,  "bod": "BOD-18", "nombre": "REST. HUIZUCAR",        "hasta": "2026-11-22", "movs_hasta": "2026-11-22", "desde": "2026-10-26" },
+  { "sucursal_id": 10, "bod": "BOD-20", "nombre": "REST. OPICO",           "hasta": "2026-11-22", "movs_hasta": "2026-11-22", "desde": "2026-10-26" },
+  { "sucursal_id": 11, "bod": "BOD-23", "nombre": "REST. CASA GUIROLA",    "hasta": "2026-11-22", "movs_hasta": "2026-11-22", "desde": "2026-10-26" },
+  { "sucursal_id": 5,  "bod": "BOD-08", "nombre": "REST. AEROPUERTO #2",   "hasta": "2026-11-23", "movs_hasta": "2026-11-23", "desde": "2026-10-27" },
+  { "sucursal_id": 16, "bod": "BOD-22", "nombre": "REST. MALCRIADAS AE2",  "hasta": "2026-11-23", "movs_hasta": "2026-11-23", "desde": "2026-10-27" },
+  { "sucursal_id": 4,  "bod": "BOD-07", "nombre": "REST. AEROPUERTO #1",   "hasta": "2026-11-23", "movs_hasta": "2026-11-23", "desde": "2026-10-27" }
+]
