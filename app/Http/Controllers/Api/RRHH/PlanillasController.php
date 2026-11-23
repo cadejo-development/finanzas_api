@@ -1454,8 +1454,8 @@ class PlanillasController extends RRHHBaseController
         return $this->captureAndRespond(request(), function () use ($id) {
             $planilla = Planilla::with('lineas')->findOrFail($id);
 
-            if (!in_array($planilla->estado, ['borrador', 'aprobada'])) {
-                return response()->json(['success' => false, 'message' => 'Solo se pueden recalcular planillas en borrador o aprobadas.'], 422);
+            if ($planilla->estado !== 'borrador') {
+                return response()->json(['success' => false, 'message' => 'Solo se pueden recalcular planillas en borrador.'], 422);
             }
 
             [$fechaInicio, $fechaFin] = $this->calc->rangoQuincena($planilla->anio, $planilla->mes, $planilla->quincena);
