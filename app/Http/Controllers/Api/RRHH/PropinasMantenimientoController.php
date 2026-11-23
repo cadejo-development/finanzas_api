@@ -71,28 +71,21 @@ class PropinasMantenimientoController extends RRHHBaseController
     {
         $puntos = PropinaPuntosCargo::orderBy('cargo_id')->get();
 
+        $cargoIds = $puntos->pluck('cargo_id')->all();
+
         $cargos = DB::connection('pgsql')
             ->table('cargos')
+            ->whereIn('id', $cargoIds)
             ->pluck('nombre', 'id');
 
-        // Traer también cargos sin configuración para mostrar en UI
-        $todosLosCargos = DB::connection('pgsql')
-            ->table('cargos')
-            ->orderBy('nombre')
-            ->get(['id', 'nombre']);
-
-        $puntosMap = $puntos->keyBy('cargo_id');
-
-        $data = $todosLosCargos->map(function ($c) use ($puntosMap) {
-            $cfg = $puntosMap->get($c->id);
-            return [
-                'cargo_id'       => $c->id,
-                'cargo_nombre'   => $c->nombre,
-                'puntos_propina' => $cfg ? (float) $cfg->puntos_propina : null,
-                'config_id'      => $cfg?->id,
-                'notas'          => $cfg?->notas,
-            ];
-        });
+        $data = $puntos->map(fn($cfg) => [
+            'cargo_id'       => $cfg->cargo_id,
+            'cargo_nombre'   => $cargos[$cfg->cargo_id] ?? "Cargo #{$cfg->cargo_id}",
+            'puntos_propina' => (float) $cfg->puntos_propina,
+            'aplica_propina' => (bool) $cfg->aplica_propina,
+            'config_id'      => $cfg->id,
+            'notas'          => $cfg->notas,
+        ])->sortBy('cargo_nombre')->values();
 
         return response()->json(['success' => true, 'data' => $data]);
     }
