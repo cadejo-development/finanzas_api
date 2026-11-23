@@ -140,7 +140,6 @@ class PropinasController extends RRHHBaseController
 
         $configs = DB::connection('rrhh')
             ->table('propina_config_sucursal')
-            ->where('activa', true)
             ->get();
 
         if ($configs->isEmpty()) {
