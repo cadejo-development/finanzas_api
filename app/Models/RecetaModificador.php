@@ -16,6 +16,7 @@ class RecetaModificador extends Model
         'grupo_nombre',
         'opcion_nombre',
         'producto_id',
+        'sub_receta_id',
         'cantidad',
         'unidad',
         'aud_usuario',
@@ -33,5 +34,10 @@ class RecetaModificador extends Model
     public function producto()
     {
         return $this->belongsTo(Producto::class);
+    }
+
+    public function subReceta()
+    {
+        return $this->belongsTo(Receta::class, 'sub_receta_id');
     }
 }

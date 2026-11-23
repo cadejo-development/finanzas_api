@@ -199,6 +199,7 @@ class RecetasController extends Controller
             'ingredientes.subReceta.ingredientes.subReceta.productoAsociado',
             'ingredientes.subReceta.ingredientes.subReceta.ingredientes.producto',
             'modificadores.producto',
+            'modificadores.subReceta',
             'sucursalConfig',  // Siempre cargar todas las sucursales asignadas
         ])->findOrFail($id);
 
@@ -222,6 +223,7 @@ class RecetasController extends Controller
             'ingredientes.subReceta.ingredientes.subReceta.productoAsociado',
             'ingredientes.subReceta.ingredientes.subReceta.ingredientes.producto',
             'modificadores.producto',
+            'modificadores.subReceta',
         ])->findOrFail($id);
 
         $data = $this->formatReceta($receta, null, true);
@@ -300,14 +302,15 @@ class RecetasController extends Controller
             'ingredientes.*.sub_receta_id'     => 'nullable|integer',
             'ingredientes.*.cantidad_por_plato'=> 'required|numeric|min:0',
             'ingredientes.*.unidad'            => 'required|string|max:20',
-            'modificadores'                              => 'nullable|array',
-            'modificadores.*.grupo_nombre'               => 'required_with:modificadores|string|max:100',
-            'modificadores.*.grupo_codigo'               => 'nullable|string|max:50',
-            'modificadores.*.opciones'                   => 'array',
-            'modificadores.*.opciones.*.opcion_nombre'   => 'required|string|max:100',
-            'modificadores.*.opciones.*.producto_id'     => 'nullable|integer',
-            'modificadores.*.opciones.*.cantidad'        => 'nullable|numeric',
-            'modificadores.*.opciones.*.unidad'          => 'nullable|string|max:20',
+            'modificadores'                                => 'nullable|array',
+            'modificadores.*.grupo_nombre'                 => 'required_with:modificadores|string|max:100',
+            'modificadores.*.grupo_codigo'                 => 'nullable|string|max:50',
+            'modificadores.*.opciones'                     => 'array',
+            'modificadores.*.opciones.*.opcion_nombre'     => 'required|string|max:100',
+            'modificadores.*.opciones.*.producto_id'       => 'nullable|integer',
+            'modificadores.*.opciones.*.sub_receta_id'     => 'nullable|integer',
+            'modificadores.*.opciones.*.cantidad'          => 'nullable|numeric',
+            'modificadores.*.opciones.*.unidad'            => 'nullable|string|max:20',
         ]);
 
         $tipoReceta = $validated['tipo_receta'] ?? 'plato';
@@ -387,6 +390,7 @@ class RecetasController extends Controller
                         'grupo_nombre'    => $grupo['grupo_nombre'],
                         'opcion_nombre'   => $opcion['opcion_nombre'],
                         'producto_id'     => $opcion['producto_id'] ?? null,
+                        'sub_receta_id'   => $opcion['sub_receta_id'] ?? null,
                         'cantidad'        => $opcion['cantidad'] ?? 0,
                         'unidad'          => $opcion['unidad'] ?? '',
                         'aud_usuario'     => $usuario,
@@ -454,13 +458,14 @@ class RecetasController extends Controller
             'ingredientes.*.cantidad_por_plato'=> 'required_with:ingredientes|numeric|min:0',
             'ingredientes.*.unidad'            => 'required_with:ingredientes|string|max:20',
             'modificadores'       => 'sometimes|array',
-            'modificadores.*.grupo_nombre'     => 'required_with:modificadores|string|max:100',
-            'modificadores.*.grupo_codigo'     => 'nullable|string|max:50',
-            'modificadores.*.opciones'         => 'array',
-            'modificadores.*.opciones.*.opcion_nombre' => 'required|string|max:100',
-            'modificadores.*.opciones.*.producto_id'   => 'nullable|integer',
-            'modificadores.*.opciones.*.cantidad'      => 'nullable|numeric',
-            'modificadores.*.opciones.*.unidad'        => 'nullable|string|max:20',
+            'modificadores.*.grupo_nombre'               => 'required_with:modificadores|string|max:100',
+            'modificadores.*.grupo_codigo'               => 'nullable|string|max:50',
+            'modificadores.*.opciones'                   => 'array',
+            'modificadores.*.opciones.*.opcion_nombre'   => 'required|string|max:100',
+            'modificadores.*.opciones.*.producto_id'     => 'nullable|integer',
+            'modificadores.*.opciones.*.sub_receta_id'   => 'nullable|integer',
+            'modificadores.*.opciones.*.cantidad'        => 'nullable|numeric',
+            'modificadores.*.opciones.*.unidad'          => 'nullable|string|max:20',
         ]);
 
         $tipoReceta    = $validated['tipo_receta'] ?? $receta->tipo_receta;
@@ -542,6 +547,7 @@ class RecetasController extends Controller
                             'grupo_nombre'   => $grupo['grupo_nombre'],
                             'opcion_nombre'  => $opcion['opcion_nombre'],
                             'producto_id'    => $opcion['producto_id'] ?? null,
+                            'sub_receta_id'  => $opcion['sub_receta_id'] ?? null,
                             'cantidad'       => $opcion['cantidad'] ?? 0,
                             'unidad'         => $opcion['unidad'] ?? '',
                             'aud_usuario'    => $usuario,
@@ -1323,17 +1329,22 @@ class RecetasController extends Controller
                         $rendimiento = (float) ($recetaMod->rendimiento ?? 0);
                         $costoUnit   = $rendimiento > 0 ? $batchCosto / $rendimiento : $batchCosto;
                     }
+                } elseif ($mod->subReceta) {
+                    $batchCosto  = $this->calcularBatchCostoDirecto($mod->subReceta);
+                    $rendimiento = (float) ($mod->subReceta->rendimiento ?? 0);
+                    $costoUnit   = $rendimiento > 0 ? $batchCosto / $rendimiento : $batchCosto;
                 }
                 $costoOp = $costoUnit * (float) ($mod->cantidad ?? 0);
                 $grupos[$key]['opciones'][] = [
-                    'nombre'          => $mod->opcion_nombre,
-                    'producto_id'     => $mod->producto_id,
-                    'producto_nombre' => $mod->producto?->nombre,
-                    'producto_codigo' => $mod->producto?->codigo,
-                    'cantidad'        => $mod->cantidad,
-                    'unidad'          => $mod->unidad,
-                    'costo'           => $costoUnit,
-                    'costo_total'     => round($costoOp, 6),
+                    'nombre'           => $mod->opcion_nombre,
+                    'producto_id'      => $mod->producto_id,
+                    'producto_nombre'  => $mod->producto?->nombre ?? $mod->subReceta?->nombre,
+                    'producto_codigo'  => $mod->producto?->codigo ?? $mod->subReceta?->codigo_origen,
+                    'sub_receta_id'    => $mod->sub_receta_id,
+                    'cantidad'         => $mod->cantidad,
+                    'unidad'           => $mod->unidad,
+                    'costo'            => $costoUnit,
+                    'costo_total'      => round($costoOp, 6),
                 ];
                 // El costo del grupo es el máximo entre las opciones — el cliente elige UNA.
                 $grupos[$key]['costo_grupo'] = max($grupos[$key]['costo_grupo'], $costoOp);
