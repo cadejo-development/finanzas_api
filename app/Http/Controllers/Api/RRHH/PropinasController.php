@@ -122,6 +122,70 @@ class PropinasController extends RRHHBaseController
         return response()->json(['success' => true, 'data' => $periodo], 201);
     }
 
+    // ─── Crear períodos para todas las sucursales configuradas ───────────────
+
+    public function storeBulk(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'anio'     => 'required|integer|min:2024',
+            'mes'      => 'required|integer|min:1|max:12',
+            'quincena' => 'required|integer|in:1,2',
+        ]);
+
+        $anio = $validated['anio'];
+        $mes  = $validated['mes'];
+        $q    = $validated['quincena'];
+
+        [$fechaInicio, $fechaFin] = $this->rangoQuincena($anio, $mes, $q);
+
+        $configs = DB::connection('rrhh')
+            ->table('propina_config_sucursal')
+            ->where('activa', true)
+            ->get();
+
+        if ($configs->isEmpty()) {
+            return response()->json(['success' => false, 'message' => 'No hay sucursales con propinas configuradas.'], 422);
+        }
+
+        $creados   = [];
+        $existentes = [];
+
+        foreach ($configs as $config) {
+            $existe = PropinaPeriodo::where('sucursal_id', $config->sucursal_id)
+                ->where('anio', $anio)->where('mes', $mes)->where('quincena', $q)
+                ->exists();
+
+            if ($existe) {
+                $existentes[] = $config->sucursal_id;
+                continue;
+            }
+
+            $diasQ = $q === 1 ? ($config->dias_quincena_1 ?? 15) : ($config->dias_quincena_2 ?? 15);
+
+            $periodo = PropinaPeriodo::create([
+                'sucursal_id'   => $config->sucursal_id,
+                'anio'          => $anio,
+                'mes'           => $mes,
+                'quincena'      => $q,
+                'fecha_inicio'  => $fechaInicio,
+                'fecha_fin'     => $fechaFin,
+                'dias_quincena' => $diasQ,
+                'estado'        => 'borrador',
+                'elaborado_por' => auth()->id(),
+            ]);
+
+            $creados[] = $periodo->id;
+        }
+
+        return response()->json([
+            'success'    => true,
+            'creados'    => count($creados),
+            'existentes' => count($existentes),
+            'message'    => count($creados) . ' período(s) creado(s)' .
+                            (count($existentes) ? ', ' . count($existentes) . ' ya existían.' : '.'),
+        ], 201);
+    }
+
     // ─── Ingresar ventas y calcular ───────────────────────────────────────────
 
     public function calcular(Request $request, int $id): JsonResponse

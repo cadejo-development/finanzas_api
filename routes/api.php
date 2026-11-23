@@ -826,6 +826,7 @@ Route::prefix('rrhh/propinas')->middleware(['auth:sanctum', 'role:rrhh_admin'])-
     // Períodos operativos
     Route::get('sobrantes',                                [PropinasController::class, 'getSobrantes']);
     Route::get('',                                         [PropinasController::class, 'index']);
+    Route::post('bulk',                                    [PropinasController::class, 'storeBulk']);
     Route::post('',                                        [PropinasController::class, 'store']);
     Route::get('{id}',                                     [PropinasController::class, 'show']);
     Route::post('{id}/calcular',                           [PropinasController::class, 'calcular']);
