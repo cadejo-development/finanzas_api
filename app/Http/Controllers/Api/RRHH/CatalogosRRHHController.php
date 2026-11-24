@@ -133,6 +133,7 @@ class CatalogosRRHHController extends RRHHBaseController
                 'cargos'                 => $cargos,
                 'departamentos'          => $departamentos,
                 'es_admin'               => $esAdmin,
+                'es_analista_rrhh'       => $this->esAnalistaRrhh(),
                 'es_gerencia_ops'        => $this->esGerenciaOps(),
                 'es_empleado'            => $this->esEmpleado(),
                 'empleado_id_propio'     => $jefeEmpleadoId,
