@@ -43,34 +43,42 @@ const pgCfg = {
   ssl:      { rejectUnauthorized: false },
 };
 
-// ─── Mapa estático: nombre Brilo → datos acreedor en core_db ─────────────────
-// Claves en MAYÚSCULAS tal como vienen de tpsnNombre en Brilo.
-// Si no está en el mapa se auto-crea con tipo_acreedor_id inferido del nombre.
+// ─── Normalización para comparar nombres sin importar acentos/case ───────────
+
+function normalize(s) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+// ─── Mapa estático: nombre Brilo (exacto, case-sensitive) → datos acreedor ───
+// Claves = tpsnNombre real de Brilo. Si no hay match por clave exacta,
+// se intenta match normalizado contra los acreedores existentes en core_db.
+// Si tampoco, se auto-crea con tipo_acreedor_id inferido del nombre.
 
 const ACREEDOR_MAP = {
-  'AGRICOLA':          { nombre: 'Banco Agrícola',                        tipo: 1 },
-  'DAVIVIENDA':        { nombre: 'Banco Davivienda',                       tipo: 1 },
+  // Nombres exactos confirmados de Brilo (tpsnNombre)
+  'AMERICA CENTRAL':   { nombre: 'Banco América Central',                  tipo: 1 },
+  'BANCO DAVIVIENDA':  { nombre: 'Banco Davivienda',                       tipo: 1 },
+  'SERVIFINANZAS':     { nombre: 'Servifinanzas',                          tipo: 5 },
+  'Banco Agricola':    { nombre: 'Banco Agrícola',                         tipo: 1 },
+  'FSV':               { nombre: 'FSV',                                    tipo: 2 },
+  'AHORRO MMTO':       { nombre: 'Ahorro Mantenimiento',                   tipo: 5 },
+  'BANCO HIPOTECARIO': { nombre: 'Banco Hipotecario',                      tipo: 1 },
+  'BANCO AZUL':        { nombre: 'Banco Azul',                             tipo: 1 },
   'BANCO CUSCATLAN':   { nombre: 'Banco Cuscatlán',                        tipo: 1 },
-  'BANCO HIPOTECAR':   { nombre: 'Banco Hipotecario',                      tipo: 1 },
-  'F.S.V':             { nombre: 'Fondo Social para la Vivienda (FSV)',     tipo: 2 },
-  'FSV':               { nombre: 'Fondo Social para la Vivienda (FSV)',     tipo: 2 },
+  'PRESTAFACIL ACCIONES INTEGRADAS, S.A. DE C.V.': { nombre: 'Prestafacil Acciones Integradas',  tipo: 5 },
+  'HABITAT':           { nombre: 'HABITAT',                                tipo: 5 },
+  'EMBARGOS':          { nombre: 'Embargos Judiciales',                    tipo: 3 },
+  'FIADO APP, S.A. DE C.V.': { nombre: 'Fiado App',                       tipo: 5 },
+  'COMEDICA DE R.L.':  { nombre: 'Comedica de R.L.',                       tipo: 4 },
+  // Otros posibles (no vistos aún pero pueden aparecer)
   'CADEJO S/INT':      { nombre: 'Cadejo Interno',                         tipo: 5 },
   'CADEJO C/INT':      { nombre: 'Cadejo Interno',                         tipo: 5 },
-  'AMERICA CENTRAL':   { nombre: 'Banco América Central',                  tipo: 1 },
-  'BANCO AZUL':        { nombre: 'Banco Azul',                             tipo: 1 },
   'PROMERICA':         { nombre: 'Banco Promerica',                        tipo: 1 },
-  'SAC. A.INTEGRAL':   { nombre: 'SAC Administradora Integral',            tipo: 5 },
-  'SERVIFINANZAS':     { nombre: 'Servifinanzas',                          tipo: 5 },
-  'OTRO DESCUENTO':    { nombre: 'Otro Descuento',                         tipo: 5 },
-  'OTROS':             { nombre: 'Otros',                                  tipo: 5 },
-  'EMBARGOS':          { nombre: 'Embargos Judiciales',                    tipo: 3 },
   'B TRABAJADORES':    { nombre: 'Banco de Trabajadores',                  tipo: 1 },
-  'CLINICA DENTAL':    { nombre: 'Clínica Dental',                         tipo: 4 },
-  'OPTICA LOURDES':    { nombre: 'Óptica Lourdes',                         tipo: 4 },
+  'F.S.V':             { nombre: 'FSV',                                    tipo: 2 },
   'VIALIDAD':          { nombre: 'Vialidad',                               tipo: 2 },
-  'MULTA':             { nombre: 'Multas',                                 tipo: 2 },
-  'ISR DEPRECIACIO':   { nombre: 'ISR Depreciación',                       tipo: 2 },
-  'AJUSTE A ISSS':     { nombre: 'Ajuste ISSS',                            tipo: 2 },
+  'EMBARGOS JUDICIALES': { nombre: 'Embargos Judiciales',                  tipo: 3 },
+  'PGR':               { nombre: 'PGR',                                    tipo: 2 },
 };
 
 // ─── Helper: inferir tipo_acreedor_id desde el nombre si no está en el mapa ──
@@ -109,9 +117,12 @@ async function main() {
   const { rows: acreedorRows } = await pg.query(
     `SELECT id, nombre FROM acreedores WHERE activo = true`
   );
-  // índice por nombre normalizado (lowercase, sin tildes aproximadas)
+  // índice por nombre normalizado (lowercase + sin acentos para match tolerante)
   const acreedorPorNombre = {};
-  for (const r of acreedorRows) acreedorPorNombre[r.nombre.toLowerCase()] = r.id;
+  for (const r of acreedorRows) {
+    acreedorPorNombre[r.nombre.toLowerCase()] = r.id;
+    acreedorPorNombre[normalize(r.nombre)]    = r.id;
+  }
   log(`Acreedores en core_db: ${acreedorRows.length}`);
 
   // ── 3. Cargar ODD Brilo existentes en ordenes_descuento (marcadas BRILO:) ────
@@ -171,14 +182,16 @@ async function main() {
     if (montoQ1 <= 0 && montoQ2 <= 0) { sinMonto++; continue; }
 
     // Mapear/crear acreedor
-    const tipoKey = (p.tipo_acreedor || '').trim().toUpperCase();
+    const tipoKey = (p.tipo_acreedor || '').trim();
     const acreedorDef = ACREEDOR_MAP[tipoKey] ?? {
       nombre: p.tipo_acreedor,
       tipo:   inferirTipo(p.tipo_acreedor),
     };
-    const nomNorm = acreedorDef.nombre.toLowerCase();
+    // Buscar por nombre exacto o normalizado (sin acentos/case)
+    const nomNorm     = acreedorDef.nombre.toLowerCase();
+    const nomNormStrip = normalize(acreedorDef.nombre);
 
-    let acreedorId = acreedorPorNombre[nomNorm];
+    let acreedorId = acreedorPorNombre[nomNorm] ?? acreedorPorNombre[nomNormStrip];
     if (!acreedorId) {
       if (!DRY_RUN) {
         const ins = await pg.query(
@@ -187,10 +200,12 @@ async function main() {
           [acreedorDef.tipo, acreedorDef.nombre, now]
         );
         acreedorId = ins.rows[0].id;
-        acreedorPorNombre[nomNorm] = acreedorId;
       } else {
         acreedorId = -1; // placeholder para dry-run
       }
+      // Actualizar índice en memoria (también en dry-run para deduplicar)
+      acreedorPorNombre[nomNorm]      = acreedorId;
+      acreedorPorNombre[nomNormStrip] = acreedorId;
       log(`  ACREEDOR NUEVO: "${acreedorDef.nombre}" (tipo=${acreedorDef.tipo})${DRY_RUN ? ' [dry]' : ' → id=' + acreedorId}`);
       acreedoresCreados++;
     }
