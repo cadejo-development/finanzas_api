@@ -27,14 +27,15 @@ class ViewAsMiddleware
         if ($viewAsUserId && Auth::check()) {
             $realUser = Auth::user();
 
-            // Solo rrhh_admin puede usar viewAs
-            if ($realUser->hasRole('rrhh_admin')) {
+            $canViewAs = $realUser->hasRole('rrhh_admin')
+                || $realUser->hasRole('admin_compras')
+                || $realUser->hasRole('gerencia_financiera')
+                || $realUser->hasRole('dir_comercial');
+
+            if ($canViewAs) {
                 $targetUser = \App\Models\User::find((int) $viewAsUserId);
 
                 if ($targetUser) {
-                    // Swap the authenticated user on the sanctum guard for this request only.
-                    // setUser() does not touch the session or fire login events,
-                    // making it safe for stateless Sanctum API requests.
                     Auth::guard('sanctum')->setUser($targetUser);
                 }
             }

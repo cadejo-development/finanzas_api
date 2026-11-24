@@ -206,7 +206,7 @@ Route::prefix('pagos')->middleware('auth:sanctum')->group(function () {
 });
 
 // ─── Compras (protegido con Sanctum) ──────────────────────────────────────
-Route::prefix('compras')->middleware('auth:sanctum')->group(function () {
+Route::prefix('compras')->middleware(['auth:sanctum', 'view-as'])->group(function () {
     // Catálogo de productos (paginado)
     Route::get('catalogos',                      [ProductosController::class, 'catalogos']);
     Route::get('unidades',                       [ProductosController::class, 'unidades']);
