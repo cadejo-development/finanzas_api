@@ -6,8 +6,10 @@ use App\Models\Empleado;
 use App\Models\RRHH\Amonestacion;
 use App\Models\RRHH\CambioSalarial;
 use App\Models\RRHH\Desvinculacion;
+use App\Models\RRHH\ContratoEmpleado;
 use App\Models\RRHH\ExpedienteArchivo;
 use App\Models\RRHH\ExpedienteContacto;
+use App\Models\RRHH\TipoContrato;
 use App\Models\RRHH\ExpedienteCuentaBanco;
 use App\Models\RRHH\ExpedienteDatosPersonales;
 use App\Models\RRHH\ExpedienteDireccion;
@@ -111,21 +113,44 @@ class ExpedienteController extends RRHHBaseController
             $anios = (int) $empleado->fecha_ingreso->diffInYears(now());
         }
 
+        // Contrato de período de prueba (SP) — el primer tipo con es_periodo_prueba=true
+        $tipoSP = TipoContrato::where('es_periodo_prueba', true)->where('activo', true)->first();
+        $fechaContratoSP = $tipoSP
+            ? ContratoEmpleado::where('empleado_id', $empleado->id)
+                ->where('tipo_contrato_id', $tipoSP->id)
+                ->orderBy('fecha_inicio')
+                ->value('fecha_inicio')
+            : null;
+
+        // Contrato indefinido — sin duración fija ni período de prueba
+        $tipoIndefinido = TipoContrato::where('es_periodo_prueba', false)
+            ->where('activo', true)
+            ->whereNull('duracion_dias')
+            ->first();
+        $fechaContratoIndefinido = $tipoIndefinido
+            ? ContratoEmpleado::where('empleado_id', $empleado->id)
+                ->where('tipo_contrato_id', $tipoIndefinido->id)
+                ->orderBy('fecha_inicio')
+                ->value('fecha_inicio')
+            : null;
+
         return [
-            'id'                => $empleado->id,
-            'codigo'            => $empleado->codigo,
-            'nombres'           => $empleado->nombres,
-            'apellidos'         => $empleado->apellidos,
-            'nombre_completo'   => trim("{$empleado->nombres} {$empleado->apellidos}"),
-            'email'             => $empleado->email,
-            'cargo'             => $empleado->cargo?->nombre,
-            'sucursal'          => $empleado->sucursal?->nombre,
-            'departamento'      => $empleado->departamento?->nombre,
-            'fecha_ingreso'     => $empleado->fecha_ingreso?->toDateString(),
-            'anios_servicio'    => $anios,
-            'activo'            => $empleado->activo,
-            'es_pensionado'     => (bool) $empleado->es_pensionado,
-            'foto_url'          => $fotoRuta,
+            'id'                      => $empleado->id,
+            'codigo'                  => $empleado->codigo,
+            'nombres'                 => $empleado->nombres,
+            'apellidos'               => $empleado->apellidos,
+            'nombre_completo'         => trim("{$empleado->nombres} {$empleado->apellidos}"),
+            'email'                   => $empleado->email,
+            'cargo'                   => $empleado->cargo?->nombre,
+            'sucursal'                => $empleado->sucursal?->nombre,
+            'departamento'            => $empleado->departamento?->nombre,
+            'fecha_ingreso'           => $empleado->fecha_ingreso?->toDateString(),
+            'anios_servicio'          => $anios,
+            'activo'                  => $empleado->activo,
+            'es_pensionado'           => (bool) $empleado->es_pensionado,
+            'foto_url'                => $fotoRuta,
+            'fecha_contrato_sp'       => $fechaContratoSP,
+            'fecha_contrato_indefinido' => $fechaContratoIndefinido,
         ];
     }
 

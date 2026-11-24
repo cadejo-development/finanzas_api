@@ -29,11 +29,14 @@ class PlanillaSPController extends RRHHBaseController
         if ($anio = $request->input('anio'))   $query->where('anio', (int) $anio);
         if ($mes  = $request->input('mes'))    $query->where('mes',  (int) $mes);
 
-        $planillas = $query->orderByDesc('anio')->orderByDesc('mes')->orderByDesc('id')->get();
+        $planillas = $query->with('lineas')->orderByDesc('anio')->orderByDesc('mes')->orderByDesc('id')->get();
 
         $data = $planillas->map(function ($p) {
             $arr = $p->toArray();
-            $arr['lineas_count'] = $p->lineas()->count();
+            unset($arr['lineas']);
+            $arr['lineas_count']      = $p->lineas->count();
+            $arr['total_honorarios']  = round((float) $p->lineas->sum('monto_honorario'), 2);
+            $arr['total_neto']        = round((float) $p->lineas->sum('liquido'), 2);
             return $arr;
         });
 
