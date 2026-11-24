@@ -616,6 +616,8 @@ class PlanillasController extends RRHHBaseController
             })
             ->select(
                 'od.empleado_id',
+                'od.id as orden_id',
+                'od.acreedor_id',
                 'od.referencia',
                 DB::raw("od.{$montoCol} as monto_quincenal"),
                 'a.nombre as acreedor_nombre'
@@ -632,6 +634,8 @@ class PlanillasController extends RRHHBaseController
                 'concepto'        => $o->referencia ?? 'Orden de descuento',
                 'monto_quincenal' => $monto,
                 'acreedor_nombre' => $o->acreedor_nombre,
+                'acreedor_id'     => (int) $o->acreedor_id,
+                'orden_id'        => (int) $o->orden_id,
             ];
         }
         return $map;
@@ -1550,6 +1554,54 @@ class PlanillasController extends RRHHBaseController
         });
     }
 
+    // ─── Pivot Bancos ─────────────────────────────────────────────────────────
+
+    /**
+     * GET /api/rrhh/planillas/{id}/bancos
+     * Retorna las ODD aplicadas en esta planilla (desde planilla_movimientos),
+     * agrupadas por empleado y acreedor, listas para el pivot del tab Bancos.
+     */
+    public function bancos(int $id): JsonResponse
+    {
+        $planilla = Planilla::with('lineas')->findOrFail($id);
+
+        $movs = DB::connection('rrhh')
+            ->table('planilla_movimientos as pm')
+            ->where('pm.planilla_id', $id)
+            ->where('pm.tipo', 'orden_descuento')
+            ->where('pm.estado', 'activo')
+            ->select('pm.empleado_id', 'pm.referencia_id as acreedor_id', 'pm.concepto', 'pm.monto')
+            ->get();
+
+        // Obtener nombres de acreedores en bloque
+        $acreedorIds = $movs->pluck('acreedor_id')->filter()->unique()->values()->all();
+        $acreedores  = [];
+        if (!empty($acreedorIds)) {
+            $acreedores = DB::connection('pgsql')
+                ->table('acreedores')
+                ->whereIn('id', $acreedorIds)
+                ->pluck('nombre', 'id')
+                ->all();
+        }
+
+        // Para acreedores sin id en referencia_id, extraer nombre del concepto (formato "Acreedor — Ref")
+        $rows = $movs->map(function ($m) use ($acreedores) {
+            $acreedorId   = $m->acreedor_id ? (int) $m->acreedor_id : null;
+            $acreedorNombre = $acreedorId
+                ? ($acreedores[$acreedorId] ?? $m->concepto)
+                : (str_contains($m->concepto, ' — ') ? explode(' — ', $m->concepto)[0] : $m->concepto);
+
+            return [
+                'empleado_id'     => (int) $m->empleado_id,
+                'acreedor_id'     => $acreedorId,
+                'acreedor_nombre' => $acreedorNombre,
+                'monto'           => abs((float) $m->monto),
+            ];
+        });
+
+        return response()->json($rows->values());
+    }
+
     // ─── Cerrar planilla ──────────────────────────────────────────────────────
 
     /**
@@ -1834,7 +1886,7 @@ class PlanillasController extends RRHHBaseController
                 'fecha_fin'    => null,
                 'dias'         => 0,
                 'monto'        => -$monto,
-                'referencia_id'=> null,
+                'referencia_id'=> $ord['acreedor_id'] ?? null,  // acreedor_id para pivot Bancos
                 'created_at'   => now(),
                 'updated_at'   => now(),
             ];
