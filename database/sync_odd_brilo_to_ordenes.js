@@ -225,7 +225,7 @@ async function main() {
             (empleado_id, acreedor_id, estado_id, monto_q1, monto_q2,
              referencia, fecha_inicio, fecha_fin, notas, aud_usuario, created_at, updated_at)
            VALUES ($1,$2,1,$3,$4,$5,$6,$7,$8,'sync_brilo',$9,$9)`,
-          [empleadoId, acreedorId, montoQ1 || null, montoQ2 || null, ref, fi, ff, notas, now]
+          [empleadoId, acreedorId, montoQ1, montoQ2, ref, fi, ff, notas, now]
         );
       }
       log(`  INSERT emp=${p.empCodigo} acreedor="${acreedorDef.nombre}" Q1=$${montoQ1} Q2=$${montoQ2} ref=${ref || '-'}`);
@@ -242,7 +242,7 @@ async function main() {
             `UPDATE ordenes_descuento
              SET monto_q1=$1, monto_q2=$2, fecha_fin=$3, estado_id=1, updated_at=$4
              WHERE id=$5`,
-            [montoQ1 || null, montoQ2 || null, ff, now, existing.id]
+            [montoQ1, montoQ2, ff, now, existing.id]
           );
         }
         log(`  UPDATE id=${existing.id} emp=${p.empCodigo} Q1=$${montoQ1} Q2=$${montoQ2}`);
