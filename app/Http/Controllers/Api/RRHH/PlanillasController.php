@@ -190,8 +190,11 @@ class PlanillasController extends RRHHBaseController
             $ausencias     = $this->getAusencias($empIds, $fechaInicio, $fechaFin);
             $suspensiones  = $this->getSuspensiones($empIds, $fechaInicio, $fechaFin);
 
-            // Cargar asuetos del período y mapa de empleados con horario normal esos días
-            $asuetos        = $this->getAsuetosEnRango($fechaInicio, $fechaFin);
+            // Asueto trabajado se paga en quincena vencida (siguiente período).
+            // Buscamos asuetos de la quincena ANTERIOR para pagarlos en ésta.
+            [$prevAnio, $prevMes, $prevQ] = $this->calc->quincenaAnterior($anio, $mes, $quincena);
+            [$prevInicio, $prevFin]       = $this->calc->rangoQuincena($prevAnio, $prevMes, $prevQ);
+            $asuetos        = $this->getAsuetosEnRango($prevInicio, $prevFin);
             $horariosAsueto = $this->getHorariosNormalEnAsuetos($empIds, $asuetos);
 
             // Cargar horas extras aprobadas para esta quincena de pago
@@ -428,12 +431,13 @@ class PlanillasController extends RRHHBaseController
             $cuenta = $cuentasMap[$l->empleado_id] ?? null;
             $afpDoc = $afpMap[$l->empleado_id] ?? null;
 
-            $salProp   = (float) $l->salario_proporcional;
-            $salAsueto = (float) ($l->salario_asueto ?? 0);
-            $montoHE   = (float) ($l->monto_horas_extras ?? 0);
-            $montoNoct = (float) ($l->monto_nocturnidades ?? 0);
-            $bonif     = (float) ($l->bonificaciones ?? 0);
-            $vac       = (float) ($l->vacaciones ?? 0);
+            $salProp    = (float) $l->salario_proporcional;
+            $salAsueto  = (float) ($l->salario_asueto ?? 0);
+            $montoHE    = (float) ($l->monto_horas_extras ?? 0);
+            $montoNoct  = (float) ($l->monto_nocturnidades ?? 0);
+            $bonif      = (float) ($l->bonificaciones ?? 0);
+            $comisiones = (float) ($l->comisiones ?? 0);
+            $vac        = (float) ($l->vacaciones ?? 0);
 
             // AFP: desglosar según entidad registrada en expediente
             $afpEntidad = $afpDoc ? strtoupper($afpDoc->entidad_emisora ?? '') : '';
@@ -472,8 +476,9 @@ class PlanillasController extends RRHHBaseController
                 'horas_nocturnas'           => (float) ($l->horas_nocturnas ?? 0),
                 'monto_nocturnidades'       => $montoNoct,
                 'bonificaciones'            => $bonif,
+                'comisiones'                => $comisiones,
                 'vacaciones'                => $vac,
-                'total_ingresos'            => round($salProp + $salAsueto + $montoHE + $montoNoct + $bonif + $vac, 2),
+                'total_ingresos'            => round($salProp + $salAsueto + $montoHE + $montoNoct + $bonif + $comisiones + $vac, 2),
                 'afp_crecer'                => $afpCrecer,
                 'afp_confia'                => $afpConfia,
                 'afp_empleado'              => $afpTotal,
@@ -504,6 +509,7 @@ class PlanillasController extends RRHHBaseController
                     'total_horas_extras'    => $filas->sum('monto_horas_extras'),
                     'total_nocturnidades'   => $filas->sum('monto_nocturnidades'),
                     'total_bonificaciones'  => $filas->sum('bonificaciones'),
+                    'total_comisiones'      => $filas->sum('comisiones'),
                     'total_vacaciones'      => $filas->sum('vacaciones'),
                     'total_ingresos'        => $filas->sum('total_ingresos'),
                     'total_afp_empleado'    => $filas->sum('afp_empleado'),
@@ -1314,7 +1320,9 @@ class PlanillasController extends RRHHBaseController
             $vacaciones    = $this->getVacaciones([$eid], $fechaInicio, $fechaFin);
             $ausencias     = $this->getAusencias([$eid], $fechaInicio, $fechaFin);
             $suspensiones  = $this->getSuspensiones([$eid], $fechaInicio, $fechaFin);
-            $asuetos       = $this->getAsuetosEnRango($fechaInicio, $fechaFin);
+            [$prevAnio2, $prevMes2, $prevQ2] = $this->calc->quincenaAnterior($planilla->anio, $planilla->mes, $planilla->quincena);
+            [$prevInicio2, $prevFin2]       = $this->calc->rangoQuincena($prevAnio2, $prevMes2, $prevQ2);
+            $asuetos        = $this->getAsuetosEnRango($prevInicio2, $prevFin2);
             $horariosAsueto = $this->getHorariosNormalEnAsuetos([$eid], $asuetos);
             $horasExtrasMap   = $this->getHorasExtrasMap([$eid], $planilla->anio, $planilla->mes, $planilla->quincena);
             $nocturnidadesMap = $this->getNocturnidadesMap([$eid], $planilla->anio, $planilla->mes, $planilla->quincena);
@@ -1453,7 +1461,9 @@ class PlanillasController extends RRHHBaseController
             $vacaciones    = $this->getVacaciones($empIds, $fechaInicio, $fechaFin);
             $ausencias     = $this->getAusencias($empIds, $fechaInicio, $fechaFin);
             $suspensiones  = $this->getSuspensiones($empIds, $fechaInicio, $fechaFin);
-            $asuetos       = $this->getAsuetosEnRango($fechaInicio, $fechaFin);
+            [$prevAnio3, $prevMes3, $prevQ3] = $this->calc->quincenaAnterior($planilla->anio, $planilla->mes, $planilla->quincena);
+            [$prevInicio3, $prevFin3]       = $this->calc->rangoQuincena($prevAnio3, $prevMes3, $prevQ3);
+            $asuetos        = $this->getAsuetosEnRango($prevInicio3, $prevFin3);
             $horariosAsueto = $this->getHorariosNormalEnAsuetos($empIds, $asuetos);
             $horasExtrasMap   = $this->getHorasExtrasMap($empIds, $planilla->anio, $planilla->mes, $planilla->quincena);
             $nocturnidadesMap = $this->getNocturnidadesMap($empIds, $planilla->anio, $planilla->mes, $planilla->quincena);
