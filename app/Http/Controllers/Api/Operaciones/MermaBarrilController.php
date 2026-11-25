@@ -212,11 +212,36 @@ class MermaBarrilController extends Controller
 
             $finalOzAnterior = [];
             if ($invAnterior) {
+                $cfg = MermaConfig::first();
+                $ozP   = (float)($cfg->barril_pequeno_oz ?? 661);
+                $ozG   = (float)($cfg->barril_grande_oz  ?? 1986.26);
+                $taraP = (float)($cfg->tara_pequeno_lb   ?? 14);
+                $taraG = (float)($cfg->tara_grande_lb    ?? 28);
+                $dens  = (float)($cfg->densidad_kg_l     ?? 1.0100);
+                $LB2KG = 0.453592;
+                $L2OZ  = 33.814;
+
+                // Barriles conectados del inventario anterior indexados por item_id
+                $itemAntIds = $invAnterior->items->pluck('id')->all();
+                $conectadosPorItem = DB::connection('compras')
+                    ->table('merma_barriles_conectados')
+                    ->whereIn('item_id', $itemAntIds)
+                    ->get()
+                    ->groupBy('item_id');
+
                 foreach ($invAnterior->items as $itemAnt) {
-                    // final_oz guardado explícitamente tiene prioridad;
-                    // si no existe, calculamos desde barriles cerrados con capacidades default
+                    // oz de barriles conectados para este item
+                    $connectedOz = 0.0;
+                    foreach ($conectadosPorItem->get($itemAnt->id, collect()) as $bc) {
+                        $tara = $bc->tamanio === 'p' ? $taraP : $taraG;
+                        $neto = max(0.0, (float)$bc->peso_lb - $tara);
+                        $connectedOz += $neto * $LB2KG / $dens * $L2OZ;
+                    }
+                    $cerradosOz = (float)$itemAnt->final_cerrados_p * $ozP
+                                + (float)$itemAnt->final_cerrados_g * $ozG;
+                    // final_oz guardado explícitamente tiene prioridad (corrección manual)
                     $finalOzAnterior[$itemAnt->cerveza_id] = $itemAnt->final_oz
-                        ?? ($itemAnt->final_cerrados_p * 661 + $itemAnt->final_cerrados_g * 1986.26);
+                        ?? round($connectedOz + $cerradosOz, 2);
                 }
             }
 
@@ -278,9 +303,33 @@ class MermaBarrilController extends Controller
 
         $finalOzAnterior = [];
         if ($invAnterior) {
+            $cfg = MermaConfig::first();
+            $ozP   = (float)($cfg->barril_pequeno_oz ?? 661);
+            $ozG   = (float)($cfg->barril_grande_oz  ?? 1986.26);
+            $taraP = (float)($cfg->tara_pequeno_lb   ?? 14);
+            $taraG = (float)($cfg->tara_grande_lb    ?? 28);
+            $dens  = (float)($cfg->densidad_kg_l     ?? 1.0100);
+            $LB2KG = 0.453592;
+            $L2OZ  = 33.814;
+
+            $itemAntIds = $invAnterior->items->pluck('id')->all();
+            $conectadosPorItem = DB::connection('compras')
+                ->table('merma_barriles_conectados')
+                ->whereIn('item_id', $itemAntIds)
+                ->get()
+                ->groupBy('item_id');
+
             foreach ($invAnterior->items as $itemAnt) {
+                $connectedOz = 0.0;
+                foreach ($conectadosPorItem->get($itemAnt->id, collect()) as $bc) {
+                    $tara = $bc->tamanio === 'p' ? $taraP : $taraG;
+                    $neto = max(0.0, (float)$bc->peso_lb - $tara);
+                    $connectedOz += $neto * $LB2KG / $dens * $L2OZ;
+                }
+                $cerradosOz = (float)$itemAnt->final_cerrados_p * $ozP
+                            + (float)$itemAnt->final_cerrados_g * $ozG;
                 $finalOzAnterior[$itemAnt->cerveza_id] = $itemAnt->final_oz
-                    ?? ($itemAnt->final_cerrados_p * 661 + $itemAnt->final_cerrados_g * 1986.26);
+                    ?? round($connectedOz + $cerradosOz, 2);
             }
         }
 
