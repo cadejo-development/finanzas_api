@@ -220,22 +220,30 @@ class PlanillasController extends RRHHBaseController
                     $eid     = (int) $emp['id'];
                     $salBase = (float) ($emp['salario_base'] ?? 0);
 
-                    // Para desvinculados: acotar el período hasta su fecha efectiva
+                    // Determinar ventana efectiva del empleado en este período
                     $desvinc = $desvinculados->get($eid);
                     if ($desvinc) {
                         $fechaTerm     = Carbon::parse($desvinc->fecha_efectiva);
                         $hastaEfectivo = $fechaTerm->lessThan($fechaFin) ? $fechaTerm : $fechaFin;
-                        // Días proporcionales al período efectivo, máx 15 (estándar 30 días/mes)
-                        $diasEfectivos = min($diasQuincena, max(1, $fechaInicio->diffInDays($hastaEfectivo) + 1));
                     } else {
                         $hastaEfectivo = $fechaFin;
-                        $diasEfectivos = $diasQuincena; // 15
                     }
+
+                    // Empleado que sale de prueba a mitad de quincena: su inicio real en salarios
+                    $fechaIngresoEfectiva = isset($emp['fecha_ingreso_efectiva'])
+                        ? Carbon::parse($emp['fecha_ingreso_efectiva'])
+                        : null;
+                    $desdeEfectivo = ($fechaIngresoEfectiva && $fechaIngresoEfectiva->gt($fechaInicio))
+                        ? $fechaIngresoEfectiva
+                        : $fechaInicio;
+
+                    // Días proporcionales al período efectivo (desde–hasta)
+                    $diasEfectivos = min($diasQuincena, max(0, $desdeEfectivo->diffInDays($hastaEfectivo) + 1));
 
                     // Días no trabajados dentro del período efectivo del empleado
                     $diasNoTrab = $this->calcDiasNoTrabajados(
                         $eid, $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
-                        $fechaInicio, $hastaEfectivo
+                        $desdeEfectivo, $hastaEfectivo
                     );
                     // Cap a diasQuincena: en meses con 31 días no se pagan días extra
                     $diasLab = min($diasQuincena, max(0, $diasEfectivos - $diasNoTrab));
@@ -537,6 +545,8 @@ class PlanillasController extends RRHHBaseController
 
     private function getEmpleadosParaPlanilla(?int $sucursalId, Carbon $fechaInicio, Carbon $fechaFin, string $tipoPlanilla = 'salarios'): array
     {
+        $transicionandoMap = collect(); // empleado_id => primer día en salarios (para prueba transitional)
+
         // Empleados desvinculados con fecha efectiva dentro del período
         $desvinculados = DB::connection('rrhh')
             ->table('desvinculaciones')
@@ -578,12 +588,26 @@ class PlanillasController extends RRHHBaseController
             $query->whereIn('e.id', $honorariosIds);
         } else {
             // Resto de tipos: solo empleados con ese tipo asignado y vigente en el período.
-            // Excluir empleados en periodo de prueba activo (van en planilla SP, no en salarios).
-            $enPruebaIds = DB::connection('rrhh')
+            // Excluir empleados cuya prueba aún no termina antes del fin del período
+            // (los que salen de prueba a mitad de quincena sí entran, con días proporcionales).
+            $pruebas = DB::connection('rrhh')
                 ->table('periodos_prueba')
                 ->where('estado', 'en_prueba')
-                ->pluck('empleado_id')
-                ->toArray();
+                ->select('empleado_id', 'fecha_fin_estimada')
+                ->get()
+                ->keyBy('empleado_id');
+
+            // Excluir solo los que siguen en prueba pasado el fin del período
+            $excluirPruebaIds = $pruebas
+                ->filter(fn($p) => $p->fecha_fin_estimada >= $fechaFinStr)
+                ->keys()->toArray();
+
+            // Empleados que salen de prueba DURANTE este período → incluir con inicio proporcional
+            $transicionandoMap = $pruebas
+                ->filter(fn($p) => $p->fecha_fin_estimada >= $fechaInicioStr && $p->fecha_fin_estimada < $fechaFinStr)
+                ->mapWithKeys(fn($p) => [
+                    (int) $p->empleado_id => Carbon::parse($p->fecha_fin_estimada)->addDay()->toDateString()
+                ]);
 
             $query->join('empleado_tipo_planilla as etp', 'etp.empleado_id', '=', 'e.id')
                   ->join('tipo_planilla as tp', function ($join) use ($tipoPlanilla) {
@@ -596,8 +620,8 @@ class PlanillasController extends RRHHBaseController
                         ->orWhere('etp.fecha_fin', '>=', $fechaInicioStr);
                   });
 
-            if (!empty($enPruebaIds)) {
-                $query->whereNotIn('e.id', $enPruebaIds);
+            if (!empty($excluirPruebaIds)) {
+                $query->whereNotIn('e.id', $excluirPruebaIds);
             }
         }
 
@@ -605,8 +629,17 @@ class PlanillasController extends RRHHBaseController
             $query->where('e.sucursal_id', $sucursalId);
         }
 
+        $empleados = $query->get()->map(function ($r) use ($transicionandoMap) {
+            $r = (array) $r;
+            // Para empleados que salen de prueba a mitad de quincena, señalar su primer día en salarios
+            if (isset($transicionandoMap[(int) $r['id']])) {
+                $r['fecha_ingreso_efectiva'] = $transicionandoMap[(int) $r['id']];
+            }
+            return $r;
+        })->all();
+
         return [
-            'empleados'     => $query->get()->map(fn($r) => (array) $r)->all(),
+            'empleados'     => $empleados,
             'desvinculados' => $desvinculados,
         ];
     }
@@ -1527,7 +1560,8 @@ class PlanillasController extends RRHHBaseController
                     ->whereIn('id', $honorariosIds)
                     ->pluck('id')->toArray();
             } else {
-                // Resto de tipos: solo los que tienen el tipo asignado Y no están en periodo de prueba
+                // Resto de tipos: solo los que tienen el tipo asignado Y no están en prueba activa
+                // (empleados que salen de prueba a mitad de quincena sí se mantienen)
                 $conTipo = DB::table('empleado_tipo_planilla as etp')
                     ->join('tipo_planilla as tp', function ($join) use ($tipoPlanilla) {
                         $join->on('tp.id', '=', 'etp.tipo_planilla_id')->where('tp.slug', '=', $tipoPlanilla);
@@ -1538,9 +1572,11 @@ class PlanillasController extends RRHHBaseController
                     })
                     ->pluck('etp.empleado_id')->toArray();
 
-                $enPruebaIds = DB::connection('rrhh')
+                // Excluir solo empleados cuya prueba no termina antes del fin del período
+                $excluirPruebaIds = DB::connection('rrhh')
                     ->table('periodos_prueba')
                     ->where('estado', 'en_prueba')
+                    ->where('fecha_fin_estimada', '>=', $fechaFinStr)
                     ->pluck('empleado_id')
                     ->toArray();
 
@@ -1548,7 +1584,7 @@ class PlanillasController extends RRHHBaseController
                     ->table('empleados')
                     ->whereIn('id', $empIdsBruto)
                     ->whereIn('id', $conTipo)
-                    ->when(!empty($enPruebaIds), fn($q) => $q->whereNotIn('id', $enPruebaIds))
+                    ->when(!empty($excluirPruebaIds), fn($q) => $q->whereNotIn('id', $excluirPruebaIds))
                     ->pluck('id')->toArray();
             }
 
@@ -1562,13 +1598,31 @@ class PlanillasController extends RRHHBaseController
                 return response()->json(['success' => false, 'message' => 'La planilla no tiene empleados válidos para este tipo.'], 422);
             }
 
+            // Empleados que salen de prueba a mitad de quincena (necesitan inicio proporcional)
+            $transicionandoRecalc = ($tipoPlanilla !== 'honorarios')
+                ? DB::connection('rrhh')
+                    ->table('periodos_prueba')
+                    ->where('estado', 'en_prueba')
+                    ->where('fecha_fin_estimada', '>=', $fechaInicioStr)
+                    ->where('fecha_fin_estimada', '<', $fechaFinStr)
+                    ->whereIn('empleado_id', $empIds)
+                    ->pluck('fecha_fin_estimada', 'empleado_id')
+                    ->map(fn($f) => Carbon::parse($f)->addDay()->toDateString())
+                : collect();
+
             $empleadosRows = DB::connection('pgsql')
                 ->table('empleados as e')
                 ->leftJoin('sucursales as s', 's.id', '=', 'e.sucursal_id')
                 ->whereIn('e.id', $empIds)
                 ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado', 'e.fecha_ingreso')
                 ->get()
-                ->map(fn($r) => (array) $r)
+                ->map(function ($r) use ($transicionandoRecalc) {
+                    $r = (array) $r;
+                    if ($transicionandoRecalc->has((int) $r['id'])) {
+                        $r['fecha_ingreso_efectiva'] = $transicionandoRecalc[(int) $r['id']];
+                    }
+                    return $r;
+                })
                 ->all();
 
             $permisos      = $this->getPermisos($empIds, $fechaInicio, $fechaFin);
@@ -1610,13 +1664,21 @@ class PlanillasController extends RRHHBaseController
                     if ($desvinc) {
                         $fechaTerm    = Carbon::parse($desvinc->fecha_efectiva);
                         $hastaEfectivo = $fechaTerm->lessThan($fechaFin) ? $fechaTerm : $fechaFin;
-                        $diasEfectivos = min($diasQuincena, max(1, $fechaInicio->diffInDays($hastaEfectivo) + 1));
                     } else {
                         $hastaEfectivo = $fechaFin;
-                        $diasEfectivos = $diasQuincena;
                     }
 
-                    $diasNoTrab = $this->calcDiasNoTrabajados($eid, $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones, $fechaInicio, $hastaEfectivo);
+                    // Empleado que sale de prueba a mitad de quincena: su inicio real en salarios
+                    $fechaIngresoEfectiva = isset($emp['fecha_ingreso_efectiva'])
+                        ? Carbon::parse($emp['fecha_ingreso_efectiva'])
+                        : null;
+                    $desdeEfectivo = ($fechaIngresoEfectiva && $fechaIngresoEfectiva->gt($fechaInicio))
+                        ? $fechaIngresoEfectiva
+                        : $fechaInicio;
+
+                    $diasEfectivos = min($diasQuincena, max(0, $desdeEfectivo->diffInDays($hastaEfectivo) + 1));
+
+                    $diasNoTrab = $this->calcDiasNoTrabajados($eid, $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones, $desdeEfectivo, $hastaEfectivo);
                     $diasLab   = min($diasQuincena, max(0, $diasEfectivos - $diasNoTrab));
 
                     $esPensionado = (bool) ($emp['es_pensionado'] ?? false);

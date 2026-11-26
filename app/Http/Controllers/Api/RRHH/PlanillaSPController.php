@@ -150,6 +150,13 @@ class PlanillaSPController extends RRHHBaseController
 
             // Obtener salario_base de cada empleado
             $empIds = $ingresos->pluck('empleado_id')->unique()->values()->all();
+
+            // fecha_fin_estimada de periodos_prueba para capear los días SP correctamente
+            // (el empleado solo cobra SP hasta que termina su periodo, no hasta fin quincena)
+            $fechaFinPruebaMap = DB::connection('rrhh')
+                ->table('periodos_prueba')
+                ->whereIn('empleado_id', $empIds)
+                ->pluck('fecha_fin_estimada', 'empleado_id');
             $empleados = DB::connection('pgsql')
                 ->table('empleados')
                 ->whereIn('id', $empIds)
@@ -232,10 +239,15 @@ class PlanillaSPController extends RRHHBaseController
                     $emp = $empleados[$ing->empleado_id] ?? null;
                     $salarioBase = $emp ? (float) $emp->salario_base : 0;
 
-                    // Días del período: desde la fecha de ingreso (o inicio Q si ingresó antes) hasta fin Q
+                    // Días del período: desde la fecha de ingreso (o inicio Q si ingresó antes)
+                    // hasta el fin del periodo de prueba (o fin Q si termina después)
                     $fechaIng        = Carbon::parse($ing->fecha_ingreso);
                     $inicioEfectiva  = $fechaIng->gt($inicioQ) ? $fechaIng->copy() : $inicioQ->copy();
-                    $diasPeriodo     = $inicioEfectiva->diffInDays($finQ) + 1; // siempre positivo
+                    $fechaFinPrueba  = isset($fechaFinPruebaMap[$ing->empleado_id])
+                        ? Carbon::parse($fechaFinPruebaMap[$ing->empleado_id])
+                        : $finQ;
+                    $finEfectiva     = $fechaFinPrueba->lt($finQ) ? $fechaFinPrueba : $finQ;
+                    $diasPeriodo     = max(0, $inicioEfectiva->diffInDays($finEfectiva) + 1);
 
                     // Descontar permisos e incapacidades
                     $diasPermiso      = min($diasPermisoMap[$ing->empleado_id] ?? 0, $diasPeriodo);
