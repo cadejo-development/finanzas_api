@@ -208,12 +208,24 @@ class PlanillaSPController extends RRHHBaseController
                 $diasIncapacidadMap[$inc->empleado_id] = ($diasIncapacidadMap[$inc->empleado_id] ?? 0) + $dias;
             }
 
+            // IDs de empleados de nuevo ingreso en el período (para borrar solo esas líneas al recalcular)
+            $empIdsIngreso = DB::connection('rrhh')
+                ->table('ingresos_personal')
+                ->where('confirmacion', 'se_presento')
+                ->where('fecha_ingreso', '>=', $cutoff)
+                ->where('fecha_ingreso', '<=', $fechaFinQ)
+                ->pluck('empleado_id')
+                ->toArray();
+
             DB::connection('rrhh')->beginTransaction();
             try {
-                // Eliminar líneas previamente auto-cargadas (empleado_id no nulo) para recalcular
-                PlanillaSPLinea::where('planilla_sp_id', $id)
-                    ->whereNotNull('empleado_id')
-                    ->delete();
+                // Solo eliminar líneas de nuevo ingreso previas para recalcular
+                // sin afectar las líneas de honorarios regulares cargadas via cargarHonorarios
+                if (!empty($empIdsIngreso)) {
+                    PlanillaSPLinea::where('planilla_sp_id', $id)
+                        ->whereIn('empleado_id', $empIdsIngreso)
+                        ->delete();
+                }
 
                 $agregados = 0;
                 foreach ($ingresos as $ing) {

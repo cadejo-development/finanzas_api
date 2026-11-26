@@ -564,8 +564,7 @@ class PlanillasController extends RRHHBaseController
         $fechaFinStr    = $fechaFin->toDateString();
 
         if ($tipoPlanilla === 'honorarios') {
-            // Honorarios: empleados con contrato SP (nuevo ingreso) O marcados explícitamente
-            // con vigencia activa durante el período de la planilla
+            // Honorarios: solo empleados marcados explícitamente con tipo honorarios vigente.
             $honorariosIds = DB::table('empleado_tipo_planilla as etp')
                 ->join('tipo_planilla as tp', 'tp.id', '=', 'etp.tipo_planilla_id')
                 ->where('tp.slug', 'honorarios')
@@ -576,13 +575,16 @@ class PlanillasController extends RRHHBaseController
                 })
                 ->pluck('etp.empleado_id');
 
-            $query->where(function ($q) use ($honorariosIds) {
-                $q->whereNotNull('e.fecha_contrato_sp')
-                  ->orWhereIn('e.id', $honorariosIds);
-            });
+            $query->whereIn('e.id', $honorariosIds);
         } else {
             // Resto de tipos: solo empleados con ese tipo asignado y vigente en el período.
-            // Excluir siempre a los de contrato SP — esos van únicamente a honorarios.
+            // Excluir empleados en periodo de prueba activo (van en planilla SP, no en salarios).
+            $enPruebaIds = DB::connection('rrhh')
+                ->table('periodos_prueba')
+                ->where('estado', 'en_prueba')
+                ->pluck('empleado_id')
+                ->toArray();
+
             $query->join('empleado_tipo_planilla as etp', 'etp.empleado_id', '=', 'e.id')
                   ->join('tipo_planilla as tp', function ($join) use ($tipoPlanilla) {
                       $join->on('tp.id', '=', 'etp.tipo_planilla_id')
@@ -592,8 +594,11 @@ class PlanillasController extends RRHHBaseController
                   ->where(function ($q) use ($fechaInicioStr) {
                       $q->whereNull('etp.fecha_fin')
                         ->orWhere('etp.fecha_fin', '>=', $fechaInicioStr);
-                  })
-                  ->whereNull('e.fecha_contrato_sp');
+                  });
+
+            if (!empty($enPruebaIds)) {
+                $query->whereNotIn('e.id', $enPruebaIds);
+            }
         }
 
         if ($sucursalId) {
@@ -1344,16 +1349,23 @@ class PlanillasController extends RRHHBaseController
                 ->table('empleados as e')
                 ->leftJoin('sucursales as s', 's.id', '=', 'e.sucursal_id')
                 ->where('e.id', $eid)
-                ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado', 'e.fecha_ingreso', 'e.fecha_contrato_sp')
+                ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado', 'e.fecha_ingreso')
                 ->first();
 
             if (!$empRow) {
                 return response()->json(['success' => false, 'message' => 'Empleado no encontrado.'], 404);
             }
 
-            // Empleados con contrato SP (servicios profesionales) solo van a planilla de honorarios
-            if (!empty($empRow->fecha_contrato_sp) && $planilla->tipo_planilla !== 'honorarios') {
-                return response()->json(['success' => false, 'message' => 'Este empleado tiene contrato de servicios profesionales y solo puede agregarse a la planilla de Honorarios.'], 422);
+            // Empleados en periodo de prueba activo van en planilla SP, no en salarios
+            if ($planilla->tipo_planilla !== 'honorarios') {
+                $enPrueba = DB::connection('rrhh')
+                    ->table('periodos_prueba')
+                    ->where('empleado_id', $eid)
+                    ->where('estado', 'en_prueba')
+                    ->exists();
+                if ($enPrueba) {
+                    return response()->json(['success' => false, 'message' => 'Este empleado está en periodo de prueba y solo puede aparecer en la planilla de Servicios Profesionales.'], 422);
+                }
             }
 
             $emp = (array) $empRow;
@@ -1499,7 +1511,7 @@ class PlanillasController extends RRHHBaseController
             $fechaFinStr     = $fechaFin->toDateString();
 
             if ($tipoPlanilla === 'honorarios') {
-                // Honorarios: fecha_contrato_sp o tipo asignado explícitamente
+                // Honorarios: solo tipo asignado explícitamente
                 $honorariosIds = DB::table('empleado_tipo_planilla as etp')
                     ->join('tipo_planilla as tp', 'tp.id', '=', 'etp.tipo_planilla_id')
                     ->where('tp.slug', 'honorarios')
@@ -1512,12 +1524,10 @@ class PlanillasController extends RRHHBaseController
                 $empIds = DB::connection('pgsql')
                     ->table('empleados')
                     ->whereIn('id', $empIdsBruto)
-                    ->where(function ($q) use ($honorariosIds) {
-                        $q->whereNotNull('fecha_contrato_sp')->orWhereIn('id', $honorariosIds);
-                    })
+                    ->whereIn('id', $honorariosIds)
                     ->pluck('id')->toArray();
             } else {
-                // Resto de tipos: solo los que tienen el tipo asignado Y no son SP
+                // Resto de tipos: solo los que tienen el tipo asignado Y no están en periodo de prueba
                 $conTipo = DB::table('empleado_tipo_planilla as etp')
                     ->join('tipo_planilla as tp', function ($join) use ($tipoPlanilla) {
                         $join->on('tp.id', '=', 'etp.tipo_planilla_id')->where('tp.slug', '=', $tipoPlanilla);
@@ -1528,11 +1538,17 @@ class PlanillasController extends RRHHBaseController
                     })
                     ->pluck('etp.empleado_id')->toArray();
 
+                $enPruebaIds = DB::connection('rrhh')
+                    ->table('periodos_prueba')
+                    ->where('estado', 'en_prueba')
+                    ->pluck('empleado_id')
+                    ->toArray();
+
                 $empIds = DB::connection('pgsql')
                     ->table('empleados')
                     ->whereIn('id', $empIdsBruto)
                     ->whereIn('id', $conTipo)
-                    ->whereNull('fecha_contrato_sp')
+                    ->when(!empty($enPruebaIds), fn($q) => $q->whereNotIn('id', $enPruebaIds))
                     ->pluck('id')->toArray();
             }
 
