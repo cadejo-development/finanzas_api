@@ -1601,6 +1601,39 @@ class PlanillasController extends RRHHBaseController
 
                     $empIds = array_unique(array_merge($empIds, $nuevosDesvinc));
                 }
+
+                // Desvinculados DENTRO del período: proporcional (pueden no estar en planilla_lineas).
+                // Empleados que se fueron antes de que se generara/recalculara la planilla.
+                $desvinculadosDentroIds = DB::connection('rrhh')
+                    ->table('desvinculaciones')
+                    ->where('estado', 'aprobado')
+                    ->where('fecha_efectiva', '>=', $fechaInicioStr)
+                    ->where('fecha_efectiva', '<=', $fechaFinStr)
+                    ->pluck('empleado_id')
+                    ->unique()
+                    ->all();
+
+                if (!empty($desvinculadosDentroIds)) {
+                    $nuevosDesvDentro = DB::connection('pgsql')
+                        ->table('empleado_tipo_planilla as etp')
+                        ->join('tipo_planilla as tp', function ($join) use ($tipoPlanilla) {
+                            $join->on('tp.id', '=', 'etp.tipo_planilla_id')->where('tp.slug', '=', $tipoPlanilla);
+                        })
+                        ->whereIn('etp.empleado_id', $desvinculadosDentroIds)
+                        ->where(function ($q) use ($fechaFinStr) {
+                            $q->whereNull('etp.fecha_inicio')->orWhere('etp.fecha_inicio', '<=', $fechaFinStr);
+                        })
+                        ->where(function ($q) use ($fechaInicioStr) {
+                            $q->whereNull('etp.fecha_fin')->orWhere('etp.fecha_fin', '>=', $fechaInicioStr);
+                        })
+                        ->whereNotIn('etp.empleado_id', $exclusionesIds)
+                        ->whereNotIn('etp.empleado_id', $empIds)
+                        ->pluck('etp.empleado_id')
+                        ->unique()
+                        ->toArray();
+
+                    $empIds = array_unique(array_merge($empIds, $nuevosDesvDentro));
+                }
             }
 
             // Eliminar líneas ACTIVAS de empleados que ya no corresponden a este tipo de planilla
