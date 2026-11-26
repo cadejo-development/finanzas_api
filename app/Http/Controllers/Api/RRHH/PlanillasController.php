@@ -71,7 +71,7 @@ class PlanillasController extends RRHHBaseController
         $data = $planillas->map(function ($p) use ($sucursales) {
             $arr = $p->toArray();
             $arr['sucursal_nombre']   = $sucursales[$p->sucursal_id] ?? null;
-            $arr['lineas_count']      = $p->lineas()->count();
+            $arr['lineas_count']      = $p->lineas()->where('estado', 'activo')->count();
             return $arr;
         });
 
