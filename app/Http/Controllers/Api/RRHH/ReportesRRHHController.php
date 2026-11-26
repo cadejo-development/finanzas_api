@@ -834,6 +834,15 @@ class ReportesRRHHController extends RRHHBaseController
                 }
             }
 
+            // Inactivos que aparecen en planilla del período (ej. desvinculados sin registro formal)
+            $idsYaIncluidos = array_column($empleados, 'id');
+            $inactivosConPlanilla = $this->getInactivosConPlanillaEnPeriodo(
+                $subordinadosIds, $desde, $hasta, $sucursalId, $deptoId, $idsYaIncluidos
+            );
+            foreach ($inactivosConPlanilla as $i) {
+                $empleados[] = $i;
+            }
+
             $empIds = array_column($empleados, 'id');
 
             // Cargar eventos
@@ -962,6 +971,61 @@ class ReportesRRHHController extends RRHHBaseController
             ->leftJoin('departamentos as d', 'd.id', '=', 'e.departamento_id')
             ->leftJoin('departamentos as dj', 'dj.jefe_empleado_id', '=', 'e.id')
             ->whereIn('e.id', $desvinIds);
+
+        if ($sucursalId) $query->where('e.sucursal_id', (int) $sucursalId);
+        if ($deptoId) {
+            $query->where(function ($q) use ($deptoId) {
+                $q->where('e.departamento_id', (int) $deptoId)
+                  ->orWhere('dj.id', (int) $deptoId);
+            });
+        }
+
+        return $query->select(
+            'e.id', 'e.codigo',
+            DB::raw("CONCAT(e.nombres, ' ', e.apellidos) as nombre"),
+            's.nombre as sucursal',
+            'ts.codigo as sucursal_tipo',
+            'e.sucursal_id',
+            'e.departamento_id',
+            DB::raw("COALESCE(d.nombre, dj.nombre) as departamento"),
+            'c.nombre as cargo'
+        )->get()->map(fn($r) => (array) $r)->toArray();
+    }
+
+    private function getInactivosConPlanillaEnPeriodo(
+        array $ids, Carbon $desde, Carbon $hasta, $sucursalId, $deptoId, array $excluirIds
+    ): array {
+        if (empty($ids)) return [];
+
+        $planillaIds = DB::connection('rrhh')
+            ->table('planillas')
+            ->where('fecha_inicio', '<=', $hasta->toDateString())
+            ->where('fecha_fin', '>=', $desde->toDateString())
+            ->pluck('id');
+
+        if ($planillaIds->isEmpty()) return [];
+
+        $inactivosIds = DB::connection('rrhh')
+            ->table('planilla_lineas')
+            ->whereIn('planilla_id', $planillaIds)
+            ->pluck('empleado_id')
+            ->unique()
+            ->diff($excluirIds)
+            ->values()
+            ->toArray();
+
+        if (empty($inactivosIds)) return [];
+
+        $query = DB::connection('pgsql')
+            ->table('empleados as e')
+            ->join('sucursales as s', 's.id', '=', 'e.sucursal_id')
+            ->leftJoin('tipos_sucursal as ts', 'ts.id', '=', 's.tipo_sucursal_id')
+            ->leftJoin('cargos as c', 'c.id', '=', 'e.cargo_id')
+            ->leftJoin('departamentos as d', 'd.id', '=', 'e.departamento_id')
+            ->leftJoin('departamentos as dj', 'dj.jefe_empleado_id', '=', 'e.id')
+            ->whereIn('e.id', $ids)
+            ->whereIn('e.id', $inactivosIds)
+            ->where('e.activo', false);
 
         if ($sucursalId) $query->where('e.sucursal_id', (int) $sucursalId);
         if ($deptoId) {
