@@ -372,6 +372,9 @@ class PlanillaSalariosService
             if (!empty($excluirPruebaIds)) {
                 $query->whereNotIn('e.id', $excluirPruebaIds);
             }
+
+            // Excluir empleados con salario_base = 0 o NULL de planillas de salarios
+            $query->where('e.salario_base', '>', 0);
         }
 
         if ($sucursalId) {

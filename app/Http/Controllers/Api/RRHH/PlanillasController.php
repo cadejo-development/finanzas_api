@@ -1302,6 +1302,11 @@ class PlanillasController extends RRHHBaseController
 
             $emp = (array) $empRow;
 
+            // Empleados con salario 0 no van en planilla de salarios
+            if ($planilla->tipo_planilla === 'salarios' && (float) ($emp['salario_base'] ?? 0) === 0.0) {
+                return response()->json(['success' => false, 'message' => 'Este empleado tiene salario base $0 y no puede incluirse en una planilla de salarios.'], 422);
+            }
+
             [$fechaInicio, $fechaFin] = $this->calc->rangoQuincena($planilla->anio, $planilla->mes, $planilla->quincena);
 
             $ctx      = $this->svc->cargarContexto([$eid], $planilla->anio, $planilla->mes, $planilla->quincena, $fechaInicio, $fechaFin);
