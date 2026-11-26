@@ -781,9 +781,8 @@ class PlanillasController extends RRHHBaseController
             }
         }
 
-        foreach ($vacaciones->where('empleado_id', $eid) as $v) {
-            $total += $this->diasSolapados($v->fecha_inicio, $v->fecha_fin, $desde, $hasta);
-        }
+        // Las vacaciones NO descuentan del salario proporcional en la planilla:
+        // el empleado cobra normalmente + la prima del 30% (Art. 177 CT-SV).
 
         foreach ($ausencias->where('empleado_id', $eid) as $a) {
             $total += 1;
@@ -2157,8 +2156,9 @@ class PlanillasController extends RRHHBaseController
             $aniversario = Carbon::create($anioQ, $ingreso->month, 28);
         }
 
+        // Prima = 30% sobre el salario de 15 días (Art. 177 CT-SV)
         return ($aniversario && $aniversario->between($fechaInicio, $fechaFin))
-            ? round($salBase * 0.30, 2)
+            ? round(($salBase / 2) * 0.30, 2)
             : 0.0;
     }
 
