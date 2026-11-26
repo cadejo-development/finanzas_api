@@ -127,9 +127,6 @@ class IngresoPersonalController extends RRHHBaseController
                 'aud_usuario'       => Auth::user()->email,
             ]);
 
-            // Asignar honorarios durante prueba y cerrar salarios
-            $this->asignarHonorariosParaPrueba($validated['empleado_id'], $fechaInicio, $fechaFinPrueba);
-
             $ingreso->load('periodoPrueba');
 
             try {
@@ -242,9 +239,17 @@ class IngresoPersonalController extends RRHHBaseController
                 ]);
             }
 
-            // Se presentó → generar contrato por servicio profesional automáticamente
+            // Se presentó → asignar honorarios (tipo planilla) + generar contrato servicios profesionales
             $contratoPS = null;
             if ($validated['confirmacion'] === 'se_presento') {
+                $periodo = $ingreso->periodoPrueba;
+                if ($periodo) {
+                    $this->asignarHonorariosParaPrueba(
+                        $ingreso->empleado_id,
+                        \Carbon\Carbon::parse($periodo->fecha_inicio),
+                        \Carbon\Carbon::parse($periodo->fecha_fin_estimada)
+                    );
+                }
                 $contratoPS = $this->autoGenerarContratoPS($ingreso);
             }
 
