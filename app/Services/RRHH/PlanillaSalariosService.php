@@ -322,10 +322,14 @@ class PlanillaSalariosService
             ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado', 'e.fecha_ingreso');
 
         if ($tipoPlanilla === 'honorarios') {
-            $honorariosIds = DB::table('empleado_tipo_planilla as etp')
+            // NULL en fecha_inicio se trata como "desde siempre" para tolerar backfill incompleto
+            $honorariosIds = DB::connection('pgsql')
+                ->table('empleado_tipo_planilla as etp')
                 ->join('tipo_planilla as tp', 'tp.id', '=', 'etp.tipo_planilla_id')
                 ->where('tp.slug', 'honorarios')
-                ->where('etp.fecha_inicio', '<=', $fechaFinStr)
+                ->where(function ($q) use ($fechaFinStr) {
+                    $q->whereNull('etp.fecha_inicio')->orWhere('etp.fecha_inicio', '<=', $fechaFinStr);
+                })
                 ->where(function ($q) use ($fechaInicioStr) {
                     $q->whereNull('etp.fecha_fin')
                       ->orWhere('etp.fecha_fin', '>=', $fechaInicioStr);
@@ -351,12 +355,15 @@ class PlanillaSalariosService
                     (int) $p->empleado_id => Carbon::parse($p->fecha_fin_estimada)->addDay()->toDateString()
                 ]);
 
+            // NULL en fecha_inicio se trata como "desde siempre" para tolerar backfill incompleto
             $query->join('empleado_tipo_planilla as etp', 'etp.empleado_id', '=', 'e.id')
                   ->join('tipo_planilla as tp', function ($join) use ($tipoPlanilla) {
                       $join->on('tp.id', '=', 'etp.tipo_planilla_id')
                            ->where('tp.slug', '=', $tipoPlanilla);
                   })
-                  ->where('etp.fecha_inicio', '<=', $fechaFinStr)
+                  ->where(function ($q) use ($fechaFinStr) {
+                      $q->whereNull('etp.fecha_inicio')->orWhere('etp.fecha_inicio', '<=', $fechaFinStr);
+                  })
                   ->where(function ($q) use ($fechaInicioStr) {
                       $q->whereNull('etp.fecha_fin')
                         ->orWhere('etp.fecha_fin', '>=', $fechaInicioStr);

@@ -1405,11 +1405,15 @@ class PlanillasController extends RRHHBaseController
             } else {
                 // Resto de tipos: solo los que tienen el tipo asignado Y no están en prueba activa
                 // (empleados que salen de prueba a mitad de quincena sí se mantienen)
-                $conTipo = DB::table('empleado_tipo_planilla as etp')
+                // fecha_inicio: NULL se trata como "desde siempre" para tolerar datos con backfill incompleto
+                $conTipo = DB::connection('pgsql')
+                    ->table('empleado_tipo_planilla as etp')
                     ->join('tipo_planilla as tp', function ($join) use ($tipoPlanilla) {
                         $join->on('tp.id', '=', 'etp.tipo_planilla_id')->where('tp.slug', '=', $tipoPlanilla);
                     })
-                    ->where('etp.fecha_inicio', '<=', $fechaFinStr)
+                    ->where(function ($q) use ($fechaFinStr) {
+                        $q->whereNull('etp.fecha_inicio')->orWhere('etp.fecha_inicio', '<=', $fechaFinStr);
+                    })
                     ->where(function ($q) use ($fechaInicioStr) {
                         $q->whereNull('etp.fecha_fin')->orWhere('etp.fecha_fin', '>=', $fechaInicioStr);
                     })
@@ -1438,6 +1442,17 @@ class PlanillasController extends RRHHBaseController
             }
 
             if (empty($empIds)) {
+                Log::warning('recalcular: sin empIds válidos', [
+                    'planilla_id'    => $id,
+                    'tipo_planilla'  => $tipoPlanilla,
+                    'quincena'       => $planilla->quincena,
+                    'mes'            => $planilla->mes,
+                    'anio'           => $planilla->anio,
+                    'empIdsBruto'    => count($empIdsBruto),
+                    'conTipo_count'  => count($conTipo ?? []),
+                    'fechaInicioStr' => $fechaInicioStr,
+                    'fechaFinStr'    => $fechaFinStr,
+                ]);
                 return response()->json(['success' => false, 'message' => 'La planilla no tiene empleados válidos para este tipo.'], 422);
             }
 
