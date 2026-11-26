@@ -114,16 +114,21 @@ class IngresoPersonalController extends RRHHBaseController
                 'aud_usuario'      => Auth::user()->email,
             ]);
 
-            $fechaInicio = \Carbon\Carbon::parse($validated['fecha_ingreso']);
+            $fechaInicio    = \Carbon\Carbon::parse($validated['fecha_ingreso']);
+            $fechaFinPrueba = $fechaInicio->copy()->addDays(PeriodoPrueba::DIAS_DEFAULT);
+
             PeriodoPrueba::create([
                 'ingreso_id'        => $ingreso->id,
                 'empleado_id'       => $validated['empleado_id'],
                 'fecha_inicio'      => $fechaInicio,
-                'fecha_fin_estimada'=> $fechaInicio->copy()->addDays(PeriodoPrueba::DIAS_DEFAULT),
+                'fecha_fin_estimada'=> $fechaFinPrueba,
                 'responsable_id'    => Auth::id(),
                 'estado'            => 'en_prueba',
                 'aud_usuario'       => Auth::user()->email,
             ]);
+
+            // Asignar honorarios durante prueba y cerrar salarios
+            $this->asignarHonorariosParaPrueba($validated['empleado_id'], $fechaInicio, $fechaFinPrueba);
 
             $ingreso->load('periodoPrueba');
 
@@ -348,10 +353,17 @@ class IngresoPersonalController extends RRHHBaseController
                 }
             }
 
-            // Aprobado → generar contrato indefinido automáticamente
+            // Aprobado → generar contrato indefinido + transicionar a planilla salarios
             $contratoIndefinido = null;
             if ($validated['estado'] === 'aprobado') {
                 $contratoIndefinido = $this->autoGenerarContratoIndefinido($ingreso);
+
+                if ($periodo->fecha_fin_estimada) {
+                    $this->transicionarASalarios(
+                        $ingreso->empleado_id,
+                        \Carbon\Carbon::parse($periodo->fecha_fin_estimada)
+                    );
+                }
             }
 
             $ingreso->load('periodoPrueba');
@@ -406,6 +418,94 @@ class IngresoPersonalController extends RRHHBaseController
         } catch (\Throwable $e) {
             Log::warning('IngresoPersonal: error auto-generando contrato PS', ['error' => $e->getMessage(), 'ingreso_id' => $ingreso->id]);
             return null;
+        }
+    }
+
+    /**
+     * Asigna tipo_planilla=honorarios al empleado por el período de prueba.
+     * Cierra la asignación de salarios para que no aparezca en planilla salarios durante prueba.
+     */
+    private function asignarHonorariosParaPrueba(int $empleadoId, \Carbon\Carbon $fechaInicio, \Carbon\Carbon $fechaFinPrueba): void
+    {
+        try {
+            $salId = DB::connection('pgsql')->table('tipo_planilla')->where('slug', 'salarios')->value('id');
+            $honId = DB::connection('pgsql')->table('tipo_planilla')->where('slug', 'honorarios')->value('id');
+
+            if (!$salId || !$honId) return;
+
+            // Cerrar salarios: fecha_fin = día antes del inicio de prueba
+            DB::connection('pgsql')->table('empleado_tipo_planilla')
+                ->where('empleado_id', $empleadoId)
+                ->where('tipo_planilla_id', $salId)
+                ->whereNull('fecha_fin')
+                ->update(['fecha_fin' => $fechaInicio->copy()->subDay()->toDateString(), 'updated_at' => now()]);
+
+            // Upsert honorarios
+            $existing = DB::connection('pgsql')->table('empleado_tipo_planilla')
+                ->where('empleado_id', $empleadoId)
+                ->where('tipo_planilla_id', $honId)
+                ->first();
+
+            if ($existing) {
+                DB::connection('pgsql')->table('empleado_tipo_planilla')
+                    ->where('id', $existing->id)
+                    ->update(['fecha_inicio' => $fechaInicio->toDateString(), 'fecha_fin' => $fechaFinPrueba->toDateString(), 'updated_at' => now()]);
+            } else {
+                DB::connection('pgsql')->table('empleado_tipo_planilla')->insert([
+                    'empleado_id'      => $empleadoId,
+                    'tipo_planilla_id' => $honId,
+                    'fecha_inicio'     => $fechaInicio->toDateString(),
+                    'fecha_fin'        => $fechaFinPrueba->toDateString(),
+                    'created_at'       => now(),
+                    'updated_at'       => now(),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('IngresoPersonal: error asignando honorarios en prueba', ['empleado_id' => $empleadoId, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Al aprobar período de prueba: cierra honorarios y reabre salarios desde el día siguiente.
+     */
+    private function transicionarASalarios(int $empleadoId, \Carbon\Carbon $fechaFinPrueba): void
+    {
+        try {
+            $salId = DB::connection('pgsql')->table('tipo_planilla')->where('slug', 'salarios')->value('id');
+            $honId = DB::connection('pgsql')->table('tipo_planilla')->where('slug', 'honorarios')->value('id');
+
+            if (!$salId || !$honId) return;
+
+            $fechaInicioSalarios = $fechaFinPrueba->copy()->addDay()->toDateString();
+
+            // Cerrar honorarios con la fecha fin real de la prueba
+            DB::connection('pgsql')->table('empleado_tipo_planilla')
+                ->where('empleado_id', $empleadoId)
+                ->where('tipo_planilla_id', $honId)
+                ->update(['fecha_fin' => $fechaFinPrueba->toDateString(), 'updated_at' => now()]);
+
+            // Reabrir o crear salarios desde el día siguiente al fin de prueba
+            $existing = DB::connection('pgsql')->table('empleado_tipo_planilla')
+                ->where('empleado_id', $empleadoId)
+                ->where('tipo_planilla_id', $salId)
+                ->first();
+
+            if ($existing) {
+                DB::connection('pgsql')->table('empleado_tipo_planilla')
+                    ->where('id', $existing->id)
+                    ->update(['fecha_inicio' => $fechaInicioSalarios, 'fecha_fin' => null, 'updated_at' => now()]);
+            } else {
+                DB::connection('pgsql')->table('empleado_tipo_planilla')->insert([
+                    'empleado_id'      => $empleadoId,
+                    'tipo_planilla_id' => $salId,
+                    'fecha_inicio'     => $fechaInicioSalarios,
+                    'fecha_fin'        => null,
+                    'created_at'       => now(),
+                    'updated_at'       => now(),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('IngresoPersonal: error transicionando a salarios', ['empleado_id' => $empleadoId, 'error' => $e->getMessage()]);
         }
     }
 
