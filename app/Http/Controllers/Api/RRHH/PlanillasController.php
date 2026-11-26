@@ -1666,6 +1666,17 @@ class PlanillasController extends RRHHBaseController
                 ->get()
                 ->keyBy('empleado_id');
 
+            // Preservar overrides manuales antes de borrar las líneas
+            $overridesMap = PlanillaLinea::where('planilla_id', $id)
+                ->where(fn($q) => $q->whereNotNull('horas_extras_override')->orWhereNotNull('horas_nocturnas_override'))
+                ->get(['empleado_id', 'horas_extras_override', 'horas_nocturnas_override'])
+                ->keyBy('empleado_id')
+                ->map(fn($l) => [
+                    'ext'  => $l->horas_extras_override !== null ? (float) $l->horas_extras_override : null,
+                    'noct' => $l->horas_nocturnas_override !== null ? (float) $l->horas_nocturnas_override : null,
+                ])
+                ->all();
+
             $lineasCalc = [];
 
             DB::connection('rrhh')->beginTransaction();
@@ -1710,16 +1721,21 @@ class PlanillasController extends RRHHBaseController
                     $resultado['salario_asueto'] = $salarioAsueto;
                     if ($salarioAsueto > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $salarioAsueto, 2);
 
-                    $horasExt = (float) ($horasExtrasMap[$eid] ?? 0);
+                    $extOverride  = $overridesMap[$eid]['ext']  ?? null;
+                    $noctOverride = $overridesMap[$eid]['noct'] ?? null;
+
+                    $horasExt = $extOverride !== null ? $extOverride : (float) ($horasExtrasMap[$eid] ?? 0);
                     $montoExt = $horasExt > 0 ? round(($salBase / 240) * 2 * $horasExt, 2) : 0.0;
-                    $resultado['horas_extras']      = round($horasExt, 2);
-                    $resultado['monto_horas_extras'] = $montoExt;
+                    $resultado['horas_extras']          = round($horasExt, 2);
+                    $resultado['horas_extras_override'] = $extOverride;
+                    $resultado['monto_horas_extras']    = $montoExt;
                     if ($montoExt > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoExt, 2);
 
-                    $horasNoct = (float) ($nocturnidadesMap[$eid] ?? 0);
+                    $horasNoct = $noctOverride !== null ? $noctOverride : (float) ($nocturnidadesMap[$eid] ?? 0);
                     $montoNoct = $horasNoct > 0 ? round(($salBase / 240) * 0.25 * $horasNoct, 2) : 0.0;
-                    $resultado['horas_nocturnas']     = round($horasNoct, 2);
-                    $resultado['monto_nocturnidades'] = $montoNoct;
+                    $resultado['horas_nocturnas']          = round($horasNoct, 2);
+                    $resultado['horas_nocturnas_override'] = $noctOverride;
+                    $resultado['monto_nocturnidades']      = $montoNoct;
                     if ($montoNoct > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoNoct, 2);
 
                     $montoVacaciones = $this->calcularMontoVacaciones($emp, $fechaInicio, $fechaFin);
@@ -2106,7 +2122,7 @@ class PlanillasController extends RRHHBaseController
                     $aniversario = Carbon::create($anioQ, $ingreso->month, 28);
                 }
                 if ($aniversario && $aniversario->between($fechaInicio, $fechaFin)) {
-                    $montoVacaciones = round($salBase * 0.30, 2);
+                    $montoVacaciones = round(($salBase / 2) * 0.30, 2); // 30% sobre quincena (Art. 177 CT-SV)
                     $rows[] = [
                         'planilla_id'   => $planillaId,
                         'empleado_id'   => $eid,
@@ -2133,6 +2149,64 @@ class PlanillasController extends RRHHBaseController
         if (!empty($rows)) {
             DB::connection('rrhh')->table('planilla_movimientos')->insert($rows);
         }
+    }
+
+    /**
+     * Actualiza manualmente las horas extras y/o nocturnidades de una línea de planilla.
+     * Guarda el valor en horas_extras_override / horas_nocturnas_override (null = volver a automático).
+     */
+    public function updateHorasOverride(Request $request, int $id, int $empleadoId)
+    {
+        return DB::connection('rrhh')->transaction(function () use ($request, $id, $empleadoId) {
+            $planilla = Planilla::findOrFail($id);
+            if (in_array($planilla->estado, ['cerrada', 'pagada'])) {
+                return response()->json(['message' => 'La planilla está cerrada.'], 422);
+            }
+
+            $linea = PlanillaLinea::where('planilla_id', $id)
+                ->where('empleado_id', $empleadoId)
+                ->firstOrFail();
+
+            $data = $request->validate([
+                'horas_extras'    => 'nullable|numeric|min:0',
+                'horas_nocturnas' => 'nullable|numeric|min:0',
+            ]);
+
+            $salBase = (float) $linea->salario_base;
+
+            if (array_key_exists('horas_extras', $data)) {
+                $val = $data['horas_extras'] !== null ? (float) $data['horas_extras'] : null;
+                $linea->horas_extras_override = $val;
+                $horasExt = $val ?? (float) $linea->horas_extras;
+                $montoExt = $horasExt > 0 ? round(($salBase / 240) * 2 * $horasExt, 2) : 0.0;
+                $linea->horas_extras      = round($horasExt, 2);
+                $linea->monto_horas_extras = $montoExt;
+            }
+
+            if (array_key_exists('horas_nocturnas', $data)) {
+                $val = $data['horas_nocturnas'] !== null ? (float) $data['horas_nocturnas'] : null;
+                $linea->horas_nocturnas_override = $val;
+                $horasNoct = $val ?? (float) $linea->horas_nocturnas;
+                $montoNoct = $horasNoct > 0 ? round(($salBase / 240) * 0.25 * $horasNoct, 2) : 0.0;
+                $linea->horas_nocturnas    = round($horasNoct, 2);
+                $linea->monto_nocturnidades = $montoNoct;
+            }
+
+            // Recalcular salario_neto desde cero para esta línea
+            $neto = (float) $linea->salario_proporcional
+                + (float) $linea->salario_asueto
+                + (float) ($linea->bonificaciones ?? 0)
+                + (float) ($linea->monto_horas_extras ?? 0)
+                + (float) ($linea->monto_nocturnidades ?? 0)
+                + (float) ($linea->vacaciones ?? 0)
+                - (float) $linea->total_descuentos_empleado;
+            $linea->salario_neto = round($neto, 2);
+            $linea->save();
+
+            $this->recalcularTotalesPlanilla($planilla);
+
+            return response()->json(['success' => true, 'linea' => $linea]);
+        });
     }
 
     /**

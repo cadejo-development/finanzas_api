@@ -18,8 +18,8 @@ class PlanillaLinea extends Model
         'afp_patronal', 'isss_patronal', 'insaforp_patronal', 'total_patronal',
         'costo_total', 'detalle_descuentos', 'notas',
         'dias_asueto', 'salario_asueto',
-        'horas_extras', 'monto_horas_extras',
-        'horas_nocturnas', 'monto_nocturnidades',
+        'horas_extras', 'horas_extras_override', 'monto_horas_extras',
+        'horas_nocturnas', 'horas_nocturnas_override', 'monto_nocturnidades',
         'vacaciones',
     ];
 
@@ -43,8 +43,10 @@ class PlanillaLinea extends Model
         'dias_asueto'               => 'decimal:2',
         'salario_asueto'            => 'decimal:2',
         'horas_extras'              => 'decimal:2',
+        'horas_extras_override'     => 'decimal:2',
         'monto_horas_extras'        => 'decimal:2',
         'horas_nocturnas'           => 'decimal:2',
+        'horas_nocturnas_override'  => 'decimal:2',
         'monto_nocturnidades'       => 'decimal:2',
         'vacaciones'                => 'decimal:2',
     ];
