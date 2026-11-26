@@ -1541,11 +1541,25 @@ class PlanillasController extends RRHHBaseController
             $fechaFinStr     = $fechaFin->toDateString();
 
             if (empty($empIdsBruto)) {
-                // Sin líneas: regenerar desde todos los empleados activos del tipo
-                ['empleados' => $empleadosBase] = $this->getEmpleadosParaPlanilla(
-                    $planilla->sucursal_id, $fechaInicio, $fechaFin, $tipoPlanilla
-                );
-                $empIds = array_column($empleadosBase, 'id');
+                // Sin líneas: regenerar desde todos los empleados activos del tipo.
+                // No filtrar por fecha_inicio del tipo-planilla para cubrir el caso donde
+                // los registros de empleado_tipo_planilla fueron creados/migrados después del período.
+                $excluirPruebaQ1 = DB::connection('rrhh')
+                    ->table('periodos_prueba')
+                    ->where('estado', 'en_prueba')
+                    ->where('fecha_fin_estimada', '>=', $fechaFinStr)
+                    ->pluck('empleado_id')->toArray();
+
+                $empIds = DB::connection('pgsql')
+                    ->table('empleados as e')
+                    ->join('empleado_tipo_planilla as etp', 'etp.empleado_id', '=', 'e.id')
+                    ->join('tipo_planilla as tp', function ($join) use ($tipoPlanilla) {
+                        $join->on('tp.id', '=', 'etp.tipo_planilla_id')
+                             ->where('tp.slug', '=', $tipoPlanilla);
+                    })
+                    ->where('e.activo', true)
+                    ->when(!empty($excluirPruebaQ1), fn($q) => $q->whereNotIn('e.id', $excluirPruebaQ1))
+                    ->pluck('e.id')->unique()->toArray();
             } elseif ($tipoPlanilla === 'honorarios') {
                 // Honorarios: solo tipo asignado explícitamente
                 $honorariosIds = DB::table('empleado_tipo_planilla as etp')
