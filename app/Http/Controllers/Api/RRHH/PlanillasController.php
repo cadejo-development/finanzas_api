@@ -581,7 +581,8 @@ class PlanillasController extends RRHHBaseController
                   ->orWhereIn('e.id', $honorariosIds);
             });
         } else {
-            // Resto de tipos: solo empleados con ese tipo asignado y vigente en el período
+            // Resto de tipos: solo empleados con ese tipo asignado y vigente en el período.
+            // Excluir siempre a los de contrato SP — esos van únicamente a honorarios.
             $query->join('empleado_tipo_planilla as etp', 'etp.empleado_id', '=', 'e.id')
                   ->join('tipo_planilla as tp', function ($join) use ($tipoPlanilla) {
                       $join->on('tp.id', '=', 'etp.tipo_planilla_id')
@@ -591,7 +592,8 @@ class PlanillasController extends RRHHBaseController
                   ->where(function ($q) use ($fechaInicioStr) {
                       $q->whereNull('etp.fecha_fin')
                         ->orWhere('etp.fecha_fin', '>=', $fechaInicioStr);
-                  });
+                  })
+                  ->whereNull('e.fecha_contrato_sp');
         }
 
         if ($sucursalId) {
@@ -1342,12 +1344,18 @@ class PlanillasController extends RRHHBaseController
                 ->table('empleados as e')
                 ->leftJoin('sucursales as s', 's.id', '=', 'e.sucursal_id')
                 ->where('e.id', $eid)
-                ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado', 'e.fecha_ingreso')
+                ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado', 'e.fecha_ingreso', 'e.fecha_contrato_sp')
                 ->first();
 
             if (!$empRow) {
                 return response()->json(['success' => false, 'message' => 'Empleado no encontrado.'], 404);
             }
+
+            // Empleados con contrato SP (servicios profesionales) solo van a planilla de honorarios
+            if (!empty($empRow->fecha_contrato_sp) && $planilla->tipo_planilla !== 'honorarios') {
+                return response()->json(['success' => false, 'message' => 'Este empleado tiene contrato de servicios profesionales y solo puede agregarse a la planilla de Honorarios.'], 422);
+            }
+
             $emp = (array) $empRow;
 
             [$fechaInicio, $fechaFin] = $this->calc->rangoQuincena($planilla->anio, $planilla->mes, $planilla->quincena);
