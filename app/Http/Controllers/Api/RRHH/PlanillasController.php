@@ -189,6 +189,17 @@ class PlanillasController extends RRHHBaseController
             // Cargar empleados activos + desvinculados durante el período, filtrados por tipo_planilla
             ['empleados' => $empleados, 'desvinculados' => $desvinculados]
                 = $this->svc->resolverEmpleados($sucursalId, $fechaInicio, $fechaFin, $tipoPlanilla);
+
+            // Excluir empleados bloqueados explícitamente para esta planilla
+            $exclusionesIds = DB::connection('rrhh')
+                ->table('planilla_exclusiones')
+                ->where('planilla_id', $planilla->id)
+                ->pluck('empleado_id')
+                ->toArray();
+            if (!empty($exclusionesIds)) {
+                $empleados = array_values(array_filter($empleados, fn($e) => !in_array((int) $e['id'], $exclusionesIds)));
+            }
+
             $empIds = array_column($empleados, 'id');
 
             $ctx = $this->svc->cargarContexto($empIds, $anio, $mes, $quincena, $fechaInicio, $fechaFin);
@@ -197,7 +208,8 @@ class PlanillasController extends RRHHBaseController
 
             DB::connection('rrhh')->beginTransaction();
             try {
-                PlanillaLinea::where('planilla_id', $planilla->id)->delete();
+                // Solo borrar líneas activas; las excluidas se conservan
+                PlanillaLinea::where('planilla_id', $planilla->id)->where('estado', 'activo')->delete();
 
                 foreach ($empleados as $emp) {
                     $eid = (int) $emp['id'];
@@ -218,7 +230,7 @@ class PlanillasController extends RRHHBaseController
                 $totales = $this->calc->calcularTotalesPlanilla($lineasCalc);
                 $planilla->update($totales);
 
-                $this->svc->snapshotMovimientos($planilla->id, $empleados, $ctx, $fechaInicio, $fechaFin);
+                $this->svc->snapshotMovimientos($planilla->id, $empleados, $ctx, $fechaInicio, $fechaFin, $exclusionesIds);
 
                 DB::connection('rrhh')->commit();
             } catch (\Throwable $e) {
@@ -285,7 +297,7 @@ class PlanillasController extends RRHHBaseController
      */
     public function exportar(int $id): JsonResponse
     {
-        $planilla = Planilla::with('lineas')->findOrFail($id);
+        $planilla = Planilla::with(['lineas' => fn($q) => $q->where('estado', 'activo')])->findOrFail($id);
         $empIds   = $planilla->lineas->pluck('empleado_id')->unique()->all();
         $empleados = $this->buildEmpleadosMap($empIds);
 
@@ -1251,7 +1263,17 @@ class PlanillasController extends RRHHBaseController
                 return response()->json(['success' => false, 'message' => 'Solo se pueden agregar empleados a planillas en borrador.'], 422);
             }
 
-            if (PlanillaLinea::where('planilla_id', $id)->where('empleado_id', $eid)->exists()) {
+            // Verificar si está explícitamente excluido
+            $estaExcluido = DB::connection('rrhh')
+                ->table('planilla_exclusiones')
+                ->where('planilla_id', $id)
+                ->where('empleado_id', $eid)
+                ->exists();
+            if ($estaExcluido) {
+                return response()->json(['success' => false, 'message' => 'Este empleado fue excluido manualmente de esta planilla. Use "Restaurar" para volver a incluirlo.'], 422);
+            }
+
+            if (PlanillaLinea::where('planilla_id', $id)->where('empleado_id', $eid)->where('estado', 'activo')->exists()) {
                 return response()->json(['success' => false, 'message' => 'El empleado ya está en esta planilla.'], 422);
             }
 
@@ -1310,7 +1332,7 @@ class PlanillasController extends RRHHBaseController
 
     /**
      * DELETE /api/rrhh/planillas/{id}/empleados/{empleadoId}
-     * Quita un empleado de una planilla en borrador.
+     * Excluye un empleado de una planilla en borrador (soft-delete + registro en planilla_exclusiones).
      */
     public function removeEmpleado(int $id, int $empleadoId): JsonResponse
     {
@@ -1318,25 +1340,114 @@ class PlanillasController extends RRHHBaseController
             $planilla = Planilla::findOrFail($id);
 
             if ($planilla->estado !== 'borrador') {
-                return response()->json(['success' => false, 'message' => 'Solo se pueden eliminar empleados de planillas en borrador.'], 422);
+                return response()->json(['success' => false, 'message' => 'Solo se pueden excluir empleados de planillas en borrador.'], 422);
             }
 
-            $deleted = PlanillaLinea::where('planilla_id', $id)
+            $linea = PlanillaLinea::where('planilla_id', $id)
                 ->where('empleado_id', $empleadoId)
-                ->delete();
+                ->where('estado', 'activo')
+                ->first();
 
-            if (!$deleted) {
+            if (!$linea) {
                 return response()->json(['success' => false, 'message' => 'El empleado no está en esta planilla.'], 404);
             }
 
-            // Borrar sus movimientos
-            PlanillaMovimiento::where('planilla_id', $id)
+            DB::connection('rrhh')->beginTransaction();
+            try {
+                // Soft-delete: marcar como excluido
+                $linea->update(['estado' => 'excluido']);
+
+                // Registrar en blocklist para que persista en regeneraciones
+                DB::connection('rrhh')->table('planilla_exclusiones')->updateOrInsert(
+                    ['planilla_id' => $id, 'empleado_id' => $empleadoId],
+                    ['excluido_por' => Auth::id(), 'created_at' => now(), 'updated_at' => now()]
+                );
+
+                $this->svc->recalcularTotalesPlanilla($planilla);
+
+                DB::connection('rrhh')->commit();
+            } catch (\Throwable $e) {
+                DB::connection('rrhh')->rollBack();
+                throw $e;
+            }
+
+            return response()->json(['success' => true, 'message' => 'Empleado excluido de la planilla.']);
+        });
+    }
+
+    /**
+     * PATCH /api/rrhh/planillas/{id}/empleados/{empleadoId}/restaurar
+     * Restaura un empleado excluido a la planilla (recalcula su línea).
+     */
+    public function restaurarEmpleado(int $id, int $empleadoId): JsonResponse
+    {
+        return $this->captureAndRespond(request(), function () use ($id, $empleadoId) {
+            $planilla = Planilla::findOrFail($id);
+
+            if ($planilla->estado !== 'borrador') {
+                return response()->json(['success' => false, 'message' => 'Solo se pueden restaurar empleados en planillas en borrador.'], 422);
+            }
+
+            $linea = PlanillaLinea::where('planilla_id', $id)
                 ->where('empleado_id', $empleadoId)
-                ->delete();
+                ->where('estado', 'excluido')
+                ->first();
 
-            $this->svc->recalcularTotalesPlanilla($planilla);
+            if (!$linea) {
+                return response()->json(['success' => false, 'message' => 'El empleado no está excluido de esta planilla.'], 404);
+            }
 
-            return response()->json(['success' => true, 'message' => 'Empleado eliminado de la planilla.']);
+            [$fechaInicio, $fechaFin] = $this->calc->rangoQuincena($planilla->anio, $planilla->mes, $planilla->quincena);
+
+            $empRow = DB::connection('pgsql')
+                ->table('empleados as e')
+                ->leftJoin('sucursales as s', 's.id', '=', 'e.sucursal_id')
+                ->where('e.id', $empleadoId)
+                ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado', 'e.fecha_ingreso')
+                ->first();
+
+            DB::connection('rrhh')->beginTransaction();
+            try {
+                // Eliminar del blocklist
+                DB::connection('rrhh')->table('planilla_exclusiones')
+                    ->where('planilla_id', $id)
+                    ->where('empleado_id', $empleadoId)
+                    ->delete();
+
+                if ($empRow) {
+                    // Recalcular línea con valores actuales
+                    $emp = (array) $empRow;
+                    $ctx = $this->svc->cargarContexto([$empleadoId], $planilla->anio, $planilla->mes, $planilla->quincena, $fechaInicio, $fechaFin);
+                    $resultado = $this->svc->calcularLinea($emp, $ctx, $fechaInicio, $fechaFin);
+
+                    $linea->update(array_merge($resultado, ['estado' => 'activo']));
+
+                    // Regenerar movimientos del empleado
+                    DB::connection('rrhh')->table('planilla_movimientos')
+                        ->where('planilla_id', $id)
+                        ->where('empleado_id', $empleadoId)
+                        ->where('estado', 'activo')
+                        ->delete();
+
+                    $this->svc->snapshotMovimientosEmpleado(
+                        $id, $empleadoId,
+                        (float) ($emp['salario_base'] ?? 0),
+                        $emp['fecha_ingreso'] ?? null,
+                        $ctx, $fechaInicio, $fechaFin
+                    );
+                } else {
+                    $linea->update(['estado' => 'activo']);
+                }
+
+                $this->svc->recalcularTotalesPlanilla($planilla);
+
+                DB::connection('rrhh')->commit();
+            } catch (\Throwable $e) {
+                DB::connection('rrhh')->rollBack();
+                throw $e;
+            }
+
+            return response()->json(['success' => true, 'message' => 'Empleado restaurado a la planilla.', 'data' => $linea->fresh()]);
         });
     }
 
@@ -1358,9 +1469,18 @@ class PlanillasController extends RRHHBaseController
             [$fechaInicio, $fechaFin] = $this->calc->rangoQuincena($planilla->anio, $planilla->mes, $planilla->quincena);
             $diasQuincena = PlanillaCalculatorService::DIAS_QUINCENA;
 
-            // Tomar los empleados actuales de la planilla y filtrar los que ya no corresponden.
-            // Si la planilla no tiene líneas (caso de recuperación), regenerar desde todos los activos.
-            $empIdsBruto = $planilla->lineas->pluck('empleado_id')->unique()->toArray();
+            // Tomar los empleados activos actuales (excluidos no se recalculan).
+            // Si la planilla no tiene líneas activas (caso de recuperación), regenerar desde todos los activos.
+            $empIdsBruto = PlanillaLinea::where('planilla_id', $id)
+                ->where('estado', 'activo')
+                ->pluck('empleado_id')->unique()->toArray();
+
+            // IDs excluidos explícitamente: se preservan tal cual
+            $exclusionesIds = DB::connection('rrhh')
+                ->table('planilla_exclusiones')
+                ->where('planilla_id', $id)
+                ->pluck('empleado_id')
+                ->toArray();
 
             $tipoPlanilla    = $planilla->tipo_planilla ?? 'salarios';
             $fechaInicioStr  = $fechaInicio->toDateString();
@@ -1435,10 +1555,13 @@ class PlanillasController extends RRHHBaseController
                     ->pluck('id')->toArray();
             }
 
-            // Eliminar líneas de empleados que ya no corresponden a este tipo de planilla
+            // Eliminar líneas ACTIVAS de empleados que ya no corresponden a este tipo de planilla
             $removidos = array_diff($empIdsBruto, $empIds);
             if (!empty($removidos)) {
-                PlanillaLinea::where('planilla_id', $id)->whereIn('empleado_id', $removidos)->delete();
+                PlanillaLinea::where('planilla_id', $id)
+                    ->whereIn('empleado_id', $removidos)
+                    ->where('estado', 'activo')
+                    ->delete();
             }
 
             if (empty($empIds)) {
@@ -1496,8 +1619,9 @@ class PlanillasController extends RRHHBaseController
                 ->get()
                 ->keyBy('empleado_id');
 
-            // Preservar overrides manuales antes de borrar las líneas
+            // Preservar overrides manuales de líneas activas antes de borrarlas
             $overridesMap = PlanillaLinea::where('planilla_id', $id)
+                ->where('estado', 'activo')
                 ->where(fn($q) => $q->whereNotNull('horas_extras_override')->orWhereNotNull('horas_nocturnas_override'))
                 ->get(['empleado_id', 'horas_extras_override', 'horas_nocturnas_override'])
                 ->keyBy('empleado_id')
@@ -1511,7 +1635,7 @@ class PlanillasController extends RRHHBaseController
 
             DB::connection('rrhh')->beginTransaction();
             try {
-                PlanillaLinea::where('planilla_id', $id)->delete();
+                PlanillaLinea::where('planilla_id', $id)->where('estado', 'activo')->delete();
 
                 foreach ($empleadosRows as $emp) {
                     $eid = (int) $emp['id'];
@@ -1535,7 +1659,7 @@ class PlanillasController extends RRHHBaseController
                 $totales = $this->calc->calcularTotalesPlanilla($lineasCalc);
                 $planilla->update($totales);
 
-                $this->svc->snapshotMovimientos($id, $empleadosRows, $ctx, $fechaInicio, $fechaFin);
+                $this->svc->snapshotMovimientos($id, $empleadosRows, $ctx, $fechaInicio, $fechaFin, $exclusionesIds);
 
                 DB::connection('rrhh')->commit();
             } catch (\Throwable $e) {

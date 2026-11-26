@@ -227,7 +227,7 @@ class PlanillaSalariosService
 
     public function recalcularTotalesPlanilla(Planilla $planilla): void
     {
-        $lineas = PlanillaLinea::where('planilla_id', $planilla->id)->get();
+        $lineas = PlanillaLinea::where('planilla_id', $planilla->id)->where('estado', 'activo')->get();
 
         $totals = [
             'total_salarios'   => $lineas->sum(fn($l) => (float) $l->salario_proporcional),
@@ -403,12 +403,14 @@ class PlanillaSalariosService
         array $empleados,
         array $ctx,
         Carbon $fechaInicio,
-        Carbon $fechaFin
+        Carbon $fechaFin,
+        array $excluirIds = []
     ): void {
         DB::connection('rrhh')
             ->table('planilla_movimientos')
             ->where('planilla_id', $planillaId)
             ->where('estado', 'activo')
+            ->when(!empty($excluirIds), fn($q) => $q->whereNotIn('empleado_id', $excluirIds))
             ->delete();
 
         foreach ($empleados as $emp) {

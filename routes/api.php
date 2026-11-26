@@ -797,6 +797,7 @@ Route::prefix('rrhh/planillas')->middleware(['auth:sanctum', 'role:rrhh_admin'])
     Route::put('{id}/movimientos/{movId}/reactivar',           [PlanillasController::class, 'reactivarMovimiento']);
     Route::post('{id}/empleados',                              [PlanillasController::class, 'addEmpleado']);
     Route::delete('{id}/empleados/{empleadoId}',               [PlanillasController::class, 'removeEmpleado']);
+    Route::patch('{id}/empleados/{empleadoId}/restaurar',      [PlanillasController::class, 'restaurarEmpleado']);
     Route::patch('{id}/empleados/{empleadoId}/horas',          [PlanillasController::class, 'updateHorasOverride']);
     Route::get('{id}/exportar',                     [PlanillasController::class, 'exportar']);
     Route::get('{id}/bancos',                       [PlanillasController::class, 'bancos']);

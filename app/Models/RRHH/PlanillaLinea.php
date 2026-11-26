@@ -11,7 +11,7 @@ class PlanillaLinea extends Model
     protected $table      = 'planilla_lineas';
 
     protected $fillable = [
-        'planilla_id', 'empleado_id',
+        'planilla_id', 'empleado_id', 'estado',
         'salario_base', 'dias_quincena', 'dias_laborados', 'salario_proporcional',
         'afp_empleado', 'isss_empleado', 'renta', 'otros_descuentos', 'bonificaciones',
         'total_descuentos_empleado', 'salario_neto',
