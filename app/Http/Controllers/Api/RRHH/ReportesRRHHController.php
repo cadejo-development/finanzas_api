@@ -563,32 +563,36 @@ class ReportesRRHHController extends RRHHBaseController
             return $noct;
         };
 
-        // Agrupar por empleado → fecha → turnos (para calcular extras correctamente)
-        $byEmpDia = [];
+        // Agrupar por empleado → semana ISO → fecha → turnos
+        $byEmpSemana = [];
         foreach ($horarios as $h) {
-            $byEmpDia[(int) $h->empleado_id][$h->fecha][] = $h;
+            $eid     = (int) $h->empleado_id;
+            $weekKey = Carbon::parse($h->fecha)->format('o-W');
+            $byEmpSemana[$eid][$weekKey][$h->fecha][] = $h;
         }
 
         $result = [];
-        foreach ($byEmpDia as $eid => $dias) {
+        foreach ($byEmpSemana as $eid => $semanas) {
             $result[$eid] = ['laboradas' => 0.0, 'nocturnas' => 0.0, 'extra' => 0.0];
-            foreach ($dias as $turnos) {
-                $totalMinDia  = 0;
-                $totalNoctDia = 0;
-                foreach ($turnos as $t) {
-                    $ini = $timeToMins($t->hora_inicio);
-                    $fin = $timeToMins($t->hora_fin);
-                    if ($fin <= $ini) $fin += 24 * 60;
-                    $totalMinDia  += ($fin - $ini);
-                    $totalNoctDia += $noctMins($ini, $fin);
+            foreach ($semanas as $diasSemana) {
+                $totalMinSemana  = 0;
+                $totalNoctSemana = 0;
+                foreach ($diasSemana as $turnos) {
+                    foreach ($turnos as $t) {
+                        $ini = $timeToMins($t->hora_inicio);
+                        $fin = $timeToMins($t->hora_fin);
+                        if ($fin <= $ini) $fin += 24 * 60;
+                        $totalMinSemana  += ($fin - $ini);
+                        $totalNoctSemana += $noctMins($ini, $fin);
+                    }
                 }
-                $horasDia = $totalMinDia / 60;
-                $noctHrs  = $totalNoctDia / 60;
-                $maxHrs   = ($noctHrs > 4) ? 7 : 8;
+                $horasSemana = $totalMinSemana / 60;
+                $noctSemana  = $totalNoctSemana / 60;
 
-                $result[$eid]['laboradas'] += $horasDia;
-                $result[$eid]['nocturnas'] += $noctHrs;
-                $result[$eid]['extra']     += max(0.0, $horasDia - $maxHrs);
+                $result[$eid]['laboradas'] += $horasSemana;
+                $result[$eid]['nocturnas'] += $noctSemana;
+                // Art. 161 CT-SV: extras = horas que superan 44 semanales
+                $result[$eid]['extra']     += max(0.0, $horasSemana - 44.0);
             }
         }
 
