@@ -824,9 +824,14 @@ class ReportesRRHHController extends RRHHBaseController
             $empleados    = $this->getEmpleadosFiltrados($subordinadosIds, $sucursalId, $deptoId);
             $idsActivos   = array_column($empleados, 'id');
 
+            // Para desvinculados e inactivos: ampliar el universo a todos los empleados
+            // (activos + inactivos) que el usuario puede ver, ya que getSubordinadosIds()
+            // filtra solo activos y excluiría a quienes ya fueron desvinculados.
+            $todosIds = $this->getTodosEmpleadosIdsConInactivos($sucursalId);
+
             // Empleados desvinculados en la quincena
             $desvinculados = $this->getDesvinculadosEnPeriodo(
-                $subordinadosIds, $desde, $hasta, $sucursalId, $deptoId
+                $todosIds, $desde, $hasta, $sucursalId, $deptoId
             );
             foreach ($desvinculados as $d) {
                 if (!in_array($d['id'], $idsActivos)) {
@@ -837,7 +842,7 @@ class ReportesRRHHController extends RRHHBaseController
             // Inactivos que aparecen en planilla del período (ej. desvinculados sin registro formal)
             $idsYaIncluidos = array_column($empleados, 'id');
             $inactivosConPlanilla = $this->getInactivosConPlanillaEnPeriodo(
-                $subordinadosIds, $desde, $hasta, $sucursalId, $deptoId, $idsYaIncluidos
+                $todosIds, $desde, $hasta, $sucursalId, $deptoId, $idsYaIncluidos
             );
             foreach ($inactivosConPlanilla as $i) {
                 $empleados[] = $i;

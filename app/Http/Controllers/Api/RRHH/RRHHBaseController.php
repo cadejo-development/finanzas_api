@@ -349,6 +349,21 @@ abstract class RRHHBaseController extends Controller
     }
 
     /**
+     * Igual que getTodosEmpleadosIds() pero incluye inactivos.
+     * Usado en reportes que necesitan ver desvinculados recientes.
+     */
+    protected function getTodosEmpleadosIdsConInactivos(?string $sucursalId = null): array
+    {
+        $query = DB::connection('pgsql')->table('empleados');
+
+        if ($sucursalId) {
+            $query->where('sucursal_id', (int) $sucursalId);
+        }
+
+        return $query->pluck('id')->all();
+    }
+
+    /**
      * Verifica si el empleado_id es el mismo empleado del usuario autenticado.
      */
     protected function esEmpleadoPropio(int $empleadoId): bool
