@@ -501,9 +501,18 @@ class PlanillaSalariosService
         foreach ($ctx['incapacidades']->where('empleado_id', $eid) as $inc) {
             $diasEnQ = $this->diasSolapados($inc->fecha_inicio, $inc->fecha_fin, $fechaInicio, $fechaFin);
             if ($diasEnQ <= 0) continue;
-            $diasDesc = $inc->tipo_institucion === 'privada'
-                ? $diasEnQ
-                : max(0, min((int) $inc->dias - 3, $diasEnQ));
+            if ($inc->tipo_institucion === 'privada') {
+                $diasDesc = $diasEnQ;
+            } else {
+                // ISSS: cadejo paga los primeros 3 días de la incapacidad.
+                // Contamos solo los días cubiertos por ISSS (día 4 en adelante) que caen dentro de la quincena.
+                $primerDiaIsss   = Carbon::parse($inc->fecha_inicio)->addDays(3);
+                $efectivoInicio  = $primerDiaIsss->max($fechaInicio);
+                $efectivoFin     = Carbon::parse($inc->fecha_fin)->min($fechaFin);
+                $diasDesc        = $efectivoInicio->lte($efectivoFin)
+                    ? (int) $efectivoInicio->diffInDays($efectivoFin) + 1
+                    : 0;
+            }
             $tipo = $inc->tipo_institucion === 'isss' ? 'incapacidad_isss' : 'incapacidad_privada';
             $rows[] = [
                 'planilla_id'  => $planillaId,
