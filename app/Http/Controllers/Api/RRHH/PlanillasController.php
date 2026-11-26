@@ -1548,12 +1548,6 @@ class PlanillasController extends RRHHBaseController
                 // Sin líneas: regenerar desde todos los empleados activos del tipo.
                 // No filtrar por fecha_inicio del tipo-planilla para cubrir el caso donde
                 // los registros de empleado_tipo_planilla fueron creados/migrados después del período.
-                $excluirPruebaQ1 = DB::connection('rrhh')
-                    ->table('periodos_prueba')
-                    ->where('estado', 'en_prueba')
-                    ->where('fecha_fin_estimada', '>=', $fechaFinStr)
-                    ->pluck('empleado_id')->toArray();
-
                 $empIds = DB::connection('pgsql')
                     ->table('empleados as e')
                     ->join('empleado_tipo_planilla as etp', 'etp.empleado_id', '=', 'e.id')
@@ -1562,7 +1556,6 @@ class PlanillasController extends RRHHBaseController
                              ->where('tp.slug', '=', $tipoPlanilla);
                     })
                     ->where('e.activo', true)
-                    ->when(!empty($excluirPruebaQ1), fn($q) => $q->whereNotIn('e.id', $excluirPruebaQ1))
                     ->pluck('e.id')->unique()->toArray();
             } elseif ($tipoPlanilla === 'honorarios') {
                 // Honorarios: solo tipo asignado explícitamente
@@ -1581,8 +1574,6 @@ class PlanillasController extends RRHHBaseController
                     ->whereIn('id', $honorariosIds)
                     ->pluck('id')->toArray();
             } else {
-                // Resto de tipos: solo los que tienen el tipo asignado Y no están en prueba activa
-                // (empleados que salen de prueba a mitad de quincena sí se mantienen)
                 // fecha_inicio: NULL se trata como "desde siempre" para tolerar datos con backfill incompleto
                 $conTipo = DB::connection('pgsql')
                     ->table('empleado_tipo_planilla as etp')
@@ -1597,17 +1588,7 @@ class PlanillasController extends RRHHBaseController
                     })
                     ->pluck('etp.empleado_id')->toArray();
 
-                // Excluir solo empleados cuya prueba no termina antes del fin del período
-                $excluirPruebaIds = DB::connection('rrhh')
-                    ->table('periodos_prueba')
-                    ->where('estado', 'en_prueba')
-                    ->where('fecha_fin_estimada', '>=', $fechaFinStr)
-                    ->pluck('empleado_id')
-                    ->toArray();
-
                 // Empleados existentes en la planilla que siguen siendo válidos.
-                // NO aplicar filtro de prueba aquí: si un admin los agregó manualmente,
-                // recalcular debe respetarlo. El filtro de prueba solo aplica a auto-adiciones nuevas.
                 $empIds = DB::connection('pgsql')
                     ->table('empleados')
                     ->whereIn('id', $empIdsBruto)
@@ -1695,7 +1676,6 @@ class PlanillasController extends RRHHBaseController
                     ->where(function ($q) use ($fechaInicioStr) {
                         $q->whereNull('etp.fecha_fin')->orWhere('etp.fecha_fin', '>=', $fechaInicioStr);
                     })
-                    ->when(!empty($excluirPruebaIds), fn($q) => $q->whereNotIn('e.id', $excluirPruebaIds))
                     ->whereNotIn('e.id', $exclusionesIds)
                     ->whereNotIn('e.id', $empIds)
                     ->pluck('e.id')
@@ -1729,31 +1709,13 @@ class PlanillasController extends RRHHBaseController
                 return response()->json(['success' => false, 'message' => 'La planilla no tiene empleados válidos para este tipo.'], 422);
             }
 
-            // Empleados que salen de prueba a mitad de quincena (necesitan inicio proporcional)
-            $transicionandoRecalc = ($tipoPlanilla !== 'honorarios')
-                ? DB::connection('rrhh')
-                    ->table('periodos_prueba')
-                    ->where('estado', 'en_prueba')
-                    ->where('fecha_fin_estimada', '>=', $fechaInicioStr)
-                    ->where('fecha_fin_estimada', '<', $fechaFinStr)
-                    ->whereIn('empleado_id', $empIds)
-                    ->pluck('fecha_fin_estimada', 'empleado_id')
-                    ->map(fn($f) => Carbon::parse($f)->addDay()->toDateString())
-                : collect();
-
             $empleadosRows = DB::connection('pgsql')
                 ->table('empleados as e')
                 ->leftJoin('sucursales as s', 's.id', '=', 'e.sucursal_id')
                 ->whereIn('e.id', $empIds)
                 ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado', 'e.fecha_ingreso')
                 ->get()
-                ->map(function ($r) use ($transicionandoRecalc) {
-                    $r = (array) $r;
-                    if ($transicionandoRecalc->has((int) $r['id'])) {
-                        $r['fecha_ingreso_efectiva'] = $transicionandoRecalc[(int) $r['id']];
-                    }
-                    return $r;
-                })
+                ->map(fn($r) => (array) $r)
                 ->all();
 
             $ctx = $this->svc->cargarContexto($empIds, $planilla->anio, $planilla->mes, $planilla->quincena, $fechaInicio, $fechaFin);
