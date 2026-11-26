@@ -997,10 +997,11 @@ class ReportesRRHHController extends RRHHBaseController
     ): array {
         if (empty($ids)) return [];
 
+        // Buscar por mes completo — así Q2 aparece al ver Q1 del mismo mes
         $planillaIds = DB::connection('rrhh')
             ->table('planillas')
-            ->where('fecha_inicio', '<=', $hasta->toDateString())
-            ->where('fecha_fin', '>=', $desde->toDateString())
+            ->whereYear('fecha_inicio', $desde->year)
+            ->whereMonth('fecha_inicio', $desde->month)
             ->pluck('id');
 
         if ($planillaIds->isEmpty()) return [];
