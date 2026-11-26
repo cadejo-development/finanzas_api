@@ -299,6 +299,7 @@ class PlanillaSalariosService
         $fechaInicioStr = $fechaInicio->toDateString();
         $fechaFinStr    = $fechaFin->toDateString();
 
+        // Desvinculados DENTRO del período: proporcional hasta su fecha de salida
         $desvinculados = DB::connection('rrhh')
             ->table('desvinculaciones')
             ->where('estado', 'aprobado')
@@ -308,15 +309,29 @@ class PlanillaSalariosService
             ->get()
             ->keyBy('empleado_id');
 
-        $desvinculadosIds = $desvinculados->keys()->all();
+        // Desvinculados DESPUÉS del período: trabajaron todo el período, quincena completa
+        $desvinculadosDespues = DB::connection('rrhh')
+            ->table('desvinculaciones')
+            ->where('estado', 'aprobado')
+            ->where('fecha_efectiva', '>', $fechaFinStr)
+            ->pluck('empleado_id')
+            ->unique()
+            ->all();
+
+        $desvinculadosIds       = $desvinculados->keys()->all();
+        $desvinculadosDespuesIds = $desvinculadosDespues;
 
         $query = DB::connection('pgsql')
             ->table('empleados as e')
             ->leftJoin('sucursales as s', 's.id', '=', 'e.sucursal_id')
-            ->where(function ($q) use ($desvinculadosIds) {
+            ->where(function ($q) use ($desvinculadosIds, $desvinculadosDespuesIds) {
                 $q->where('e.activo', true);
                 if (!empty($desvinculadosIds)) {
                     $q->orWhereIn('e.id', $desvinculadosIds);
+                }
+                // Empleados que se desvincularon después del período: seguían activos durante él
+                if (!empty($desvinculadosDespuesIds)) {
+                    $q->orWhereIn('e.id', $desvinculadosDespuesIds);
                 }
             })
             ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado', 'e.fecha_ingreso');
