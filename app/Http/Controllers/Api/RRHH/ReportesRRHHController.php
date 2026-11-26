@@ -367,17 +367,33 @@ class ReportesRRHHController extends RRHHBaseController
             [$desde, $hasta] = $this->calc->rangoQuincena($anio, $mes, $quincena);
             $diasQuincena    = PlanillaCalculatorService::DIAS_QUINCENA;
 
+            // Período VENCIDO para extras/nocturnidades (mismo criterio que PlanillaSalariosService)
+            // Q1 de pago → horarios del 16-fin del mes ANTERIOR
+            // Q2 de pago → horarios del 1-15 del mes ACTUAL
+            if ($quincena === 1) {
+                $mesV  = $mes === 1 ? 12 : $mes - 1;
+                $anioV = $mes === 1 ? $anio - 1 : $anio;
+                $desdeVenc = Carbon::create($anioV, $mesV, 16);
+                $hastaVenc = Carbon::create($anioV, $mesV)->endOfMonth()->startOfDay();
+            } else {
+                $desdeVenc = Carbon::create($anio, $mes, 1);
+                $hastaVenc = Carbon::create($anio, $mes, 15);
+            }
+
             $empleados = $this->getEmpleadosFiltrados($subordinadosIds, $sucursalId, $deptoId);
             $empIds    = collect($empleados)->pluck('id')->toArray();
 
-            // Ausencias (para días no trabajados y descuento de horas)
+            // Ausencias (para días no trabajados y descuento de horas) — período actual
             $permisosAct = $this->getPermisos($empIds, $desde, $hasta);
             $incapAct    = $this->getIncapacidades($empIds, $desde, $hasta);
             $vacacAct    = $this->getVacaciones($empIds, $desde, $hasta);
             $ausAct      = $this->getAusencias($empIds, $desde, $hasta);
 
-            // Horas de horarios (empleados operativos con schedule)
-            $horasDetalle = $this->getHorasDetalle($empIds, $desde, $hasta);
+            // Horas laboradas del período actual
+            $horasActual = $this->getHorasDetalle($empIds, $desde, $hasta);
+
+            // Extras y nocturnidades del período VENCIDO (lo que se cobra en esta quincena)
+            $horasVencido = $this->getHorasDetalle($empIds, $desdeVenc, $hastaVenc);
 
             // Extras de solicitudes aprobadas (principalmente admin sin horarios)
             $extrasMap = $this->getHorasExtrasSolicitudes($empIds, $anio, $mes, $quincena);
@@ -394,14 +410,16 @@ class ReportesRRHHController extends RRHHBaseController
                     $eid, $permisosAct, $incapAct, $vacacAct, $ausAct, $desde, $hasta
                 );
 
-                $horarios = $horasDetalle[$eid] ?? null;
-                $tieneHorarios = $horarios !== null && $horarios['laboradas'] > 0;
+                $horariosAct  = $horasActual[$eid] ?? null;
+                $horariosVenc = $horasVencido[$eid] ?? null;
+                $tieneHorarios = $horariosAct !== null && $horariosAct['laboradas'] > 0;
 
                 if ($tieneHorarios) {
-                    // Operativo: el horario ya omite los días de ausencia, sin resta adicional
-                    $hLaboradas = $horarios['laboradas'];
-                    $hNocturnas = $horarios['nocturnas'];
-                    $hExtra     = $horarios['extra'] + ($extrasMap[$eid] ?? 0);
+                    // Laboradas: período actual
+                    $hLaboradas = $horariosAct['laboradas'];
+                    // Extras y nocturnidades: período VENCIDO (lo que se pagará en esta quincena)
+                    $hNocturnas = $horariosVenc !== null ? $horariosVenc['nocturnas'] : 0.0;
+                    $hExtra     = ($horariosVenc !== null ? $horariosVenc['extra'] : 0.0) + ($extrasMap[$eid] ?? 0);
                 } else {
                     // Admin sin horarios: base días laborables × 8h, restar permisos e incapacidades
                     $horasAusencia = $this->calcHorasAusencias($eid, $permisosAct, $incapAct, $desde, $hasta);
@@ -437,12 +455,14 @@ class ReportesRRHHController extends RRHHBaseController
                 'success' => true,
                 'data'    => $reporte,
                 'meta'    => [
-                    'anio'            => $anio,
-                    'mes'             => $mes,
-                    'quincena'        => $quincena,
-                    'desde'           => $desde->toDateString(),
-                    'hasta'           => $hasta->toDateString(),
-                    'dias_laborables' => $diasLaborables,
+                    'anio'              => $anio,
+                    'mes'               => $mes,
+                    'quincena'          => $quincena,
+                    'desde'             => $desde->toDateString(),
+                    'hasta'             => $hasta->toDateString(),
+                    'dias_laborables'   => $diasLaborables,
+                    'vencido_desde'     => $desdeVenc->toDateString(),
+                    'vencido_hasta'     => $hastaVenc->toDateString(),
                 ],
             ]);
         } catch (\Throwable $e) {

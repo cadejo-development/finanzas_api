@@ -1099,8 +1099,9 @@ class PlanillasController extends RRHHBaseController
         }
 
         $data = $request->validate([
-            'monto' => 'nullable|numeric',
-            'dias'  => 'nullable|numeric',
+            'monto'    => 'nullable|numeric',
+            'dias'     => 'nullable|numeric',
+            'concepto' => 'nullable|string|max:255',
         ]);
 
         $mov->update($data);
