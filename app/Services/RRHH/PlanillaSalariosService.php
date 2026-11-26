@@ -1001,10 +1001,18 @@ class PlanillaSalariosService
 
         foreach ($incapacidades->where('empleado_id', $eid) as $inc) {
             $diasEnQ = $this->diasSolapados($inc->fecha_inicio, $inc->fecha_fin, $desde, $hasta);
+            if ($diasEnQ <= 0) continue;
             if ($inc->tipo_institucion === 'privada') {
                 $total += $diasEnQ;
             } elseif ($inc->tipo_institucion === 'isss') {
-                $total += max(0, min((int) $inc->dias - 3, $diasEnQ));
+                // Cadejo paga los primeros 3 días; ISSS cubre el día 4 en adelante.
+                // Intersectar los días cubiertos por ISSS con el rango de la quincena.
+                $primerDiaIsss  = Carbon::parse($inc->fecha_inicio)->addDays(3);
+                $efectivoInicio = $primerDiaIsss->max($desde);
+                $efectivoFin    = Carbon::parse($inc->fecha_fin)->min($hasta);
+                $total += $efectivoInicio->lte($efectivoFin)
+                    ? (int) $efectivoInicio->diffInDays($efectivoFin) + 1
+                    : 0;
             }
         }
 
