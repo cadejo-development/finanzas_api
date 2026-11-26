@@ -1694,7 +1694,6 @@ class PlanillasController extends RRHHBaseController
                     ->where(function ($q) use ($fechaInicioStr) {
                         $q->whereNull('etp.fecha_fin')->orWhere('etp.fecha_fin', '>=', $fechaInicioStr);
                     })
-                    ->when(!empty($excluirPruebaIds), fn($q) => $q->whereNotIn('e.id', $excluirPruebaIds))
                     ->whereNotIn('e.id', $exclusionesIds)
                     ->whereNotIn('e.id', $empIds)
                     ->pluck('e.id')
