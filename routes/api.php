@@ -742,6 +742,7 @@ Route::prefix('rrhh/expediente')->middleware(['auth:sanctum', 'role:jefatura,por
 // ─── RRHH Tipo Planilla ───────────────────────────────────────────────────────
 Route::middleware(['auth:sanctum', 'role:rrhh_admin'])->group(function () {
     Route::get('rrhh/tipo-planilla',                              [TipoPlanillaController::class, 'index']);
+    Route::get('rrhh/tipo-planilla/empleados',                   [TipoPlanillaController::class, 'empleados']);
     Route::get('rrhh/empleados/{id}/tipo-planilla',              [TipoPlanillaController::class, 'getEmpleado']);
     Route::put('rrhh/empleados/{id}/tipo-planilla',              [TipoPlanillaController::class, 'syncEmpleado']);
 });

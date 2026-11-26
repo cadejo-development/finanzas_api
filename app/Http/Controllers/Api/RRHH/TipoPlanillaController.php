@@ -17,6 +17,44 @@ class TipoPlanillaController extends Controller
         return response()->json(['success' => true, 'data' => $tipos]);
     }
 
+    /**
+     * GET /api/rrhh/tipo-planilla/empleados
+     * Todos los empleados activos con sus tipos de planilla asignados (una sola consulta).
+     */
+    public function empleados(): JsonResponse
+    {
+        $empleados = DB::connection('pgsql')
+            ->table('empleados as e')
+            ->leftJoin('sucursales as s', 's.id', '=', 'e.sucursal_id')
+            ->where('e.activo', true)
+            ->orderBy('e.apellidos')
+            ->select('e.id', 'e.codigo', 'e.nombres', 'e.apellidos', 's.nombre as sucursal')
+            ->get();
+
+        // Mapa empleado_id → tipos
+        $asignaciones = DB::table('empleado_tipo_planilla as etp')
+            ->join('tipo_planilla as tp', 'tp.id', '=', 'etp.tipo_planilla_id')
+            ->select('etp.empleado_id', 'tp.id', 'tp.slug', 'tp.nombre')
+            ->get()
+            ->groupBy('empleado_id');
+
+        $data = $empleados->map(function ($emp) use ($asignaciones) {
+            $tipos = collect($asignaciones->get($emp->id, []))
+                ->map(fn($t) => ['id' => $t->id, 'slug' => $t->slug, 'nombre' => $t->nombre])
+                ->values();
+            return [
+                'id'       => $emp->id,
+                'codigo'   => $emp->codigo,
+                'nombres'  => $emp->nombres,
+                'apellidos'=> $emp->apellidos,
+                'sucursal' => $emp->sucursal,
+                'tipos'    => $tipos,
+            ];
+        });
+
+        return response()->json(['success' => true, 'data' => $data]);
+    }
+
     /** GET /api/rrhh/empleados/{id}/tipo-planilla — tipos asignados al empleado */
     public function getEmpleado(int $empleadoId): JsonResponse
     {

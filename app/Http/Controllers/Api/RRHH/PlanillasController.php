@@ -552,12 +552,6 @@ class PlanillasController extends RRHHBaseController
         $query = DB::connection('pgsql')
             ->table('empleados as e')
             ->leftJoin('sucursales as s', 's.id', '=', 'e.sucursal_id')
-            // Filtro por tipo de planilla asignado al empleado
-            ->join('empleado_tipo_planilla as etp', 'etp.empleado_id', '=', 'e.id')
-            ->join('tipo_planilla as tp', function ($join) use ($tipoPlanilla) {
-                $join->on('tp.id', '=', 'etp.tipo_planilla_id')
-                     ->where('tp.slug', '=', $tipoPlanilla);
-            })
             ->where(function ($q) use ($desvinculadosIds) {
                 $q->where('e.activo', true);
                 if (!empty($desvinculadosIds)) {
@@ -565,6 +559,26 @@ class PlanillasController extends RRHHBaseController
                 }
             })
             ->select('e.id', 'e.salario_base', 's.geo_departamento_id', 'e.es_pensionado', 'e.fecha_ingreso');
+
+        if ($tipoPlanilla === 'honorarios') {
+            // Honorarios: empleados con contrato SP (fecha_contrato_sp) O marcados explícitamente
+            $honorariosIds = DB::table('empleado_tipo_planilla as etp')
+                ->join('tipo_planilla as tp', 'tp.id', '=', 'etp.tipo_planilla_id')
+                ->where('tp.slug', 'honorarios')
+                ->pluck('etp.empleado_id');
+
+            $query->where(function ($q) use ($honorariosIds) {
+                $q->whereNotNull('e.fecha_contrato_sp')
+                  ->orWhereIn('e.id', $honorariosIds);
+            });
+        } else {
+            // Resto de tipos: solo empleados con ese tipo asignado
+            $query->join('empleado_tipo_planilla as etp', 'etp.empleado_id', '=', 'e.id')
+                  ->join('tipo_planilla as tp', function ($join) use ($tipoPlanilla) {
+                      $join->on('tp.id', '=', 'etp.tipo_planilla_id')
+                           ->where('tp.slug', '=', $tipoPlanilla);
+                  });
+        }
 
         if ($sucursalId) {
             $query->where('e.sucursal_id', $sucursalId);
