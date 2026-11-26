@@ -13,6 +13,7 @@ use App\Models\RRHH\PlanillaLinea;
 use App\Models\RRHH\PlanillaMovimiento;
 use App\Models\RRHH\Vacacion;
 use App\Services\RRHH\PlanillaCalculatorService;
+use App\Services\RRHH\PlanillaSalariosService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,7 +25,10 @@ class PlanillasController extends RRHHBaseController
 {
     use \App\Http\Controllers\Api\RRHH\Traits\RRHHCapturesExceptions;
 
-    public function __construct(private PlanillaCalculatorService $calc) {}
+    public function __construct(
+        private PlanillaCalculatorService $calc,
+        private PlanillaSalariosService $svc,
+    ) {}
 
     // ─── Listado ─────────────────────────────────────────────────────────────
 
@@ -184,163 +188,37 @@ class PlanillasController extends RRHHBaseController
 
             // Cargar empleados activos + desvinculados durante el período, filtrados por tipo_planilla
             ['empleados' => $empleados, 'desvinculados' => $desvinculados]
-                = $this->getEmpleadosParaPlanilla($sucursalId, $fechaInicio, $fechaFin, $tipoPlanilla);
+                = $this->svc->resolverEmpleados($sucursalId, $fechaInicio, $fechaFin, $tipoPlanilla);
             $empIds = array_column($empleados, 'id');
 
-            // Cargar eventos del período (misma lógica que ReportesRRHHController)
-            $permisos      = $this->getPermisos($empIds, $fechaInicio, $fechaFin);
-            $incapacidades = $this->getIncapacidades($empIds, $fechaInicio, $fechaFin);
-            $vacaciones    = $this->getVacaciones($empIds, $fechaInicio, $fechaFin);
-            $ausencias     = $this->getAusencias($empIds, $fechaInicio, $fechaFin);
-            $suspensiones  = $this->getSuspensiones($empIds, $fechaInicio, $fechaFin);
-
-            // Asueto trabajado se paga en quincena vencida (siguiente período).
-            // Buscamos asuetos de la quincena ANTERIOR para pagarlos en ésta.
-            [$prevAnio, $prevMes, $prevQ] = $this->calc->quincenaAnterior($anio, $mes, $quincena);
-            [$prevInicio, $prevFin]       = $this->calc->rangoQuincena($prevAnio, $prevMes, $prevQ);
-            $asuetos        = $this->getAsuetosEnRango($prevInicio, $prevFin);
-            $horariosAsueto = $this->getHorariosNormalEnAsuetos($empIds, $asuetos);
-
-            // Cargar horas extras aprobadas para esta quincena de pago
-            $horasExtrasMap     = $this->getHorasExtrasMap($empIds, $anio, $mes, $quincena);
-            $nocturnidadesMap   = $this->getNocturnidadesMap($empIds, $anio, $mes, $quincena);
-
-            // Cargar órdenes de descuento activas del período
-            $ordenesMap      = $this->getOrdenesActivasMap($empIds, $fechaInicio->toDateString(), $quincena);
-            $bonificacionesMap = $this->getBonificacionesMap($empIds, $fechaInicio, $fechaFin);
+            $ctx = $this->svc->cargarContexto($empIds, $anio, $mes, $quincena, $fechaInicio, $fechaFin);
 
             $lineasCalc = [];
 
             DB::connection('rrhh')->beginTransaction();
             try {
-                // Borrar líneas anteriores de esta planilla
                 PlanillaLinea::where('planilla_id', $planilla->id)->delete();
 
                 foreach ($empleados as $emp) {
-                    $eid     = (int) $emp['id'];
-                    $salBase = (float) ($emp['salario_base'] ?? 0);
+                    $eid = (int) $emp['id'];
 
-                    // Determinar ventana efectiva del empleado en este período
                     $desvinc = $desvinculados->get($eid);
-                    if ($desvinc) {
-                        $fechaTerm     = Carbon::parse($desvinc->fecha_efectiva);
-                        $hastaEfectivo = $fechaTerm->lessThan($fechaFin) ? $fechaTerm : $fechaFin;
-                    } else {
-                        $hastaEfectivo = $fechaFin;
-                    }
-
-                    // Empleado que sale de prueba a mitad de quincena: su inicio real en salarios
-                    $fechaIngresoEfectiva = isset($emp['fecha_ingreso_efectiva'])
-                        ? Carbon::parse($emp['fecha_ingreso_efectiva'])
+                    $hastaEfectivo = $desvinc
+                        ? (Carbon::parse($desvinc->fecha_efectiva)->lessThan($fechaFin)
+                            ? Carbon::parse($desvinc->fecha_efectiva)
+                            : $fechaFin)
                         : null;
-                    $desdeEfectivo = ($fechaIngresoEfectiva && $fechaIngresoEfectiva->gt($fechaInicio))
-                        ? $fechaIngresoEfectiva
-                        : $fechaInicio;
 
-                    // Días proporcionales al período efectivo (desde–hasta)
-                    $diasEfectivos = min($diasQuincena, max(0, $desdeEfectivo->diffInDays($hastaEfectivo) + 1));
+                    $resultado = $this->svc->calcularLinea($emp, $ctx, $fechaInicio, $fechaFin, $hastaEfectivo);
 
-                    // Días no trabajados dentro del período efectivo del empleado
-                    $diasNoTrab = $this->calcDiasNoTrabajados(
-                        $eid, $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
-                        $desdeEfectivo, $hastaEfectivo
-                    );
-                    // Cap a diasQuincena: en meses con 31 días no se pagan días extra
-                    $diasLab = min($diasQuincena, max(0, $diasEfectivos - $diasNoTrab));
-
-                    // Órdenes de descuento y bonificaciones del empleado
-                    $ordenes       = $ordenesMap[$eid]        ?? [];
-                    $bonificEmp    = $bonificacionesMap[$eid] ?? [];
-
-                    // Calcular
-                    $esPensionado = (bool) ($emp['es_pensionado'] ?? false);
-                    $resultado = $this->calc->calcularPlanillaEmpleado(
-                        $salBase, (float) $diasLab, $diasQuincena, $ordenes, $bonificEmp, $esPensionado
-                    );
-
-                    // Asuetos: empleados con horario 'normal' ese día cobran 100% extra
-                    $geoDptoEmp    = $emp['geo_departamento_id'] ?? null;
-                    $diasAsueto    = $this->contarAsuetosEmpleado(
-                        (int) $eid, $geoDptoEmp, $asuetos, $horariosAsueto
-                    );
-                    $salarioAsueto = $diasAsueto > 0
-                        ? round(($salBase / 30) * $diasAsueto, 2)
-                        : 0.0;
-
-                    $resultado['dias_asueto']    = $diasAsueto;
-                    $resultado['salario_asueto'] = $salarioAsueto;
-                    if ($salarioAsueto > 0) {
-                        $resultado['salario_neto'] = round($resultado['salario_neto'] + $salarioAsueto, 2);
-                    }
-
-                    // Horas extras aprobadas para esta quincena (tarifa doble = salBase/240 × 2)
-                    $horasExtrasEmp   = (float) ($horasExtrasMap[$eid] ?? 0);
-                    $montoHorasExtras = $horasExtrasEmp > 0
-                        ? round(($salBase / 240) * 2 * $horasExtrasEmp, 2)
-                        : 0.0;
-
-                    $resultado['horas_extras']       = round($horasExtrasEmp, 2);
-                    $resultado['monto_horas_extras']  = $montoHorasExtras;
-                    if ($montoHorasExtras > 0) {
-                        $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoHorasExtras, 2);
-                    }
-
-                    // Nocturnidades (25% sobre tarifa hora base, Art. 161 CT-SV)
-                    $horasNoct    = (float) ($nocturnidadesMap[$eid] ?? 0);
-                    $montoNoct    = $horasNoct > 0
-                        ? round(($salBase / 240) * 0.25 * $horasNoct, 2)
-                        : 0.0;
-
-                    $resultado['horas_nocturnas']     = round($horasNoct, 2);
-                    $resultado['monto_nocturnidades'] = $montoNoct;
-                    if ($montoNoct > 0) {
-                        $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoNoct, 2);
-                    }
-
-                    // Pago de vacaciones (30% s.mensual al cumplir aniversario, Art. 177 CT-SV)
-                    $montoVacaciones = $this->calcularMontoVacaciones($emp, $fechaInicio, $fechaFin);
-                    $resultado['vacaciones'] = $montoVacaciones;
-                    if ($montoVacaciones > 0) {
-                        $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoVacaciones, 2);
-                    }
-
-                    // Anotar días de suspensión en detalle para trazabilidad
-                    $diasSusp = $suspensiones
-                        ->filter(fn($s) => $s->amonestacion?->empleado_id === $eid)
-                        ->count();
-                    if ($diasSusp > 0) {
-                        $detalle = json_decode($resultado['detalle_descuentos'] ?? '[]', true) ?: [];
-                        $detalle[] = [
-                            'concepto' => "Suspensión disciplinaria ({$diasSusp} día(s))",
-                            'tipo'     => 'suspension',
-                            'dias'     => $diasSusp,
-                            'monto'    => 0, // el impacto ya está en dias_laborados reducidos
-                        ];
-                        $resultado['detalle_descuentos'] = json_encode($detalle);
-                    }
-
-                    $linea = PlanillaLinea::create(array_merge(
-                        [
-                            'planilla_id' => $planilla->id,
-                            'empleado_id' => $eid,
-                        ],
-                        $resultado
-                    ));
-
+                    PlanillaLinea::create(array_merge(['planilla_id' => $planilla->id, 'empleado_id' => $eid], $resultado));
                     $lineasCalc[] = $resultado;
                 }
 
-                // Actualizar totales de la planilla
                 $totales = $this->calc->calcularTotalesPlanilla($lineasCalc);
                 $planilla->update($totales);
 
-                // Snapshot de movimientos por empleado
-                $this->snapshotMovimientos(
-                    $planilla->id, $empleados,
-                    $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
-                    $asuetos, $horariosAsueto, $horasExtrasMap, $nocturnidadesMap,
-                    $fechaInicio, $fechaFin, $diasQuincena, $ordenesMap
-                );
+                $this->svc->snapshotMovimientos($planilla->id, $empleados, $ctx, $fechaInicio, $fechaFin);
 
                 DB::connection('rrhh')->commit();
             } catch (\Throwable $e) {
@@ -348,7 +226,6 @@ class PlanillasController extends RRHHBaseController
                 throw $e;
             }
 
-            // Retornar planilla completa con líneas
             return $this->show($planilla->id);
         });
     }
@@ -1228,7 +1105,7 @@ class PlanillasController extends RRHHBaseController
 
         $mov->update($data);
         $this->ajustarLineaTrasMov($id, $mov->empleado_id);
-        $this->recalcularTotalesPlanilla($planilla->fresh());
+        $this->svc->recalcularTotalesPlanilla($planilla->fresh());
         $linea = PlanillaLinea::where('planilla_id', $id)->where('empleado_id', $mov->empleado_id)->first();
 
         return response()->json(['success' => true, 'message' => 'Movimiento actualizado.', 'data' => $mov, 'linea' => $linea, 'planilla_totales' => $planilla->fresh()->only(['total_salarios','total_descuentos','total_patronal','total_neto'])]);
@@ -1254,7 +1131,7 @@ class PlanillasController extends RRHHBaseController
 
         $mov->update(['estado' => 'anulado']);
         $this->ajustarLineaTrasMov($id, $mov->empleado_id);
-        $this->recalcularTotalesPlanilla($planilla->fresh());
+        $this->svc->recalcularTotalesPlanilla($planilla->fresh());
         $linea = PlanillaLinea::where('planilla_id', $id)->where('empleado_id', $mov->empleado_id)->first();
 
         return response()->json(['success' => true, 'message' => 'Movimiento anulado.', 'data' => $mov, 'linea' => $linea, 'planilla_totales' => $planilla->fresh()->only(['total_salarios','total_descuentos','total_patronal','total_neto'])]);
@@ -1275,7 +1152,7 @@ class PlanillasController extends RRHHBaseController
         $mov = PlanillaMovimiento::where('planilla_id', $id)->findOrFail($movId);
         $mov->update(['estado' => 'activo']);
         $this->ajustarLineaTrasMov($id, $mov->empleado_id);
-        $this->recalcularTotalesPlanilla($planilla->fresh());
+        $this->svc->recalcularTotalesPlanilla($planilla->fresh());
         $linea = PlanillaLinea::where('planilla_id', $id)->where('empleado_id', $mov->empleado_id)->first();
 
         return response()->json(['success' => true, 'message' => 'Movimiento reactivado.', 'data' => $mov, 'linea' => $linea, 'planilla_totales' => $planilla->fresh()->only(['total_salarios','total_descuentos','total_patronal','total_neto'])]);
@@ -1403,72 +1280,21 @@ class PlanillasController extends RRHHBaseController
             $emp = (array) $empRow;
 
             [$fechaInicio, $fechaFin] = $this->calc->rangoQuincena($planilla->anio, $planilla->mes, $planilla->quincena);
-            $diasQuincena = PlanillaCalculatorService::DIAS_QUINCENA;
 
-            $permisos      = $this->getPermisos([$eid], $fechaInicio, $fechaFin);
-            $incapacidades = $this->getIncapacidades([$eid], $fechaInicio, $fechaFin);
-            $vacaciones    = $this->getVacaciones([$eid], $fechaInicio, $fechaFin);
-            $ausencias     = $this->getAusencias([$eid], $fechaInicio, $fechaFin);
-            $suspensiones  = $this->getSuspensiones([$eid], $fechaInicio, $fechaFin);
-            [$prevAnio2, $prevMes2, $prevQ2] = $this->calc->quincenaAnterior($planilla->anio, $planilla->mes, $planilla->quincena);
-            [$prevInicio2, $prevFin2]       = $this->calc->rangoQuincena($prevAnio2, $prevMes2, $prevQ2);
-            $asuetos        = $this->getAsuetosEnRango($prevInicio2, $prevFin2);
-            $horariosAsueto = $this->getHorariosNormalEnAsuetos([$eid], $asuetos);
-            $horasExtrasMap   = $this->getHorasExtrasMap([$eid], $planilla->anio, $planilla->mes, $planilla->quincena);
-            $nocturnidadesMap = $this->getNocturnidadesMap([$eid], $planilla->anio, $planilla->mes, $planilla->quincena);
-            $ordenesMap    = $this->getOrdenesActivasMap([$eid], $fechaInicio->toDateString(), $planilla->quincena);
-            $bonificMap    = $this->getBonificacionesMap([$eid], $fechaInicio, $fechaFin);
-
-            $salBase   = (float) ($emp['salario_base'] ?? 0);
-            $diasNoTrab = $this->calcDiasNoTrabajados($eid, $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones, $fechaInicio, $fechaFin);
-            $diasLab   = min($diasQuincena, max(0, $diasQuincena - $diasNoTrab));
-
-            $esPensionado = (bool) ($emp['es_pensionado'] ?? false);
-            $resultado = $this->calc->calcularPlanillaEmpleado(
-                $salBase, (float) $diasLab, $diasQuincena,
-                $ordenesMap[$eid] ?? [], $bonificMap[$eid] ?? [], $esPensionado
-            );
-
-            $geoDptoEmp   = $emp['geo_departamento_id'] ?? null;
-            $diasAsueto   = $this->contarAsuetosEmpleado($eid, $geoDptoEmp, $asuetos, $horariosAsueto);
-            $salarioAsueto = $diasAsueto > 0 ? round(($salBase / 30) * $diasAsueto, 2) : 0.0;
-            $resultado['dias_asueto']    = $diasAsueto;
-            $resultado['salario_asueto'] = $salarioAsueto;
-            if ($salarioAsueto > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $salarioAsueto, 2);
-
-            $horasExt = (float) ($horasExtrasMap[$eid] ?? 0);
-            $montoExt = $horasExt > 0 ? round(($salBase / 240) * 2 * $horasExt, 2) : 0.0;
-            $resultado['horas_extras']      = round($horasExt, 2);
-            $resultado['monto_horas_extras'] = $montoExt;
-            if ($montoExt > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoExt, 2);
-
-            $horasNoct = (float) ($nocturnidadesMap[$eid] ?? 0);
-            $montoNoct = $horasNoct > 0 ? round(($salBase / 240) * 0.25 * $horasNoct, 2) : 0.0;
-            $resultado['horas_nocturnas']     = round($horasNoct, 2);
-            $resultado['monto_nocturnidades'] = $montoNoct;
-            if ($montoNoct > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoNoct, 2);
-
-            $montoVacaciones = $this->calcularMontoVacaciones($emp, $fechaInicio, $fechaFin);
-            $resultado['vacaciones'] = $montoVacaciones;
-            if ($montoVacaciones > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoVacaciones, 2);
+            $ctx      = $this->svc->cargarContexto([$eid], $planilla->anio, $planilla->mes, $planilla->quincena, $fechaInicio, $fechaFin);
+            $resultado = $this->svc->calcularLinea($emp, $ctx, $fechaInicio, $fechaFin);
 
             DB::connection('rrhh')->beginTransaction();
             try {
-                $linea = PlanillaLinea::create(array_merge(
-                    ['planilla_id' => $id, 'empleado_id' => $eid],
-                    $resultado
-                ));
+                $linea = PlanillaLinea::create(array_merge(['planilla_id' => $id, 'empleado_id' => $eid], $resultado));
 
-                // Recalcular totales
-                $this->recalcularTotalesPlanilla($planilla);
+                $this->svc->recalcularTotalesPlanilla($planilla);
 
-                // Snapshot movimientos solo para este empleado
-                $this->snapshotMovimientosEmpleado(
+                $this->svc->snapshotMovimientosEmpleado(
                     $id, $eid,
-                    $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
-                    $asuetos, $horariosAsueto, $horasExtrasMap, $nocturnidadesMap,
-                    $fechaInicio, $fechaFin, $diasQuincena, $salBase, $ordenesMap,
-                    $emp['fecha_ingreso'] ?? null
+                    (float) ($emp['salario_base'] ?? 0),
+                    $emp['fecha_ingreso'] ?? null,
+                    $ctx, $fechaInicio, $fechaFin
                 );
 
                 DB::connection('rrhh')->commit();
@@ -1507,7 +1333,7 @@ class PlanillasController extends RRHHBaseController
                 ->where('empleado_id', $empleadoId)
                 ->delete();
 
-            $this->recalcularTotalesPlanilla($planilla);
+            $this->svc->recalcularTotalesPlanilla($planilla);
 
             return response()->json(['success' => true, 'message' => 'Empleado eliminado de la planilla.']);
         });
@@ -1641,19 +1467,7 @@ class PlanillasController extends RRHHBaseController
                 })
                 ->all();
 
-            $permisos      = $this->getPermisos($empIds, $fechaInicio, $fechaFin);
-            $incapacidades = $this->getIncapacidades($empIds, $fechaInicio, $fechaFin);
-            $vacaciones    = $this->getVacaciones($empIds, $fechaInicio, $fechaFin);
-            $ausencias     = $this->getAusencias($empIds, $fechaInicio, $fechaFin);
-            $suspensiones  = $this->getSuspensiones($empIds, $fechaInicio, $fechaFin);
-            [$prevAnio3, $prevMes3, $prevQ3] = $this->calc->quincenaAnterior($planilla->anio, $planilla->mes, $planilla->quincena);
-            [$prevInicio3, $prevFin3]       = $this->calc->rangoQuincena($prevAnio3, $prevMes3, $prevQ3);
-            $asuetos        = $this->getAsuetosEnRango($prevInicio3, $prevFin3);
-            $horariosAsueto = $this->getHorariosNormalEnAsuetos($empIds, $asuetos);
-            $horasExtrasMap   = $this->getHorasExtrasMap($empIds, $planilla->anio, $planilla->mes, $planilla->quincena);
-            $nocturnidadesMap = $this->getNocturnidadesMap($empIds, $planilla->anio, $planilla->mes, $planilla->quincena);
-            $ordenesMap    = $this->getOrdenesActivasMap($empIds, $fechaInicio->toDateString(), $planilla->quincena);
-            $bonificMap    = $this->getBonificacionesMap($empIds, $fechaInicio, $fechaFin);
+            $ctx = $this->svc->cargarContexto($empIds, $planilla->anio, $planilla->mes, $planilla->quincena, $fechaInicio, $fechaFin);
 
             // Mapa de desvinculados (por si alguno fue desvinculado después de generar)
             $desvinculados = DB::connection('rrhh')
@@ -1684,70 +1498,19 @@ class PlanillasController extends RRHHBaseController
                 PlanillaLinea::where('planilla_id', $id)->delete();
 
                 foreach ($empleadosRows as $emp) {
-                    $eid     = (int) $emp['id'];
-                    $salBase = (float) ($emp['salario_base'] ?? 0);
+                    $eid = (int) $emp['id'];
 
                     $desvinc = $desvinculados->get($eid);
-                    if ($desvinc) {
-                        $fechaTerm    = Carbon::parse($desvinc->fecha_efectiva);
-                        $hastaEfectivo = $fechaTerm->lessThan($fechaFin) ? $fechaTerm : $fechaFin;
-                    } else {
-                        $hastaEfectivo = $fechaFin;
-                    }
-
-                    // Empleado que sale de prueba a mitad de quincena: su inicio real en salarios
-                    $fechaIngresoEfectiva = isset($emp['fecha_ingreso_efectiva'])
-                        ? Carbon::parse($emp['fecha_ingreso_efectiva'])
+                    $hastaEfectivo = $desvinc
+                        ? (Carbon::parse($desvinc->fecha_efectiva)->lessThan($fechaFin)
+                            ? Carbon::parse($desvinc->fecha_efectiva)
+                            : $fechaFin)
                         : null;
-                    $desdeEfectivo = ($fechaIngresoEfectiva && $fechaIngresoEfectiva->gt($fechaInicio))
-                        ? $fechaIngresoEfectiva
-                        : $fechaInicio;
-
-                    $diasEfectivos = min($diasQuincena, max(0, $desdeEfectivo->diffInDays($hastaEfectivo) + 1));
-
-                    $diasNoTrab = $this->calcDiasNoTrabajados($eid, $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones, $desdeEfectivo, $hastaEfectivo);
-                    $diasLab   = min($diasQuincena, max(0, $diasEfectivos - $diasNoTrab));
-
-                    $esPensionado = (bool) ($emp['es_pensionado'] ?? false);
-                    $resultado = $this->calc->calcularPlanillaEmpleado(
-                        $salBase, (float) $diasLab, $diasQuincena,
-                        $ordenesMap[$eid] ?? [], $bonificMap[$eid] ?? [], $esPensionado
-                    );
-
-                    $geoDptoEmp   = $emp['geo_departamento_id'] ?? null;
-                    $diasAsueto   = $this->contarAsuetosEmpleado($eid, $geoDptoEmp, $asuetos, $horariosAsueto);
-                    $salarioAsueto = $diasAsueto > 0 ? round(($salBase / 30) * $diasAsueto, 2) : 0.0;
-                    $resultado['dias_asueto']    = $diasAsueto;
-                    $resultado['salario_asueto'] = $salarioAsueto;
-                    if ($salarioAsueto > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $salarioAsueto, 2);
 
                     $extOverride  = $overridesMap[$eid]['ext']  ?? null;
                     $noctOverride = $overridesMap[$eid]['noct'] ?? null;
 
-                    $horasExt = $extOverride !== null ? $extOverride : (float) ($horasExtrasMap[$eid] ?? 0);
-                    $montoExt = $horasExt > 0 ? round(($salBase / 240) * 2 * $horasExt, 2) : 0.0;
-                    $resultado['horas_extras']          = round($horasExt, 2);
-                    $resultado['horas_extras_override'] = $extOverride;
-                    $resultado['monto_horas_extras']    = $montoExt;
-                    if ($montoExt > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoExt, 2);
-
-                    $horasNoct = $noctOverride !== null ? $noctOverride : (float) ($nocturnidadesMap[$eid] ?? 0);
-                    $montoNoct = $horasNoct > 0 ? round(($salBase / 240) * 0.25 * $horasNoct, 2) : 0.0;
-                    $resultado['horas_nocturnas']          = round($horasNoct, 2);
-                    $resultado['horas_nocturnas_override'] = $noctOverride;
-                    $resultado['monto_nocturnidades']      = $montoNoct;
-                    if ($montoNoct > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoNoct, 2);
-
-                    $montoVacaciones = $this->calcularMontoVacaciones($emp, $fechaInicio, $fechaFin);
-                    $resultado['vacaciones'] = $montoVacaciones;
-                    if ($montoVacaciones > 0) $resultado['salario_neto'] = round($resultado['salario_neto'] + $montoVacaciones, 2);
-
-                    $diasSusp = $suspensiones->filter(fn($s) => $s->amonestacion?->empleado_id === $eid)->count();
-                    if ($diasSusp > 0) {
-                        $detalle   = json_decode($resultado['detalle_descuentos'] ?? '[]', true) ?: [];
-                        $detalle[] = ['concepto' => "Suspensión disciplinaria ({$diasSusp} día(s))", 'tipo' => 'suspension', 'dias' => $diasSusp, 'monto' => 0];
-                        $resultado['detalle_descuentos'] = json_encode($detalle);
-                    }
+                    $resultado = $this->svc->calcularLinea($emp, $ctx, $fechaInicio, $fechaFin, $hastaEfectivo, $extOverride, $noctOverride);
 
                     PlanillaLinea::create(array_merge(['planilla_id' => $id, 'empleado_id' => $eid], $resultado));
                     $lineasCalc[] = $resultado;
@@ -1756,12 +1519,7 @@ class PlanillasController extends RRHHBaseController
                 $totales = $this->calc->calcularTotalesPlanilla($lineasCalc);
                 $planilla->update($totales);
 
-                $this->snapshotMovimientos(
-                    $id, $empleadosRows,
-                    $permisos, $incapacidades, $vacaciones, $ausencias, $suspensiones,
-                    $asuetos, $horariosAsueto, $horasExtrasMap, $nocturnidadesMap,
-                    $fechaInicio, $fechaFin, $diasQuincena, $ordenesMap
-                );
+                $this->svc->snapshotMovimientos($id, $empleadosRows, $ctx, $fechaInicio, $fechaFin);
 
                 DB::connection('rrhh')->commit();
             } catch (\Throwable $e) {
@@ -2178,32 +1936,22 @@ class PlanillasController extends RRHHBaseController
                 $val = $data['horas_extras'] !== null ? (float) $data['horas_extras'] : null;
                 $linea->horas_extras_override = $val;
                 $horasExt = $val ?? (float) $linea->horas_extras;
-                $montoExt = $horasExt > 0 ? round(($salBase / 240) * 2 * $horasExt, 2) : 0.0;
-                $linea->horas_extras      = round($horasExt, 2);
-                $linea->monto_horas_extras = $montoExt;
+                $linea->horas_extras       = round($horasExt, 2);
+                $linea->monto_horas_extras = $this->svc->montoHorasExtras($salBase, $horasExt);
             }
 
             if (array_key_exists('horas_nocturnas', $data)) {
                 $val = $data['horas_nocturnas'] !== null ? (float) $data['horas_nocturnas'] : null;
                 $linea->horas_nocturnas_override = $val;
                 $horasNoct = $val ?? (float) $linea->horas_nocturnas;
-                $montoNoct = $horasNoct > 0 ? round(($salBase / 240) * 0.25 * $horasNoct, 2) : 0.0;
-                $linea->horas_nocturnas    = round($horasNoct, 2);
-                $linea->monto_nocturnidades = $montoNoct;
+                $linea->horas_nocturnas     = round($horasNoct, 2);
+                $linea->monto_nocturnidades = $this->svc->montoNocturnidades($salBase, $horasNoct);
             }
 
-            // Recalcular salario_neto desde cero para esta línea
-            $neto = (float) $linea->salario_proporcional
-                + (float) $linea->salario_asueto
-                + (float) ($linea->bonificaciones ?? 0)
-                + (float) ($linea->monto_horas_extras ?? 0)
-                + (float) ($linea->monto_nocturnidades ?? 0)
-                + (float) ($linea->vacaciones ?? 0)
-                - (float) $linea->total_descuentos_empleado;
-            $linea->salario_neto = round($neto, 2);
+            $linea->salario_neto = $this->svc->recalcularNetoLinea($linea);
             $linea->save();
 
-            $this->recalcularTotalesPlanilla($planilla);
+            $this->svc->recalcularTotalesPlanilla($planilla);
 
             return response()->json(['success' => true, 'linea' => $linea]);
         });
