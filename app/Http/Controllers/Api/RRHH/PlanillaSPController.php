@@ -435,6 +435,100 @@ class PlanillaSPController extends RRHHBaseController
         });
     }
 
+    // ─── Cargar honorarios marcados ───────────────────────────────────────────
+
+    /**
+     * POST /api/rrhh/planillas-sp/{id}/cargar-honorarios
+     *
+     * Busca empleados activos con tipo_planilla = 'honorarios' (asignados
+     * explícitamente en empleado_tipo_planilla) que aún NO están en esta
+     * planilla SP, y los agrega con monto_honorario = salario_base.
+     */
+    public function cargarHonorarios(int $id): JsonResponse
+    {
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $planilla = PlanillaSP::findOrFail($id);
+
+            if ($planilla->estado !== 'borrador') {
+                return response()->json(['success' => false, 'message' => 'Solo se pueden agregar líneas a planillas SP en borrador.'], 422);
+            }
+
+            // IDs ya presentes en la planilla (evitar duplicar)
+            $yaPresentes = PlanillaSPLinea::where('planilla_sp_id', $id)
+                ->whereNotNull('empleado_id')
+                ->pluck('empleado_id')
+                ->all();
+
+            // Empleados activos marcados con tipo 'honorarios' (no SP de nuevo ingreso — esos ya entran por cargar-nuevo-ingreso)
+            $honorariosIds = DB::table('empleado_tipo_planilla as etp')
+                ->join('tipo_planilla as tp', 'tp.id', '=', 'etp.tipo_planilla_id')
+                ->where('tp.slug', 'honorarios')
+                ->pluck('etp.empleado_id');
+
+            $empleados = DB::connection('pgsql')
+                ->table('empleados as e')
+                ->leftJoin('sucursales as s', 's.id', '=', 'e.sucursal_id')
+                ->whereIn('e.id', $honorariosIds)
+                ->where('e.activo', true)
+                ->whereNotIn('e.id', $yaPresentes)
+                ->select('e.id', 'e.nombres', 'e.apellidos', 'e.salario_base')
+                ->get();
+
+            if ($planilla->sucursal_id) {
+                $empleados = $empleados->filter(function ($emp) use ($planilla) {
+                    return DB::connection('pgsql')
+                        ->table('empleados')
+                        ->where('id', $emp->id)
+                        ->where('sucursal_id', $planilla->sucursal_id)
+                        ->exists();
+                });
+            }
+
+            if ($empleados->isEmpty()) {
+                return response()->json([
+                    'success'  => true,
+                    'message'  => 'No hay empleados marcados como Honorarios pendientes de agregar.',
+                    'agregados' => 0,
+                ]);
+            }
+
+            DB::connection('rrhh')->beginTransaction();
+            try {
+                $agregados = 0;
+                foreach ($empleados as $emp) {
+                    $nombre    = trim($emp->apellidos . ', ' . $emp->nombres);
+                    $monto     = round((float) $emp->salario_base, 2);
+                    $retencion = round($monto * self::RETENCION_ISR_PCT, 2);
+                    $liquido   = round($monto - $retencion, 2);
+
+                    PlanillaSPLinea::create([
+                        'planilla_sp_id'       => $id,
+                        'empleado_id'          => $emp->id,
+                        'nombre'               => $nombre,
+                        'descripcion_servicio' => 'Honorarios — tipo planilla asignado',
+                        'monto_honorario'      => $monto,
+                        'retencion_isr'        => $retencion,
+                        'liquido'              => $liquido,
+                    ]);
+                    $agregados++;
+                }
+
+                $this->recalcularTotales($planilla);
+                DB::connection('rrhh')->commit();
+            } catch (\Throwable $e) {
+                DB::connection('rrhh')->rollBack();
+                throw $e;
+            }
+
+            return response()->json([
+                'success'   => true,
+                'message'   => "Se agregaron {$agregados} empleado(s) con tipo Honorarios.",
+                'agregados' => $agregados,
+                'data'      => $planilla->fresh()->load('lineas'),
+            ]);
+        });
+    }
+
     // ─── Exportar ─────────────────────────────────────────────────────────────
 
     /**

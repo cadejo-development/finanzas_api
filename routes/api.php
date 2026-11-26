@@ -808,6 +808,7 @@ Route::prefix('rrhh/planillas-sp')->middleware(['auth:sanctum', 'role:rrhh_admin
     Route::put('{id}/cerrar',                       [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'cerrar']);
     Route::get('{id}/exportar',                     [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'exportar']);
     Route::post('{id}/cargar-nuevo-ingreso',        [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'cargarNuevoIngreso']);
+    Route::post('{id}/cargar-honorarios',           [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'cargarHonorarios']);
     Route::post('{id}/lineas',                      [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'storeLinea']);
     Route::put('{id}/lineas/{lineaId}',             [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'updateLinea']);
     Route::delete('{id}/lineas/{lineaId}',          [\App\Http\Controllers\Api\RRHH\PlanillaSPController::class, 'destroyLinea']);
