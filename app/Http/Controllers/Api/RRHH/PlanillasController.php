@@ -1487,10 +1487,63 @@ class PlanillasController extends RRHHBaseController
             [$fechaInicio, $fechaFin] = $this->calc->rangoQuincena($planilla->anio, $planilla->mes, $planilla->quincena);
             $diasQuincena = PlanillaCalculatorService::DIAS_QUINCENA;
 
-            // Usar exactamente los empleados que ya están en la planilla
-            $empIds = $planilla->lineas->pluck('empleado_id')->unique()->toArray();
-            if (empty($empIds)) {
+            // Tomar los empleados actuales de la planilla y filtrar los que ya no corresponden.
+            // Esto limpia ingresos erróneos sin necesidad de regenerar desde cero.
+            $empIdsBruto = $planilla->lineas->pluck('empleado_id')->unique()->toArray();
+            if (empty($empIdsBruto)) {
                 return response()->json(['success' => false, 'message' => 'La planilla no tiene empleados.'], 422);
+            }
+
+            $tipoPlanilla    = $planilla->tipo_planilla ?? 'salarios';
+            $fechaInicioStr  = $fechaInicio->toDateString();
+            $fechaFinStr     = $fechaFin->toDateString();
+
+            if ($tipoPlanilla === 'honorarios') {
+                // Honorarios: fecha_contrato_sp o tipo asignado explícitamente
+                $honorariosIds = DB::table('empleado_tipo_planilla as etp')
+                    ->join('tipo_planilla as tp', 'tp.id', '=', 'etp.tipo_planilla_id')
+                    ->where('tp.slug', 'honorarios')
+                    ->where('etp.fecha_inicio', '<=', $fechaFinStr)
+                    ->where(function ($q) use ($fechaInicioStr) {
+                        $q->whereNull('etp.fecha_fin')->orWhere('etp.fecha_fin', '>=', $fechaInicioStr);
+                    })
+                    ->pluck('etp.empleado_id')->toArray();
+
+                $empIds = DB::connection('pgsql')
+                    ->table('empleados')
+                    ->whereIn('id', $empIdsBruto)
+                    ->where(function ($q) use ($honorariosIds) {
+                        $q->whereNotNull('fecha_contrato_sp')->orWhereIn('id', $honorariosIds);
+                    })
+                    ->pluck('id')->toArray();
+            } else {
+                // Resto de tipos: solo los que tienen el tipo asignado Y no son SP
+                $conTipo = DB::table('empleado_tipo_planilla as etp')
+                    ->join('tipo_planilla as tp', function ($join) use ($tipoPlanilla) {
+                        $join->on('tp.id', '=', 'etp.tipo_planilla_id')->where('tp.slug', '=', $tipoPlanilla);
+                    })
+                    ->where('etp.fecha_inicio', '<=', $fechaFinStr)
+                    ->where(function ($q) use ($fechaInicioStr) {
+                        $q->whereNull('etp.fecha_fin')->orWhere('etp.fecha_fin', '>=', $fechaInicioStr);
+                    })
+                    ->pluck('etp.empleado_id')->toArray();
+
+                $empIds = DB::connection('pgsql')
+                    ->table('empleados')
+                    ->whereIn('id', $empIdsBruto)
+                    ->whereIn('id', $conTipo)
+                    ->whereNull('fecha_contrato_sp')
+                    ->pluck('id')->toArray();
+            }
+
+            // Eliminar líneas de empleados que ya no corresponden a este tipo de planilla
+            $removidos = array_diff($empIdsBruto, $empIds);
+            if (!empty($removidos)) {
+                PlanillaLinea::where('planilla_id', $id)->whereIn('empleado_id', $removidos)->delete();
+            }
+
+            if (empty($empIds)) {
+                return response()->json(['success' => false, 'message' => 'La planilla no tiene empleados válidos para este tipo.'], 422);
             }
 
             $empleadosRows = DB::connection('pgsql')
