@@ -11,7 +11,7 @@ class Planilla extends Model
 
     protected $fillable = [
         'anio', 'mes', 'quincena', 'fecha_inicio', 'fecha_fin',
-        'sucursal_id', 'estado',
+        'sucursal_id', 'tipo_planilla', 'estado',
         'total_salarios', 'total_descuentos', 'total_patronal', 'total_neto',
         'creado_por',
     ];

@@ -130,16 +130,18 @@ class PlanillasController extends RRHHBaseController
     {
         return $this->captureAndRespond($request, function () use ($request) {
             $validated = $request->validate([
-                'anio'        => 'required|integer|min:2020|max:2099',
-                'mes'         => 'required|integer|min:1|max:12',
-                'quincena'    => 'required|integer|in:1,2',
-                'sucursal_id' => 'nullable|integer',
+                'anio'          => 'required|integer|min:2020|max:2099',
+                'mes'           => 'required|integer|min:1|max:12',
+                'quincena'      => 'required|integer|in:1,2',
+                'sucursal_id'   => 'nullable|integer',
+                'tipo_planilla' => 'nullable|string|exists:tipo_planilla,slug',
             ]);
 
-            $anio       = (int) $validated['anio'];
-            $mes        = (int) $validated['mes'];
-            $quincena   = (int) $validated['quincena'];
-            $sucursalId = isset($validated['sucursal_id']) ? (int) $validated['sucursal_id'] : null;
+            $anio          = (int) $validated['anio'];
+            $mes           = (int) $validated['mes'];
+            $quincena      = (int) $validated['quincena'];
+            $sucursalId    = isset($validated['sucursal_id']) ? (int) $validated['sucursal_id'] : null;
+            $tipoPlanilla  = $validated['tipo_planilla'] ?? 'salarios';
 
             // Buscar o crear la planilla
             $planilla = Planilla::where('anio', $anio)
@@ -161,26 +163,28 @@ class PlanillasController extends RRHHBaseController
 
             if (!$planilla) {
                 $planilla = Planilla::create([
-                    'anio'        => $anio,
-                    'mes'         => $mes,
-                    'quincena'    => $quincena,
-                    'fecha_inicio'=> $fechaInicio->toDateString(),
-                    'fecha_fin'   => $fechaFin->toDateString(),
-                    'sucursal_id' => $sucursalId,
-                    'estado'      => 'borrador',
-                    'creado_por'  => Auth::id(),
+                    'anio'          => $anio,
+                    'mes'           => $mes,
+                    'quincena'      => $quincena,
+                    'fecha_inicio'  => $fechaInicio->toDateString(),
+                    'fecha_fin'     => $fechaFin->toDateString(),
+                    'sucursal_id'   => $sucursalId,
+                    'tipo_planilla' => $tipoPlanilla,
+                    'estado'        => 'borrador',
+                    'creado_por'    => Auth::id(),
                 ]);
             } else {
                 $planilla->update([
-                    'fecha_inicio' => $fechaInicio->toDateString(),
-                    'fecha_fin'    => $fechaFin->toDateString(),
-                    'estado'       => 'borrador',
+                    'fecha_inicio'  => $fechaInicio->toDateString(),
+                    'fecha_fin'     => $fechaFin->toDateString(),
+                    'tipo_planilla' => $tipoPlanilla,
+                    'estado'        => 'borrador',
                 ]);
             }
 
-            // Cargar empleados activos + desvinculados durante el período
+            // Cargar empleados activos + desvinculados durante el período, filtrados por tipo_planilla
             ['empleados' => $empleados, 'desvinculados' => $desvinculados]
-                = $this->getEmpleadosParaPlanilla($sucursalId, $fechaInicio, $fechaFin);
+                = $this->getEmpleadosParaPlanilla($sucursalId, $fechaInicio, $fechaFin, $tipoPlanilla);
             $empIds = array_column($empleados, 'id');
 
             // Cargar eventos del período (misma lógica que ReportesRRHHController)
@@ -531,7 +535,7 @@ class PlanillasController extends RRHHBaseController
 
     // ─── Helpers privados ────────────────────────────────────────────────────
 
-    private function getEmpleadosParaPlanilla(?int $sucursalId, Carbon $fechaInicio, Carbon $fechaFin): array
+    private function getEmpleadosParaPlanilla(?int $sucursalId, Carbon $fechaInicio, Carbon $fechaFin, string $tipoPlanilla = 'salarios'): array
     {
         // Empleados desvinculados con fecha efectiva dentro del período
         $desvinculados = DB::connection('rrhh')
@@ -548,6 +552,12 @@ class PlanillasController extends RRHHBaseController
         $query = DB::connection('pgsql')
             ->table('empleados as e')
             ->leftJoin('sucursales as s', 's.id', '=', 'e.sucursal_id')
+            // Filtro por tipo de planilla asignado al empleado
+            ->join('empleado_tipo_planilla as etp', 'etp.empleado_id', '=', 'e.id')
+            ->join('tipo_planilla as tp', function ($join) use ($tipoPlanilla) {
+                $join->on('tp.id', '=', 'etp.tipo_planilla_id')
+                     ->where('tp.slug', '=', $tipoPlanilla);
+            })
             ->where(function ($q) use ($desvinculadosIds) {
                 $q->where('e.activo', true);
                 if (!empty($desvinculadosIds)) {

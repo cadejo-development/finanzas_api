@@ -52,6 +52,7 @@ use App\Http\Controllers\Api\RRHH\HorariosController;
 use App\Http\Controllers\Api\RRHH\PlantillasTurnoController;
 use App\Http\Controllers\Api\RRHH\PlanillasController;
 use App\Http\Controllers\Api\RRHH\MantenimientoPlanillaController;
+use App\Http\Controllers\Api\RRHH\TipoPlanillaController;
 use App\Http\Controllers\Api\GeoController;
 use App\Http\Controllers\Api\Compras\MenuPublicoController;
 use App\Http\Controllers\Api\RRHH\IngresoQRController;
@@ -736,6 +737,13 @@ Route::prefix('rrhh/expediente')->middleware(['auth:sanctum', 'role:jefatura,por
 
     // Fecha de ingreso (solo rrhh_admin)
     Route::patch('{empleadoId}/fecha-ingreso',                    [ExpedienteController::class, 'updateFechaIngreso']);
+});
+
+// ─── RRHH Tipo Planilla ───────────────────────────────────────────────────────
+Route::middleware(['auth:sanctum', 'role:rrhh_admin'])->group(function () {
+    Route::get('rrhh/tipo-planilla',                              [TipoPlanillaController::class, 'index']);
+    Route::get('rrhh/empleados/{id}/tipo-planilla',              [TipoPlanillaController::class, 'getEmpleado']);
+    Route::put('rrhh/empleados/{id}/tipo-planilla',              [TipoPlanillaController::class, 'syncEmpleado']);
 });
 
 // ─── RRHH Planillas (solo rrhh_admin) ────────────────────────────────────────
