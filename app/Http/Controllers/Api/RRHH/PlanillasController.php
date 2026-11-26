@@ -1533,17 +1533,20 @@ class PlanillasController extends RRHHBaseController
             $diasQuincena = PlanillaCalculatorService::DIAS_QUINCENA;
 
             // Tomar los empleados actuales de la planilla y filtrar los que ya no corresponden.
-            // Esto limpia ingresos erróneos sin necesidad de regenerar desde cero.
+            // Si la planilla no tiene líneas (caso de recuperación), regenerar desde todos los activos.
             $empIdsBruto = $planilla->lineas->pluck('empleado_id')->unique()->toArray();
-            if (empty($empIdsBruto)) {
-                return response()->json(['success' => false, 'message' => 'La planilla no tiene empleados.'], 422);
-            }
 
             $tipoPlanilla    = $planilla->tipo_planilla ?? 'salarios';
             $fechaInicioStr  = $fechaInicio->toDateString();
             $fechaFinStr     = $fechaFin->toDateString();
 
-            if ($tipoPlanilla === 'honorarios') {
+            if (empty($empIdsBruto)) {
+                // Sin líneas: regenerar desde todos los empleados activos del tipo
+                ['empleados' => $empleadosBase] = $this->getEmpleadosParaPlanilla(
+                    $planilla->sucursal_id, $fechaInicio, $fechaFin, $tipoPlanilla
+                );
+                $empIds = array_column($empleadosBase, 'id');
+            } elseif ($tipoPlanilla === 'honorarios') {
                 // Honorarios: solo tipo asignado explícitamente
                 $honorariosIds = DB::table('empleado_tipo_planilla as etp')
                     ->join('tipo_planilla as tp', 'tp.id', '=', 'etp.tipo_planilla_id')
