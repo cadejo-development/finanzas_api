@@ -1634,6 +1634,31 @@ class PlanillasController extends RRHHBaseController
 
                     $empIds = array_unique(array_merge($empIds, $nuevosDesvDentro));
                 }
+
+                // Empleados activos con tipo correcto que no estén en la planilla aún
+                // (adquirieron el tipo después de que se generó la planilla original).
+                $activosFaltantes = DB::connection('pgsql')
+                    ->table('empleados as e')
+                    ->join('empleado_tipo_planilla as etp', 'etp.empleado_id', '=', 'e.id')
+                    ->join('tipo_planilla as tp', function ($join) use ($tipoPlanilla) {
+                        $join->on('tp.id', '=', 'etp.tipo_planilla_id')->where('tp.slug', '=', $tipoPlanilla);
+                    })
+                    ->where('e.activo', true)
+                    ->where('e.salario_base', '>', 0)
+                    ->where(function ($q) use ($fechaFinStr) {
+                        $q->whereNull('etp.fecha_inicio')->orWhere('etp.fecha_inicio', '<=', $fechaFinStr);
+                    })
+                    ->where(function ($q) use ($fechaInicioStr) {
+                        $q->whereNull('etp.fecha_fin')->orWhere('etp.fecha_fin', '>=', $fechaInicioStr);
+                    })
+                    ->when(!empty($excluirPruebaIds), fn($q) => $q->whereNotIn('e.id', $excluirPruebaIds))
+                    ->whereNotIn('e.id', $exclusionesIds)
+                    ->whereNotIn('e.id', $empIds)
+                    ->pluck('e.id')
+                    ->unique()
+                    ->toArray();
+
+                $empIds = array_unique(array_merge($empIds, $activosFaltantes));
             }
 
             // Eliminar líneas ACTIVAS de empleados que ya no corresponden a este tipo de planilla
