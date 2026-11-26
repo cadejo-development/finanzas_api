@@ -792,6 +792,7 @@ Route::prefix('rrhh/planillas')->middleware(['auth:sanctum', 'role:rrhh_admin'])
     Route::put('{id}/cerrar',                       [PlanillasController::class, 'cerrar']);
     Route::post('{id}/recalcular',                  [PlanillasController::class, 'recalcular']);
     Route::get('{id}/movimientos',                              [PlanillasController::class, 'movimientos']);
+    Route::post('{id}/movimientos',                            [PlanillasController::class, 'crearMovimiento']);
     Route::put('{id}/movimientos/{movId}',                     [PlanillasController::class, 'updateMovimiento']);
     Route::put('{id}/movimientos/{movId}/anular',              [PlanillasController::class, 'anularMovimiento']);
     Route::put('{id}/movimientos/{movId}/reactivar',           [PlanillasController::class, 'reactivarMovimiento']);

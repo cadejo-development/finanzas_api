@@ -1089,6 +1089,53 @@ class PlanillasController extends RRHHBaseController
     }
 
     /**
+     * POST /api/rrhh/planillas/{id}/movimientos
+     * Crea un movimiento manual (bonificacion_manual, comision) para un empleado.
+     */
+    public function crearMovimiento(int $id, Request $request): JsonResponse
+    {
+        $planilla = Planilla::findOrFail($id);
+
+        if ($planilla->estado !== 'borrador') {
+            return response()->json(['success' => false, 'message' => 'Solo se pueden crear movimientos en planillas en borrador.'], 422);
+        }
+
+        $data = $request->validate([
+            'empleado_id' => 'required|integer',
+            'tipo'        => 'required|in:bonificacion_manual,comision',
+            'concepto'    => 'required|string|max:255',
+            'monto'       => 'required|numeric|min:0.01',
+        ]);
+
+        $linea = PlanillaLinea::where('planilla_id', $id)->where('empleado_id', $data['empleado_id'])->first();
+        if (!$linea) {
+            return response()->json(['success' => false, 'message' => 'El empleado no tiene línea activa en esta planilla.'], 422);
+        }
+
+        $mov = PlanillaMovimiento::create([
+            'planilla_id'  => $id,
+            'empleado_id'  => $data['empleado_id'],
+            'tipo'         => $data['tipo'],
+            'concepto'     => $data['concepto'],
+            'monto'        => round((float) $data['monto'], 2),
+            'dias'         => 0,
+            'estado'       => 'activo',
+        ]);
+
+        $this->ajustarLineaTrasMov($id, $data['empleado_id']);
+        $this->svc->recalcularTotalesPlanilla($planilla->fresh());
+        $linea = PlanillaLinea::where('planilla_id', $id)->where('empleado_id', $data['empleado_id'])->first();
+
+        return response()->json([
+            'success'          => true,
+            'message'          => 'Movimiento creado.',
+            'data'             => $mov,
+            'linea'            => $linea,
+            'planilla_totales' => $planilla->fresh()->only(['total_salarios','total_descuentos','total_patronal','total_neto']),
+        ]);
+    }
+
+    /**
      * PUT /api/rrhh/planillas/{id}/movimientos/{movId}
      * Actualiza monto/dias de un movimiento (solo planillas borrador, no orden_descuento).
      */
@@ -1185,14 +1232,16 @@ class PlanillasController extends RRHHBaseController
             ->where('estado', 'activo')
             ->get();
 
-        $otrosDesc   = 0.0;
-        $montoExtras = 0.0;
-        $horasExtras = 0.0;
-        $montoNoct   = 0.0;
-        $horasNoct   = 0.0;
-        $salAsueto   = 0.0;
-        $diasAsueto  = 0.0;
-        $montoVacac  = 0.0;
+        $otrosDesc          = 0.0;
+        $montoExtras        = 0.0;
+        $horasExtras        = 0.0;
+        $montoNoct          = 0.0;
+        $horasNoct          = 0.0;
+        $salAsueto          = 0.0;
+        $diasAsueto         = 0.0;
+        $montoVacac         = 0.0;
+        $bonificacionManual = 0.0;
+        $comisiones         = 0.0;
 
         foreach ($movs as $m) {
             switch ($m->tipo) {
@@ -1214,8 +1263,22 @@ class PlanillasController extends RRHHBaseController
                 case 'pago_vacaciones':
                     $montoVacac += (float) $m->monto;
                     break;
+                case 'bonificacion_manual':
+                    $bonificacionManual += (float) $m->monto;
+                    break;
+                case 'comision':
+                    $comisiones += (float) $m->monto;
+                    break;
             }
         }
+
+        // bonificaciones = sistema (re-leído de la tabla fuente) + manuales desde movimientos
+        $planillaObj = Planilla::findOrFail($planillaId);
+        $fechaIn     = Carbon::parse($planillaObj->fecha_inicio);
+        $fechaFin2   = Carbon::parse($planillaObj->fecha_fin);
+        $bonifMapEmp = $this->svc->getBonificacionesMap([$eid], $fechaIn, $fechaFin2);
+        $systemBonif = array_sum(array_column($bonifMapEmp[$eid] ?? [], 'monto'));
+        $totalBonif  = round($systemBonif + $bonificacionManual, 2);
 
         $totalDesc = round(
             (float) $linea->afp_empleado + (float) $linea->isss_empleado +
@@ -1223,19 +1286,21 @@ class PlanillasController extends RRHHBaseController
         );
         $salNeto = round(
             (float) $linea->salario_proporcional + $salAsueto + $montoExtras +
-            $montoNoct + (float) $linea->bonificaciones + $montoVacac - $totalDesc, 2
+            $montoNoct + $totalBonif + $comisiones + $montoVacac - $totalDesc, 2
         );
 
         $update = [
-            'otros_descuentos'          => round($otrosDesc,   2),
+            'otros_descuentos'          => round($otrosDesc,          2),
             'total_descuentos_empleado' => $totalDesc,
             'salario_neto'              => $salNeto,
-            'monto_horas_extras'        => round($montoExtras, 2),
-            'horas_extras'              => round($horasExtras, 2),
-            'monto_nocturnidades'       => round($montoNoct,   2),
-            'dias_asueto'               => round($diasAsueto,  2),
-            'salario_asueto'            => round($salAsueto,   2),
-            'vacaciones'                => round($montoVacac,  2),
+            'monto_horas_extras'        => round($montoExtras,        2),
+            'horas_extras'              => round($horasExtras,        2),
+            'monto_nocturnidades'       => round($montoNoct,          2),
+            'dias_asueto'               => round($diasAsueto,         2),
+            'salario_asueto'            => round($salAsueto,          2),
+            'vacaciones'                => round($montoVacac,         2),
+            'comisiones'                => round($comisiones,         2),
+            'bonificaciones'            => $totalBonif,
         ];
         // Solo sobreescribir horas_nocturnas si los movimientos traen dias > 0
         if ($horasNoct > 0) {
@@ -1289,28 +1354,6 @@ class PlanillasController extends RRHHBaseController
             }
 
             [$fechaInicio, $fechaFin] = $this->calc->rangoQuincena($planilla->anio, $planilla->mes, $planilla->quincena);
-
-            // Empleados en periodo de prueba activo van en planilla SP, no en salarios.
-            // Excepción: si el periodo termina DENTRO de esta quincena (transición), sí se permite.
-            if ($planilla->tipo_planilla !== 'honorarios') {
-                $prueba = DB::connection('rrhh')
-                    ->table('periodos_prueba')
-                    ->where('empleado_id', $eid)
-                    ->where('estado', 'en_prueba')
-                    ->select('fecha_fin_estimada')
-                    ->first();
-
-                if ($prueba) {
-                    $fechaFinPrueba = $prueba->fecha_fin_estimada;
-                    $fechaFinStr    = $fechaFin->toDateString();
-                    $fechaInicioStr = $fechaInicio->toDateString();
-                    // Solo bloquear si el periodo de prueba cubre TODA la quincena
-                    if ($fechaFinPrueba >= $fechaFinStr) {
-                        return response()->json(['success' => false, 'message' => 'Este empleado está en periodo de prueba y solo puede aparecer en la planilla de Servicios Profesionales.'], 422);
-                    }
-                    // Si termina dentro de la quincena: se permite (calculará proporcional desde el día siguiente al fin de prueba)
-                }
-            }
 
             $emp = (array) $empRow;
 
