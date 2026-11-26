@@ -1626,12 +1626,13 @@ class PlanillasController extends RRHHBaseController
                     ->pluck('empleado_id')
                     ->toArray();
 
-                // Empleados existentes en la planilla que siguen siendo válidos
+                // Empleados existentes en la planilla que siguen siendo válidos.
+                // NO aplicar filtro de prueba aquí: si un admin los agregó manualmente,
+                // recalcular debe respetarlo. El filtro de prueba solo aplica a auto-adiciones nuevas.
                 $empIds = DB::connection('pgsql')
                     ->table('empleados')
                     ->whereIn('id', $empIdsBruto)
                     ->whereIn('id', $conTipo)
-                    ->when(!empty($excluirPruebaIds), fn($q) => $q->whereNotIn('id', $excluirPruebaIds))
                     ->pluck('id')->toArray();
 
                 // Desvinculados DESPUÉS del período: trabajaron todo el período pero aún no están en planilla_lineas.
