@@ -43,12 +43,11 @@ return new class extends Migration
 
             if (!$fechaIngreso || !$fechaFinPrueba) continue;
 
-            // Cerrar salarios: fecha_fin = día antes del ingreso
-            $diaAntesIngreso = \Carbon\Carbon::parse($fechaIngreso)->subDay()->toDateString();
+            // Eliminar salarios mientras está en prueba — se recrea al aprobar
             DB::connection('pgsql')->table('empleado_tipo_planilla')
                 ->where('empleado_id', $eid)
                 ->where('tipo_planilla_id', $salId)
-                ->update(['fecha_fin' => $diaAntesIngreso, 'updated_at' => now()]);
+                ->delete();
 
             // Upsert honorarios
             $existing = DB::connection('pgsql')->table('empleado_tipo_planilla')

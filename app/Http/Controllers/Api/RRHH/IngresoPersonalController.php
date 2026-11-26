@@ -438,12 +438,11 @@ class IngresoPersonalController extends RRHHBaseController
 
             if (!$salId || !$honId) return;
 
-            // Cerrar salarios: fecha_fin = día antes del inicio de prueba
+            // Eliminar salarios mientras está en prueba — se recrea al aprobar
             DB::connection('pgsql')->table('empleado_tipo_planilla')
                 ->where('empleado_id', $empleadoId)
                 ->where('tipo_planilla_id', $salId)
-                ->whereNull('fecha_fin')
-                ->update(['fecha_fin' => $fechaInicio->copy()->subDay()->toDateString(), 'updated_at' => now()]);
+                ->delete();
 
             // Upsert honorarios
             $existing = DB::connection('pgsql')->table('empleado_tipo_planilla')
