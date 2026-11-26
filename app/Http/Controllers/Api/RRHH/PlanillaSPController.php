@@ -459,10 +459,21 @@ class PlanillaSPController extends RRHHBaseController
                 ->pluck('empleado_id')
                 ->all();
 
-            // Empleados activos marcados con tipo 'honorarios' (no SP de nuevo ingreso — esos ya entran por cargar-nuevo-ingreso)
+            // Rango de la planilla SP para filtrar vigencia del tipo
+            [$fechaInicioQ, $fechaFinQ] = $planilla->quincena
+                ? $this->rangoQuincena($planilla->anio, $planilla->mes, $planilla->quincena)
+                : [Carbon::create($planilla->anio, $planilla->mes, 1)->toDateString(),
+                   Carbon::create($planilla->anio, $planilla->mes)->endOfMonth()->toDateString()];
+
+            // Empleados activos marcados con tipo 'honorarios' vigentes en el período
             $honorariosIds = DB::table('empleado_tipo_planilla as etp')
                 ->join('tipo_planilla as tp', 'tp.id', '=', 'etp.tipo_planilla_id')
                 ->where('tp.slug', 'honorarios')
+                ->where('etp.fecha_inicio', '<=', $fechaFinQ)
+                ->where(function ($q) use ($fechaInicioQ) {
+                    $q->whereNull('etp.fecha_fin')
+                      ->orWhere('etp.fecha_fin', '>=', $fechaInicioQ);
+                })
                 ->pluck('etp.empleado_id');
 
             $empleados = DB::connection('pgsql')
