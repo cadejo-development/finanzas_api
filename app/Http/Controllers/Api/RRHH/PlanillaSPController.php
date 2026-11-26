@@ -459,6 +459,238 @@ class PlanillaSPController extends RRHHBaseController
         });
     }
 
+    // ─── Recalcular SP (honorarios + nuevo ingreso + totales) ────────────────
+
+    /**
+     * POST /api/rrhh/planillas-sp/{id}/recalcular
+     *
+     * Elimina todas las líneas autogeneradas (con empleado_id), luego recarga:
+     *   1. Empleados con tipo_planilla = 'honorarios'
+     *   2. Empleados de nuevo ingreso (ingresos_personal + periodos_prueba)
+     * Las líneas manuales (sin empleado_id) se conservan.
+     */
+    public function recalcular(int $id): JsonResponse
+    {
+        return $this->captureAndRespond(request(), function () use ($id) {
+            $planilla = PlanillaSP::findOrFail($id);
+
+            if ($planilla->estado !== 'borrador') {
+                return response()->json(['success' => false, 'message' => 'Solo se puede recalcular en planillas en borrador.'], 422);
+            }
+
+            if (!$planilla->quincena) {
+                return response()->json(['success' => false, 'message' => 'La planilla no tiene quincena definida. Elimínala y crea una nueva con quincena.'], 422);
+            }
+
+            [$fechaInicioQ, $fechaFinQ] = $this->rangoQuincena(
+                (int) $planilla->anio,
+                (int) $planilla->mes,
+                (int) $planilla->quincena
+            );
+
+            $inicioQ = Carbon::parse($fechaInicioQ);
+            $finQ    = Carbon::parse($fechaFinQ);
+            $diasQ   = $inicioQ->diffInDays($finQ) + 1;
+
+            DB::connection('rrhh')->beginTransaction();
+            try {
+                // ── 1. Borrar todas las líneas autogeneradas ──────────────────
+                PlanillaSPLinea::where('planilla_sp_id', $id)
+                    ->whereNotNull('empleado_id')
+                    ->delete();
+
+                $agregadosHonorarios = 0;
+                $agregadosIngreso    = 0;
+
+                // ── 2. Cargar empleados tipo Honorarios ───────────────────────
+                $honorariosIds = DB::table('empleado_tipo_planilla as etp')
+                    ->join('tipo_planilla as tp', 'tp.id', '=', 'etp.tipo_planilla_id')
+                    ->where('tp.slug', 'honorarios')
+                    ->where('etp.fecha_inicio', '<=', $fechaFinQ)
+                    ->where(function ($q) use ($fechaInicioQ) {
+                        $q->whereNull('etp.fecha_fin')
+                          ->orWhere('etp.fecha_fin', '>=', $fechaInicioQ);
+                    })
+                    ->pluck('etp.empleado_id');
+
+                $empleadosHon = DB::connection('pgsql')
+                    ->table('empleados as e')
+                    ->whereIn('e.id', $honorariosIds)
+                    ->where('e.activo', true)
+                    ->when($planilla->sucursal_id, fn($q) => $q->where('e.sucursal_id', $planilla->sucursal_id))
+                    ->select('e.id', 'e.nombres', 'e.apellidos', 'e.salario_base')
+                    ->get();
+
+                foreach ($empleadosHon as $emp) {
+                    $nombre    = trim($emp->apellidos . ', ' . $emp->nombres);
+                    $monto     = round((float) $emp->salario_base, 2);
+                    $retencion = round($monto * self::RETENCION_ISR_PCT, 2);
+                    $liquido   = round($monto - $retencion, 2);
+
+                    PlanillaSPLinea::create([
+                        'planilla_sp_id'       => $id,
+                        'empleado_id'          => $emp->id,
+                        'nombre'               => $nombre,
+                        'descripcion_servicio' => 'Honorarios — tipo planilla asignado',
+                        'monto_honorario'      => $monto,
+                        'retencion_isr'        => $retencion,
+                        'liquido'              => $liquido,
+                    ]);
+                    $agregadosHonorarios++;
+                }
+
+                // ── 3. Cargar empleados de nuevo ingreso ──────────────────────
+                $cutoff = $inicioQ->copy()->subDays(30)->toDateString();
+
+                // IDs de honorarios ya cargados (para no duplicar si alguien está en ambas fuentes)
+                $yaPresentes = PlanillaSPLinea::where('planilla_sp_id', $id)
+                    ->whereNotNull('empleado_id')
+                    ->pluck('empleado_id')
+                    ->all();
+
+                $queryIng = DB::connection('rrhh')
+                    ->table('ingresos_personal as ip')
+                    ->where('ip.confirmacion', 'se_presento')
+                    ->where('ip.fecha_ingreso', '>=', $cutoff)
+                    ->where('ip.fecha_ingreso', '<=', $fechaFinQ)
+                    ->whereNotIn('ip.empleado_id', $yaPresentes)
+                    ->select('ip.empleado_id', 'ip.fecha_ingreso',
+                             'ip.empleado_nombre', 'ip.cargo_nombre', 'ip.sucursal_nombre')
+                    ->groupBy('ip.empleado_id', 'ip.fecha_ingreso',
+                              'ip.empleado_nombre', 'ip.cargo_nombre', 'ip.sucursal_nombre');
+
+                if ($planilla->sucursal_id) {
+                    $empIdsSuc = DB::connection('pgsql')
+                        ->table('empleados')
+                        ->where('sucursal_id', $planilla->sucursal_id)
+                        ->pluck('id');
+                    $queryIng->whereIn('ip.empleado_id', $empIdsSuc);
+                }
+
+                $ingresos = $queryIng->get();
+
+                if ($ingresos->isNotEmpty()) {
+                    $empIdsIng = $ingresos->pluck('empleado_id')->unique()->values()->all();
+
+                    $fechaFinPruebaMap = DB::connection('rrhh')
+                        ->table('periodos_prueba')
+                        ->whereIn('empleado_id', $empIdsIng)
+                        ->pluck('fecha_fin_estimada', 'empleado_id');
+
+                    $empleadosIng = DB::connection('pgsql')
+                        ->table('empleados')
+                        ->whereIn('id', $empIdsIng)
+                        ->select('id', 'salario_base', 'nombres', 'apellidos')
+                        ->get()
+                        ->keyBy('id');
+
+                    // Permisos e incapacidades batch
+                    $permisosRaw = DB::connection('rrhh')
+                        ->table('permisos')
+                        ->whereIn('empleado_id', $empIdsIng)
+                        ->where('estado', 'aprobado')
+                        ->where('es_dia_completo', true)
+                        ->where('fecha', '<=', $fechaFinQ)
+                        ->where('fecha', '>=', $inicioQ->copy()->subDays(30)->toDateString())
+                        ->select('empleado_id', 'fecha', DB::raw('COALESCE(dias, 1) as dias_permiso'))
+                        ->get();
+
+                    $incapacidadesRaw = DB::connection('rrhh')
+                        ->table('incapacidades')
+                        ->whereIn('empleado_id', $empIdsIng)
+                        ->where('fecha_inicio', '<=', $fechaFinQ)
+                        ->where('fecha_fin',    '>=', $fechaInicioQ)
+                        ->select('empleado_id', 'fecha_inicio', 'fecha_fin')
+                        ->get();
+
+                    $diasPermisoMap     = [];
+                    $diasIncapacidadMap = [];
+
+                    foreach ($permisosRaw as $p) {
+                        $pIni  = Carbon::parse($p->fecha);
+                        $pFin  = $pIni->copy()->addDays((int) $p->dias_permiso - 1);
+                        $oStart = $pIni->lt($inicioQ) ? $inicioQ : $pIni;
+                        $oEnd   = $pFin->gt($finQ)    ? $finQ    : $pFin;
+                        $dias   = max(0, $oStart->diffInDays($oEnd) + 1);
+                        $diasPermisoMap[$p->empleado_id] = ($diasPermisoMap[$p->empleado_id] ?? 0) + $dias;
+                    }
+
+                    foreach ($incapacidadesRaw as $inc) {
+                        $iIni  = Carbon::parse($inc->fecha_inicio);
+                        $iFin  = Carbon::parse($inc->fecha_fin);
+                        $oStart = $iIni->lt($inicioQ) ? $inicioQ : $iIni;
+                        $oEnd   = $iFin->gt($finQ)    ? $finQ    : $iFin;
+                        $dias   = max(0, $oStart->diffInDays($oEnd) + 1);
+                        $diasIncapacidadMap[$inc->empleado_id] = ($diasIncapacidadMap[$inc->empleado_id] ?? 0) + $dias;
+                    }
+
+                    foreach ($ingresos as $ing) {
+                        $emp         = $empleadosIng[$ing->empleado_id] ?? null;
+                        $salarioBase = $emp ? (float) $emp->salario_base : 0;
+
+                        $fechaIng       = Carbon::parse($ing->fecha_ingreso);
+                        $inicioEfectiva = $fechaIng->gt($inicioQ) ? $fechaIng->copy() : $inicioQ->copy();
+                        $fechaFinPrueba = isset($fechaFinPruebaMap[$ing->empleado_id])
+                            ? Carbon::parse($fechaFinPruebaMap[$ing->empleado_id])
+                            : $finQ;
+                        $finEfectiva    = $fechaFinPrueba->lt($finQ) ? $fechaFinPrueba : $finQ;
+                        $diasPeriodo    = max(0, $inicioEfectiva->diffInDays($finEfectiva) + 1);
+
+                        $diasPermiso     = min($diasPermisoMap[$ing->empleado_id] ?? 0, $diasPeriodo);
+                        $diasIncapacidad = min($diasIncapacidadMap[$ing->empleado_id] ?? 0, $diasPeriodo - $diasPermiso);
+                        $diasTrabajados  = max(0, $diasPeriodo - $diasPermiso - $diasIncapacidad);
+
+                        $monto     = round($salarioBase / 30 * $diasTrabajados, 2);
+                        $retencion = round($monto * self::RETENCION_ISR_PCT, 2);
+                        $liquido   = round($monto - $retencion, 2);
+
+                        $nombre = $emp
+                            ? trim($emp->nombres . ' ' . $emp->apellidos)
+                            : $ing->empleado_nombre;
+
+                        $desc = 'Honorarios SP - ' . $ing->cargo_nombre . ' (' . $ing->fecha_ingreso . ')';
+                        if ($diasPeriodo < $diasQ) {
+                            $desc .= " — {$diasPeriodo} días en período";
+                        }
+                        if ($diasPermiso > 0 || $diasIncapacidad > 0) {
+                            $desc .= " ({$diasTrabajados} trabajados)";
+                        }
+
+                        PlanillaSPLinea::create([
+                            'planilla_sp_id'       => $id,
+                            'empleado_id'          => $ing->empleado_id,
+                            'nombre'               => $nombre,
+                            'descripcion_servicio' => $desc,
+                            'dias_periodo'         => $diasPeriodo,
+                            'dias_permiso'         => $diasPermiso,
+                            'dias_incapacidad'     => $diasIncapacidad,
+                            'dias_trabajados'      => $diasTrabajados,
+                            'monto_honorario'      => $monto,
+                            'retencion_isr'        => $retencion,
+                            'liquido'              => $liquido,
+                        ]);
+                        $agregadosIngreso++;
+                    }
+                }
+
+                // ── 4. Recalcular totales ─────────────────────────────────────
+                $this->recalcularTotales($planilla);
+                DB::connection('rrhh')->commit();
+            } catch (\Throwable $e) {
+                DB::connection('rrhh')->rollBack();
+                throw $e;
+            }
+
+            return response()->json([
+                'success'             => true,
+                'message'             => "Recalculado: {$agregadosHonorarios} honorario(s), {$agregadosIngreso} nuevo(s) ingreso.",
+                'agregados_honorarios' => $agregadosHonorarios,
+                'agregados_ingreso'   => $agregadosIngreso,
+                'data'                => $planilla->fresh()->load('lineas'),
+            ]);
+        });
+    }
+
     // ─── Cargar honorarios marcados ───────────────────────────────────────────
 
     /**
