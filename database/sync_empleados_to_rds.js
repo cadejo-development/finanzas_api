@@ -765,10 +765,11 @@ async function run() {
     log(`Sucursales en RDS: ${sucRes.rows.length}`);
     log(`Cargos en RDS:     ${cargoRes.rows.length}`);
 
-    const existRes = await pg.query('SELECT codigo, sync_excluido, departamento_id FROM empleados');
-    const existentes = new Set(existRes.rows.map(r => r.codigo));
-    const excluidos  = new Set(existRes.rows.filter(r => r.sync_excluido).map(r => r.codigo));
-    const deptActual = Object.fromEntries(
+    const existRes = await pg.query('SELECT codigo, sync_excluido, salario_manual, departamento_id FROM empleados');
+    const existentes      = new Set(existRes.rows.map(r => r.codigo));
+    const excluidos       = new Set(existRes.rows.filter(r => r.sync_excluido).map(r => r.codigo));
+    const salarioManual   = new Set(existRes.rows.filter(r => r.salario_manual).map(r => r.codigo));
+    const deptActual      = Object.fromEntries(
       existRes.rows.filter(r => r.departamento_id).map(r => [r.codigo, parseInt(r.departamento_id)])
     );
     log(`Empleados ya en RDS: ${existentes.size}\n`);
@@ -806,7 +807,10 @@ async function run() {
         if (excluidos.has(codigo)) continue;
         const fechaIngreso = fmtDate(r.fecha_ingreso);
         const cargoId      = cargoByCode[r.cargo_codigo] ?? null;
-        const salarioBase  = r.salario_mes != null ? parseFloat(r.salario_mes) : null;
+        // Si salario_manual=true, no pisamos el salario local con el de Brilo
+        const salarioBase  = salarioManual.has(codigo)
+          ? null
+          : (r.salario_mes != null ? parseFloat(r.salario_mes) : null);
         const emailVal     = clean(r.email, 150);
 
         const curDept  = deptActual[codigo] ?? null;

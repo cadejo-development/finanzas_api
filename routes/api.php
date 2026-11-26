@@ -737,6 +737,9 @@ Route::prefix('rrhh/expediente')->middleware(['auth:sanctum', 'role:jefatura,por
 
     // Fecha de ingreso (solo rrhh_admin)
     Route::patch('{empleadoId}/fecha-ingreso',                    [ExpedienteController::class, 'updateFechaIngreso']);
+
+    // Salario directo (solo rrhh_admin — protegido contra sync Brilo)
+    Route::put('{empleadoId}/salario',                            [ExpedienteController::class, 'updateSalario']);
 });
 
 // ─── RRHH Tipo Planilla ───────────────────────────────────────────────────────

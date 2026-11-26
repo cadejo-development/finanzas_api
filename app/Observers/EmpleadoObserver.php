@@ -31,12 +31,13 @@ class EmpleadoObserver
                 'departamento_id' => $empleado->departamento_id,
                 'salario_base'    => $empleado->salario_base,
                 'sync_excluido'   => $empleado->sync_excluido ?? false,
+                'salario_manual'  => $empleado->salario_manual ?? false,
                 'plaza_id'        => $empleado->plaza_id,
             ]],
             ['id'],
             ['codigo', 'nombres', 'apellidos', 'email', 'cargo_id', 'sucursal_id',
              'activo', 'aud_usuario', 'user_id', 'fecha_ingreso', 'departamento_id',
-             'salario_base', 'sync_excluido', 'plaza_id', 'updated_at']
+             'salario_base', 'sync_excluido', 'salario_manual', 'plaza_id', 'updated_at']
         );
     }
 }

@@ -151,6 +151,8 @@ class ExpedienteController extends RRHHBaseController
             'foto_url'                => $fotoRuta,
             'fecha_contrato_sp'       => $fechaContratoSP,
             'fecha_contrato_indefinido' => $fechaContratoIndefinido,
+            'salario_base'            => $empleado->salario_base !== null ? (float) $empleado->salario_base : null,
+            'salario_manual'          => (bool) ($empleado->salario_manual ?? false),
         ];
     }
 
@@ -936,6 +938,39 @@ class ExpedienteController extends RRHHBaseController
                 ->update(['fecha_ingreso' => $data['fecha_ingreso']]);
 
             return response()->json(['success' => true, 'fecha_ingreso' => $data['fecha_ingreso']]);
+        });
+    }
+
+    /**
+     * PUT /api/rrhh/empleados/{id}/salario  — solo admin RRHH
+     * Edita salario_base directamente y activa salario_manual=true
+     * para que el sync diario de Brilo no lo sobreescriba.
+     */
+    public function updateSalario(Request $request, int $empleadoId): JsonResponse
+    {
+        return $this->captureAndRespond($request, function () use ($request, $empleadoId) {
+            if (!$this->esAdminRrhh()) {
+                return response()->json(['success' => false, 'message' => 'Solo administradores RRHH pueden editar el salario directamente.'], 403);
+            }
+
+            $data = $request->validate([
+                'salario_base' => 'required|numeric|min:0',
+            ]);
+
+            \DB::connection('pgsql')
+                ->table('empleados')
+                ->where('id', $empleadoId)
+                ->update([
+                    'salario_base'   => $data['salario_base'],
+                    'salario_manual' => true,
+                    'updated_at'     => now(),
+                ]);
+
+            return response()->json([
+                'success'       => true,
+                'salario_base'  => (float) $data['salario_base'],
+                'salario_manual'=> true,
+            ]);
         });
     }
 }
