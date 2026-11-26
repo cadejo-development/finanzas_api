@@ -1610,7 +1610,6 @@ class PlanillasController extends RRHHBaseController
                     ->table('empleados')
                     ->whereIn('id', $empIdsBruto)
                     ->whereIn('id', $conTipo)
-                    ->when(!empty($excluirPruebaIds), fn($q) => $q->whereNotIn('id', $excluirPruebaIds))
                     ->pluck('id')->toArray();
 
                 // Desvinculados DESPUÉS del período: trabajaron todo el período pero aún no están en planilla_lineas.
