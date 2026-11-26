@@ -870,33 +870,31 @@ class PlanillaSalariosService
             ->whereNotNull('hora_fin')
             ->get(['empleado_id', 'fecha', 'hora_inicio', 'hora_fin']);
 
-        $toMins  = fn(string $t): int => (int) explode(':', $t)[0] * 60 + (int) (explode(':', $t)[1] ?? 0);
-        $horasNoct = function (int $i, int $f): float {
-            $n = 0;
-            $z2s = max($i, 19 * 60); $z2e = min($f, 24 * 60);
-            if ($z2e > $z2s) $n += $z2e - $z2s;
-            if ($f > 24 * 60) $n += min($f, 30 * 60) - 24 * 60;
-            return $n / 60.0;
-        };
+        $toMins = fn(string $t): int => (int) explode(':', $t)[0] * 60 + (int) (explode(':', $t)[1] ?? 0);
 
+        // Agrupar por empleado → semana ISO → día → turnos
         $grouped = [];
         foreach ($horarios as $h) {
-            $grouped[(int) $h->empleado_id][$h->fecha][] = $h;
+            $eid     = (int) $h->empleado_id;
+            $weekKey = Carbon::parse($h->fecha)->format('o-W'); // ej: "2026-45"
+            $grouped[$eid][$weekKey][$h->fecha][] = $h;
         }
 
         $result = [];
-        foreach ($grouped as $eid => $dias) {
+        foreach ($grouped as $eid => $semanas) {
             $result[$eid] = 0.0;
-            foreach ($dias as $turnos) {
-                $totalH = 0.0; $totalN = 0.0;
-                foreach ($turnos as $t) {
-                    $i = $toMins($t->hora_inicio); $f = $toMins($t->hora_fin);
-                    if ($f <= $i) $f += 1440;
-                    $totalH += ($f - $i) / 60.0;
-                    $totalN += $horasNoct($i, $f);
+            foreach ($semanas as $diasDeSemana) {
+                $totalSemanah = 0.0;
+                foreach ($diasDeSemana as $turnos) {
+                    foreach ($turnos as $t) {
+                        $i = $toMins($t->hora_inicio);
+                        $f = $toMins($t->hora_fin);
+                        if ($f <= $i) $f += 1440; // turno cruza medianoche
+                        $totalSemanah += ($f - $i) / 60.0;
+                    }
                 }
-                $maxHoras = $totalN > 4 ? 7 : 8;
-                $result[$eid] += max(0.0, $totalH - $maxHoras);
+                // Art. 161 CT-SV: horas extras = horas que superan 44 semanales
+                $result[$eid] += max(0.0, $totalSemanah - 44.0);
             }
         }
 
