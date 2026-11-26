@@ -1355,6 +1355,27 @@ class PlanillasController extends RRHHBaseController
 
             [$fechaInicio, $fechaFin] = $this->calc->rangoQuincena($planilla->anio, $planilla->mes, $planilla->quincena);
 
+            // Empleados en periodo de prueba activo van en planilla SP, no en salarios.
+            // Excepción: si el periodo termina DENTRO de esta quincena (transición), sí se permite.
+            if ($planilla->tipo_planilla !== 'honorarios') {
+                $prueba = DB::connection('rrhh')
+                    ->table('periodos_prueba')
+                    ->where('empleado_id', $eid)
+                    ->where('estado', 'en_prueba')
+                    ->select('fecha_fin_estimada')
+                    ->first();
+
+                if ($prueba) {
+                    $fechaFinPrueba = $prueba->fecha_fin_estimada;
+                    $fechaFinStr    = $fechaFin->toDateString();
+                    // Solo bloquear si el periodo de prueba cubre TODA la quincena
+                    if ($fechaFinPrueba >= $fechaFinStr) {
+                        return response()->json(['success' => false, 'message' => 'Este empleado está en periodo de prueba y solo puede aparecer en la planilla de Servicios Profesionales.'], 422);
+                    }
+                    // Si termina dentro de la quincena: se permite (calculará proporcional desde el día siguiente al fin de prueba)
+                }
+            }
+
             $emp = (array) $empRow;
 
             // Empleados con salario 0 no van en planilla de salarios
@@ -1610,6 +1631,7 @@ class PlanillasController extends RRHHBaseController
                     ->table('empleados')
                     ->whereIn('id', $empIdsBruto)
                     ->whereIn('id', $conTipo)
+                    ->when(!empty($excluirPruebaIds), fn($q) => $q->whereNotIn('id', $excluirPruebaIds))
                     ->pluck('id')->toArray();
 
                 // Desvinculados DESPUÉS del período: trabajaron todo el período pero aún no están en planilla_lineas.
@@ -1693,6 +1715,7 @@ class PlanillasController extends RRHHBaseController
                     ->where(function ($q) use ($fechaInicioStr) {
                         $q->whereNull('etp.fecha_fin')->orWhere('etp.fecha_fin', '>=', $fechaInicioStr);
                     })
+                    ->when(!empty($excluirPruebaIds), fn($q) => $q->whereNotIn('e.id', $excluirPruebaIds))
                     ->whereNotIn('e.id', $exclusionesIds)
                     ->whereNotIn('e.id', $empIds)
                     ->pluck('e.id')
