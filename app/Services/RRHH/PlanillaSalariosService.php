@@ -619,8 +619,21 @@ class PlanillaSalariosService
             ];
         }
 
+        // Leer overrides de la línea ya calculada (existen porque calcularLinea corre antes del snapshot)
+        $lineaOverrides = DB::connection('rrhh')
+            ->table('planilla_lineas')
+            ->where('planilla_id', $planillaId)
+            ->where('empleado_id', $eid)
+            ->where('estado', 'activo')
+            ->select('horas_extras_override', 'horas_nocturnas_override')
+            ->first();
+        $extOverrideSnap  = ($lineaOverrides && $lineaOverrides->horas_extras_override  !== null)
+            ? (float) $lineaOverrides->horas_extras_override  : null;
+        $noctOverrideSnap = ($lineaOverrides && $lineaOverrides->horas_nocturnas_override !== null)
+            ? (float) $lineaOverrides->horas_nocturnas_override : null;
+
         // Horas extras aprobadas (tarifa doble, Art. 161 CT-SV)
-        $horasExt = (float) ($ctx['horasExtrasMap'][$eid] ?? 0);
+        $horasExt = $extOverrideSnap !== null ? $extOverrideSnap : (float) ($ctx['horasExtrasMap'][$eid] ?? 0);
         if ($horasExt > 0) {
             $montoExt = $this->montoHorasExtras($salBase, $horasExt);
             $rows[] = [
@@ -639,7 +652,7 @@ class PlanillaSalariosService
         }
 
         // Nocturnidades (25% sobre tarifa hora base, Art. 161 CT-SV)
-        $horasNoct = (float) ($ctx['nocturnidadesMap'][$eid] ?? 0);
+        $horasNoct = $noctOverrideSnap !== null ? $noctOverrideSnap : (float) ($ctx['nocturnidadesMap'][$eid] ?? 0);
         if ($horasNoct > 0) {
             $montoNoct = $this->montoNocturnidades($salBase, $horasNoct);
             $rows[] = [
