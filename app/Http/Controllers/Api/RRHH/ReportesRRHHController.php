@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api\RRHH;
 
 use App\Models\RRHH\AusenciaInjustificada;
+use App\Models\RRHH\ContratoEmpleado;
 use App\Models\RRHH\Incapacidad;
 use App\Models\RRHH\Permiso;
+use App\Models\RRHH\TipoContrato;
 use App\Models\RRHH\Vacacion;
 use App\Services\RRHH\PlanillaCalculatorService;
 use Illuminate\Http\JsonResponse;
@@ -1112,5 +1114,114 @@ class ReportesRRHHController extends RRHHBaseController
             $map[(int) $row->id] = $row->sucursal_tipo;
         }
         return $map;
+    }
+
+    // ─── Maestro de Empleados ─────────────────────────────────────────────────
+
+    public function maestroEmpleados(Request $request): JsonResponse
+    {
+        try {
+            $soloActivos = $request->boolean('solo_activos', true);
+
+            // 1. Empleados desde pgsql
+            $query = DB::connection('pgsql')
+                ->table('empleados as e')
+                ->leftJoin('cargos as c',      'c.id', '=', 'e.cargo_id')
+                ->leftJoin('sucursales as s',   's.id', '=', 'e.sucursal_id')
+                ->leftJoin('departamentos as d', 'd.id', '=', 'e.departamento_id');
+
+            if ($soloActivos) {
+                $query->where('e.activo', true);
+            }
+
+            $empleados = $query->select(
+                'e.id',
+                'e.codigo',
+                DB::raw("CONCAT(e.nombres, ' ', e.apellidos) as nombre_completo"),
+                'e.fecha_ingreso',
+                'e.salario_base',
+                'e.activo',
+                'c.nombre as cargo',
+                's.nombre as sucursal',
+                'd.nombre as departamento'
+            )->orderBy('s.nombre')->orderBy('e.apellidos')->get();
+
+            if ($empleados->isEmpty()) {
+                return response()->json(['success' => true, 'data' => []]);
+            }
+
+            $empIds = $empleados->pluck('id')->toArray();
+
+            // 2. Documentos desde rrhh (DUI, ISSS, AFP — uno por tipo, el más reciente)
+            $docs = DB::connection('rrhh')
+                ->table('expediente_documentos')
+                ->whereIn('empleado_id', $empIds)
+                ->whereIn('tipo', ['dui', 'isss', 'afp'])
+                ->orderBy('updated_at', 'desc')
+                ->get(['empleado_id', 'tipo', 'numero', 'entidad_emisora']);
+
+            // Indexar por empleado_id → tipo → primer registro encontrado
+            $docsMap = [];
+            foreach ($docs as $doc) {
+                $eid  = (int) $doc->empleado_id;
+                $tipo = $doc->tipo;
+                if (!isset($docsMap[$eid][$tipo])) {
+                    $docsMap[$eid][$tipo] = $doc;
+                }
+            }
+
+            // 3. Contratos desde rrhh
+            $tipoSP = TipoContrato::where('es_periodo_prueba', true)->where('activo', true)->first();
+            $tipoIndef = TipoContrato::where('es_periodo_prueba', false)->where('activo', true)
+                ->whereNull('duracion_dias')->first();
+
+            $contratosSP = $tipoSP
+                ? ContratoEmpleado::whereIn('empleado_id', $empIds)
+                    ->where('tipo_contrato_id', $tipoSP->id)
+                    ->orderBy('fecha_inicio')
+                    ->get(['empleado_id', 'fecha_inicio', 'fecha_fin'])
+                    ->keyBy('empleado_id')
+                : collect();
+
+            $contratosIndef = $tipoIndef
+                ? ContratoEmpleado::whereIn('empleado_id', $empIds)
+                    ->where('tipo_contrato_id', $tipoIndef->id)
+                    ->orderBy('fecha_inicio')
+                    ->get(['empleado_id', 'fecha_inicio'])
+                    ->keyBy('empleado_id')
+                : collect();
+
+            // 4. Construir filas del maestro
+            $data = $empleados->map(function ($emp) use ($docsMap, $contratosSP, $contratosIndef) {
+                $eid     = (int) $emp->id;
+                $dui     = $docsMap[$eid]['dui']  ?? null;
+                $isss    = $docsMap[$eid]['isss'] ?? null;
+                $afp     = $docsMap[$eid]['afp']  ?? null;
+                $sp      = $contratosSP->get($eid);
+                $indef   = $contratosIndef->get($eid);
+
+                return [
+                    'codigo'                 => $emp->codigo,
+                    'nombre_completo'        => $emp->nombre_completo,
+                    'cargo'                  => $emp->cargo,
+                    'sucursal'               => $emp->sucursal,
+                    'departamento'           => $emp->departamento,
+                    'dui'                    => $dui?->numero,
+                    'isss'                   => $isss?->numero,
+                    'afp_entidad'            => $afp?->entidad_emisora,
+                    'afp_nup'                => $afp?->numero,
+                    'fecha_ingreso'          => $emp->fecha_ingreso,
+                    'salario_base'           => $emp->salario_base !== null ? (float) $emp->salario_base : null,
+                    'activo'                 => (bool) $emp->activo,
+                    'fecha_inicio_sp'        => $sp?->fecha_inicio,
+                    'fecha_fin_sp'           => $sp?->fecha_fin,
+                    'fecha_contrato_indef'   => $indef?->fecha_inicio,
+                ];
+            })->values();
+
+            return response()->json(['success' => true, 'data' => $data]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
     }
 }
