@@ -1102,9 +1102,10 @@ class PlanillasController extends RRHHBaseController
 
         $data = $request->validate([
             'empleado_id' => 'required|integer',
-            'tipo'        => 'required|in:bonificacion_manual,comision',
+            'tipo'        => 'required|in:horas_extras,nocturnidad,pago_vacaciones,bonificacion_manual,comision',
             'concepto'    => 'required|string|max:255',
-            'monto'       => 'required|numeric|min:0.01',
+            'horas'       => 'nullable|numeric|min:0.01',
+            'monto'       => 'nullable|numeric|min:0.01',
         ]);
 
         $linea = PlanillaLinea::where('planilla_id', $id)->where('empleado_id', $data['empleado_id'])->first();
@@ -1112,13 +1113,33 @@ class PlanillasController extends RRHHBaseController
             return response()->json(['success' => false, 'message' => 'El empleado no tiene línea activa en esta planilla.'], 422);
         }
 
+        $diasStore  = 0.0;
+        $montoStore = 0.0;
+
+        if (in_array($data['tipo'], ['horas_extras', 'nocturnidad'])) {
+            $horas = (float) ($data['horas'] ?? 0);
+            if ($horas <= 0) {
+                return response()->json(['success' => false, 'message' => 'Las horas son requeridas para este tipo.'], 422);
+            }
+            $salBase    = (float) DB::connection('pgsql')->table('empleados')->where('id', $data['empleado_id'])->value('salario_base');
+            $diasStore  = $horas;
+            $montoStore = $data['tipo'] === 'horas_extras'
+                ? $this->svc->montoHorasExtras($salBase, $horas)
+                : $this->svc->montoNocturnidades($salBase, $horas);
+        } else {
+            $montoStore = (float) ($data['monto'] ?? 0);
+            if ($montoStore <= 0) {
+                return response()->json(['success' => false, 'message' => 'El monto es requerido para este tipo.'], 422);
+            }
+        }
+
         $mov = PlanillaMovimiento::create([
             'planilla_id'  => $id,
             'empleado_id'  => $data['empleado_id'],
             'tipo'         => $data['tipo'],
             'concepto'     => $data['concepto'],
-            'monto'        => round((float) $data['monto'], 2),
-            'dias'         => 0,
+            'monto'        => round($montoStore, 2),
+            'dias'         => $diasStore,
             'estado'       => 'activo',
         ]);
 
