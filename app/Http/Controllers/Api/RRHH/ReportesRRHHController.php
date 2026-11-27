@@ -1137,10 +1137,14 @@ class ReportesRRHHController extends RRHHBaseController
             $empleados = $query->select(
                 'e.id',
                 'e.codigo',
+                'e.nombres',
+                'e.apellidos',
                 DB::raw("CONCAT(e.nombres, ' ', e.apellidos) as nombre_completo"),
+                'e.email',
                 'e.fecha_ingreso',
                 'e.salario_base',
                 'e.activo',
+                'e.es_pensionado',
                 'c.nombre as cargo',
                 's.nombre as sucursal',
                 'd.nombre as departamento'
@@ -1152,11 +1156,11 @@ class ReportesRRHHController extends RRHHBaseController
 
             $empIds = $empleados->pluck('id')->toArray();
 
-            // 2. Documentos desde rrhh (DUI, ISSS, AFP — uno por tipo, el más reciente)
+            // 2. Documentos desde rrhh (DUI, NIT, ISSS, AFP — uno por tipo, el más reciente)
             $docs = DB::connection('rrhh')
                 ->table('expediente_documentos')
                 ->whereIn('empleado_id', $empIds)
-                ->whereIn('tipo', ['dui', 'isss', 'afp'])
+                ->whereIn('tipo', ['dui', 'nit', 'isss', 'afp'])
                 ->orderBy('updated_at', 'desc')
                 ->get(['empleado_id', 'tipo', 'numero', 'entidad_emisora']);
 
@@ -1193,29 +1197,35 @@ class ReportesRRHHController extends RRHHBaseController
 
             // 4. Construir filas del maestro
             $data = $empleados->map(function ($emp) use ($docsMap, $contratosSP, $contratosIndef) {
-                $eid     = (int) $emp->id;
-                $dui     = $docsMap[$eid]['dui']  ?? null;
-                $isss    = $docsMap[$eid]['isss'] ?? null;
-                $afp     = $docsMap[$eid]['afp']  ?? null;
-                $sp      = $contratosSP->get($eid);
-                $indef   = $contratosIndef->get($eid);
+                $eid   = (int) $emp->id;
+                $dui   = $docsMap[$eid]['dui']  ?? null;
+                $nit   = $docsMap[$eid]['nit']  ?? null;
+                $isss  = $docsMap[$eid]['isss'] ?? null;
+                $afp   = $docsMap[$eid]['afp']  ?? null;
+                $sp    = $contratosSP->get($eid);
+                $indef = $contratosIndef->get($eid);
 
                 return [
-                    'codigo'                 => $emp->codigo,
-                    'nombre_completo'        => $emp->nombre_completo,
-                    'cargo'                  => $emp->cargo,
-                    'sucursal'               => $emp->sucursal,
-                    'departamento'           => $emp->departamento,
-                    'dui'                    => $dui?->numero,
-                    'isss'                   => $isss?->numero,
-                    'afp_entidad'            => $afp?->entidad_emisora,
-                    'afp_nup'                => $afp?->numero,
-                    'fecha_ingreso'          => $emp->fecha_ingreso,
-                    'salario_base'           => $emp->salario_base !== null ? (float) $emp->salario_base : null,
-                    'activo'                 => (bool) $emp->activo,
-                    'fecha_inicio_sp'        => $sp?->fecha_inicio,
-                    'fecha_fin_sp'           => $sp?->fecha_fin,
-                    'fecha_contrato_indef'   => $indef?->fecha_inicio,
+                    'codigo'               => $emp->codigo,
+                    'nombres'              => $emp->nombres,
+                    'apellidos'            => $emp->apellidos,
+                    'nombre_completo'      => $emp->nombre_completo,
+                    'email'                => $emp->email,
+                    'cargo'                => $emp->cargo,
+                    'sucursal'             => $emp->sucursal,
+                    'departamento'         => $emp->departamento,
+                    'dui'                  => $dui?->numero,
+                    'nit'                  => $nit?->numero,
+                    'isss'                 => $isss?->numero,
+                    'afp_entidad'          => $afp?->entidad_emisora,
+                    'afp_nup'              => $afp?->numero,
+                    'es_pensionado'        => (bool) $emp->es_pensionado,
+                    'fecha_ingreso'        => $emp->fecha_ingreso,
+                    'salario_base'         => $emp->salario_base !== null ? (float) $emp->salario_base : null,
+                    'activo'               => (bool) $emp->activo,
+                    'fecha_inicio_sp'      => $sp?->fecha_inicio,
+                    'fecha_fin_sp'         => $sp?->fecha_fin,
+                    'fecha_contrato_indef' => $indef?->fecha_inicio,
                 ];
             })->values();
 
