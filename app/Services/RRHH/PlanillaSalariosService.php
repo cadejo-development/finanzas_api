@@ -429,10 +429,15 @@ class PlanillaSalariosService
         Carbon $fechaFin,
         array $excluirIds = []
     ): void {
+        // Tipos creados manualmente que NO se auto-generan desde control de horarios:
+        // se preservan para que sobrevivan al recalcular.
+        $tiposManuales = ['ajuste_dias', 'bonificacion_manual', 'comision'];
+
         DB::connection('rrhh')
             ->table('planilla_movimientos')
             ->where('planilla_id', $planillaId)
             ->where('estado', 'activo')
+            ->whereNotIn('tipo', $tiposManuales)
             ->when(!empty($excluirIds), fn($q) => $q->whereNotIn('empleado_id', $excluirIds))
             ->delete();
 
@@ -472,11 +477,14 @@ class PlanillaSalariosService
             ->mapWithKeys(fn($r) => [$r->tipo . '|' . ($r->referencia_id ?? $r->concepto) => true])
             ->all();
 
+        $tiposManuales = ['ajuste_dias', 'bonificacion_manual', 'comision'];
+
         DB::connection('rrhh')
             ->table('planilla_movimientos')
             ->where('planilla_id', $planillaId)
             ->where('empleado_id', $eid)
             ->where('estado', 'activo')
+            ->whereNotIn('tipo', $tiposManuales)
             ->delete();
 
         $rows = [];
