@@ -573,6 +573,8 @@ Route::prefix('rrhh')->middleware(['auth:sanctum', 'role:jefatura,portal_admin,r
     Route::get('amonestaciones/{id}/descargar',     [AmonestacionesController::class, 'descargar']);
     Route::get('amonestaciones/{id}/pdf',           [AmonestacionesController::class, 'pdf']);
     Route::patch('amonestaciones/{id}/invalidar',   [AmonestacionesController::class, 'invalidar']);
+    Route::post('amonestaciones/{id}/aprobar',      [AmonestacionesController::class, 'aprobar']);
+    Route::post('amonestaciones/{id}/rechazar',     [AmonestacionesController::class, 'rechazar']);
 
     // Ingreso de Personal y Período de Prueba
     Route::get('ingresos/criterios-evaluacion',             [IngresoPersonalController::class, 'criteriosEvaluacion']);

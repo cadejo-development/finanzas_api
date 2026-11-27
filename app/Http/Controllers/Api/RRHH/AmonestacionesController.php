@@ -74,6 +74,9 @@ class AmonestacionesController extends RRHHBaseController
 
             $aplica = $validated['aplica_suspension'] ?? false;
 
+            $esRestaurante = $this->esEmpleadoDeRestaurante($validated['empleado_id']);
+            $estadoInicial = $esRestaurante ? 'pendiente_gerencia_ops' : 'pendiente_rrhh';
+
             $amonestacion = Amonestacion::create([
                 'empleado_id'        => $validated['empleado_id'],
                 'jefe_id'            => $jefe->id,
@@ -83,6 +86,7 @@ class AmonestacionesController extends RRHHBaseController
                 'accion_tomada'      => $validated['accion_tomada'] ?? null,
                 'tipo_sancion'       => $validated['tipo_sancion'] ?? null,
                 'aplica_suspension'  => $aplica,
+                'estado'             => $estadoInicial,
                 'aud_usuario'        => Auth::user()->email,
             ]);
 
@@ -253,6 +257,121 @@ class AmonestacionesController extends RRHHBaseController
         $nombre = 'Amonestacion_' . str_replace(' ', '_', $empleadoNombre) . "_{$id}.pdf";
 
         return $pdf->download($nombre);
+    }
+
+    /**
+     * POST /api/rrhh/amonestaciones/{id}/aprobar
+     */
+    public function aprobar(Request $request, int $id): JsonResponse
+    {
+        return $this->captureAndRespond($request, function () use ($id) {
+            $amonestacion = Amonestacion::findOrFail($id);
+
+            // Gerencia de Operaciones: pendiente_gerencia_ops → pendiente_rrhh
+            if ($this->esGerenciaOps() && $amonestacion->estado === 'pendiente_gerencia_ops') {
+                $amonestacion->update([
+                    'estado'      => 'pendiente_rrhh',
+                    'aud_usuario' => Auth::user()->email,
+                ]);
+
+                $amonestacion->load(['tipoFalta', 'diasSuspension']);
+                $enriched = $this->enrichWithEmpleadoData([$amonestacion->toArray()]);
+                $data = $enriched[0];
+                if (empty($data['empleado_nombre'])) {
+                    $data['empleado_nombre'] = 'Empleado #' . ($data['empleado_id'] ?? '?');
+                }
+
+                $this->notificarAdminsRrhh(
+                    tipo:           'Aprobada por Ops — pendiente RRHH',
+                    empleadoNombre: $data['empleado_nombre'],
+                    detalles: [
+                        'Tipo de falta'   => $amonestacion->tipoFalta?->nombre ?? '—',
+                        'Fecha'           => $amonestacion->fecha_amonestacion->format('d/m/Y'),
+                        'Descripción'     => $amonestacion->descripcion,
+                        'Cargo'           => $data['cargo_nombre'] ?? '—',
+                        'Sucursal'        => $data['sucursal_nombre'] ?? '—',
+                        'Aprobada por Ops' => Auth::user()->name ?? Auth::user()->email,
+                    ],
+                    rutaFrontend: 'amonestaciones',
+                );
+
+                return response()->json([
+                    'success' => true,
+                    'data'    => $data,
+                    'message' => 'Aprobado por Operaciones. Pendiente de aprobación final por RRHH.',
+                ]);
+            }
+
+            // RRHH Admin: pendiente_rrhh → aprobado
+            if ($this->esAdminRrhh() && $amonestacion->estado === 'pendiente_rrhh') {
+                $amonestacion->update([
+                    'estado'          => 'aprobado',
+                    'aprobado_por_id' => Auth::user()->id,
+                    'aprobado_en'     => now(),
+                    'aud_usuario'     => Auth::user()->email,
+                ]);
+
+                $amonestacion->load(['tipoFalta', 'diasSuspension']);
+                $enriched = $this->enrichWithEmpleadoData([$amonestacion->toArray()]);
+                $data = $enriched[0];
+                if (empty($data['empleado_nombre'])) {
+                    $data['empleado_nombre'] = 'Empleado #' . ($data['empleado_id'] ?? '?');
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'data'    => $data,
+                    'message' => 'Amonestación aprobada y efectiva en el expediente.',
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No tienes permiso para aprobar esta amonestación en su estado actual.',
+            ], 403);
+        });
+    }
+
+    /**
+     * POST /api/rrhh/amonestaciones/{id}/rechazar
+     */
+    public function rechazar(Request $request, int $id): JsonResponse
+    {
+        return $this->captureAndRespond($request, function () use ($request, $id) {
+            $amonestacion = Amonestacion::findOrFail($id);
+
+            $validated = $request->validate([
+                'motivo' => 'required|string|min:10|max:1000',
+            ]);
+
+            $puedeRechazar =
+                ($this->esGerenciaOps() && $amonestacion->estado === 'pendiente_gerencia_ops') ||
+                ($this->esAdminRrhh()   && $amonestacion->estado === 'pendiente_rrhh');
+
+            if (!$puedeRechazar) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes permiso para rechazar esta amonestación en su estado actual.',
+                ], 403);
+            }
+
+            $amonestacion->update([
+                'estado'          => 'rechazado',
+                'aprobado_por_id' => Auth::user()->id,
+                'aprobado_en'     => now(),
+                'rechazo_motivo'  => $validated['motivo'],
+                'aud_usuario'     => Auth::user()->email,
+            ]);
+
+            $amonestacion->load(['tipoFalta', 'diasSuspension']);
+            $enriched = $this->enrichWithEmpleadoData([$amonestacion->toArray()]);
+            $data = $enriched[0];
+            if (empty($data['empleado_nombre'])) {
+                $data['empleado_nombre'] = 'Empleado #' . ($data['empleado_id'] ?? '?');
+            }
+
+            return response()->json(['success' => true, 'data' => $data, 'message' => 'Amonestación rechazada.']);
+        });
     }
 
     /**
