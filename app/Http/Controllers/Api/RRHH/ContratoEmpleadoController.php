@@ -109,6 +109,10 @@ class ContratoEmpleadoController extends RRHHBaseController
     public function storeParaEmpleado(Request $request, int $empleadoId): JsonResponse
     {
         return $this->captureAndRespond($request, function () use ($request, $empleadoId) {
+            if (!$this->esAdminRrhh() && !$this->esAnalistaRrhh()) {
+                return response()->json(['success' => false, 'message' => 'Solo el departamento de RRHH puede elaborar contratos.'], 403);
+            }
+
             $emp = DB::connection('pgsql')
                 ->table('empleados as e')
                 ->leftJoin('cargos as c', 'c.id', '=', 'e.cargo_id')
@@ -164,6 +168,10 @@ class ContratoEmpleadoController extends RRHHBaseController
     public function store(Request $request, int $ingresoId): JsonResponse
     {
         return $this->captureAndRespond($request, function () use ($request, $ingresoId) {
+            if (!$this->esAdminRrhh() && !$this->esAnalistaRrhh()) {
+                return response()->json(['success' => false, 'message' => 'Solo el departamento de RRHH puede elaborar contratos.'], 403);
+            }
+
             $ingreso = IngresoPersonal::findOrFail($ingresoId);
 
             $v = $request->validate([

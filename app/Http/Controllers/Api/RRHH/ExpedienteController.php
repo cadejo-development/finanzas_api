@@ -115,12 +115,15 @@ class ExpedienteController extends RRHHBaseController
 
         // Contrato de período de prueba (SP) — el primer tipo con es_periodo_prueba=true
         $tipoSP = TipoContrato::where('es_periodo_prueba', true)->where('activo', true)->first();
-        $fechaContratoSP = $tipoSP
+        $contratoSP = $tipoSP
             ? ContratoEmpleado::where('empleado_id', $empleado->id)
                 ->where('tipo_contrato_id', $tipoSP->id)
                 ->orderBy('fecha_inicio')
-                ->value('fecha_inicio')
+                ->select('fecha_inicio', 'fecha_fin')
+                ->first()
             : null;
+        $fechaContratoSP    = $contratoSP?->fecha_inicio;
+        $fechaFinContratoSP = $contratoSP?->fecha_fin;
 
         // Contrato indefinido — sin duración fija ni período de prueba
         $tipoIndefinido = TipoContrato::where('es_periodo_prueba', false)
@@ -149,7 +152,8 @@ class ExpedienteController extends RRHHBaseController
             'activo'                  => $empleado->activo,
             'es_pensionado'           => (bool) $empleado->es_pensionado,
             'foto_url'                => $fotoRuta,
-            'fecha_contrato_sp'       => $fechaContratoSP,
+            'fecha_contrato_sp'         => $fechaContratoSP,
+            'fecha_fin_contrato_sp'     => $fechaFinContratoSP,
             'fecha_contrato_indefinido' => $fechaContratoIndefinido,
             'salario_base'            => $empleado->salario_base !== null ? (float) $empleado->salario_base : null,
             'salario_manual'          => (bool) ($empleado->salario_manual ?? false),
