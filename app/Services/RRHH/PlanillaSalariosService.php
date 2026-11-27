@@ -116,7 +116,8 @@ class PlanillaSalariosService
         Carbon $fechaFin,
         ?Carbon $hastaEfectivo = null,
         ?float $extOverride = null,
-        ?float $noctOverride = null
+        ?float $noctOverride = null,
+        ?float $diasLaboradosOverride = null
     ): array {
         $eid          = (int) $emp['id'];
         $salBase      = (float) ($emp['salario_base'] ?? 0);
@@ -140,7 +141,11 @@ class PlanillaSalariosService
             $ctx['ausencias'], $ctx['suspensiones'],
             $desdeEfectivo, $hastaEfectivo
         );
-        $diasLab = min($diasQuincena, max(0, $diasEfectivos - $diasNoTrab));
+
+        // Override manual de días laborados (ajuste_dias movement)
+        $diasLab = $diasLaboradosOverride !== null
+            ? min($diasQuincena, max(0.0, $diasLaboradosOverride))
+            : min($diasQuincena, max(0, $diasEfectivos - $diasNoTrab));
 
         $esPensionado = (bool) ($emp['es_pensionado'] ?? false);
         $resultado = $this->calc->calcularPlanillaEmpleado(

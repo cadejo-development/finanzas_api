@@ -1102,9 +1102,10 @@ class PlanillasController extends RRHHBaseController
 
         $data = $request->validate([
             'empleado_id' => 'required|integer',
-            'tipo'        => 'required|in:horas_extras,nocturnidad,pago_vacaciones,bonificacion_manual,comision',
+            'tipo'        => 'required|in:horas_extras,nocturnidad,pago_vacaciones,bonificacion_manual,comision,ajuste_dias',
             'concepto'    => 'required|string|max:255',
             'horas'       => 'nullable|numeric|min:0.01',
+            'dias'        => 'nullable|numeric|min:0',
             'monto'       => 'nullable|numeric|min:0.01',
         ]);
 
@@ -1126,6 +1127,13 @@ class PlanillasController extends RRHHBaseController
             $montoStore = $data['tipo'] === 'horas_extras'
                 ? $this->svc->montoHorasExtras($salBase, $horas)
                 : $this->svc->montoNocturnidades($salBase, $horas);
+        } elseif ($data['tipo'] === 'ajuste_dias') {
+            $dias = $data['dias'] ?? null;
+            if ($dias === null) {
+                return response()->json(['success' => false, 'message' => 'Los días son requeridos para ajuste de días laborados.'], 422);
+            }
+            $diasStore  = max(0.0, (float) $dias);
+            $montoStore = 0.0;
         } else {
             $montoStore = (float) ($data['monto'] ?? 0);
             if ($montoStore <= 0) {
@@ -1253,6 +1261,41 @@ class PlanillasController extends RRHHBaseController
             ->where('estado', 'activo')
             ->get();
 
+        // ── Ajuste de días laborados (toma prioridad sobre el cálculo automático) ──
+        $diasOverride = null;
+        foreach ($movs as $m) {
+            if ($m->tipo === 'ajuste_dias') {
+                $diasOverride = max(0.0, (float) $m->dias);
+                break;
+            }
+        }
+
+        if ($diasOverride !== null) {
+            $empRow = DB::connection('pgsql')
+                ->table('empleados')
+                ->where('id', $eid)
+                ->select('salario_base', 'es_pensionado')
+                ->first();
+            $base = $this->calc->calcularPlanillaEmpleado(
+                (float) ($empRow->salario_base ?? 0),
+                $diasOverride,
+                (int) $linea->dias_quincena,
+                [], []
+            );
+            // Actualizar en memoria para que el cálculo de totalDesc use los valores nuevos
+            $linea->dias_laborados       = $diasOverride;
+            $linea->salario_proporcional = $base['salario_proporcional'];
+            $linea->afp_empleado         = $base['afp_empleado'];
+            $linea->isss_empleado        = $base['isss_empleado'];
+            $linea->renta                = $base['renta'];
+            $linea->afp_patronal         = $base['afp_patronal'];
+            $linea->isss_patronal        = $base['isss_patronal'];
+            $linea->insaforp_patronal    = $base['insaforp_patronal'];
+            $linea->total_patronal       = round(
+                $base['afp_patronal'] + $base['isss_patronal'] + $base['insaforp_patronal'], 2
+            );
+        }
+
         $otrosDesc          = 0.0;
         $montoExtras        = 0.0;
         $horasExtras        = 0.0;
@@ -1323,7 +1366,19 @@ class PlanillasController extends RRHHBaseController
             'comisiones'                => round($comisiones,         2),
             'bonificaciones'            => $totalBonif,
         ];
-        // Solo sobreescribir horas_nocturnas si los movimientos traen dias > 0
+
+        if ($diasOverride !== null) {
+            $update['dias_laborados']       = $linea->dias_laborados;
+            $update['salario_proporcional'] = $linea->salario_proporcional;
+            $update['afp_empleado']         = $linea->afp_empleado;
+            $update['isss_empleado']        = $linea->isss_empleado;
+            $update['renta']                = $linea->renta;
+            $update['afp_patronal']         = $linea->afp_patronal;
+            $update['isss_patronal']        = $linea->isss_patronal;
+            $update['insaforp_patronal']    = $linea->insaforp_patronal;
+            $update['total_patronal']       = $linea->total_patronal;
+        }
+
         if ($horasNoct > 0) {
             $update['horas_nocturnas'] = round($horasNoct, 2);
         }
@@ -1764,6 +1819,15 @@ class PlanillasController extends RRHHBaseController
                 ])
                 ->all();
 
+            // Preservar ajuste_dias manuales (movimientos no se borran con las líneas)
+            $ajusteDiasMap = PlanillaMovimiento::where('planilla_id', $id)
+                ->where('tipo', 'ajuste_dias')
+                ->where('estado', 'activo')
+                ->get(['empleado_id', 'dias'])
+                ->keyBy('empleado_id')
+                ->map(fn($m) => max(0.0, (float) $m->dias))
+                ->all();
+
             $lineasCalc = [];
 
             DB::connection('rrhh')->beginTransaction();
@@ -1782,8 +1846,9 @@ class PlanillasController extends RRHHBaseController
 
                     $extOverride  = $overridesMap[$eid]['ext']  ?? null;
                     $noctOverride = $overridesMap[$eid]['noct'] ?? null;
+                    $diasOverride = $ajusteDiasMap[$eid]        ?? null;
 
-                    $resultado = $this->svc->calcularLinea($emp, $ctx, $fechaInicio, $fechaFin, $hastaEfectivo, $extOverride, $noctOverride);
+                    $resultado = $this->svc->calcularLinea($emp, $ctx, $fechaInicio, $fechaFin, $hastaEfectivo, $extOverride, $noctOverride, $diasOverride);
 
                     PlanillaLinea::create(array_merge(['planilla_id' => $id, 'empleado_id' => $eid], $resultado));
                     $lineasCalc[] = $resultado;
@@ -1793,6 +1858,12 @@ class PlanillasController extends RRHHBaseController
                 $planilla->update($totales);
 
                 $this->svc->snapshotMovimientos($id, $empleadosRows, $ctx, $fechaInicio, $fechaFin, $exclusionesIds);
+
+                // Para empleados con ajuste_dias manual, re-aplicar movimientos manuales
+                // (bonif, comision, etc.) que no pasan por calcularLinea
+                foreach (array_keys($ajusteDiasMap) as $eidAdj) {
+                    $this->ajustarLineaTrasMov($id, (int) $eidAdj);
+                }
 
                 DB::connection('rrhh')->commit();
             } catch (\Throwable $e) {
