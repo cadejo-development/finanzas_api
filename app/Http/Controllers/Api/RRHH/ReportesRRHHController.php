@@ -1226,26 +1226,14 @@ class ReportesRRHHController extends RRHHBaseController
                     'fecha_ingreso'        => $emp->fecha_ingreso,
                     'salario_base'         => $emp->salario_base !== null ? (float) $emp->salario_base : null,
                     'activo'               => (bool) $emp->activo,
-                    // fecha_contrato_sp viene directo del empleado (más completo que contratos_empleado)
-                    // fecha_fin_sp e indefinido vienen de contratos_empleado cuando existen
-                    'fecha_inicio_sp'      => $emp->fecha_contrato_sp ?? $sp?->fecha_inicio,
+                    'fecha_inicio_sp'      => $sp?->fecha_inicio,
                     'fecha_fin_sp'         => $sp?->fecha_fin,
-                    'fecha_contrato_indef' => $indef?->fecha_inicio,
+                    // Si no tiene contrato indefinido digitalizado, fecha_ingreso es el inicio
+                    'fecha_contrato_indef' => $indef?->fecha_inicio ?? $emp->fecha_ingreso,
                 ];
             })->values();
 
-            return response()->json([
-                'success' => true,
-                'data'    => $data,
-                '_debug'  => [
-                    'tipo_sp_id'    => $tipoSP?->id,
-                    'tipo_sp'       => $tipoSP?->nombre,
-                    'tipo_indef_id' => $tipoIndef?->id,
-                    'tipo_indef'    => $tipoIndef?->nombre,
-                    'contratos_sp'  => $contratosSP->count(),
-                    'contratos_indef' => $contratosIndef->count(),
-                ],
-            ]);
+            return response()->json(['success' => true, 'data' => $data]);
         } catch (\Throwable $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
