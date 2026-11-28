@@ -1142,6 +1142,7 @@ class ReportesRRHHController extends RRHHBaseController
                 DB::raw("CONCAT(e.nombres, ' ', e.apellidos) as nombre_completo"),
                 'e.email',
                 'e.fecha_ingreso',
+                'e.fecha_contrato_sp',
                 'e.salario_base',
                 'e.activo',
                 'e.es_pensionado',
@@ -1174,11 +1175,12 @@ class ReportesRRHHController extends RRHHBaseController
                 }
             }
 
-            // 3. Contratos desde rrhh
-            $tipoSP = TipoContrato::where('es_periodo_prueba', true)->where('activo', true)->first();
+            // 3. Contratos desde rrhh (para fecha_fin SP e indefinido)
+            $tipoSP    = TipoContrato::where('es_periodo_prueba', true)->where('activo', true)->first();
             $tipoIndef = TipoContrato::where('es_periodo_prueba', false)->where('activo', true)
                 ->whereNull('duracion_dias')->first();
 
+            // SP: solo necesitamos fecha_fin (inicio viene de empleados.fecha_contrato_sp)
             $contratosSP = $tipoSP
                 ? ContratoEmpleado::whereIn('empleado_id', $empIds)
                     ->where('tipo_contrato_id', $tipoSP->id)
@@ -1187,6 +1189,7 @@ class ReportesRRHHController extends RRHHBaseController
                     ->keyBy('empleado_id')
                 : collect();
 
+            // Indefinido
             $contratosIndef = $tipoIndef
                 ? ContratoEmpleado::whereIn('empleado_id', $empIds)
                     ->where('tipo_contrato_id', $tipoIndef->id)
@@ -1223,13 +1226,26 @@ class ReportesRRHHController extends RRHHBaseController
                     'fecha_ingreso'        => $emp->fecha_ingreso,
                     'salario_base'         => $emp->salario_base !== null ? (float) $emp->salario_base : null,
                     'activo'               => (bool) $emp->activo,
-                    'fecha_inicio_sp'      => $sp?->fecha_inicio,
+                    // fecha_contrato_sp viene directo del empleado (más completo que contratos_empleado)
+                    // fecha_fin_sp e indefinido vienen de contratos_empleado cuando existen
+                    'fecha_inicio_sp'      => $emp->fecha_contrato_sp ?? $sp?->fecha_inicio,
                     'fecha_fin_sp'         => $sp?->fecha_fin,
                     'fecha_contrato_indef' => $indef?->fecha_inicio,
                 ];
             })->values();
 
-            return response()->json(['success' => true, 'data' => $data]);
+            return response()->json([
+                'success' => true,
+                'data'    => $data,
+                '_debug'  => [
+                    'tipo_sp_id'    => $tipoSP?->id,
+                    'tipo_sp'       => $tipoSP?->nombre,
+                    'tipo_indef_id' => $tipoIndef?->id,
+                    'tipo_indef'    => $tipoIndef?->nombre,
+                    'contratos_sp'  => $contratosSP->count(),
+                    'contratos_indef' => $contratosIndef->count(),
+                ],
+            ]);
         } catch (\Throwable $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
