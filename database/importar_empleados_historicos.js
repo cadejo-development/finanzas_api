@@ -97,7 +97,7 @@ async function main() {
 
     // 3. Filtrar solo los que no existen en RDS
     const faltantes = briloEmps.filter(e => {
-      const cod = clean(e.codigo, 50);
+      const cod = clean(e.codigo, 20);
       return cod && !existing.has(cod);
     });
     log(`  → ${faltantes.length} empleados nuevos a importar\n`);
@@ -128,7 +128,7 @@ async function main() {
       if (!cargoId)  sinCargo++;
 
       return {
-        codigo:      clean(e.codigo, 50),
+        codigo:      clean(e.codigo, 20),
         nombres:     clean(e.nombres, 120),
         apellidos:   clean(e.apellidos, 120),
         email:       clean(e.email, 120),
